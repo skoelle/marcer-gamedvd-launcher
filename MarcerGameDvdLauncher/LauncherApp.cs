@@ -142,6 +142,15 @@ namespace MarcerGameDvdLauncher
                 }
 
                 var key = Console.ReadKey(intercept: true);
+                if (key.KeyChar == '?')
+                {
+                    _menuRenderer.ShowHelpBox(currentAvailableLines);
+                    Console.ReadKey(intercept: true);
+                    _menuRenderer.InvalidateCache();
+                    _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
+                    ProgramHelpers.FlushInputBuffer();
+                    continue;
+                }
                 switch (key.Key)
                 {
                     case ConsoleKey.UpArrow:

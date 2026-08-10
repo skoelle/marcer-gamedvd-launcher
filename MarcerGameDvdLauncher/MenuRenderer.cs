@@ -139,6 +139,93 @@ namespace MarcerGameDvdLauncher
             }
         }
 
+        // Invalidates the internal line cache so the next DrawMenu call
+        // performs a full redraw of every line. Useful after an overlay
+        // (e.g. help box) has overwritten the console directly.
+        public void InvalidateCache()
+        {
+            for (int i = 0; i < _cachedBuffer.Length; i++)
+                _cachedBuffer[i].Text = null!;
+        }
+
+        // Renders a centered, bordered help box with key bindings inside the
+        // available console area. The caller is responsible for waiting on a
+        // key and redrawing the menu afterwards.
+        public void ShowHelpBox(int availableLines)
+        {
+            try
+            {
+                int width = Console.WindowWidth;
+                string[] helpLines = GetHelpLines();
+                int boxHeight = Math.Min(helpLines.Length + 2, Math.Max(3, availableLines));
+                int boxWidth = Math.Max(1, width);
+                int topRow = Math.Max(0, (availableLines - boxHeight) / 2);
+
+                Console.BackgroundColor = ConsoleColor.DarkGray;
+                Console.ForegroundColor = ConsoleColor.White;
+
+                string topBorder = "+" + new string('-', Math.Max(0, boxWidth - 2)) + "+";
+                Console.SetCursorPosition(0, topRow);
+                Console.Write(topBorder);
+
+                for (int i = 0; i < boxHeight - 2; i++)
+                {
+                    int row = topRow + 1 + i;
+                    string content;
+                    if (i < helpLines.Length)
+                    {
+                        content = PadToWidth(helpLines[i], boxWidth - 2);
+                    }
+                    else
+                    {
+                        content = new string(' ', Math.Max(0, boxWidth - 2));
+                    }
+                    Console.SetCursorPosition(0, row);
+                    Console.Write("|" + content + "|");
+                }
+
+                int bottomRow = topRow + boxHeight - 1;
+                if (bottomRow < Console.WindowHeight)
+                {
+                    string bottomBorder = "+" + new string('-', Math.Max(0, boxWidth - 2)) + "+";
+                    Console.SetCursorPosition(0, bottomRow);
+                    Console.Write(bottomBorder);
+                }
+
+                Console.ResetColor();
+            }
+            catch
+            {
+            }
+        }
+
+        private static string[] GetHelpLines()
+        {
+            return [
+                "  Help — Key Bindings",
+                "  ",
+                "   ↑ / ↓      Move selection up / down",
+                "   Enter / →  Open folder / launch ZIP with Hatari",
+                "   ← / BS     Go up one directory (never exceeds root)",
+                "   ESC / Q    Exit the program",
+                "   PgUp       Jump one page up",
+                "   PgDn       Jump one page down",
+                "   *          Toggle favorite on selected ZIP",
+                "   ?          Show this help",
+                "  ",
+                "  Navigation is strictly limited to RootDirectory.",
+                "  The overlay shows both root and patch layers combined.",
+                "  ",
+                "  Press any key to continue...",
+            ];
+        }
+
+        private static string PadToWidth(string text, int width)
+        {
+            if (text.Length > width) return text.Substring(0, width);
+            return text + new string(' ', width - text.Length);
+        }
+
         // Returns foreground and background colors for an entry depending on selection state
         private (ConsoleColor fg, ConsoleColor bg) GetColors(GameEntry e, bool selected)
         {

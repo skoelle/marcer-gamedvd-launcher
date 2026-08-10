@@ -64,6 +64,7 @@ A performant, consistent console launcher for the Hatari emulator on Windows. Co
     - ESC or Q: exit the program immediately
     - PageUp/PageDown: jump exactly one screen full (window height - 1)
     - `*`: toggle favorite on selected ZIP
+    - `?`: show a help box with key bindings
     - Display always one line less than console height; no overflow/cut-off
 - **Cursor position saving per directory:**
     - The last position/selection of each directory is retained, even after Backspace

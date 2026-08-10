@@ -12,7 +12,7 @@ The implementation is split into focused modules (files) under the `MarcerGameDv
 - MarcerGameDvdLauncher/ProgramHelpers.cs: Small shared helpers (resolve relative paths, centralized console message helper) used across modules.
 - MarcerGameDvdLauncher/OverlayDirectoryBrowser.cs: Filesystem overlay and browsing logic — merges root and patch directories, enumerates folders and ZIPs, protects against path traversal and ensures navigation cannot leave the configured roots.
 - MarcerGameDvdLauncher/NavigationController.cs: Encapsulates selection, scrolling and relative-path navigation logic (cursor, page up/down, per-directory remembered selection/state).
-- MarcerGameDvdLauncher/MenuRenderer.cs: Console rendering logic — efficient per-line redraw, double-buffering and color selection according to overlay rules.
+- MarcerGameDvdLauncher/MenuRenderer.cs: Console rendering logic — efficient per-line redraw, double-buffering, color selection according to overlay rules, and the help box overlay.
 - MarcerGameDvdLauncher/HatariLauncher.cs: Responsible for validating the Hatari executable and starting Hatari with the configured argument template (replaces `{cfg}` and `{zip}`).
 - MarcerGameDvdLauncher/UIErrorService.cs: Centralized UI error presentation using the console message helper.
 
@@ -57,6 +57,7 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
   - Backspace: jump to parent directory (never outside root)
   - ESC: exit the program
   - PageUp/PageDown: jump by one page up/down through the file list
+  - `?`: show a help box with key bindings
 - The file list always shows exactly as many lines as fit the screen – ALWAYS **one line less** than the console height (`Console.WindowHeight - 1`). This avoids overflow at the bottom and ensures the selection never enters the non-visible area.
   Rationale: writing to the very last console line can cause the Windows console to auto-scroll or produce visual jumps when the cursor reaches the bottom row. Reserving one line prevents unintended scrolling/flicker and keeps the selection cursor strictly within the visible area.
   Maintenance: when changing rendering or navigation logic, always compute the displayed page size as `availableLines = Console.WindowHeight - 1` and keep this value consistent across MenuRenderer, NavigationController and any other code that references the console height.
