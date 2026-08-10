@@ -1,0 +1,21 @@
+# Ignore build artifacts
+bin/
+obj/
+# User-specific or machine-generated files
+*.user
+*.vs
+*.vscode
+*.suo
+*.userosscache
+*.sln.docstates
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Release-Verzeichnis (keine ZIPs o.ä. ins Git!)
+# Only ignore top-level release/ directory. Release directories in subfolders are allowed.
+/release/
+
+# User-specific configuration (real config, not example)
+launcher.config.json
+favorites.txt

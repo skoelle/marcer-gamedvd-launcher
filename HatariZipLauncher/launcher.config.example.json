@@ -1,0 +1,9 @@
+{
+  "RootDirectory": "C:\\Games\\Hatari\\ROMS",
+  "PatchDirectory": "C:\\Games\\Hatari\\PATCH",
+  "Hatari": {
+    "Executable": "C:\\Tools\\hatari\\hatari.exe",
+    "ConfigFile": "C:\\Tools\\hatari\\hatari-st.cfg",
+    "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
+  }
+}

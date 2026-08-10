@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            rid: win-x64
+            artifact_name: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact_name: linux-x64
+          - os: macos-latest
+            rid: osx-x64
+            artifact_name: osx-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build
+        run: dotnet publish -c Release -r ${{ matrix.rid }} -p:Version=${{ steps.version.outputs.version }} --self-contained false
+
+      - name: Create ZIP (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "HatariZipLauncher/bin/Release/net10.0/${{ matrix.rid }}/*" -DestinationPath "HatariZipLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
+
+      - name: Create ZIP (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd HatariZipLauncher/bin/Release/net10.0/${{ matrix.rid }}
+          zip -r ../../../HatariZipLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HatariZipLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}
+          path: HatariZipLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git describe --tags --abbrev=0 ${CURRENT_TAG}^ 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since ${PREV_TAG}" > release-notes.md
+            echo "" >> release-notes.md
+            git log --oneline ${PREV_TAG}..${CURRENT_TAG} >> release-notes.md
+          else
+            echo "## Initial release" > release-notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: HatariZipLauncher ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: artifacts/**/*.zip
+          generate_release_notes: false
