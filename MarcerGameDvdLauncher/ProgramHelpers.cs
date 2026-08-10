@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace HatariZipLauncher
+namespace MarcerGameDvdLauncher
 {
     // Small helpers refactored into their own file to keep Program.cs focused.
     internal static class ProgramHelpers

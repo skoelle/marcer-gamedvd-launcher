@@ -1,7 +1,7 @@
 @echo off
 
-REM === Build script for HatariZipLauncher (requires .NET SDK 6 or newer) ===
-echo Building HatariZipLauncher...
+REM === Build script for MarcerGameDvdLauncher (requires .NET SDK 6 or newer) ===
+echo Building MarcerGameDvdLauncher...
 where dotnet >nul 2>nul
 if errorlevel 1 (
   echo [ERROR] .NET SDK not found. Please install from https://dotnet.microsoft.com/download
@@ -10,7 +10,7 @@ if errorlevel 1 (
 
 REM Im aktuellen Ordner (wo build.cmd liegt) bauen
 cd /d %~dp0
-cd HatariZipLauncher
+cd MarcerGameDvdLauncher
 
 dotnet build -c Release
 if errorlevel 1 (
@@ -19,7 +19,7 @@ if errorlevel 1 (
 )
 
 REM Finden der fertigen .exe (Release-Verzeichnis)
-for /f "delims=" %%I in ('dir /b /s /a-d bin\Release\*HatariZipLauncher*.exe') do set EXEPATH=%%I
+for /f "delims=" %%I in ('dir /b /s /a-d bin\Release\*MarcerGameDvdLauncher*.exe') do set EXEPATH=%%I
 if exist "%EXEPATH%" (
   echo [OK] Build complete. EXE: "%EXEPATH%"
 ) else (

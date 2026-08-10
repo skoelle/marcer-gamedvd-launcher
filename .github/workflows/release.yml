@@ -47,19 +47,19 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          Compress-Archive -Path "HatariZipLauncher/bin/Release/net10.0/${{ matrix.rid }}/*" -DestinationPath "HatariZipLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
+          Compress-Archive -Path "MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/*" -DestinationPath "MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
 
       - name: Create ZIP (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: |
-          cd HatariZipLauncher/bin/Release/net10.0/${{ matrix.rid }}
-          zip -r ../../../HatariZipLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip .
+          cd MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}
+          zip -r ../../../MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: HatariZipLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}
-          path: HatariZipLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip
+          name: MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}
+          path: MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip
 
   release:
     needs: build
@@ -91,7 +91,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: HatariZipLauncher ${{ github.ref_name }}
+          name: MarcerGameDvdLauncher ${{ github.ref_name }}
           body_path: release-notes.md
           files: artifacts/**/*.zip
           generate_release_notes: false

@@ -1,4 +1,4 @@
-namespace HatariZipLauncher
+namespace MarcerGameDvdLauncher
 {
     class Program
     {

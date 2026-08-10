@@ -1,4 +1,4 @@
-namespace HatariZipLauncher
+namespace MarcerGameDvdLauncher
 {
     // Manages loading, saving and querying favorite ZIP paths.
     public class FavoritesService

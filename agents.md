@@ -4,17 +4,17 @@ applyTo: '**'
 
 ## Module Overview (Marcer GameDVD Launcher)
 
-The implementation is split into focused modules (files) under the `HatariZipLauncher/` folder. Keep this section up to date when files are added, removed or responsibilities change.
+The implementation is split into focused modules (files) under the `MarcerGameDvdLauncher/` folder. Keep this section up to date when files are added, removed or responsibilities change.
 
-- HatariZipLauncher/Program.cs: Minimal entry point. Sets console title and starts the application by creating `LauncherApp`.
-- HatariZipLauncher/LauncherApp.cs: Application lifecycle host — loads configuration, initializes components and runs the main directory navigation loop (contains `AppHost` internal class).
-- HatariZipLauncher/AppConfiguration.cs: POCO configuration classes (`AppConfig`, `AppHatariConfig`) used to deserialize `launcher.config.json`.
-- HatariZipLauncher/ProgramHelpers.cs: Small shared helpers (resolve relative paths, centralized console message helper) used across modules.
-- HatariZipLauncher/OverlayDirectoryBrowser.cs: Filesystem overlay and browsing logic — merges root and patch directories, enumerates folders and ZIPs, protects against path traversal and ensures navigation cannot leave the configured roots.
-- HatariZipLauncher/NavigationController.cs: Encapsulates selection, scrolling and relative-path navigation logic (cursor, page up/down, per-directory remembered selection/state).
-- HatariZipLauncher/MenuRenderer.cs: Console rendering logic — efficient per-line redraw, double-buffering and color selection according to overlay rules.
-- HatariZipLauncher/HatariLauncher.cs: Responsible for validating the Hatari executable and starting Hatari with the configured argument template (replaces `{cfg}` and `{zip}`).
-- HatariZipLauncher/UIErrorService.cs: Centralized UI error presentation using the console message helper.
+- MarcerGameDvdLauncher/Program.cs: Minimal entry point. Sets console title and starts the application by creating `LauncherApp`.
+- MarcerGameDvdLauncher/LauncherApp.cs: Application lifecycle host — loads configuration, initializes components and runs the main directory navigation loop (contains `AppHost` internal class).
+- MarcerGameDvdLauncher/AppConfiguration.cs: POCO configuration classes (`AppConfig`, `AppHatariConfig`) used to deserialize `launcher.config.json`.
+- MarcerGameDvdLauncher/ProgramHelpers.cs: Small shared helpers (resolve relative paths, centralized console message helper) used across modules.
+- MarcerGameDvdLauncher/OverlayDirectoryBrowser.cs: Filesystem overlay and browsing logic — merges root and patch directories, enumerates folders and ZIPs, protects against path traversal and ensures navigation cannot leave the configured roots.
+- MarcerGameDvdLauncher/NavigationController.cs: Encapsulates selection, scrolling and relative-path navigation logic (cursor, page up/down, per-directory remembered selection/state).
+- MarcerGameDvdLauncher/MenuRenderer.cs: Console rendering logic — efficient per-line redraw, double-buffering and color selection according to overlay rules.
+- MarcerGameDvdLauncher/HatariLauncher.cs: Responsible for validating the Hatari executable and starting Hatari with the configured argument template (replaces `{cfg}` and `{zip}`).
+- MarcerGameDvdLauncher/UIErrorService.cs: Centralized UI error presentation using the console message helper.
 
 Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (agents.md) and README.md as required by project policy.
 **Note for Automated Tests/CI:**
@@ -35,7 +35,7 @@ Additional policy:
 - README.md must be written in English. Any functional change that affects usage, configuration, or behavior MUST update README.md in English immediately after the change. If there are consequential changes to developer-facing policies, build steps, or requirements, `agents.md` must be updated as well.
 
 Developer note: Visual Studio Solution
-- A Visual Studio solution file exists at the repository root: `marcer-gamedvd-launcher.sln`. Developers may open this solution in Visual Studio to work on the project, debug and build from the IDE. The solution references `HatariZipLauncher\HatariZipLauncher.csproj` and includes Debug and Release configurations. Use `build.cmd` (Windows) or `build.sh` (Linux) and `start.cmd` for consistent command-line builds/releases as described elsewhere in this document.
+- A Visual Studio solution file exists at the repository root: `marcer-gamedvd-launcher.sln`. Developers may open this solution in Visual Studio to work on the project, debug and build from the IDE. The solution references `MarcerGameDvdLauncher\MarcerGameDvdLauncher.csproj` and includes Debug and Release configurations. Use `build.cmd` (Windows) or `build.sh` (Linux) and `start.cmd` for consistent command-line builds/releases as described elsewhere in this document.
 
 With this, it is ensured that binary/release files never end up in git, and the release process is always traceable and performed exclusively manually in the web interface.
 

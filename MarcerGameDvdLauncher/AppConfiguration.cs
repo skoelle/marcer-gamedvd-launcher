@@ -1,4 +1,4 @@
-namespace HatariZipLauncher
+namespace MarcerGameDvdLauncher
 {
     // Configuration POCOs separated into their own file for clarity
     public class AppHatariConfig

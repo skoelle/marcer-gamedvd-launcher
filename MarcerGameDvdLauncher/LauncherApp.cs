@@ -1,4 +1,4 @@
-namespace HatariZipLauncher
+namespace MarcerGameDvdLauncher
 {
     // Encapsulates application lifecycle: load config, initialize components, run navigation
     public class LauncherApp

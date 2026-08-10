@@ -1,4 +1,4 @@
-namespace HatariZipLauncher;
+namespace MarcerGameDvdLauncher;
 
 /// <summary>
 /// Centralized service for error and user message output in the console UI.

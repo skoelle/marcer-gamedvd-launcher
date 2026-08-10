@@ -1,4 +1,4 @@
-namespace HatariZipLauncher
+namespace MarcerGameDvdLauncher
 {
     public enum EntryKind { Directory, Zip }
 

@@ -2,7 +2,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.6.33424.171
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HatariZipLauncher", "HatariZipLauncher\HatariZipLauncher.csproj", "{B1D2C3E4-F567-48AB-C9D0-1234567890AB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarcerGameDvdLauncher", "MarcerGameDvdLauncher\MarcerGameDvdLauncher.csproj", "{B1D2C3E4-F567-48AB-C9D0-1234567890AB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# === Build script for HatariZipLauncher (requires .NET SDK 6 or newer) ===
-echo "Building HatariZipLauncher..."
+# === Build script for MarcerGameDvdLauncher (requires .NET SDK 6 or newer) ===
+echo "Building MarcerGameDvdLauncher..."
 
 if ! command -v dotnet &> /dev/null; then
     echo "[ERROR] .NET SDK not found. Please install from https://dotnet.microsoft.com/download"
@@ -11,8 +11,8 @@ fi
 # Build in current directory (where build.sh is located)
 cd "$(dirname "$0")"
 
-# Change to HatariZipLauncher subdirectory
-cd "HatariZipLauncher"
+# Change to MarcerGameDvdLauncher subdirectory
+cd "MarcerGameDvdLauncher"
 
 dotnet build -c Release
 if [ $? -ne 0 ]; then
@@ -21,7 +21,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Check for the built .exe file
-EXEPATH=$(find "bin/Release" -name "HatariZipLauncher*.exe" -print -quit 2>/dev/null)
+EXEPATH=$(find "bin/Release" -name "MarcerGameDvdLauncher*.exe" -print -quit 2>/dev/null)
 if [ -n "$EXEPATH" ] && [ -f "$EXEPATH" ]; then
     echo "[OK] Build complete. EXE: \"$EXEPATH\""
 else
