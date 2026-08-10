@@ -81,7 +81,14 @@ jobs:
           CURRENT_TAG="${GITHUB_REF_NAME}"
           PREV_TAG=$(git describe --tags --abbrev=0 ${CURRENT_TAG}^ 2>/dev/null || echo "")
 
-          if [ -n "$PREV_TAG" ]; then
+          # Get the full commit message body of the release commit
+          # (the empty commit created by /create-release)
+          COMMIT_HASH=$(git rev-list -n 1 ${CURRENT_TAG})
+          BODY=$(git log -1 --format=%b ${COMMIT_HASH})
+
+          if [ -n "$BODY" ]; then
+            echo "$BODY" > release-notes.md
+          elif [ -n "$PREV_TAG" ]; then
             echo "## Changes since ${PREV_TAG}" > release-notes.md
             echo "" >> release-notes.md
             git log --oneline ${PREV_TAG}..${CURRENT_TAG} >> release-notes.md
