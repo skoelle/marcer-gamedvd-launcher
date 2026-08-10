@@ -129,6 +129,18 @@ scripts/start.sh
 
 > ⚠️ Do **not** use `dotnet build` or `dotnet run` directly — always use the platform build script to ensure consistent output.
 
+### 🧪 Demo Mode
+
+`demo.sh` creates a complete test environment with fake ZIPs and two layers (root + patch), then launches the launcher:
+
+```bash
+scripts/demo.sh
+```
+
+This builds the project, generates a structured `.demo/` directory with sample folders and ZIPs, writes a matching `launcher.config.json`, and starts the launcher. Useful for quickly testing overlay behavior and navigation without setting up real game files.
+
+> ⚠️ Windows is not supported for `demo.sh`. Use `start.cmd` with your own game files instead.
+
 ### 🚀 Release Process
 
 Releases are automated via GitHub Actions (`.github/workflows/release.yml`).
