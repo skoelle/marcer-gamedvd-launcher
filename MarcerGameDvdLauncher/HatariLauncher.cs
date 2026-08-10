@@ -11,11 +11,9 @@ namespace MarcerGameDvdLauncher
             if (string.IsNullOrWhiteSpace(exePath))
                 throw new ArgumentNullException(nameof(exePath));
 
-            // Defensive validation: ensure the executable exists and looks like an .exe
+            // Defensive validation: ensure the executable exists
             if (!File.Exists(exePath))
                 throw new ArgumentException($"Hatari executable not found: {exePath}", nameof(exePath));
-            if (!string.Equals(Path.GetExtension(exePath), ".exe", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException($"Hatari executable must be an .exe file: {exePath}", nameof(exePath));
 
             _exePath = exePath;
             _cfgPath = cfgPath;

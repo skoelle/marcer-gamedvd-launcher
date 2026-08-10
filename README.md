@@ -113,13 +113,13 @@ Example `launcher.config.example.json`:
 Fields:
 - RootDirectory: Absolute (or relative) path to the game root. Navigation must never leave this root directory.
 - PatchDirectory: Optional overlay/patch directory (merged with the main root at runtime).
-- Hatari.Executable: Full path to `hatari.exe`.
+- Hatari.Executable: Full path to the Hatari executable.
 - Hatari.ConfigFile: Full path to the Hatari configuration file.
 - Hatari.ArgsTemplate: Argument template used to start Hatari. Use `{cfg}` for the Hatari config file path and `{zip}` for the ZIP file to launch.
 
 Notes:
 - Relative paths are resolved relative to the EXE directory (AppContext.BaseDirectory). This makes behavior consistent when running from the build output folder.
- - Hatari.Executable is validated at startup: the file must exist and have an .exe extension. Relative paths for Hatari settings are resolved against the EXE folder.
+ - Hatari.Executable is validated at startup: the file must exist. Relative paths for Hatari settings are resolved against the EXE folder.
 - `Hatari.ArgsTemplate` must contain at least the `{zip}` placeholder. Example: `-c "{cfg}" --disk-a "{zip}"`.
 - The program performs a straight string substitution of `{cfg}` and `{zip}`; it does not add additional quoting logic. Therefore include quotes around placeholders in the template if your paths contain spaces (as in the example).
 - `launcher.config.example.json` is copied to the output directory by the csproj (`CopyToOutputDirectory=PreserveNewest`).

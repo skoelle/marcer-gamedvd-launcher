@@ -75,7 +75,7 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
 - Empty directories must be displayed correctly (or reported correctly).
 - In the root directory, Backspace must have no effect (no error, do not leave the program).
 - Navigation (Backspace, Enter, etc.) must remain robust even for very deep or large directory trees.
- - Hatari.Executable is validated during startup: the path is resolved (relative to the EXE directory when applicable) and must point to an existing .exe file. If validation fails the program must present a clear error and exit.
+ - Hatari.Executable is validated during startup: the path is resolved (relative to the EXE directory when applicable) and must point to an existing file. If validation fails the program must present a clear error and exit.
 
 ### Miscellaneous
 - Optional: Build and start scripts (build.cmd / build.sh / start.cmd) are present, adapt as needed.
