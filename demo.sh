@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+# Licensed under the MIT License. See LICENSE file in project root for details.
+
 # === Demo setup and run script for MarcerGameDvdLauncher ===
 # Creates a structured test directory with main and patch layers,
 # populates them with fake ZIPs, then launches the launcher.

@@ -212,3 +212,9 @@ Releases are automated via GitHub Actions (`.github/workflows/release.yml`).
 - Full technical requirements and build rules are in [`AGENTS.md`](AGENTS.md).
 - After any functional change, both `README.md` and `AGENTS.md` must be updated.
 - Every release **must** include release notes listing all changes and bugfixes.
+
+---
+
+## License
+
+Licensed under the [MIT License](LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

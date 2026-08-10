@@ -1,3 +1,5 @@
+REM Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+REM Licensed under the MIT License. See LICENSE file in project root for details.
 @echo off
 
 REM === Build script for MarcerGameDvdLauncher (requires .NET SDK 6 or newer) ===

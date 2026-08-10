@@ -128,3 +128,9 @@ Note: The ConsoleColor mapping above is authoritative for the application. If yo
 - Navigation is always based strictly on the **relative path from root** and is consistent on all levels (Backspace always moves up one level, Enter always moves one level deeper, regardless of which layer).
 
 ---
+
+## License
+
+MIT License - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+- Full text in `LICENSE`
+- License headers in all source code files

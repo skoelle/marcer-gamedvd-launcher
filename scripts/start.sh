@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+# Licensed under the MIT License. See LICENSE file in project root for details.
+
 # Starts MarcerGameDvdLauncher (script is in scripts/, code in src/)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXE_PATH="$SCRIPT_DIR/../src/MarcerGameDvdLauncher/bin/Release/net10.0/MarcerGameDvdLauncher"
