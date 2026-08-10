@@ -6,16 +6,16 @@ applyTo: '**'
 
 The implementation is split into focused modules (files) under the `src/MarcerGameDvdLauncher/` folder. Keep this section up to date when files are added, removed or responsibilities change.
 
-- MarcerGameDvdLauncher/Program.cs: Minimal entry point. Sets console title and starts the application by creating `LauncherApp`.
-- MarcerGameDvdLauncher/LauncherApp.cs: Application lifecycle host — loads configuration, initializes components and runs the main directory navigation loop (contains `AppHost` internal class).
-- MarcerGameDvdLauncher/AppConfiguration.cs: POCO configuration classes (`AppConfig`, `AppHatariConfig`) used to deserialize `launcher.config.json`.
-- MarcerGameDvdLauncher/ProgramHelpers.cs: Small shared helpers (resolve relative paths, centralized console message helper) used across modules.
+- MarcerGameDvdLauncher/Program.cs: Minimal entry point. Sets the console title (via `DefaultTitle` constant) and starts the application by creating `LauncherApp`.
+- MarcerGameDvdLauncher/LauncherApp.cs: Application lifecycle host — loads configuration, initializes components and runs the main directory navigation loop (contains `AppHost` internal class). Key-handling logic is delegated to `InputController`.
+- MarcerGameDvdLauncher/AppConfiguration.cs: POCO configuration classes (`AppConfig`, `AppHatariConfig`, `AppColorConfig`) used to deserialize `launcher.config.json`; color values resolved via `Enum.TryParse<ConsoleColor>` with default fallback.
+- MarcerGameDvdLauncher/ProgramHelpers.cs: Small shared helpers (resolve relative paths, centralized console message helper, input buffer flushing) used across modules.
 - MarcerGameDvdLauncher/OverlayDirectoryBrowser.cs: Filesystem overlay and browsing logic — merges root and patch directories, enumerates folders and ZIPs, protects against path traversal and ensures navigation cannot leave the configured roots.
-- MarcerGameDvdLauncher/NavigationController.cs: Encapsulates selection, scrolling and relative-path navigation logic (cursor, page up/down, per-directory remembered selection/state).
-- MarcerGameDvdLauncher/MenuRenderer.cs: Console rendering logic — efficient per-line redraw, double-buffering, color selection according to overlay rules, and the help box overlay.
+- MarcerGameDvdLauncher/NavigationController.cs: Encapsulates selection, scrolling and relative-path navigation logic (cursor, page up/down, per-directory remembered selection/state); uses named scroll-fraction constants.
+- MarcerGameDvdLauncher/MenuRenderer.cs: Console rendering logic — efficient per-line redraw, double-buffering, configurable color selection via injected `AppColorConfig`, and the help box overlay.
+- MarcerGameDvdLauncher/InputController.cs: Handles key events (arrow keys, Enter, Backspace, PageUp/Down, `*`, `?`, ESC) and the associated navigation/drawing logic; owns `ReloadGameEntries` and the virtual `Favorites` folder integration.
 - MarcerGameDvdLauncher/HatariLauncher.cs: Responsible for validating the Hatari executable and starting Hatari with the configured argument template (replaces `{cfg}` and `{zip}`).
-- MarcerGameDvdLauncher/FavoritesService.cs: Manages the favorites/bookmark system — toggling favorites on ZIPs, persisting them to `favorites.txt`, and providing the virtual `Favorites` folder view.
-- MarcerGameDvdLauncher/DirectoryService.cs: Filesystem service layer — enumerates directories and ZIPs, resolves paths, and provides the underlying I/O operations used by OverlayDirectoryBrowser.
+- MarcerGameDvdLauncher/FavoritesService.cs: Manages the favorites/bookmark system — toggling favorites on ZIPs, persisting them to `favorites.txt` (via `DefaultFileName` constant), and providing the virtual `Favorites` folder view (via `FavoritesRootName` constant).
 - MarcerGameDvdLauncher/UIErrorService.cs: Centralized UI error presentation using the console message helper.
 
 Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (AGENTS.md) and README.md as required by project policy.
@@ -62,7 +62,7 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
   - `?`: show a help box with key bindings
 - The file list always shows exactly as many lines as fit the screen – ALWAYS **one line less** than the console height (`Console.WindowHeight - 1`). This avoids overflow at the bottom and ensures the selection never enters the non-visible area.
   Rationale: writing to the very last console line can cause the Windows console to auto-scroll or produce visual jumps when the cursor reaches the bottom row. Reserving one line prevents unintended scrolling/flicker and keeps the selection cursor strictly within the visible area.
-  Maintenance: when changing rendering or navigation logic, always compute the displayed page size as `availableLines = Console.WindowHeight - 1` and keep this value consistent across MenuRenderer, NavigationController and any other code that references the console height.
+   Maintenance: when changing rendering or navigation logic, always compute the displayed page size as `availableLines = ProgramHelpers.AvailableLines` (which resolves to `Console.WindowHeight - 1`) and keep this value consistent across MenuRenderer, NavigationController and any other code that references the console height.
 - There is no information line/path display.
 - Cursor and scroll logic:
   - The selection cursor must always remain in the visible area.
@@ -114,15 +114,18 @@ Each entry is displayed with a left label indicating its layer status:
 - **`[ROOT]`**: Entry exists only in main (root) layer
 - **`[PTCH]`**: Entry exists only in patch layer
 
-Color mapping:
-- Folder in both layers: **ConsoleColor.Yellow** (`[BOTH]`)
-- Folder only in patch layer: **ConsoleColor.DarkYellow** (`[PTCH]`)
-- Folder only in main layer: **ConsoleColor.Gray** (`[ROOT]`)
-- ZIP in both layers: **ConsoleColor.Green** (`[BOTH]`)
-- ZIP only in main layer: **ConsoleColor.DarkGreen** (`[ROOT]`)
-- ZIP only in patch layer: **ConsoleColor.Magenta** (`[PTCH]`)
+Color mapping (now configurable via the `Colors` section in `launcher.config.json`; defaults shown below):
+- Folder in both layers: **Yellow** (`[BOTH]`) → `FolderBoth`
+- Folder only in patch layer: **DarkYellow** (`[PTCH]`) → `FolderPatchOnly`
+- Folder only in main layer: **Gray** (`[ROOT]`) → `FolderRootOnly`
+- ZIP in both layers: **Green** (`[BOTH]`) → `ZipBoth`
+- ZIP only in main layer: **DarkGreen** (`[ROOT]`) → `ZipRootOnly`
+- ZIP only in patch layer: **Magenta** (`[PTCH]`) → `ZipPatchOnly`
+- Selected entry foreground: **Black** → `SelectedForeground`
+- Selected entry background: **DarkCyan** → `SelectedBackground`
+- Virtual entry (Favorites pseudo-folder): **White** → `VirtualEntry`
 
-Note: The ConsoleColor mapping above is authoritative for the application. If you change color values in code (MenuRenderer/GetColorForEntry), update this section to keep documentation and implementation in sync.
+Note: Color values are resolved in `MenuRenderer` from the injected `AppColorConfig` (populated in `LauncherApp.LoadConfiguration` via `Enum.TryParse<ConsoleColor>` with default fallback). Invalid or missing values fall back to the defaults above. If you change default color values in `AppColorConfig`, update this section and the README color tables to keep documentation and implementation in sync.
 
 ### Navigation
 - Navigation is always based strictly on the **relative path from root** and is consistent on all levels (Backspace always moves up one level, Enter always moves one level deeper, regardless of which layer).

@@ -4,21 +4,18 @@ Ziel: Das Repo aufräumen (Doku, Code, Config)
 
 ## 1. Code-Qualität – Schwächen beheben (harmlos, rein refaktoriell)
 
-- [ ] **LauncherApp.cs zerlegen:** Die ~300-Zeilen-Klasse in separate Klassen aufteilen
-  (z.B. `InputController`/`KeyHandler` für den switch-Block, Lifecycle bleibt in LauncherApp).
+- [x] **LauncherApp.cs zerlegen:** Die ~300-Zeilen-Klasse in separate Klassen aufteilen
+  (InputController.cs extrahiert mit Key-Handling + ReloadGameEntries; Lifecycle & Main-Loop bleiben in AppHost).
   Ziel: keine Funktionsänderung, nur Struktur.
 - [ ] **Magische Strings entfernen / zentralisieren (nur im Code, siehe 2c):**
-  - [ ] Virtueller Ordnername `"Favorites"` (LauncherApp.cs) → gemeinsame Konstante (nicht konfigurierbar).
-  - [ ] Dateiname `"favorites.txt"` (LauncherApp.cs) → Konstante in FavoritesService (nicht konfigurierbar).
-  - [ ] Console-Titel `"Marcer GameDVD Launcher"` (Program.cs) → Konstante (nicht konfigurierbar).
-  - [ ] Default-ArgsTemplate `-c "{cfg}" --disk-a "{zip}"` (LauncherApp.cs) → redundanten Fallback
-        entfernen; Config liefert den Template (ist schon in der example definiert, Validation `{zip}` existiert).
-- [ ] **Scroll-Trigger magische Zahlen** (NavigationController.cs: `2/3`, `1/3`) in benannte Konstanten
-      (z.B. `BottomScrollFraction = 2f/3f`) mit Kommentar aufzählen.
-  - [ ] Redundanz beseitigen: `RedrawEntry` hat unnötige `maxRow`-Logik; `EnsureCacheForRow` ungenau →
-        klarer formulieren.
-- [ ] **Fehler-Schlucken besprechen:** `FavoritesService.Save()` (catch leer) und `UIErrorService` –
-      entweder Kommentar ergänzen („bewusst still") oder Rückgabewert einführen.
+  - [x] Virtueller Ordnername `"Favorites"` → `FavoritesService.FavoritesRootName` Konstante (nicht konfigurierbar).
+  - [x] Dateiname `"favorites.txt"` → `FavoritesService.DefaultFileName` Konstante (nicht konfigurierbar).
+  - [x] Console-Titel `"Marcer GameDVD Launcher"` (Program.cs) → `DefaultTitle` Konstante (nicht konfigurierbar).
+  - [x] Default-ArgsTemplate `-c "{cfg}" --disk-a "{zip}"` (LauncherApp.cs) → redundanten Fallback entfernt; Config liefert das Template (Validation `{zip}` existiert schon).
+- [x] **Scroll-Trigger magische Zahlen** (NavigationController.cs: `2/3`, `1/3`) in benannte Konstanten
+      (`BottomScrollFraction = 2.0/3.0`, `TopScrollFraction = 1.0/3.0`) mit Kommentar aufzählen.
+  - [x] Redundanz beseitigen: `RedrawEntry` — überflüssige `maxRow`-Logik entfernt, `EnsureCacheForRow` durch `EnsureCache` ersetzt (klare Formulierung).
+- [x] **Fehler-Schlucken besprechen:** `FavoritesService.Save()` (catch leer) — Kommentar korrigiert ("bewusst still", erklärt warum Persistence-Fehler nicht zum Absturz führen); `UIErrorService` — DocComment erweitert (Fehler werden gezeigt, nicht regeworfen, App bleibt im Loop).
 - [ ] (Optional) Testprojekt hinzufügen für NavigationController & OverlayDirectoryBrowser –
       vorab mit Nutzer klären, da Policy bisher keine Tests vorsieht.
 
@@ -33,29 +30,25 @@ Ziel: Das Repo aufräumen (Doku, Code, Config)
 - Ziel: Farben (Foreground pro Entry-Typ + Selection-Farben) in `launcher.config.json` konfigurierbar
   machen (**Entscheidung: ja, konfigurierbar**), mit Default-Fallback auf heutige Werte.
 
-- [ ] `AppConfig` erweitern: neuen Abschnitt z.B. `"Colors"` hinzufügen:
-      - [ ] POCO `AppColorConfig` mit `ConsoleColor`-Werten (als String, z.B. `"Yellow"`):
-            - FolderBoth, FolderPatchOnly, FolderRootOnly,
-              ZipBoth, ZipRootOnly, ZipPatchOnly,
-              SelectedForeground, SelectedBackground, VirtualEntry(vorab optional).
-      - [ ] Deserialisierung per `Enum.TryParse<ConsoleColor>` + Default-Fallback.
-      - [ ] `MenuRenderer` bekommt optional passende `AppColorConfig` (Konstruktor-Injection);
-            `GetColorForEntry`/`GetColors` nutzen Config statt Konstanten.
-      - [ ] Falls Config-Werte fehlen → heutiges Verhalten beibehalten (fallback).
-- [ ] Doku synchronisieren: README + AGENTS.md Farbtabellen auf Config-Felder verlinken.
-- [ ] Beispielwerte ins `launcher.config.example.json` aufnehmen.
+- [x] `AppConfig` erweitern: neuen Abschnitt `"Colors"` hinzugefügt:
+      - [x] POCO `AppColorConfig` mit `ConsoleColor`-Werten (als String, z.B. `"Yellow"`):
+            FolderBoth, FolderPatchOnly, FolderRootOnly, ZipBoth, ZipRootOnly, ZipPatchOnly,
+            SelectedForeground, SelectedBackground, VirtualEntry.
+      - [x] Deserialisierung per `Enum.TryParse<ConsoleColor>` + Default-Fallback (manuell via `ParseAppColors`/`ParseColorField`).
+      - [x] `MenuRenderer` bekommt `AppColorConfig` via Konstruktor-Injection; `GetColorForEntry`/`GetColors` nutzen Config statt Konstanten.
+      - [x] Falls Config-Werte fehlen → heutiges Verhalten beibehalten (fallback).
+- [x] Doku synchronisiert: README + AGENTS.md Farbtabellen auf Config-Felder verlinkt.
+- [x] Beispielwerte ins `launcher.config.example.json` aufgenommen.
 
 ### 2b. Benutzer-Config (User-Config) – entschieden
 
 Ziel: die echte lokale Config gehört NICHT ins Repo, sondern bleibt lokal.
 
-- [ ] **Entscheidung getroffen (Variante 1):** `launcher.config.json` bleibt im Build-Output/EXE-Ordner
-      (lokal, gitignored). Die `launcher.config.example.json` wird beim Release mitgeliefert und der
-      Nutzer passt sie sich manuell an → kopieren zu `launcher.config.json`.
-- [ ] KEINE zusätzliche Suchreihenfolge (`%APPDATA%`, `~/.config`) implementieren.
-- [ ] KEIN CLI-Parameter `--config` einführen.
-- [ ] `.gitignore` entsprechend ergänzen (echte `launcher.config.json` + `favorites.txt` werden nie committet).
-- [ ] README: Abschnitt „Configuration" beschreibt nur das manuelle Kopieren der example.
+- [x] **Entscheidung getroffen (Variante 1):** `launcher.config.json` bleibt im Build-Output/EXE-Ordner (lokal, gitignored). Die `launcher.config.example.json` wird beim Release mitgeliefert und der Nutzer kopiert sie manuell zu `launcher.config.json`.
+- [x] KEINE zusätzliche Suchreihenfolge (`%APPDATA%`, `~/.config`) implementiert — Pfad ist ausschließlich `AppContext.BaseDirectory`.
+- [x] KEIN CLI-Parameter `--config` eingeführt.
+- [x] `.gitignore` ergänzt: `launcher.config.json` und `favorites.txt` werden nie committet.
+- [x] README: Abschnitt „Configuration" beschreibt manuelles Kopieren der example.
 
 ### 2c. Platzhalterwerte zentralisieren (sehr detailliert)
 
@@ -80,13 +73,12 @@ externe Anpassungsmöglichkeit dafür.
 
 **Verbindliche To-dos für 2c:**
 
-- [ ] Konstanten/Helfer einführen für: Favorites-Ordnername, `favorites.txt`, Konsolen-Titel,
-      Scroll-Anteile, `AvailableLines`-Helfer.
-- [ ] Default-ArgsTemplate-Fallback entfernen; Config muss `ArgsTemplate` immer liefern.
-- [ ] Alle vorkommenden String-Literale auf die neuen Konstanten zurückführen (kein doppeltes `"Favorites"` mehr).
-- [ ] Kommentare ergänzen, die erklären, WARUM der Wert fest ist (z.B. `WindowHeight-1` als Policy).
-- [ ] Win32-Konstanten (Punkt 7) NICHT anfassen, nur per Kommentar als „bewusst hartkodiert" markieren.
-- [ ] README/agents nicht um diese rein implementativen Werte erweitern (keine Config-Felder dokumentieren);
+- [x] Konstanten/Helfer eingeführt für: `FavoritesRootName` (FavoritesService), `DefaultFileName` (FavoritesService), `DefaultTitle` (Program), `BottomScrollFraction`/`TopScrollFraction` (NavigationController), `AvailableLines`-Helfer (ProgramHelpers).
+- [x] Default-ArgsTemplate-Fallback entfernt; Config muss `ArgsTemplate` immer liefern (Validation existiert bereits).
+- [x] Alle String-Literale auf Konstanten zurückgeführt (kein doppeltes `"Favorites"` mehr — nur die Konstantendefinition).
+- [x] Kommentare ergänzt, die erklären, WARUM Werte fest sind (`AvailableLines` als Policy, Win32-Konstanten als API-konstant, Scroll-Anteile als feste Navigation).
+- [x] Win32-Konstanten (Punkt 7) NICHT angefasst, nur per Kommentar als „bewusst hartkodiert" markiert.
+- [x] README/agents nicht um diese rein implementativen Werte erweitert (keine Config-Felder dokumentiert);
       Doku bleibt bei nutzersichtbaren, konfigurierbaren Werten (Farben, Titel, RootDir/Patch/Hatari).
 
 ---

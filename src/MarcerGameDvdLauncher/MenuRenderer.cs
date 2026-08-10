@@ -11,6 +11,14 @@ namespace MarcerGameDvdLauncher
         private LineState[] _cachedBuffer = Array.Empty<LineState>();
         private int _cachedWidth = -1;
 
+        // Color configuration (injected; defaults to built-in scheme if null)
+        private readonly AppColorConfig _colors;
+
+        public MenuRenderer(AppColorConfig? colors = null)
+        {
+            _colors = colors ?? new AppColorConfig();
+        }
+
         // availableLines is provided per-draw so the renderer adapts to console resizes
         public void DrawMenu(List<GameEntry> entries, int scrollOffset, int selectedIndex, int availableLines, Func<GameEntry, bool>? isFavorite = null)
         {
@@ -43,11 +51,8 @@ namespace MarcerGameDvdLauncher
             }
 
             // Diff & write only changed lines
-            // Use the caller-provided availableLines (which should be Console.WindowHeight - 1)
-            int maxRow = Math.Max(0, availableLines - 1);
             for (int row = 0; row < availableLines; row++)
             {
-                if (row > maxRow) break;
                 var newLine = newBuffer[row];
                 var oldLine = _cachedBuffer[row];
                 if (oldLine.Text != newLine.Text || oldLine.Fg != newLine.Fg || oldLine.Bg != newLine.Bg)
@@ -63,26 +68,16 @@ namespace MarcerGameDvdLauncher
         {
             if (entryIdx < 0 || entryIdx >= entries.Count) return;
             availableLines = Math.Max(1, availableLines);
-            int maxRow = Math.Max(0, availableLines - 1);
-            if (row < 0 || row > maxRow) return;
+            // row is a visual row within the visible window; validate against availableLines
+            if (row < 0 || row >= availableLines) return;
 
             int width = Console.WindowWidth;
-            // ensure cache is valid for current width/height and the target row
-            EnsureCacheForRow(width, Math.Min(availableLines, Math.Max(1, _cachedBuffer.Length == 0 ? 1 : _cachedBuffer.Length)));
+            // Ensure the cache matches the current dimensions (same as DrawMenu)
+            EnsureCache(width, availableLines);
 
             var e = entries[entryIdx];
+            var (fg, bg) = GetColors(e, selected);
             string text = BuildLineText(e, width, isFavorite?.Invoke(e) ?? false);
-            ConsoleColor fg, bg;
-            if (selected)
-            {
-                bg = ConsoleColor.DarkCyan;
-                fg = ConsoleColor.Black;
-            }
-            else
-            {
-                bg = ConsoleColor.Black;
-                fg = GetColorForEntry(e);
-            }
 
             var newLine = new LineState { Text = text, Fg = fg, Bg = bg };
             // If cache differs, write
@@ -109,18 +104,6 @@ namespace MarcerGameDvdLauncher
             {
                 _cachedBuffer = new LineState[availableLines];
                 for (int i = 0; i < availableLines; i++) _cachedBuffer[i].Text = null!;
-                _cachedWidth = width;
-            }
-        }
-
-        // Ensures the cached buffer has at least requiredRows entries and matches width.
-        private void EnsureCacheForRow(int width, int requiredRows)
-        {
-            if (_cachedBuffer.Length < requiredRows || _cachedWidth != width)
-            {
-                int newLen = Math.Max(requiredRows, 1);
-                _cachedBuffer = new LineState[newLen];
-                for (int i = 0; i < newLen; i++) _cachedBuffer[i].Text = null!;
                 _cachedWidth = width;
             }
         }
@@ -229,12 +212,13 @@ namespace MarcerGameDvdLauncher
             return text + new string(' ', width - text.Length);
         }
 
-        // Returns foreground and background colors for an entry depending on selection state
+        // Returns foreground and background colors for an entry depending on selection state.
+        // Selected colors and entry colors come from the injected AppColorConfig.
         private (ConsoleColor fg, ConsoleColor bg) GetColors(GameEntry e, bool selected)
         {
             if (selected)
             {
-                return (ConsoleColor.Black, ConsoleColor.DarkCyan);
+                return (_colors.SelectedForeground, _colors.SelectedBackground);
             }
             else
             {
@@ -306,20 +290,20 @@ namespace MarcerGameDvdLauncher
 
         private ConsoleColor GetColorForEntry(GameEntry e)
         {
-            // Virtual entries (like the Favorites pseudo-folder) should be white
-            if (e.IsVirtual) return ConsoleColor.White;
+            // Virtual entries (like the Favorites pseudo-folder) use the configured VirtualEntry color
+            if (e.IsVirtual) return _colors.VirtualEntry;
 
             if (e.Kind == EntryKind.Directory)
             {
-                if (e.InRoot && e.InPatch) return ConsoleColor.Yellow;       // Both layers
-                if (e.InPatch && !e.InRoot) return ConsoleColor.DarkYellow;  // Only patch
-                if (e.InRoot && !e.InPatch) return ConsoleColor.Gray;        // Only root
+                if (e.InRoot && e.InPatch) return _colors.FolderBoth;       // Both layers
+                if (e.InPatch && !e.InRoot) return _colors.FolderPatchOnly;  // Only patch
+                if (e.InRoot && !e.InPatch) return _colors.FolderRootOnly;   // Only root
             }
             else if (e.Kind == EntryKind.Zip)
             {
-                if (e.InRoot && e.InPatch) return ConsoleColor.Green;        // Both layers
-                if (e.InRoot && !e.InPatch) return ConsoleColor.DarkGreen;   // Only root
-                if (e.InPatch && !e.InRoot) return ConsoleColor.Magenta;     // Only patch
+                if (e.InRoot && e.InPatch) return _colors.ZipBoth;           // Both layers
+                if (e.InRoot && !e.InPatch) return _colors.ZipRootOnly;     // Only root
+                if (e.InPatch && !e.InRoot) return _colors.ZipPatchOnly;     // Only patch
             }
             return ConsoleColor.DarkGray;
         }

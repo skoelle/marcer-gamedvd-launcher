@@ -9,6 +9,11 @@ namespace MarcerGameDvdLauncher
     // Small helpers refactored into their own file to keep Program.cs focused.
     internal static class ProgramHelpers
     {
+        // The console window height minus one. The last row is reserved to prevent
+        // auto-scroll / flicker when the cursor reaches the bottom row (project policy).
+        // Centralized here so the policy lives in exactly one place.
+        public static int AvailableLines => Math.Max(0, Console.WindowHeight - 1);
+
         // Flushes the console input buffer to avoid processing leftover key events
         // Uses Win32 FlushConsoleInputBuffer on the standard input handle. On non-Windows
         // environments this will be a no-op.
@@ -31,6 +36,8 @@ namespace MarcerGameDvdLauncher
             }
         }
 
+        // Win32 API constants — intentionally hardcoded (bewusst hartkodiert).
+        // These are defined by the Windows API and do not change.
         private const int STD_INPUT_HANDLE = -10;
 
         [System.Runtime.InteropServices.DllImport("kernel32.dll")]
@@ -41,6 +48,7 @@ namespace MarcerGameDvdLauncher
         private static extern bool FlushConsoleInputBuffer(IntPtr hConsoleInput);
 
         // P/Invoke to query key state (used to detect physical key release)
+        // Win32 virtual-key code — intentionally hardcoded (bewusst hartkodiert).
         private const int VK_RETURN = 0x0D;
 
         [DllImport("user32.dll")]
@@ -55,7 +63,7 @@ namespace MarcerGameDvdLauncher
         {
             try
             {
-                int lastRow = Math.Max(0, Console.WindowHeight - 1);
+                int lastRow = AvailableLines;
                 int width = Console.WindowWidth;
                 string text = message ?? string.Empty;
                 if (text.Length > width) text = text.Substring(0, Math.Max(0, width - 3)) + "...";

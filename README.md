@@ -16,7 +16,9 @@ Built for the [Marcer GameDVD](https://www.facebook.com/groups/360493904888475/)
 
 ### Color Scheme
 
-| Entry | Label | Color | Meaning |
+Colors are configurable via the `Colors` section in `launcher.config.json` (see [Configuration](#-configuration)). Defaults are shown below:
+
+| Entry | Label | Default Color | Meaning |
 |---|---|---|---|
 | Folder in both layers | `[BOTH]` | Yellow | Exists in main + patch |
 | Patch-only folder | `[PTCH]` | DarkYellow | Only in patch layer |
@@ -24,6 +26,8 @@ Built for the [Marcer GameDVD](https://www.facebook.com/groups/360493904888475/)
 | ZIP in both layers | `[BOTH]` | Green | Exists in main + patch |
 | Main-only ZIP | `[ROOT]` | DarkGreen | Only in main layer |
 | Patch-only ZIP | `[PTCH]` | Magenta | Only in patch layer |
+| Selected entry | — | Black on DarkCyan | Highlighted entry |
+| Virtual entry (Favorites) | — | White | Pseudo-folder |
 
 ---
 
@@ -69,6 +73,17 @@ The launcher reads `launcher.config.json` from the same directory as the executa
     "Executable": "C:\\Tools\\hatari\\hatari.exe",
     "ConfigFile": "C:\\Tools\\hatari\\hatari-st.cfg",
     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
+  },
+  "Colors": {
+    "FolderBoth": "Yellow",
+    "FolderPatchOnly": "DarkYellow",
+    "FolderRootOnly": "Gray",
+    "ZipBoth": "Green",
+    "ZipRootOnly": "DarkGreen",
+    "ZipPatchOnly": "Magenta",
+    "SelectedForeground": "Black",
+    "SelectedBackground": "DarkCyan",
+    "VirtualEntry": "White"
   }
 }
 ```
@@ -80,6 +95,28 @@ The launcher reads `launcher.config.json` from the same directory as the executa
 | `Hatari.Executable` | ✅ | Path to the Hatari executable. Validated at startup. |
 | `Hatari.ConfigFile` | ✅ | Path to the Hatari configuration file. |
 | `Hatari.ArgsTemplate` | ✅ | Argument template. Must contain `{zip}`, optionally `{cfg}`. |
+| `Colors` | ❌ | Optional color overrides. See [Color Scheme](#-color-scheme) below. Missing or invalid values fall back to defaults. |
+
+**Notes:**
+- Relative paths are resolved relative to the executable's directory.
+- Include quotes around `{cfg}` and `{zip}` in the template if your paths contain spaces.
+- After editing `launcher.config.json`, restart the application.
+
+### 🎨 Color Scheme
+
+Colors are fully configurable via the `Colors` section of `launcher.config.json`. Each field accepts a [ConsoleColor](https://learn.microsoft.com/dotnet/api/system.consolecolor) name (case-insensitive). Omitting the entire `Colors` section — or any individual field — falls back to the built-in defaults:
+
+| Field | Default | Applies to |
+|---|---|---|
+| `FolderBoth` | Yellow | Folders in both layers |
+| `FolderPatchOnly` | DarkYellow | Folders in patch only |
+| `FolderRootOnly` | Gray | Folders in root only |
+| `ZipBoth` | Green | ZIPs in both layers |
+| `ZipRootOnly` | DarkGreen | ZIPs in root only |
+| `ZipPatchOnly` | Magenta | ZIPs in patch only |
+| `SelectedForeground` | Black | Foreground for the highlighted entry |
+| `SelectedBackground` | DarkCyan | Background for the highlighted entry |
+| `VirtualEntry` | White | Virtual entries (e.g. the Favorites pseudo-folder) |
 
 **Notes:**
 - Relative paths are resolved relative to the executable's directory.

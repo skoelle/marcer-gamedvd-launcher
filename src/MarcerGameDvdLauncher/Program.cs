@@ -5,9 +5,12 @@ namespace MarcerGameDvdLauncher
 {
     class Program
     {
+        // Console window title. Not configurable — fixed application display name.
+        private const string DefaultTitle = "Marcer GameDVD Launcher";
+
         static void Main(string[] args)
         {
-            Console.Title = "Marcer GameDVD Launcher";
+            Console.Title = DefaultTitle;
             var app = new LauncherApp();
             app.Run();
         }

@@ -6,6 +6,14 @@ namespace MarcerGameDvdLauncher
     // Manages loading, saving and querying favorite ZIP paths.
     public class FavoritesService
     {
+        // Virtual folder name displayed at the root when favorites exist.
+        // Not configurable — fixed UI element.
+        public const string FavoritesRootName = "Favorites";
+
+        // Filename used for persisting favorites to disk.
+        // Not configurable — fixed persistence file.
+        public const string DefaultFileName = "favorites.txt";
+
         private readonly string _filePath;
         // Use a SortedSet so favorites are kept in sorted order in memory.
         private SortedSet<string> _favorites = new(StringComparer.OrdinalIgnoreCase);
@@ -87,7 +95,11 @@ namespace MarcerGameDvdLauncher
             }
             catch
             {
-                // Let callers surface errors (we swallow here to avoid throwing on write failures during UI operations)
+                // Swallowed intentionally ("bewusst still"): a persistence failure
+                // (e.g. disk full, read-only directory) must not crash or interrupt
+                // the UI. The in-memory state is still updated so the user sees
+                // immediate feedback; only the on-disk write is lost. On next
+                // application start the favorites reflect the last successful save.
             }
         }
     }

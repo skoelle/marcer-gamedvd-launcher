@@ -69,245 +69,139 @@ namespace MarcerGameDvdLauncher
             if (string.IsNullOrWhiteSpace(cfg.Hatari.ArgsTemplate) || !cfg.Hatari.ArgsTemplate.Contains("{zip}"))
                 throw new InvalidOperationException("Hatari.ArgsTemplate must contain the {zip} placeholder.");
 
+            // Parse Colors section manually so invalid values fall back to defaults
+            // instead of crashing the deserialization.
+            cfg.Colors = ParseAppColors(json);
+
             return cfg;
+        }
+
+        // Parses the optional "Colors" JSON section into an AppColorConfig.
+        // Each field is resolved with Enum.TryParse<ConsoleColor>; unparseable or
+        // missing values silently fall back to the defaults defined in AppColorConfig.
+        private static AppColorConfig ParseAppColors(string json)
+        {
+            var colors = new AppColorConfig();
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("Colors", out var colorsEl) && colorsEl.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    ParseColorField(colorsEl, "FolderBoth", v => colors.FolderBoth = v);
+                    ParseColorField(colorsEl, "FolderPatchOnly", v => colors.FolderPatchOnly = v);
+                    ParseColorField(colorsEl, "FolderRootOnly", v => colors.FolderRootOnly = v);
+                    ParseColorField(colorsEl, "ZipBoth", v => colors.ZipBoth = v);
+                    ParseColorField(colorsEl, "ZipRootOnly", v => colors.ZipRootOnly = v);
+                    ParseColorField(colorsEl, "ZipPatchOnly", v => colors.ZipPatchOnly = v);
+                    ParseColorField(colorsEl, "SelectedForeground", v => colors.SelectedForeground = v);
+                    ParseColorField(colorsEl, "SelectedBackground", v => colors.SelectedBackground = v);
+                    ParseColorField(colorsEl, "VirtualEntry", v => colors.VirtualEntry = v);
+                }
+            }
+            catch
+            {
+                // On any JSON error, fall back to default colors (already set above)
+            }
+            return colors;
+        }
+
+        private static void ParseColorField(System.Text.Json.JsonElement colorsEl, string name, Action<ConsoleColor> setter)
+        {
+            if (colorsEl.TryGetProperty(name, out var prop) && prop.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var str = prop.GetString();
+                if (Enum.TryParse<ConsoleColor>(str ?? string.Empty, ignoreCase: true, out var parsed))
+                    setter(parsed);
+                // Invalid color names are silently ignored — defaults are preserved
+            }
         }
     }
 
-    // Internal host that keeps state previously stored in Program.cs
+    // Internal host that keeps state and lifecycle management for the application.
+    // Key-handling logic has been extracted into InputController; this class
+    // focuses on component wiring, initialization and the main loop (resize detection + key polling).
     internal class AppHost(AppConfig cfg)
     {
-        OverlayDirectoryBrowser? _directoryBrowser;
-        MenuRenderer _menuRenderer = new MenuRenderer();
-        NavigationController _navigationController = new NavigationController();
-        List<GameEntry> _gameEntries = new List<GameEntry>();
-        HatariLauncher? _hatariLauncher;
-        readonly UIErrorService _errorService = new UIErrorService();
-        FavoritesService? _favoritesService;
+        private InputController? _inputController;
+        private MenuRenderer? _menuRenderer;
+        private HatariLauncher? _hatariLauncher;
+        private int _currentAvailableLines;
+        private int _currentWidth;
 
-        public void InitializeComponents()
+    public void InitializeComponents()
+    {
+        var directoryBrowser = new OverlayDirectoryBrowser(cfg.RootDirectory ?? string.Empty, cfg.PatchDirectory ?? string.Empty);
+
+        // Initialize favorites service. Use PatchDirectory if present, otherwise exe dir fallback.
+        string favPath;
+        if (!string.IsNullOrWhiteSpace(cfg.PatchDirectory))
         {
-            _directoryBrowser = new OverlayDirectoryBrowser(cfg.RootDirectory ?? string.Empty, cfg.PatchDirectory ?? string.Empty);
-            // Initialize favorites service. Use PatchDirectory if present, otherwise exe dir fallback.
-            string favPath;
-            if (!string.IsNullOrWhiteSpace(cfg.PatchDirectory))
-            {
-                favPath = Path.Combine(cfg.PatchDirectory!, "favorites.txt");
-            }
-            else
-            {
-                favPath = Path.Combine(AppContext.BaseDirectory, "favorites.txt");
-            }
-            _favoritesService = new FavoritesService(favPath);
-            try { _favoritesService.Load(); } catch { /* ignore load errors */ }
-            try
-            {
-                _hatariLauncher = new HatariLauncher(cfg.Hatari?.Executable ?? throw new InvalidOperationException("Hatari.Executable not configured"), cfg.Hatari?.ConfigFile ?? string.Empty, cfg.Hatari?.ArgsTemplate ?? "-c \"{cfg}\" --disk-a \"{zip}\"");
-            }
-            catch (Exception ex)
-            {
-                ProgramHelpers.ShowConsoleMessage(["Hatari initialization error: " + ex.Message, "Press any key to exit."
-                ], ConsoleColor.Red);
-                Environment.Exit(1);
-            }
-            Console.CursorVisible = false;
+            favPath = Path.Combine(cfg.PatchDirectory!, FavoritesService.DefaultFileName);
         }
+        else
+        {
+            favPath = Path.Combine(AppContext.BaseDirectory, FavoritesService.DefaultFileName);
+        }
+        var favoritesService = new FavoritesService(favPath);
+        try { favoritesService.Load(); } catch { /* ignore load errors */ }
+
+        var errorService = new UIErrorService();
+        try
+        {
+            // ArgsTemplate is validated in LoadConfiguration — it must always contain {zip}.
+            // No hardcoded fallback is needed; the config file is the single source of truth.
+            _hatariLauncher = new HatariLauncher(cfg.Hatari?.Executable ?? throw new InvalidOperationException("Hatari.Executable not configured"), cfg.Hatari?.ConfigFile ?? string.Empty, cfg.Hatari?.ArgsTemplate ?? string.Empty);
+        }
+        catch (Exception ex)
+        {
+            ProgramHelpers.ShowConsoleMessage(["Hatari initialization error: " + ex.Message, "Press any key to exit."
+            ], ConsoleColor.Red);
+            Environment.Exit(1);
+        }
+
+        _menuRenderer = new MenuRenderer(cfg.Colors);
+        var navigationController = new NavigationController();
+
+        _inputController = new InputController(directoryBrowser, _menuRenderer, navigationController,
+            _hatariLauncher!, favoritesService, errorService);
+
+        Console.CursorVisible = false;
+    }
 
         public void RunDirectoryNavigation()
         {
+            _currentAvailableLines = ProgramHelpers.AvailableLines;
+            _currentWidth = Console.WindowWidth;
+
+            _inputController!.ReloadGameEntries();
+            _inputController.RefreshView(_currentAvailableLines);
+
             bool exitRequested = false;
-            ReloadGameEntries();
-            int currentAvailableLines = Console.WindowHeight - 1;
-            int currentWidth = Console.WindowWidth;
-            _navigationController.UpdateScrollOffset(_gameEntries.Count, currentAvailableLines);
-            var isFav = new Func<GameEntry, bool>(e => _favoritesService?.IsFavorite(e.Kind == EntryKind.Zip ? (e.InPatch ? e.PatchPath : e.RootPath) ?? string.Empty : string.Empty) ?? false);
-            _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
             while (!exitRequested)
             {
-                // Reloads are performed explicitly when entering or leaving directories (Enter/Backspace)
+                // Reloads are performed explicitly by InputController when entering/leaving directories
                 // Do NOT hit the filesystem here on every loop iteration.
 
                 // detect a change in console height and/or width and redraw immediately
-                int latestAvailableLines = Console.WindowHeight - 1;
+                int latestAvailableLines = ProgramHelpers.AvailableLines;
                 int latestWidth = Console.WindowWidth;
-                if (latestAvailableLines != currentAvailableLines || latestWidth != currentWidth)
-                {
-                    currentAvailableLines = latestAvailableLines;
-                    currentWidth = latestWidth;
-                    _navigationController.UpdateScrollOffset(_gameEntries.Count, currentAvailableLines);
-                    _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                }
-
-                // Only block if there's actually a key; otherwise allow resize detection
-                if (!Console.KeyAvailable)
-                {
-                    Thread.Sleep(50);
-                    continue;
-                }
-
-                var key = Console.ReadKey(intercept: true);
-                if (key.KeyChar == '?')
-                {
-                    _menuRenderer.ShowHelpBox(currentAvailableLines);
-                    Console.ReadKey(intercept: true);
-                    _menuRenderer.InvalidateCache();
-                    _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                    ProgramHelpers.FlushInputBuffer();
-                    continue;
-                }
-                switch (key.Key)
-                {
-                    case ConsoleKey.UpArrow:
-                        int previousSelectedIndexUp = _navigationController.SelectedIndex;
-                        bool didScrollUp = _navigationController.MoveUp(_gameEntries, currentAvailableLines);
-                        if (didScrollUp)
-                        {
-                            _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                        }
-                        else
-                        {
-                            _menuRenderer.RedrawEntry(_gameEntries, previousSelectedIndexUp, previousSelectedIndexUp - _navigationController.ScrollOffset, false, currentAvailableLines, isFav);
-                            _menuRenderer.RedrawEntry(_gameEntries, _navigationController.SelectedIndex, _navigationController.SelectedIndex - _navigationController.ScrollOffset, true, currentAvailableLines, isFav);
-                        }
-                        // flush input to avoid key repeat
-                        ProgramHelpers.FlushInputBuffer();
-                        break;
-                    case ConsoleKey.DownArrow:
-                        int previousSelectedIndexDown = _navigationController.SelectedIndex;
-                        bool didScrollDown = _navigationController.MoveDown(_gameEntries, currentAvailableLines);
-                            if (didScrollDown)
-                            {
-                                _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                            }
-                            else
-                            {
-                                _menuRenderer.RedrawEntry(_gameEntries, previousSelectedIndexDown, previousSelectedIndexDown - _navigationController.ScrollOffset, false, currentAvailableLines, isFav);
-                                _menuRenderer.RedrawEntry(_gameEntries, _navigationController.SelectedIndex, _navigationController.SelectedIndex - _navigationController.ScrollOffset, true, currentAvailableLines, isFav);
-                            }
-                        ProgramHelpers.FlushInputBuffer();
-                        break;
-                    case ConsoleKey.Enter:
-                    case ConsoleKey.RightArrow:
-                        var oldRelativePath = _navigationController.CurrentRelativePath;
-                        var isDirectory = _gameEntries.Count > 0 && _gameEntries[_navigationController.SelectedIndex].Kind == EntryKind.Directory;
-                        _navigationController.HandleEnter(_gameEntries);
-                        if (isDirectory && oldRelativePath != _navigationController.CurrentRelativePath) {
-                            ReloadGameEntries();
-                            _navigationController.UpdateScrollOffset(_gameEntries.Count, currentAvailableLines);
-                        }
-                        _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                        // Only start a ZIP if NOT switching to a directory
-                        if (!isDirectory && _gameEntries.Count > 0 && _gameEntries[_navigationController.SelectedIndex].Kind == EntryKind.Zip)
-                        {
-                            string zipToLaunch = _gameEntries[_navigationController.SelectedIndex].InPatch ? _gameEntries[_navigationController.SelectedIndex].PatchPath : _gameEntries[_navigationController.SelectedIndex].RootPath;
-                            try
-                            {
-                                _hatariLauncher!.Launch(zipToLaunch);
-                            }
-                            catch (Exception ex)
-                            {
-                                _errorService.ShowError(ex.Message);
-                            }
-                        }
-                        // flush input to avoid leftover key events after an enter/navigation
-                        ProgramHelpers.FlushInputBuffer();
-                        break;
-                    case ConsoleKey.Backspace:
-                    case ConsoleKey.LeftArrow:
-                        _navigationController.GoUpDirectory();
-                        ReloadGameEntries();
-                        _navigationController.UpdateScrollOffset(_gameEntries.Count, currentAvailableLines);
-                        _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                        ProgramHelpers.FlushInputBuffer();
-                        break;
-                    case ConsoleKey.PageDown:
-                        _navigationController.PageDown(_gameEntries, currentAvailableLines);
-                        _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                        ProgramHelpers.FlushInputBuffer();
-                        break;
-                    case ConsoleKey.PageUp:
-                        _navigationController.PageUp(_gameEntries, currentAvailableLines);
-                        _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                        ProgramHelpers.FlushInputBuffer();
-                        break;
-                    case ConsoleKey.Multiply:
-                    case ConsoleKey.Oem8:
-                        // Toggle favorite for selected ZIP (handles numpad * and some layouts)
-                        if (_gameEntries.Count > 0 && _gameEntries[_navigationController.SelectedIndex].Kind == EntryKind.Zip)
-                        {
-                            var ge = _gameEntries[_navigationController.SelectedIndex];
-                            string path = ge.InPatch ? ge.PatchPath : ge.RootPath;
-                            try
-                            {
-                                _favoritesService?.Toggle(path);
-                            }
-                            catch (Exception ex)
-                            {
-                                _errorService.ShowError("Failed to toggle favorite: " + ex.Message);
-                            }
-                            // Redraw the whole menu so the '*' marker updates immediately
-                            _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                        }
-                        ProgramHelpers.FlushInputBuffer();
-                        break;
-                    case ConsoleKey.Escape:
-                    case ConsoleKey.Q:
-                        exitRequested = true;
-                        break;
-                }
-            }
-        }
-
-        void ReloadGameEntries()
-        {
-            try
+            if (latestAvailableLines != _currentAvailableLines || latestWidth != _currentWidth)
             {
-                // If we are at the virtual Favorites folder, produce the flat list from the favorites service
-                if (string.Equals(_navigationController.CurrentRelativePath, "Favorites", StringComparison.OrdinalIgnoreCase))
-                {
-                    var favs = _favoritesService?.GetAll() ?? new List<string>();
-                    _gameEntries = favs.Select(p => new GameEntry
-                    {
-                        Name = Path.GetFileName(p),
-                        Kind = EntryKind.Zip,
-                        InRoot = true,
-                        InPatch = false,
-                        RootPath = p,
-                        PatchPath = string.Empty,
-                        IsVirtual = false
-                    }).ToList();
-                    _navigationController.SetEntriesCount(_gameEntries.Count);
-                    return;
-                }
-
-                // Otherwise use the overlay directory browser for normal folders
-                _gameEntries = _directoryBrowser!.GetEntries(_navigationController.CurrentRelativePath);
-
-                // If we are at the root and there are favorites, prepend a virtual "Favorites" folder
-                if (string.IsNullOrEmpty(_navigationController.CurrentRelativePath) && (_favoritesService?.HasFavorites() ?? false))
-                {
-                    var virtualEntry = new GameEntry
-                    {
-                        Name = "Favorites",
-                        Kind = EntryKind.Directory,
-                        InRoot = true,
-                        InPatch = false,
-                        RootPath = string.Empty,
-                        PatchPath = string.Empty,
-                        IsVirtual = true
-                    };
-                    // insert at the beginning
-                    _gameEntries.Insert(0, virtualEntry);
-                }
-
-                _navigationController.SetEntriesCount(_gameEntries.Count);
+                _currentAvailableLines = latestAvailableLines;
+                _currentWidth = latestWidth;
+                _inputController.RefreshView(_currentAvailableLines);
             }
-            catch (Exception ex)
+
+            // Only block if there's actually a key; otherwise allow resize detection
+            if (!Console.KeyAvailable)
             {
-                // Show the error to the user and continue with an empty list
-                _errorService.ShowError(ex.Message);
-                _gameEntries = new List<GameEntry>();
-                _navigationController.SetEntriesCount(0);
+                Thread.Sleep(50);
+                continue;
             }
+
+            var key = Console.ReadKey(intercept: true);
+            exitRequested = _inputController.HandleKey(key, _currentAvailableLines);
         }
+    }
     }
 }
