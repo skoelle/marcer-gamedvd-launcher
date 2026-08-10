@@ -183,6 +183,16 @@ This builds the project, generates a structured `.demo/` directory with sample f
 Releases are automated via GitHub Actions (`.github/workflows/release.yml`).
 
 **To create a release:**
+
+You can use the `/create-release` command (via opencode) for a fully automated flow:
+
+```text
+/create-release 1.0.0
+```
+
+This command validates the version, checks for uncommitted changes, generates a release summary from recent commits, creates a release commit with the summary as the commit message, tags it, and pushes — all in one step. The GitHub Action then builds platform ZIPs and creates the GitHub Release.
+
+**Manual release:**
 1. Ensure `README.md` and `AGENTS.md` are up to date.
 2. Commit all changes.
 3. Tag and push:
