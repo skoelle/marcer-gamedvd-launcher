@@ -7,7 +7,7 @@ Ziel: Das Repo aufräumen (Doku, Code, Config)
 - [x] **LauncherApp.cs zerlegen:** Die ~300-Zeilen-Klasse in separate Klassen aufteilen
   (InputController.cs extrahiert mit Key-Handling + ReloadGameEntries; Lifecycle & Main-Loop bleiben in AppHost).
   Ziel: keine Funktionsänderung, nur Struktur.
-- [ ] **Magische Strings entfernen / zentralisieren (nur im Code, siehe 2c):**
+- [x] **Magische Strings entfernen / zentralisieren (nur im Code, siehe 2c):**
   - [x] Virtueller Ordnername `"Favorites"` → `FavoritesService.FavoritesRootName` Konstante (nicht konfigurierbar).
   - [x] Dateiname `"favorites.txt"` → `FavoritesService.DefaultFileName` Konstante (nicht konfigurierbar).
   - [x] Console-Titel `"Marcer GameDVD Launcher"` (Program.cs) → `DefaultTitle` Konstante (nicht konfigurierbar).
