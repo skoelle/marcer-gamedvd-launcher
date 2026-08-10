@@ -42,7 +42,7 @@ Ziel: Das Repo aufräumen (Doku, Code, Config)
       - [ ] `MenuRenderer` bekommt optional passende `AppColorConfig` (Konstruktor-Injection);
             `GetColorForEntry`/`GetColors` nutzen Config statt Konstanten.
       - [ ] Falls Config-Werte fehlen → heutiges Verhalten beibehalten (fallback).
-- [ ] Doku synchronisieren: README + agents.md Farbtabellen auf Config-Felder verlinken.
+- [ ] Doku synchronisieren: README + AGENTS.md Farbtabellen auf Config-Felder verlinken.
 - [ ] Beispielwerte ins `launcher.config.example.json` aufnehmen.
 
 ### 2b. Benutzer-Config (User-Config) – entschieden

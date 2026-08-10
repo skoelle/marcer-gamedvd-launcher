@@ -133,7 +133,7 @@ Releases are automated via GitHub Actions. When a tag matching `v*` is pushed, t
 3. Creates a GitHub Release with all ZIPs attached
 
 **To create a release:**
-1. Ensure `README.md` and `agents.md` are up to date.
+1. Ensure `README.md` and `AGENTS.md` are up to date.
 2. Commit all changes.
 3. Create and push a tag: `git tag v{version} && git push origin v{version}`.
 4. The GitHub Action handles the rest.
@@ -147,6 +147,6 @@ Releases are automated via GitHub Actions. When a tag matching `v*` is pushed, t
 This launcher was built for the [Marcer GameDVD](https://www.facebook.com/groups/360493904888475/) community on Facebook. If you have questions, suggestions, or want to discuss Hatari and Atari ST gaming, join the group!
 
 ## Notes
-- Full requirements, features and build rules are always up to date in `agents.md`.
-- After every code or feature change and every release, README.md and agents.md must be reviewed and kept up to date.
-- For every release, release notes **must** be present listing all changes and bugfixes; this is required by agents.md!
+- Full requirements, features and build rules are always up to date in `AGENTS.md`.
+- After every code or feature change and every release, README.md and AGENTS.md must be reviewed and kept up to date.
+- For every release, release notes **must** be present listing all changes and bugfixes; this is required by AGENTS.md!

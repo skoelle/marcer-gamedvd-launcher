@@ -16,7 +16,7 @@ The implementation is split into focused modules (files) under the `MarcerGameDv
 - MarcerGameDvdLauncher/HatariLauncher.cs: Responsible for validating the Hatari executable and starting Hatari with the configured argument template (replaces `{cfg}` and `{zip}`).
 - MarcerGameDvdLauncher/UIErrorService.cs: Centralized UI error presentation using the console message helper.
 
-Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (agents.md) and README.md as required by project policy.
+Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (AGENTS.md) and README.md as required by project policy.
 **Note for Automated Tests/CI:**
 The Launcher cannot be executed or tested via `start.cmd` from this environment (build system, automation agent) since no Windows console environment is present. For release workflows and developer validation, it is ALWAYS required to do a manual test run via start.cmd per documentation and policy before delivery.
 
@@ -24,7 +24,7 @@ The Launcher cannot be executed or tested via `start.cmd` from this environment 
 - Pushing a tag (`v*`) triggers the GitHub Action workflow (`.github/workflows/release.yml`).
 - The workflow builds platform-specific artifacts (Windows, Linux, macOS), generates release notes from git log, and creates a GitHub Release with all ZIPs attached.
 - Developer steps for a release:
-   1. Ensure `README.md` and `agents.md` are up to date.
+   1. Ensure `README.md` and `AGENTS.md` are up to date.
    2. Commit all changes.
    3. Create and push a tag: `git tag v{version} && git push origin v{version}`.
    4. The GitHub Action handles the rest (build, ZIP, release notes, GitHub Release).
@@ -32,14 +32,14 @@ The Launcher cannot be executed or tested via `start.cmd` from this environment 
 
 
 Additional policy:
-- README.md must be written in English. Any functional change that affects usage, configuration, or behavior MUST update README.md in English immediately after the change. If there are consequential changes to developer-facing policies, build steps, or requirements, `agents.md` must be updated as well.
+- README.md must be written in English. Any functional change that affects usage, configuration, or behavior MUST update README.md in English immediately after the change. If there are consequential changes to developer-facing policies, build steps, or requirements, AGENTS.md must be updated as well.
 
 Developer note: Visual Studio Solution
 - A Visual Studio solution file exists at the repository root: `marcer-gamedvd-launcher.sln`. Developers may open this solution in Visual Studio to work on the project, debug and build from the IDE. The solution references `MarcerGameDvdLauncher\MarcerGameDvdLauncher.csproj` and includes Debug and Release configurations. Use `build.cmd` (Windows) or `build.sh` (Linux) and `start.cmd` for consistent command-line builds/releases as described elsewhere in this document.
 
 With this, it is ensured that binary/release files never end up in git, and the release process is always traceable and performed exclusively manually in the web interface.
 
-# Requirements for the Marcer GameDVD Launcher (agents.md)
+# Requirements for the Marcer GameDVD Launcher (AGENTS.md)
 
 ## Basic Function / Purpose
 The console launcher is meant for browsing a games directory and can launch ZIP files with the Hatari emulator under Windows. Control is exclusively via keyboard in the console window.
@@ -85,7 +85,7 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
 - After each build for a release, the entire build output directory (`bin/Release/net10.0/`) must be zipped in the `release/` directory, and the ZIP must be uploaded as a release asset in Gitea.
 - For every release, a Release Notes file must be maintained that summarizes all changes, bugfixes, and new features in that version; Release Notes must be provided with the release asset.
 
- - **IMPORTANT:** With any functional change to the launcher, BOTH this file (agents.md) AND the README.md must always be updated and kept current. Immediately after, a successful build must be executed. This is mandatory for all development on the project.
+ - **IMPORTANT:** With any functional change to the launcher, BOTH this file (AGENTS.md) AND the README.md must always be updated and kept current. Immediately after, a successful build must be executed. This is mandatory for all development on the project.
 
 
 ---
