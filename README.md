@@ -139,6 +139,10 @@ Releases are automated via GitHub Actions. When a tag matching `v*` is pushed, t
 - **Windows:** `build.cmd`
 - **Linux/macOS:** `build.sh` (run `chmod +x build.sh` first)
 
+## Community
+
+This launcher was built for the [Marcer GameDVD](https://www.facebook.com/groups/360493904888475/) community on Facebook. If you have questions, suggestions, or want to discuss Hatari and Atari ST gaming, join the group!
+
 ## Notes
 - Full requirements, features and build rules are always up to date in `agents.md`.
 - After every code or feature change and every release, README.md and agents.md must be reviewed and kept up to date.
