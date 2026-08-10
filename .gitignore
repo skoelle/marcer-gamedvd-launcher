@@ -12,6 +12,9 @@ obj/
 .DS_Store
 Thumbs.db
 
+# Python virtual environment
+.venv/
+
 # Release-Verzeichnis (keine ZIPs o.ä. ins Git!)
 # Only ignore top-level release/ directory. Release directories in subfolders are allowed.
 /release/

@@ -1,102 +1,65 @@
 # Marcer GameDVD Launcher
 
-A performant, consistent console launcher for the Hatari emulator on Windows. Control is entirely via keyboard—using only the arrow keys, Enter, Backspace, ESC, PageUp, and PageDown, you can browse your game archive quickly and comfortably. Navigation is strictly limited to the configured root directory. ZIPs are seamlessly launched via Hatari. Thanks to overlay/patch mode, a consistent color scheme, and robust cursor/scroll logic, even the largest archives or deeply nested directory trees are handled smoothly and reliably.
+A fast, keyboard-driven console launcher for the Hatari emulator. Browse your Atari ST game archive, navigate folders, and launch ZIPs — all from the terminal. Supports overlay/patch mode for comparing and merging game directories.
 
-## Features
-- **Overlay/Patch Union:** Recursively merges main and patch directory at every level. Each object/name is shown only once (patch takes precedence).
-- **Dynamic, practical color scheme with layer labels:**
-
-    | Entry                  | Label     | ConsoleColor | Meaning
-    |------------------------|-----------|--------------|---------------------------------------------|
-    | Folder in both         | `[BOTH]`  | Yellow       | Directory in both layers (patch/main)
-    | Patch-only folder      | `[PTCH]`  | DarkYellow   | Directory only in patch layer
-    | Main-only folder       | `[ROOT]`  | Gray         | Directory only in main layer
-    | ZIP in both            | `[BOTH]`  | Green        | ZIP archive in both layers
-    | Main-only ZIP          | `[ROOT]`  | DarkGreen    | ZIP archive only in main layer
-    | Patch-only ZIP         | `[PTCH]`  | Magenta      | ZIP archive only in patch layer
-
-## Roadmap
-
-### Released Features
-- **Favorites/bookmark system:**
-  - Press `*` on a ZIP to toggle it as a favorite. Favorites are shown in a virtual `Favorites` folder at the top of the root listing when any favorites exist.
-  - Favorites are persisted in `favorites.txt` in the configured `PatchDirectory`, or next to the EXE if no patch directory is set.
-
-### Planned Features
-- **ZIP database & metadata extraction** (from version 2.0)
-  - Builds a database (e.g. as a local file), stores all known ZIPs
-  - Enables full-text search, filters, later analysis
-- **Search/filter (quicksearch) over ZIPs** (from v2.0, via database)
-  - Fast name search inside launcher, with history
-- **History/list of recently launched games** (from v2.0, via database)
-  - Automatic access to recently played titles
-- **Overlay hot swap** (from version 3.0)
-  - Overlay/patch folder can be switched at runtime, instant comparison
-
-**More ideas will be added iteratively!**
+Built for the [Marcer GameDVD](https://www.facebook.com/groups/360493904888475/) community on Facebook.
 
 ---
 
-**Display Performance Note:**
-- The current rendering logic follows state-of-the-art principles for performant C# console apps:
-  - Minimal redraw: Only the truly changed line is redrawn, never the whole screen.
-  - No Console.Clear or full redraw on cursor movement—just targeted SetCursorPosition and Write.
-  - This method (per StackOverflow, Spectre.Console, Terminal.Gui, etc.) is optimal for smooth navigation in large lists.
-  - Further performance can be gained with shadow buffers/string-diffs per line, but currently there's no practical performance issue.
-- Thus, display performance is at “best practice” level for .NET TUIs.
-  - Long file names and narrow console widths are handled defensively: MenuRenderer truncates file names so that each rendered line is exactly Console.WindowWidth characters long. This prevents Console.Write from overflowing the line and avoids visual artifacts when names are longer than the available width.
+## 🎮 Features
+
+- **Overlay/Patch Mode:** Recursively merges a main game directory with an optional patch directory. If a file or folder exists in both, the patch version takes precedence.
+- **Layer Labels:** Each entry shows its source — `[BOTH]`, `[ROOT]`, or `[PTCH]` — with a matching color scheme.
+- **Favorites:** Press `*` on any ZIP to bookmark it. Bookmarked games appear in a virtual `Favorites` folder at the top of the root listing.
+- **Robust Navigation:** Cursor position is remembered per directory. Scrolling and page jumps adapt dynamically to any console height.
+- **Minimal Redraw:** Only changed lines are redrawn — no flicker, no `Console.Clear`, smooth even in huge directory trees.
+
+### Color Scheme
+
+| Entry | Label | Color | Meaning |
+|---|---|---|---|
+| Folder in both layers | `[BOTH]` | Yellow | Exists in main + patch |
+| Patch-only folder | `[PTCH]` | DarkYellow | Only in patch layer |
+| Main-only folder | `[ROOT]` | Gray | Only in main layer |
+| ZIP in both layers | `[BOTH]` | Green | Exists in main + patch |
+| Main-only ZIP | `[ROOT]` | DarkGreen | Only in main layer |
+| Patch-only ZIP | `[PTCH]` | Magenta | Only in patch layer |
 
 ---
-### Features we will NOT implement
-- User-configurable key bindings (keymap)
-- Display & import of screenshots/cover images
-- Music/Sound player integration (YM/MOD/SND, etc.)
-- Persistent UI settings, window size management (not relevant in console mode)
 
-## Operation and Display
+## 🕹️ End Users
 
-- **Consistent navigation & controls:**
-    - Arrow up/down: move selection (always visible)
-    - Arrow right: open folder / launch ZIP with Hatari (same as Enter)
-    - Arrow left: exactly one level up (same as Backspace)
-    - Enter: open folder / launch ZIP with Hatari (patch variant always preferred if present)
-    - Backspace: exactly one level up (never exceeds root)
-    - ESC or Q: exit the program immediately
-    - PageUp/PageDown: jump exactly one screen full (window height - 1)
-    - `*`: toggle favorite on selected ZIP
-    - `?`: show a help box with key bindings
-    - Display always one line less than console height; no overflow/cut-off
-- **Cursor position saving per directory:**
-    - The last position/selection of each directory is retained, even after Backspace
-- **Robust, smooth redraw:**
-    - Optimized full redraw on scrolling/paging
-    - Minimal redraw on cursor move
-- **Minimal resource usage (handles huge trees efficiently)**
-- **Navigation can NEVER leave the configured root**
+### 📥 Download
 
-## Usage
-1. Edit `launcher.config.example.json` to set your `RootDirectory`, optional `PatchDirectory` and the `Hatari` settings, then copy it to `launcher.config.json` for local use. Relative paths are resolved against the EXE folder (build output).
-2. **Windows:** Build via `scripts/build.cmd`, start via `scripts/start.cmd`.
-3. **Linux/macOS:** Build via `scripts/build.sh` (run `chmod +x scripts/*.sh` first to make it executable), start via `scripts/start.sh`.
-4. In the console, all subfolders and ZIPs in root (and recursively below) will be shown; other file types/hidden files are always ignored.
-5. Complete navigation/control with arrow keys, Enter, Backspace, ESC, PgUp/PgDn, as described above.
-6. **IMPORTANT:** Navigation/scroll/backspace:
-    - Backspace never escapes the root
-    - In root, Backspace has no effect
-    - Empty directories are reported (display stays stable)
-7. **Overlay/patch logic:**
-    - If a ZIP/folder exists in both patch and main, always the patch version opens/launches
-    - All navigation is relative to root path—for consistent experience
+Download the ZIP for your platform from the [Releases](https://github.com/anomalyco/marcer-gamedvd-launcher/releases) page:
 
-## System Requirements
-- **Windows:** .NET Desktop Runtime 10 or later, Hatari Emulator with configured CFG
-- **Linux:** .NET Runtime 10 or later, Hatari Emulator with configured CFG (Wine/compatible version)
+| Platform | Archive |
+|---|---|
+| Windows | `*-win-x64.zip` |
+| Linux | `*-linux-x64.zip` |
+| macOS | `*-osx-x64.zip` |
 
-## Configuration
+### 💻 System Requirements
 
-The application reads settings from `launcher.config.json` (the local, user-specific file). A template `launcher.config.example.json` is shipped with the release — copy it to `launcher.config.json` and adjust the paths for your environment.
+- **.NET Runtime 10** or later ([download](https://dotnet.microsoft.com/download/dotnet/10.0))
+- **Hatari Emulator** with a working configuration file
+  - Windows: native Hatari
+  - Linux / macOS: Hatari via Wine or native build
 
-Example `launcher.config.example.json`:
+### ⚡ Quick Start
+
+1. Extract the release ZIP to any folder.
+2. Copy `launcher.config.example.json` to `launcher.config.json`.
+3. Edit `launcher.config.json` — set your game directory and Hatari paths (see [Configuration](#%EF%B8%8F-configuration) below).
+4. Run the launcher:
+   - **Windows:** Double-click `MarcerGameDvdLauncher.exe` or run from a terminal.
+   - **Linux:** `chmod +x MarcerGameDvdLauncher && ./MarcerGameDvdLauncher`
+   - **macOS:** `chmod +x MarcerGameDvdLauncher && ./MarcerGameDvdLauncher`
+5. Browse and launch games with your keyboard.
+
+### ⚙️ Configuration
+
+The launcher reads `launcher.config.json` from the same directory as the executable. A template is included in the release — copy it and adjust:
 
 ```json
 {
@@ -110,43 +73,93 @@ Example `launcher.config.example.json`:
 }
 ```
 
-Fields:
-- RootDirectory: Absolute (or relative) path to the game root. Navigation must never leave this root directory.
-- PatchDirectory: Optional overlay/patch directory (merged with the main root at runtime).
-- Hatari.Executable: Full path to the Hatari executable.
-- Hatari.ConfigFile: Full path to the Hatari configuration file.
-- Hatari.ArgsTemplate: Argument template used to start Hatari. Use `{cfg}` for the Hatari config file path and `{zip}` for the ZIP file to launch.
+| Field | Required | Description |
+|---|---|---|
+| `RootDirectory` | ✅ | Game root folder. Navigation never leaves this directory. |
+| `PatchDirectory` | ❌ | Optional overlay/patch directory merged at runtime. |
+| `Hatari.Executable` | ✅ | Path to the Hatari executable. Validated at startup. |
+| `Hatari.ConfigFile` | ✅ | Path to the Hatari configuration file. |
+| `Hatari.ArgsTemplate` | ✅ | Argument template. Must contain `{zip}`, optionally `{cfg}`. |
 
-Notes:
-- Relative paths are resolved relative to the EXE directory (AppContext.BaseDirectory). This makes behavior consistent when running from the build output folder.
- - Hatari.Executable is validated at startup: the file must exist. Relative paths for Hatari settings are resolved against the EXE folder.
-- `Hatari.ArgsTemplate` must contain at least the `{zip}` placeholder. Example: `-c "{cfg}" --disk-a "{zip}"`.
-- The program performs a straight string substitution of `{cfg}` and `{zip}`; it does not add additional quoting logic. Therefore include quotes around placeholders in the template if your paths contain spaces (as in the example).
-- `launcher.config.example.json` is copied to the output directory by the csproj (`CopyToOutputDirectory=PreserveNewest`).
-- After modifying `launcher.config.json`, restart the application for changes to take effect.
+**Notes:**
+- Relative paths are resolved relative to the executable's directory.
+- Include quotes around `{cfg}` and `{zip}` in the template if your paths contain spaces.
+- After editing `launcher.config.json`, restart the application.
 
-## Release Workflow
+### ⌨️ Controls
 
-Releases are automated via GitHub Actions. When a tag matching `v*` is pushed, the workflow (`.github/workflows/release.yml`) automatically:
-1. Builds platform-specific artifacts (Windows, Linux, macOS)
-2. Generates release notes from git log
-3. Creates a GitHub Release with all ZIPs attached
+| Key | Action |
+|---|---|
+| `↑` / `↓` | Move selection |
+| `Enter` / `→` | Open folder or launch ZIP |
+| `Backspace` / `←` | Go up one directory level |
+| `PageUp` / `PageDown` | Jump one page |
+| `*` | Toggle favorite on selected ZIP |
+| `?` | Show help overlay |
+| `ESC` / `Q` | Exit |
+
+**Navigation rules:**
+- Backspace in the root directory has no effect — you can never leave it.
+- Empty directories are displayed correctly.
+- When a ZIP or folder exists in both layers, the patch version is always launched/opened.
+
+---
+
+## 🛠️ Developers
+
+### 📋 Prerequisites
+
+- [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0)
+- Windows: `build.cmd` / `start.cmd`
+- Linux / macOS: `build.sh` / `start.sh` (run `chmod +x scripts/*.sh` first)
+
+### 🔨 Build & Run
+
+**Windows:**
+```bat
+scripts\build.cmd
+scripts\start.cmd
+```
+
+**Linux / macOS:**
+```bash
+scripts/build.sh
+scripts/start.sh
+```
+
+> ⚠️ Do **not** use `dotnet build` or `dotnet run` directly — always use the platform build script to ensure consistent output.
+
+### 🚀 Release Process
+
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`).
 
 **To create a release:**
 1. Ensure `README.md` and `AGENTS.md` are up to date.
 2. Commit all changes.
-3. Create and push a tag: `git tag v{version} && git push origin v{version}`.
-4. The GitHub Action handles the rest.
+3. Tag and push:
+   ```bash
+   git tag v1.2.3
+   git push origin v1.2.3
+   ```
+4. The workflow builds platform ZIPs, generates release notes, and creates a GitHub Release.
 
-**Local builds** (for development/testing):
-- **Windows:** `scripts/build.cmd` to build, `scripts/start.cmd` to run
-- **Linux/macOS:** `scripts/build.sh` to build, `scripts/start.sh` to run (run `chmod +x scripts/*.sh` first)
+---
 
-## Community
+## 🗺️ Roadmap
 
-This launcher was built for the [Marcer GameDVD](https://www.facebook.com/groups/360493904888475/) community on Facebook. If you have questions, suggestions, or want to discuss Hatari and Atari ST gaming, join the group!
+| Version | Feature |
+|---|---|
+| 2.0 | ZIP database & metadata extraction |
+| 2.0 | Quicksearch / filter over ZIPs |
+| 2.0 | History of recently launched games |
+| 3.0 | Overlay hot-swap at runtime |
 
-## Notes
-- Full requirements, features and build rules are always up to date in `AGENTS.md`.
-- After every code or feature change and every release, README.md and AGENTS.md must be reviewed and kept up to date.
-- For every release, release notes **must** be present listing all changes and bugfixes; this is required by AGENTS.md!
+**Not planned:** Configurable keybindings, screenshot/cover display, sound/music integration, persistent UI settings.
+
+---
+
+## 📝 Notes
+
+- Full technical requirements and build rules are in [`AGENTS.md`](AGENTS.md).
+- After any functional change, both `README.md` and `AGENTS.md` must be updated.
+- Every release **must** include release notes listing all changes and bugfixes.
