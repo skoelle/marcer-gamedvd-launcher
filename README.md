@@ -1,9 +1,9 @@
-# HatariZipLauncher
+# Marcer GameDVD Launcher
 
 A performant, consistent console launcher for the Hatari emulator on Windows. Control is entirely via keyboard—using only the arrow keys, Enter, Backspace, ESC, PageUp, and PageDown, you can browse your game archive quickly and comfortably. Navigation is strictly limited to the configured root directory. ZIPs are seamlessly launched via Hatari. Thanks to overlay/patch mode, a consistent color scheme, and robust cursor/scroll logic, even the largest archives or deeply nested directory trees are handled smoothly and reliably.
 
 ## Features
-- **Overlay/Patch Union (since v0.6):** Recursively merges main and patch directory at every level. Each object/name is shown only once (patch takes precedence).
+- **Overlay/Patch Union:** Recursively merges main and patch directory at every level. Each object/name is shown only once (patch takes precedence).
 - **Dynamic, practical color scheme:**
 
     | Entry                  | ConsoleColor | Meaning
@@ -18,7 +18,7 @@ A performant, consistent console launcher for the Hatari emulator on Windows. Co
 ## Roadmap
 
 ### Released Features
-- **Favorites/bookmark system** (since v0.91):
+- **Favorites/bookmark system:**
   - Press `*` on a ZIP to toggle it as a favorite. Favorites are shown in a virtual `Favorites` folder at the top of the root listing when any favorites exist.
   - Favorites are persisted in `favorites.txt` in the configured `PatchDirectory`, or next to the EXE if no patch directory is set.
 
@@ -37,7 +37,7 @@ A performant, consistent console launcher for the Hatari emulator on Windows. Co
 
 ---
 
-**Display Performance Note (as of v0.84):**
+**Display Performance Note:**
 - The current rendering logic follows state-of-the-art principles for performant C# console apps:
   - Minimal redraw: Only the truly changed line is redrawn, never the whole screen.
   - No Console.Clear or full redraw on cursor movement—just targeted SetCursorPosition and Write.
@@ -83,7 +83,7 @@ A performant, consistent console launcher for the Hatari emulator on Windows. Co
     - Empty directories are reported (display stays stable)
 8. **Overlay/patch logic:**
     - If a ZIP/folder exists in both patch and main, always the patch version opens/launches
-    - Since v0.6, all navigation is relative to root path—for consistent experience
+    - All navigation is relative to root path—for consistent experience
 
 ## System Requirements
 - **Windows:** .NET Desktop Runtime 10 or later, Hatari Emulator with configured CFG

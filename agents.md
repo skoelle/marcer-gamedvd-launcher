@@ -2,7 +2,7 @@
 applyTo: '**'
 ---
 
-## Module Overview (HatariZipLauncher)
+## Module Overview (Marcer GameDVD Launcher)
 
 The implementation is split into focused modules (files) under the `HatariZipLauncher/` folder. Keep this section up to date when files are added, removed or responsibilities change.
 
@@ -39,7 +39,7 @@ Developer note: Visual Studio Solution
 
 With this, it is ensured that binary/release files never end up in git, and the release process is always traceable and performed exclusively manually in the web interface.
 
-# Requirements for the Hatari ZIP Launcher (agents.md)
+# Requirements for the Marcer GameDVD Launcher (agents.md)
 
 ## Basic Function / Purpose
 The console launcher is meant for browsing a games directory and can launch ZIP files with the Hatari emulator under Windows. Control is exclusively via keyboard in the console window.
@@ -90,7 +90,7 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
 
 ---
 
-## Layer/Overlay Mode (since v0.6)
+## Layer/Overlay Mode
 
 ### Overlay Logic
 - The display always combines the contents of the game root ("main directory") and patch directory.
@@ -117,6 +117,6 @@ Implementation note (input flushing):
 Note: The ConsoleColor mapping above is authoritative for the application. If you change color values in code (MenuRenderer/GetColorForEntry), update this section to keep documentation and implementation in sync.
 
 ### Navigation
-- Navigation since v0.6 is always based strictly on the **relative path from root** and is consistent on all levels (Backspace always moves up one level, Enter always moves one level deeper, regardless of which layer).
+- Navigation is always based strictly on the **relative path from root** and is consistent on all levels (Backspace always moves up one level, Enter always moves one level deeper, regardless of which layer).
 
 ---

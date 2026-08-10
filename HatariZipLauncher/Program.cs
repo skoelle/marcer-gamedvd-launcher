@@ -4,7 +4,7 @@ namespace HatariZipLauncher
     {
         static void Main(string[] args)
         {
-            Console.Title = "Hatari ZIP Launcher";
+            Console.Title = "Marcer GameDVD Launcher";
             var app = new LauncherApp();
             app.Run();
         }

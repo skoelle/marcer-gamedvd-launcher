@@ -10,7 +10,7 @@ Ziel: Das Repo aufräumen (Doku, Code, Config)
 - [ ] **Magische Strings entfernen / zentralisieren (nur im Code, siehe 2c):**
   - [ ] Virtueller Ordnername `"Favorites"` (LauncherApp.cs) → gemeinsame Konstante (nicht konfigurierbar).
   - [ ] Dateiname `"favorites.txt"` (LauncherApp.cs) → Konstante in FavoritesService (nicht konfigurierbar).
-  - [ ] Console-Titel `"Hatari ZIP Launcher"` (Program.cs) → Konstante (nicht konfigurierbar).
+  - [ ] Console-Titel `"Marcer GameDVD Launcher"` (Program.cs) → Konstante (nicht konfigurierbar).
   - [ ] Default-ArgsTemplate `-c "{cfg}" --disk-a "{zip}"` (LauncherApp.cs) → redundanten Fallback
         entfernen; Config liefert den Template (ist schon in der example definiert, Validation `{zip}` existiert).
 - [ ] **Scroll-Trigger magische Zahlen** (NavigationController.cs: `2/3`, `1/3`) in benannte Konstanten
@@ -68,7 +68,7 @@ Inkonsistenzen. Die folgenden Werte sind betroffen:
 |---|------|-----------------|------------|---------------|
 | 1 | `"Favorites"` | `LauncherApp.cs` (2×) | Virtueller Ordnername, der dem Nutzer als Eintrag an der Wurzel angezeigt wird. Wenn zwei voneinander abweichende Literale im Codestand bleiben, funktioniert Enter/Anzeige dieses Ordners nicht mehr. | Eine einzige Konstante `const string FavoritesRootName = "Favorites";` (z.B. in `FavoritesService`); beide Verwendungen darauf zurückführen. **Nur Code-Konstante, nicht konfigurierbar.** |
 | 2 | `"favorites.txt"` | `LauncherApp.cs` | Dateiname der Favoriten-Persistenz (liegt im Patch-Dir oder neben EXE). | Konstante im `FavoritesService` (z.B. `public const string DefaultFileName = "favorites.txt";`); Aufrufer nutzen diese statt Literal. **Nur Code-Konstante, nicht konfigurierbar.** |
-| 3 | `"Hatari ZIP Launcher"` | `Program.cs` (`Console.Title`) | Konsolen-Titel, der im Fenstertitel erscheint. | Konstante `const string DefaultTitle = "Hatari ZIP Launcher";` (Nutzer-visible, aber **nicht konfigurierbar** — fixer Anzeige-Titel). |
+| 3 | `"Marcer GameDVD Launcher"` | `Program.cs` (`Console.Title`) | Konsolen-Titel, der im Fenstertitel erscheint. | Konstante `const string DefaultTitle = "Marcer GameDVD Launcher";` (Nutzer-visible, aber **nicht konfigurierbar** — fixer Anzeige-Titel). |
 | 4 | Default-ArgsTemplate `-c "{cfg}" --disk-a "{zip}"` | `LauncherApp.cs` | Redundanter Fallback, falls `Hatari.ArgsTemplate` in der Config nicht gesetzt ist. Ist bereits in der example definiert → das Hardcode ist nur ein Sicherheitsnetz. | Redundanz entfernen: Fallback streichen und erzwingen, dass die Config den Template liefert (Validation `{zip}` existiert schon). **Config-Feld bleibt die einzige Quelle.** |
 | 5 | Scroll-Anteile `2/3` und `1/3` | `NavigationController.cs` | Bestimmt, ab welcher relativen Position im sichtbaren Fenster automatisch gescrollt wird (Cursor bei 2/3 unten → scrollen, bei 1/3 oben → zurückscrollen). | Benannte Konstanten `BottomScrollTriggerFraction = 2f/3f` und `TopScrollTriggerFraction = 1f/3f` mit Kommentar; Logik bleibt identisch. **Nur Code-Konstanten, nicht konfigurierbar.** |
 | 6 | `WindowHeight - 1` / `WindowWidth` | `LauncherApp.cs` / `MenuRenderer.cs` | Die Liste ist immer eine Zeile weniger als die Konsolenhöhe (Policy, verhindert Auto-Scroll am Fensterrand). Wird an mehreren Stellen erneut berechnet. | Zentrale Helfer-Berechnung (z.B. statische Methode/Property `AvailableLines`), damit die Policy an genau einer Stelle kodiert ist; Logik unverändert (Resize-Handling bleibt). **Nur Code, nicht konfigurierbar.** |
