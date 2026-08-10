@@ -14,6 +14,10 @@
     <Content Include="launcher.config.example.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="../../LICENSE">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>LICENSE</Link>
+    </Content>
   </ItemGroup>
 
 </Project>
