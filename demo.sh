@@ -175,7 +175,7 @@ EOF
 echo "[OK] Config written to $CONFIG_FILE"
 
 # Copy config to EXE output directory (app looks for it there)
-EXE_DIR="$SCRIPT_DIR/MarcerGameDvdLauncher/bin/Release/net10.0"
+EXE_DIR="$SCRIPT_DIR/src/MarcerGameDvdLauncher/bin/Release/net10.0"
 cp "$CONFIG_FILE" "$EXE_DIR/launcher.config.json"
 echo "[OK] Config copied to $EXE_DIR"
 
@@ -186,4 +186,4 @@ echo "Controls: Arrow keys, Enter, Backspace, ESC to exit"
 echo ""
 
 cd "$SCRIPT_DIR"
-dotnet run --project MarcerGameDvdLauncher -c Release
+dotnet run --project src/MarcerGameDvdLauncher -c Release

@@ -8,11 +8,9 @@ if ! command -v dotnet &> /dev/null; then
     exit 1
 fi
 
-# Build in current directory (where build.sh is located)
+# Build in MarcerGameDvdLauncher subdirectory (script is in scripts/, code in src/)
 cd "$(dirname "$0")"
-
-# Change to MarcerGameDvdLauncher subdirectory
-cd "MarcerGameDvdLauncher"
+cd "../src/MarcerGameDvdLauncher"
 
 dotnet build -c Release
 if [ $? -ne 0 ]; then

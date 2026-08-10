@@ -8,9 +8,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
-REM Im aktuellen Ordner (wo build.cmd liegt) bauen
+REM Im src-Ordner bauen (build.cmd liegt in scripts/)
 cd /d %~dp0
-cd MarcerGameDvdLauncher
+cd ..\src\MarcerGameDvdLauncher
 
 dotnet build -c Release
 if errorlevel 1 (

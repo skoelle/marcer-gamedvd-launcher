@@ -4,7 +4,7 @@ applyTo: '**'
 
 ## Module Overview (Marcer GameDVD Launcher)
 
-The implementation is split into focused modules (files) under the `MarcerGameDvdLauncher/` folder. Keep this section up to date when files are added, removed or responsibilities change.
+The implementation is split into focused modules (files) under the `src/MarcerGameDvdLauncher/` folder. Keep this section up to date when files are added, removed or responsibilities change.
 
 - MarcerGameDvdLauncher/Program.cs: Minimal entry point. Sets console title and starts the application by creating `LauncherApp`.
 - MarcerGameDvdLauncher/LauncherApp.cs: Application lifecycle host — loads configuration, initializes components and runs the main directory navigation loop (contains `AppHost` internal class).
@@ -18,7 +18,7 @@ The implementation is split into focused modules (files) under the `MarcerGameDv
 
 Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (AGENTS.md) and README.md as required by project policy.
 **Note for Automated Tests/CI:**
-The Launcher cannot be executed or tested via `start.cmd` from this environment (build system, automation agent) since no Windows console environment is present. For release workflows and developer validation, it is ALWAYS required to do a manual test run via start.cmd per documentation and policy before delivery.
+The Launcher cannot be executed or tested via `scripts/start.cmd` from this environment (build system, automation agent) since no Windows console environment is present. For release workflows and developer validation, it is ALWAYS required to do a manual test run via scripts/start.cmd per documentation and policy before delivery.
 
 **Release Process (automated via GitHub Actions):**
 - Pushing a tag (`v*`) triggers the GitHub Action workflow (`.github/workflows/release.yml`).
@@ -35,7 +35,7 @@ Additional policy:
 - README.md must be written in English. Any functional change that affects usage, configuration, or behavior MUST update README.md in English immediately after the change. If there are consequential changes to developer-facing policies, build steps, or requirements, AGENTS.md must be updated as well.
 
 Developer note: Visual Studio Solution
-- A Visual Studio solution file exists at the repository root: `marcer-gamedvd-launcher.sln`. Developers may open this solution in Visual Studio to work on the project, debug and build from the IDE. The solution references `MarcerGameDvdLauncher\MarcerGameDvdLauncher.csproj` and includes Debug and Release configurations. Use `build.cmd` (Windows) or `build.sh` (Linux) and `start.cmd` for consistent command-line builds/releases as described elsewhere in this document.
+- A Visual Studio solution file exists at `src/marcer-gamedvd-launcher.sln`. Developers may open this solution in Visual Studio to work on the project, debug and build from the IDE. The solution references `MarcerGameDvdLauncher\MarcerGameDvdLauncher.csproj` and includes Debug and Release configurations. Use `scripts/build.cmd` (Windows) or `scripts/build.sh` (Linux) and `scripts/start.cmd` for consistent command-line builds/releases as described elsewhere in this document.
 
 With this, it is ensured that binary/release files never end up in git, and the release process is always traceable and performed exclusively manually in the web interface.
 
@@ -79,9 +79,9 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
  - Hatari.Executable is validated during startup: the path is resolved (relative to the EXE directory when applicable) and must point to an existing file. If validation fails the program must present a clear error and exit.
 
 ### Miscellaneous
-- Optional: Build and start scripts (build.cmd / build.sh / start.cmd) are present, adapt as needed.
- - For ALL builds, tests, and releases, ONLY the platform build script may be used: `build.cmd` (Windows) or `build.sh` (Linux). Direct `dotnet build`/`dotnet run` calls are NOT allowed, as they can lead to version/runtime conflicts. The application must always be started and tested using `start.cmd`.
- - After making any code changes that affect behavior or touch source files, run the platform build script (`build.cmd` on Windows, `build.sh` on Linux) and ensure the build completes successfully before committing. Additionally, perform a manual functional test using `start.cmd` on a Windows machine prior to pushing a release.
+- Optional: Build and start scripts (`scripts/build.cmd` / `scripts/build.sh` / `scripts/start.cmd` / `scripts/start.sh`) are present, adapt as needed.
+ - For ALL builds, tests, and releases, ONLY the platform build script may be used: `scripts/build.cmd` (Windows) or `scripts/build.sh` (Linux). Direct `dotnet build`/`dotnet run` calls are NOT allowed, as they can lead to version/runtime conflicts. The application must always be started and tested using `scripts/start.cmd`.
+ - After making any code changes that affect behavior or touch source files, run the platform build script (`scripts/build.cmd` on Windows, `scripts/build.sh` on Linux) and ensure the build completes successfully before committing. Additionally, perform a manual functional test using `scripts/start.cmd` on a Windows machine prior to pushing a release.
 - The console window can have any number of lines; display/navigation must adapt dynamically.
 - After each build for a release, the entire build output directory (`bin/Release/net10.0/`) must be zipped in the `release/` directory, and the ZIP must be uploaded as a release asset in Gitea.
 - For every release, a Release Notes file must be maintained that summarizes all changes, bugfixes, and new features in that version; Release Notes must be provided with the release asset.

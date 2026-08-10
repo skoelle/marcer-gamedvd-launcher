@@ -41,18 +41,19 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build
+        working-directory: src/MarcerGameDvdLauncher
         run: dotnet publish -c Release -r ${{ matrix.rid }} -p:Version=${{ steps.version.outputs.version }} --self-contained false
 
       - name: Create ZIP (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          Compress-Archive -Path "MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/publish/*" -DestinationPath "MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
+          Compress-Archive -Path "src/MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/publish/*" -DestinationPath "MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
 
       - name: Create ZIP (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: |
-          cd MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/publish
+          cd src/MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/publish
           zip -r $GITHUB_WORKSPACE/MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip .
 
       - name: Upload artifact

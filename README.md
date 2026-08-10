@@ -76,8 +76,8 @@ A performant, consistent console launcher for the Hatari emulator on Windows. Co
 
 ## Usage
 1. Edit `launcher.config.example.json` to set your `RootDirectory`, optional `PatchDirectory` and the `Hatari` settings, then copy it to `launcher.config.json` for local use. Relative paths are resolved against the EXE folder (build output).
-2. **Windows:** Build via `build.cmd`, start via `start.cmd`.
-3. **Linux/macOS:** Build via `build.sh` (run `chmod +x build.sh` first to make it executable), start via `start.sh`.
+2. **Windows:** Build via `scripts/build.cmd`, start via `scripts/start.cmd`.
+3. **Linux/macOS:** Build via `scripts/build.sh` (run `chmod +x scripts/*.sh` first to make it executable), start via `scripts/start.sh`.
 4. In the console, all subfolders and ZIPs in root (and recursively below) will be shown; other file types/hidden files are always ignored.
 5. Complete navigation/control with arrow keys, Enter, Backspace, ESC, PgUp/PgDn, as described above.
 6. **IMPORTANT:** Navigation/scroll/backspace:
@@ -139,8 +139,8 @@ Releases are automated via GitHub Actions. When a tag matching `v*` is pushed, t
 4. The GitHub Action handles the rest.
 
 **Local builds** (for development/testing):
-- **Windows:** `build.cmd` to build, `start.cmd` to run
-- **Linux/macOS:** `build.sh` to build, `start.sh` to run (run `chmod +x *.sh` first)
+- **Windows:** `scripts/build.cmd` to build, `scripts/start.cmd` to run
+- **Linux/macOS:** `scripts/build.sh` to build, `scripts/start.sh` to run (run `chmod +x scripts/*.sh` first)
 
 ## Community
 

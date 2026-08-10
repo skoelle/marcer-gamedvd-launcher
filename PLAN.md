@@ -94,4 +94,4 @@ externe Anpassungsmöglichkeit dafür.
 ## 4. Abschlusskriterien
 
 - [ ] Commit mit aussagekräftiger Message (nur echter Autor, kein Co-Author).
-- [ ] Nach Doku- und Code-Änderungen: `build.cmd` (Windows) bzw. `build.sh` (Linux) läuft fehlerfrei.
+- [ ] Nach Doku- und Code-Änderungen: `scripts/build.cmd` (Windows) bzw. `scripts/build.sh` (Linux) läuft fehlerfrei.
