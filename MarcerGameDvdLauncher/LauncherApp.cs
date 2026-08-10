@@ -174,6 +174,7 @@ namespace MarcerGameDvdLauncher
                         ProgramHelpers.FlushInputBuffer();
                         break;
                     case ConsoleKey.Enter:
+                    case ConsoleKey.RightArrow:
                         var oldRelativePath = _navigationController.CurrentRelativePath;
                         var isDirectory = _gameEntries.Count > 0 && _gameEntries[_navigationController.SelectedIndex].Kind == EntryKind.Directory;
                         _navigationController.HandleEnter(_gameEntries);
@@ -199,11 +200,11 @@ namespace MarcerGameDvdLauncher
                         ProgramHelpers.FlushInputBuffer();
                         break;
                     case ConsoleKey.Backspace:
+                    case ConsoleKey.LeftArrow:
                         _navigationController.GoUpDirectory();
                         ReloadGameEntries();
                         _navigationController.UpdateScrollOffset(_gameEntries.Count, currentAvailableLines);
                         _menuRenderer.DrawMenu(_gameEntries, _navigationController.ScrollOffset, _navigationController.SelectedIndex, currentAvailableLines, isFav);
-                        // flush input to avoid leftover key events after directory change
                         ProgramHelpers.FlushInputBuffer();
                         break;
                     case ConsoleKey.PageDown:
@@ -237,6 +238,7 @@ namespace MarcerGameDvdLauncher
                         ProgramHelpers.FlushInputBuffer();
                         break;
                     case ConsoleKey.Escape:
+                    case ConsoleKey.Q:
                         exitRequested = true;
                         break;
                 }

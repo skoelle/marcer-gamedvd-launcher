@@ -106,13 +106,19 @@ Note on PatchDirectory semantics:
 Implementation note (input flushing):
 - To avoid undesired key-repeat / input "afterglow" when the user holds navigation keys, the application performs a best-effort flush of the console input buffer after navigation events. This is implemented by ProgramHelpers.FlushInputBuffer(), which uses the Win32 FlushConsoleInputBuffer API on Windows. This behaviour is intentional and required to provide a responsive navigation experience.
 
-### Color Scheme
-- Folder in both layers: **ConsoleColor.Yellow**
-- Folder only in patch layer: **ConsoleColor.DarkYellow**
-- Folder only in main layer: **ConsoleColor.Gray**
-- ZIP in both layers: **ConsoleColor.Green**
-- ZIP only in main layer: **ConsoleColor.DarkGreen**
-- ZIP only in patch layer: **ConsoleColor.Magenta**
+### Color Scheme and Layer Labels
+Each entry is displayed with a left label indicating its layer status:
+- **`[BOTH]`**: Entry exists in both main and patch layer
+- **`[ROOT]`**: Entry exists only in main (root) layer
+- **`[PTCH]`**: Entry exists only in patch layer
+
+Color mapping:
+- Folder in both layers: **ConsoleColor.Yellow** (`[BOTH]`)
+- Folder only in patch layer: **ConsoleColor.DarkYellow** (`[PTCH]`)
+- Folder only in main layer: **ConsoleColor.Gray** (`[ROOT]`)
+- ZIP in both layers: **ConsoleColor.Green** (`[BOTH]`)
+- ZIP only in main layer: **ConsoleColor.DarkGreen** (`[ROOT]`)
+- ZIP only in patch layer: **ConsoleColor.Magenta** (`[PTCH]`)
 
 Note: The ConsoleColor mapping above is authoritative for the application. If you change color values in code (MenuRenderer/GetColorForEntry), update this section to keep documentation and implementation in sync.
 

@@ -156,18 +156,8 @@ namespace MarcerGameDvdLauncher
         private string BuildLineText(GameEntry e, int width, bool isFavorite)
         {
             if (width <= 0) return string.Empty;
-            // Reserve 6 characters for the label area. For directories we show "[DIR] ",
-            // for ZIPs we use the same width and optionally show a leading '*' when favorited.
-            string label;
-            if (e.Kind == EntryKind.Directory)
-            {
-                label = "[DIR] ";
-            }
-            else
-            {
-                // For ZIPs, show '*' after 4 spaces when favorited (keeps 6-char label area).
-                label = isFavorite ? "    * " : new string(' ', 6);
-            }
+
+            string label = GetLabel(e, isFavorite);
 
             // If the console width is smaller than the label, truncate the label
             if (width <= label.Length)
@@ -197,21 +187,49 @@ namespace MarcerGameDvdLauncher
             return result;
         }
 
+        // Returns the left label for an entry based on kind, layer status and favorite state.
+        // Format: [LayerLabel][TypeIndicator] where
+        //   LayerLabel = [BOTH] / [ROOT] / [PTCH] (7 chars)
+        //   TypeIndicator = [DIR]  for dirs, "    * " or "      " for ZIPs (6 chars)
+        private static string GetLabel(GameEntry e, bool isFavorite)
+        {
+            // Layer label (7 chars)
+            string layer;
+            if (e.InRoot && e.InPatch) layer = "[BOTH] ";
+            else if (e.InPatch) layer = "[PTCH] ";
+            else if (e.InRoot) layer = "[ROOT] ";
+            else layer = "       ";
+
+            // Type indicator (6 chars)
+            string type;
+            if (e.Kind == EntryKind.Directory)
+            {
+                type = "[DIR] ";
+            }
+            else
+            {
+                type = isFavorite ? "    * " : "      ";
+            }
+
+            return layer + type;  // 13 chars total
+        }
+
         private ConsoleColor GetColorForEntry(GameEntry e)
         {
             // Virtual entries (like the Favorites pseudo-folder) should be white
             if (e.IsVirtual) return ConsoleColor.White;
+
             if (e.Kind == EntryKind.Directory)
             {
-                if (e.InRoot && e.InPatch) return ConsoleColor.Yellow; // Both layers
-                if (e.InPatch && !e.InRoot) return ConsoleColor.DarkYellow; // Only patch
-                if (e.InRoot && !e.InPatch) return ConsoleColor.Gray; // Only root
+                if (e.InRoot && e.InPatch) return ConsoleColor.Yellow;       // Both layers
+                if (e.InPatch && !e.InRoot) return ConsoleColor.DarkYellow;  // Only patch
+                if (e.InRoot && !e.InPatch) return ConsoleColor.Gray;        // Only root
             }
             else if (e.Kind == EntryKind.Zip)
             {
-                if (e.InRoot && e.InPatch) return ConsoleColor.Green;
-                if (e.InRoot && !e.InPatch) return ConsoleColor.DarkGreen;
-                if (e.InPatch && !e.InRoot) return ConsoleColor.Magenta;
+                if (e.InRoot && e.InPatch) return ConsoleColor.Green;        // Both layers
+                if (e.InRoot && !e.InPatch) return ConsoleColor.DarkGreen;   // Only root
+                if (e.InPatch && !e.InRoot) return ConsoleColor.Magenta;     // Only patch
             }
             return ConsoleColor.DarkGray;
         }

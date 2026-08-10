@@ -4,16 +4,16 @@ A performant, consistent console launcher for the Hatari emulator on Windows. Co
 
 ## Features
 - **Overlay/Patch Union:** Recursively merges main and patch directory at every level. Each object/name is shown only once (patch takes precedence).
-- **Dynamic, practical color scheme:**
+- **Dynamic, practical color scheme with layer labels:**
 
-    | Entry                  | ConsoleColor | Meaning
-    |------------------------|--------------|---------------------------------------------|
-    | Folder in both         | ConsoleColor.Yellow      | Directory in both layers (patch/main)
-    | Patch-only folder      | ConsoleColor.DarkYellow  | Directory only in patch layer
-    | Main-only folder       | ConsoleColor.Gray       | Directory only in main layer
-    | ZIP in both           | ConsoleColor.Green      | ZIP archive in both layers
-    | Main-only ZIP         | ConsoleColor.DarkGreen  | ZIP archive only in main layer
-    | Patch-only ZIP        | ConsoleColor.Magenta    | ZIP archive only in patch layer
+    | Entry                  | Label     | ConsoleColor | Meaning
+    |------------------------|-----------|--------------|---------------------------------------------|
+    | Folder in both         | `[BOTH]`  | Yellow       | Directory in both layers (patch/main)
+    | Patch-only folder      | `[PTCH]`  | DarkYellow   | Directory only in patch layer
+    | Main-only folder       | `[ROOT]`  | Gray         | Directory only in main layer
+    | ZIP in both            | `[BOTH]`  | Green        | ZIP archive in both layers
+    | Main-only ZIP          | `[ROOT]`  | DarkGreen    | ZIP archive only in main layer
+    | Patch-only ZIP         | `[PTCH]`  | Magenta      | ZIP archive only in patch layer
 
 ## Roadmap
 
@@ -57,10 +57,13 @@ A performant, consistent console launcher for the Hatari emulator on Windows. Co
 
 - **Consistent navigation & controls:**
     - Arrow up/down: move selection (always visible)
+    - Arrow right: open folder / launch ZIP with Hatari (same as Enter)
+    - Arrow left: exactly one level up (same as Backspace)
     - Enter: open folder / launch ZIP with Hatari (patch variant always preferred if present)
     - Backspace: exactly one level up (never exceeds root)
-    - ESC: exit the program immediately
+    - ESC or Q: exit the program immediately
     - PageUp/PageDown: jump exactly one screen full (window height - 1)
+    - `*`: toggle favorite on selected ZIP
     - Display always one line less than console height; no overflow/cut-off
 - **Cursor position saving per directory:**
     - The last position/selection of each directory is retained, even after Backspace
