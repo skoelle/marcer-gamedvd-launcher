@@ -47,12 +47,12 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          Compress-Archive -Path "MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/*" -DestinationPath "MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
+          Compress-Archive -Path "MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/publish/*" -DestinationPath "MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
 
       - name: Create ZIP (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: |
-          cd MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}
+          cd MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/publish
           zip -r ../../../MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip .
 
       - name: Upload artifact
