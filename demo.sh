@@ -14,7 +14,7 @@ CONFIG_FILE="$SCRIPT_DIR/launcher.config.json"
 
 # --- Step 1: Build ---
 echo "=== Building MarcerGameDvdLauncher ==="
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/src/MarcerGameDvdLauncher"
 dotnet build -c Release --verbosity quiet
 echo "[OK] Build successful."
 
@@ -185,5 +185,5 @@ echo "=== Launching MarcerGameDvdLauncher ==="
 echo "Controls: Arrow keys, Enter, Backspace, ESC to exit"
 echo ""
 
-cd "$SCRIPT_DIR"
-dotnet run --project src/MarcerGameDvdLauncher -c Release
+cd "$SCRIPT_DIR/src/MarcerGameDvdLauncher"
+dotnet run -c Release
