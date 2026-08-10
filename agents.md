@@ -35,7 +35,7 @@ Additional policy:
 - README.md must be written in English. Any functional change that affects usage, configuration, or behavior MUST update README.md in English immediately after the change. If there are consequential changes to developer-facing policies, build steps, or requirements, `agents.md` must be updated as well.
 
 Developer note: Visual Studio Solution
-- A Visual Studio solution file exists at the repository root: `MarcerLauncher.sln`. Developers may open this solution in Visual Studio to work on the project, debug and build from the IDE. The solution references `HatariZipLauncher\HatariZipLauncher.csproj` and includes Debug and Release configurations. Use `build.cmd` (Windows) or `build.sh` (Linux) and `start.cmd` for consistent command-line builds/releases as described elsewhere in this document.
+- A Visual Studio solution file exists at the repository root: `marcer-gamedvd-launcher.sln`. Developers may open this solution in Visual Studio to work on the project, debug and build from the IDE. The solution references `HatariZipLauncher\HatariZipLauncher.csproj` and includes Debug and Release configurations. Use `build.cmd` (Windows) or `build.sh` (Linux) and `start.cmd` for consistent command-line builds/releases as described elsewhere in this document.
 
 With this, it is ensured that binary/release files never end up in git, and the release process is always traceable and performed exclusively manually in the web interface.
 
