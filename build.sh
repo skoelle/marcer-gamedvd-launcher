@@ -20,10 +20,10 @@ if [ $? -ne 0 ]; then
     exit 2
 fi
 
-# Check for the built .exe file
-EXEPATH=$(find "bin/Release" -name "MarcerGameDvdLauncher*.exe" -print -quit 2>/dev/null)
-if [ -n "$EXEPATH" ] && [ -f "$EXEPATH" ]; then
-    echo "[OK] Build complete. EXE: \"$EXEPATH\""
+# Check for the built binary
+BINPATH=$(find "bin/Release" \( -name "MarcerGameDvdLauncher" -o -name "MarcerGameDvdLauncher.exe" \) -print -quit 2>/dev/null)
+if [ -n "$BINPATH" ] && [ -f "$BINPATH" ]; then
+    echo "[OK] Build complete. Binary: \"$BINPATH\""
 else
-    echo "[WARNING] Build appears successful but .exe not found!"
+    echo "[WARNING] Build appears successful but binary not found!"
 fi
