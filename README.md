@@ -103,6 +103,43 @@ The launcher reads `launcher.config.json` from the same directory as the executa
 - Empty directories are displayed correctly.
 - When a ZIP or folder exists in both layers, the patch version is always launched/opened.
 
+### 🔄 Keeping Your Patch Directory Updated
+
+The community uses [ftp-sync](https://github.com/slippyex/ftp-sync) to keep the patch directory in sync with Marcer's FTP server. This downloads only changed or new files — fast and bandwidth-friendly.
+
+**Setup:**
+
+1. Clone and install ftp-sync:
+   ```bash
+   git clone https://github.com/slippyex/ftp-sync.git
+   cd ftp-sync
+   npm install
+   ```
+
+2. Create a `config.json` with your paths and the FTP credentials from the community:
+   ```json
+   {
+     "ftpConfig": {
+       "host": "<ftp-host>",
+       "user": "<username>",
+       "password": "<password>",
+       "port": 2121
+     },
+     "localDir": "C:\\Games\\MarcersGameDVD\\",
+     "remoteDir": "/GameDVD",
+     "patchDir": "C:\\Games\\MarcersGameDVD-Patch\\"
+   }
+   ```
+   > 💡 Ask in the [Facebook group](https://www.facebook.com/groups/360493904888475/) for the current FTP credentials.
+
+3. Run the sync:
+   ```bash
+   npm run sync config.json
+   ```
+   Press `s` to start syncing. Press `q` to exit when done.
+
+4. Point the launcher's `PatchDirectory` in `launcher.config.json` to the `patchDir` from your ftp-sync config.
+
 ---
 
 ## 🛠️ Developers
