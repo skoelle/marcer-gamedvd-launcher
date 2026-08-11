@@ -8,7 +8,7 @@ namespace MarcerGameDvdLauncher
         // The Hatari configuration file that is shipped with the launcher.
         // When Hatari.ConfigFile is not set in launcher.config.json, this file
         // (resolved relative to the executable directory) is used automatically.
-        public const string DefaultConfigFile = "MarcerGameDvd-Hatari.cfg";
+        private const string DEFAULT_CONFIG_FILE = "MarcerGameDvd-Hatari.cfg";
 
         private readonly string _exePath;
         private readonly string _cfgPath;
@@ -26,6 +26,8 @@ namespace MarcerGameDvdLauncher
             // Validate argsTemplate
             if (string.IsNullOrWhiteSpace(argsTemplate) || !argsTemplate.Contains("{zip}"))
                 throw new ArgumentException("Hatari.ArgsTemplate must contain the {zip} placeholder.", nameof(argsTemplate));
+            if (string.IsNullOrWhiteSpace(argsTemplate) || !argsTemplate.Contains("{cfg}"))
+                throw new ArgumentException("Hatari.ArgsTemplate must contain the {cfg} placeholder.", nameof(argsTemplate));
 
             _exePath = exePath;
             _cfgPath = cfgPath;
@@ -42,7 +44,6 @@ namespace MarcerGameDvdLauncher
                 throw new ArgumentException("ZIP archive path must not be empty.", nameof(zipFilePath));
             try
             {
-                // Build arguments: only include config section if cfgPath is not empty
                 string args = _argsTemplate;
                 if (!string.IsNullOrWhiteSpace(_cfgPath))
                 {
@@ -50,8 +51,7 @@ namespace MarcerGameDvdLauncher
                 }
                 else
                 {
-                    // Remove {cfg} placeholder entirely if config file is empty
-                    args = args.Replace("{cfg}", string.Empty);
+                    args = args.Replace("{cfg}", Path.Combine(Directory.GetCurrentDirectory(),DEFAULT_CONFIG_FILE));
                 }
                 args = args.Replace("{zip}", zipFilePath);
 
