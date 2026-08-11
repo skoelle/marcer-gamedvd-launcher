@@ -73,8 +73,8 @@
 
 ## Priority Recommendation
 
-1. **Fix #1 (ArgsTemplate `{cfg}`)** - Breaks launch when ConfigFile empty
+1. **Fix #1 (ArgsTemplate `{cfg}`)** - ✅ Fixed: empty ConfigFile now falls back to bundled config
 2. **Fix #2 (RedrawEntry bounds)** - Potential crash on resize
-3. **Fix #3 (HatariLauncher validation)** - Defense in depth
+3. **Fix #3 (HatariLauncher validation)** - ✅ Done (per BUGS.md Fixed table)
 4. **Fix #4 (ZIP path validation)** - User-facing robustness
-5. **Sync #5 & #6 (docs)** - Requirements accuracy
+5. **Sync #5 & #6 (docs)** - ✅ Done: ConfigFile documented as optional with fallback
