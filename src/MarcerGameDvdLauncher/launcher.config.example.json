@@ -3,7 +3,7 @@
   "PatchDirectory": "C:\\Games\\Hatari\\PATCH",
   "Hatari": {
     "Executable": "C:\\Tools\\hatari\\hatari.exe",
-    "ConfigFile": "C:\\Tools\\hatari\\hatari-st.cfg",
+    "ConfigFile": "",
     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
   },
   "Colors": {

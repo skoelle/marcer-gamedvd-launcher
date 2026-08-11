@@ -46,9 +46,7 @@ Download the ZIP for your platform from the [Releases](https://github.com/anomal
 ### 💻 System Requirements
 
 - **.NET Runtime 10** or later ([download](https://dotnet.microsoft.com/download/dotnet/10.0))
-- **Hatari Emulator** with a working configuration file
-  - Windows: native Hatari
-  - Linux / macOS: Hatari via Wine or native build
+- **Hatari Emulator** (Windows native, or Linux/macOS via Wine or native build) — a Hatari configuration file (`MarcerGameDvd-Hatari.cfg`) is bundled with the launcher and used automatically when `Hatari.ConfigFile` is empty.
 
 ### ⚡ Quick Start
 
@@ -71,7 +69,7 @@ The launcher reads `launcher.config.json` from the same directory as the executa
   "PatchDirectory": "C:\\Games\\Hatari\\PATCH",
   "Hatari": {
     "Executable": "C:\\Tools\\hatari\\hatari.exe",
-    "ConfigFile": "C:\\Tools\\hatari\\hatari-st.cfg",
+    "ConfigFile": "",
     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
   },
   "Colors": {
@@ -93,7 +91,7 @@ The launcher reads `launcher.config.json` from the same directory as the executa
 | `RootDirectory` | ✅ | Game root folder. Navigation never leaves this directory. |
 | `PatchDirectory` | ❌ | Optional overlay/patch directory merged at runtime. |
 | `Hatari.Executable` | ✅ | Path to the Hatari executable. Validated at startup. |
-| `Hatari.ConfigFile` | ✅ | Path to the Hatari configuration file. |
+| `Hatari.ConfigFile` | ❌ | Path to a Hatari configuration file. If empty, the bundled `MarcerGameDvd-Hatari.cfg` (shipped with the launcher) is used automatically. |
 | `Hatari.ArgsTemplate` | ✅ | Argument template. Must contain `{zip}`, optionally `{cfg}`. |
 | `Colors` | ❌ | Optional color overrides. See [Color Scheme](#-color-scheme) below. Missing or invalid values fall back to defaults. |
 

@@ -5,6 +5,11 @@ namespace MarcerGameDvdLauncher
 {
     public class HatariLauncher
     {
+        // The Hatari configuration file that is shipped with the launcher.
+        // When Hatari.ConfigFile is not set in launcher.config.json, this file
+        // (resolved relative to the executable directory) is used automatically.
+        public const string DefaultConfigFile = "MarcerGameDvd-Hatari.cfg";
+
         private readonly string _exePath;
         private readonly string _cfgPath;
         private readonly string _argsTemplate;
