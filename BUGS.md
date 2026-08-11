@@ -29,7 +29,7 @@
 ### 5. `Hatari.ConfigFile` required status unclear
 **Location**: `README.md:96` vs `LauncherApp.cs:67-68`
 **Conflict**: README marks `Hatari.ConfigFile` as required (✅). Code allows empty string and only validates if non-empty. If template uses `{cfg}` but ConfigFile empty → broken args.
-**Resolution**: Decide: make ConfigFile truly required (validate non-empty) OR document as optional and handle empty in template.
+**Resolution**: ConfigFile is now optional. When empty, the bundled `MarcerGameDvd-Hatari.cfg` (shipped in the release) is used automatically. README updated to reflect this. ✅ Fixed
 
 ### 6. `RightArrow` key binding missing from AGENTS.md requirements
 **Location**: `AGENTS.md:57-58` vs `InputController.cs:172-173`
