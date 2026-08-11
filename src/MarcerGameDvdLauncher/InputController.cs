@@ -178,7 +178,10 @@ namespace MarcerGameDvdLauncher
                             {
                                 errorService.ShowError(ex.Message);
                             }
-                            // Redraw menu after Hatari has exited
+                            // Redraw menu after Hatari has exited.
+                            // Invalidate the cache because the modal overwrote
+                            // a console row that the cache still considers valid.
+                            menuRenderer.InvalidateCache();
                             DrawMenu(availableLines);
                         }
                         // flush input to avoid leftover key events after an enter/navigation
