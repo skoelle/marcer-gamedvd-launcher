@@ -65,9 +65,10 @@ namespace MarcerGameDvdLauncher
 
             // If no Hatari config file was specified, fall back to the bundled
             // MarcerGameDvd-Hatari.cfg that ships with the launcher.
+            // Use current working directory to allow running from different locations
             if (string.IsNullOrWhiteSpace(cfg.Hatari.ConfigFile))
             {
-                cfg.Hatari.ConfigFile = Path.Combine(exeDir, HatariLauncher.DefaultConfigFile);
+                cfg.Hatari.ConfigFile = Path.Combine(Directory.GetCurrentDirectory(), HatariLauncher.DefaultConfigFile);
             }
 
             // Validate the Hatari config file (either user-specified or bundled fallback)
