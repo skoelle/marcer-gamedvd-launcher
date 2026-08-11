@@ -19,16 +19,16 @@ namespace MarcerGameDvdLauncher
 
     public class OverlayDirectoryBrowser(string root, string patch)
     {
-        public List<GameEntry> GetEntries(string currentRelativePath)
+        public List<GameEntry> GetEntries(string? currentRelativePath)
         {
             try
             {
                 // Normalize and protect against path traversal or absolute paths in the relative path
-                string rel = currentRelativePath ?? string.Empty;
+                var rel = currentRelativePath ?? string.Empty;
                 // Remove any leading directory separators
                 rel = rel.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 // If the relative path is rooted or contains parent directory segments, reset to root
-                if (Path.IsPathRooted(rel) || rel.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries).Any(p => p == ".."))
+                if (Path.IsPathRooted(rel) || rel.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Any(p => p == ".."))
                 {
                     rel = string.Empty;
                 }

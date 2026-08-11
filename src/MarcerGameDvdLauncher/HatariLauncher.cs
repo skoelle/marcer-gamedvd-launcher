@@ -44,15 +44,8 @@ namespace MarcerGameDvdLauncher
                 throw new ArgumentException("ZIP archive path must not be empty.", nameof(zipFilePath));
             try
             {
-                string args = _argsTemplate;
-                if (!string.IsNullOrWhiteSpace(_cfgPath))
-                {
-                    args = args.Replace("{cfg}", _cfgPath);
-                }
-                else
-                {
-                    args = args.Replace("{cfg}", Path.Combine(Directory.GetCurrentDirectory(),DEFAULT_CONFIG_FILE));
-                }
+                var args = _argsTemplate;
+                args = args.Replace("{cfg}", !string.IsNullOrWhiteSpace(_cfgPath) ? _cfgPath : Path.Combine(Directory.GetCurrentDirectory(),DEFAULT_CONFIG_FILE));
                 args = args.Replace("{zip}", zipFilePath);
 
                 var psi = new System.Diagnostics.ProcessStartInfo

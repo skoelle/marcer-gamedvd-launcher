@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
-using System;
 using System.Runtime.InteropServices;
 
 namespace MarcerGameDvdLauncher
@@ -40,11 +39,11 @@ namespace MarcerGameDvdLauncher
         // These are defined by the Windows API and do not change.
         private const int STD_INPUT_HANDLE = -10;
 
-        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        [DllImport("kernel32.dll")]
         private static extern IntPtr GetStdHandle(int nStdHandle);
 
-        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool FlushConsoleInputBuffer(IntPtr hConsoleInput);
 
         // P/Invoke to query key state (used to detect physical key release)
@@ -59,16 +58,16 @@ namespace MarcerGameDvdLauncher
         // then removed and the method returns. This is designed to be a
         // lightweight modal for the console UI and uses the last console line
         // which the application reserves for transient messages.
-        public static void ShowModalUntilReturnReleased(string message)
+        public static void ShowModalUntilReturnReleased(string? message)
         {
             try
             {
-                int lastRow = AvailableLines;
-                int width = Console.WindowWidth;
-                string text = message ?? string.Empty;
+                var lastRow = AvailableLines;
+                var width = Console.WindowWidth;
+                var text = message ?? string.Empty;
                 if (text.Length > width) text = text.Substring(0, Math.Max(0, width - 3)) + "...";
-                int padding = Math.Max(0, width - text.Length);
-                string line = text + new string(' ', padding);
+                var padding = Math.Max(0, width - text.Length);
+                var line = text + new string(' ', padding);
 
                 Console.BackgroundColor = ConsoleColor.DarkGray;
                 Console.ForegroundColor = ConsoleColor.White;

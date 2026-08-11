@@ -3,7 +3,7 @@
 
 namespace MarcerGameDvdLauncher
 {
-    public class MenuRenderer
+    public class MenuRenderer(AppColorConfig? colors = null)
     {
         // Simple line-based double buffer to avoid full Clear() flicker.
         // cachedBuffer holds the last rendered text and colors for each visible row.
@@ -12,12 +12,7 @@ namespace MarcerGameDvdLauncher
         private int _cachedWidth = -1;
 
         // Color configuration (injected; defaults to built-in scheme if null)
-        private readonly AppColorConfig _colors;
-
-        public MenuRenderer(AppColorConfig? colors = null)
-        {
-            _colors = colors ?? new AppColorConfig();
-        }
+        private readonly AppColorConfig _colors = colors ?? new AppColorConfig();
 
         // availableLines is provided per-draw so the renderer adapts to console resizes
         public void DrawMenu(List<GameEntry> entries, int scrollOffset, int selectedIndex, int availableLines, Func<GameEntry, bool>? isFavorite = null)
@@ -140,53 +135,40 @@ namespace MarcerGameDvdLauncher
 
         // Renders a centered, bordered help box with key bindings inside the
         // available console area. The caller is responsible for waiting on a
-        // key and redrawing the menu afterwards.
+        // key and redrawing the menu afterward.
         public void ShowHelpBox(int availableLines)
         {
-            try
+            var width = Console.WindowWidth;
+            var helpLines = GetHelpLines();
+            var boxHeight = Math.Min(helpLines.Length + 2, Math.Max(3, availableLines));
+            var boxWidth = Math.Max(1, width);
+            var topRow = Math.Max(0, (availableLines - boxHeight) / 2);
+
+            Console.BackgroundColor = ConsoleColor.DarkGray;
+            Console.ForegroundColor = ConsoleColor.White;
+
+            var topBorder = "+" + new string('-', Math.Max(0, boxWidth - 2)) + "+";
+            Console.SetCursorPosition(0, topRow);
+            Console.Write(topBorder);
+
+            for (var i = 0; i < boxHeight - 2; i++)
             {
-                int width = Console.WindowWidth;
-                string[] helpLines = GetHelpLines();
-                int boxHeight = Math.Min(helpLines.Length + 2, Math.Max(3, availableLines));
-                int boxWidth = Math.Max(1, width);
-                int topRow = Math.Max(0, (availableLines - boxHeight) / 2);
-
-                Console.BackgroundColor = ConsoleColor.DarkGray;
-                Console.ForegroundColor = ConsoleColor.White;
-
-                string topBorder = "+" + new string('-', Math.Max(0, boxWidth - 2)) + "+";
-                Console.SetCursorPosition(0, topRow);
-                Console.Write(topBorder);
-
-                for (int i = 0; i < boxHeight - 2; i++)
-                {
-                    int row = topRow + 1 + i;
-                    string content;
-                    if (i < helpLines.Length)
-                    {
-                        content = PadToWidth(helpLines[i], boxWidth - 2);
-                    }
-                    else
-                    {
-                        content = new string(' ', Math.Max(0, boxWidth - 2));
-                    }
-                    Console.SetCursorPosition(0, row);
-                    Console.Write("|" + content + "|");
-                }
-
-                int bottomRow = topRow + boxHeight - 1;
-                if (bottomRow < Console.WindowHeight)
-                {
-                    string bottomBorder = "+" + new string('-', Math.Max(0, boxWidth - 2)) + "+";
-                    Console.SetCursorPosition(0, bottomRow);
-                    Console.Write(bottomBorder);
-                }
-
-                Console.ResetColor();
+                var row = topRow + 1 + i;
+                var content = i < helpLines.Length
+                    ? PadToWidth(helpLines[i], boxWidth - 2)
+                    : new string(' ', Math.Max(0, boxWidth - 2));
+                Console.SetCursorPosition(0, row);
+                Console.Write("|" + content + "|");
             }
-            catch
+
+            var bottomRow = topRow + boxHeight - 1;
+            if (bottomRow < Console.WindowHeight)
             {
+                var bottomBorder = "+" + new string('-', Math.Max(0, boxWidth - 2)) + "+";
+                Console.SetCursorPosition(0, bottomRow);
+                Console.Write(bottomBorder);
             }
+            Console.ResetColor();
         }
 
         private static string[] GetHelpLines()
@@ -235,7 +217,7 @@ namespace MarcerGameDvdLauncher
         {
             if (width <= 0) return string.Empty;
 
-            string label = GetLabel(e, isFavorite);
+            var label = GetLabel(e, isFavorite);
 
             // If the console width is smaller than the label, truncate the label
             if (width <= label.Length)
@@ -243,7 +225,7 @@ namespace MarcerGameDvdLauncher
                 return label.Substring(0, width);
             }
 
-            int maxNameLen = width - label.Length; // space left for name
+            var maxNameLen = width - label.Length; // space left for name
             string displayName;
             if (e.Name.Length <= maxNameLen)
             {
@@ -257,7 +239,7 @@ namespace MarcerGameDvdLauncher
                     displayName = e.Name.Substring(0, Math.Max(0, maxNameLen));
             }
 
-            int padding = Math.Max(0, width - label.Length - displayName.Length);
+            var padding = Math.Max(0, width - label.Length - displayName.Length);
             var result = label + displayName + new string(' ', padding);
             // Ensure exact width (defensive): truncate or pad if needed
             if (result.Length > width) return result.Substring(0, width);
@@ -273,7 +255,7 @@ namespace MarcerGameDvdLauncher
         {
             // Layer label (7 chars)
             string layer;
-            if (e.InRoot && e.InPatch) layer = "[BOTH] ";
+            if (e is {InRoot: true, InPatch: true}) layer = "[BOTH] ";
             else if (e.InPatch) layer = "[PTCH] ";
             else if (e.InRoot) layer = "[ROOT] ";
             else layer = "       ";
@@ -299,15 +281,15 @@ namespace MarcerGameDvdLauncher
 
             if (e.Kind == EntryKind.Directory)
             {
-                if (e.InRoot && e.InPatch) return _colors.FolderBoth;       // Both layers
-                if (e.InPatch && !e.InRoot) return _colors.FolderPatchOnly;  // Only patch
-                if (e.InRoot && !e.InPatch) return _colors.FolderRootOnly;   // Only root
+                if (e is {InRoot: true, InPatch: true}) return _colors.FolderBoth;       // Both layers
+                if (e is {InPatch: true, InRoot: false}) return _colors.FolderPatchOnly;  // Only patch
+                if (e is {InRoot: true, InPatch: false}) return _colors.FolderRootOnly;   // Only root
             }
             else if (e.Kind == EntryKind.Zip)
             {
-                if (e.InRoot && e.InPatch) return _colors.ZipBoth;           // Both layers
-                if (e.InRoot && !e.InPatch) return _colors.ZipRootOnly;     // Only root
-                if (e.InPatch && !e.InRoot) return _colors.ZipPatchOnly;     // Only patch
+                if (e is {InRoot: true, InPatch: true}) return _colors.ZipBoth;           // Both layers
+                if (e is { InRoot: true, InPatch: false }) return _colors.ZipRootOnly;     // Only root
+                if (e is {InPatch: true, InRoot: false}) return _colors.ZipPatchOnly;     // Only patch
             }
             return ConsoleColor.DarkGray;
         }

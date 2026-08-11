@@ -4,7 +4,7 @@
 namespace MarcerGameDvdLauncher
 {
     // Manages loading, saving and querying favorite ZIP paths.
-    public class FavoritesService
+    public class FavoritesService(string filePath)
     {
         // Virtual folder name displayed at the root when favorites exist.
         // Not configurable — fixed UI element.
@@ -14,14 +14,9 @@ namespace MarcerGameDvdLauncher
         // Not configurable — fixed persistence file.
         public const string DefaultFileName = "favorites.txt";
 
-        private readonly string _filePath;
+        private readonly string _filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
         // Use a SortedSet so favorites are kept in sorted order in memory.
         private SortedSet<string> _favorites = new(StringComparer.OrdinalIgnoreCase);
-
-        public FavoritesService(string filePath)
-        {
-            _filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
-        }
 
         // Load favorites from disk (no-op if file missing)
         public void Load()
@@ -31,7 +26,7 @@ namespace MarcerGameDvdLauncher
             var lines = File.ReadAllLines(_filePath, System.Text.Encoding.UTF8);
             foreach (var l in lines)
             {
-                var t = l?.Trim();
+                var t = l.Trim();
                 if (string.IsNullOrEmpty(t)) continue;
                 try
                 {
@@ -71,14 +66,13 @@ namespace MarcerGameDvdLauncher
             if (string.IsNullOrWhiteSpace(path)) throw new ArgumentNullException(nameof(path));
             var full = Path.GetFullPath(path);
             bool added;
-            if (_favorites.Contains(full))
+            if (!_favorites.Add(full))
             {
                 _favorites.Remove(full);
                 added = false;
             }
             else
             {
-                _favorites.Add(full);
                 added = true;
             }
             Save();

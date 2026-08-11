@@ -8,11 +8,11 @@ namespace MarcerGameDvdLauncher
         // Scroll fractions: when the selection cursor reaches 2/3 of the visible window
         // height from the top, the list scrolls down; when it reaches 1/3, it scrolls up.
         // Not configurable — these ratios are the established navigation behaviour.
-        private const double BottomScrollFraction = 2.0 / 3.0;
-        private const double TopScrollFraction = 1.0 / 3.0;
+        private const double BOTTOM_SCROLL_FRACTION = 2.0 / 3.0;
+        private const double TOP_SCROLL_FRACTION = 1.0 / 3.0;
 
-        public int SelectedIndex { get; private set; } = 0;
-        public int ScrollOffset { get; private set; } = 0;
+        public int SelectedIndex { get; private set; }
+        public int ScrollOffset { get; private set; }
         public string CurrentRelativePath { get; private set; } = "";
         // Stores the last selection & scroll position for each directory
         private readonly Dictionary<string, (int sel, int scroll)> _lastSelections = new();
@@ -105,12 +105,12 @@ namespace MarcerGameDvdLauncher
             if (availableLines < 1) availableLines = 1;
             if (entryCount <= availableLines) { ScrollOffset = 0; return; }
             if (SelectedIndex == 0) { ScrollOffset = 0; return; }
-            int bottomScrollTrigger = ScrollOffset + (int)(availableLines * BottomScrollFraction);
-            int topScrollTrigger = ScrollOffset + (int)(availableLines * TopScrollFraction);
+            int bottomScrollTrigger = ScrollOffset + (int)(availableLines * BOTTOM_SCROLL_FRACTION);
+            int topScrollTrigger = ScrollOffset + (int)(availableLines * TOP_SCROLL_FRACTION);
             if (SelectedIndex >= bottomScrollTrigger && (ScrollOffset + availableLines) < entryCount)
-                ScrollOffset = SelectedIndex - (int)(availableLines * BottomScrollFraction);
+                ScrollOffset = SelectedIndex - (int)(availableLines * BOTTOM_SCROLL_FRACTION);
             else if (SelectedIndex < topScrollTrigger && ScrollOffset > 0)
-                ScrollOffset = SelectedIndex - (int)(availableLines * TopScrollFraction);
+                ScrollOffset = SelectedIndex - (int)(availableLines * TOP_SCROLL_FRACTION);
             if (ScrollOffset < 0) ScrollOffset = 0;
             if (ScrollOffset > entryCount - availableLines)
                 ScrollOffset = entryCount - availableLines;
