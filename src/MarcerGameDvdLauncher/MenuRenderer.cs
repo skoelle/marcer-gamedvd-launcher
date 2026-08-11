@@ -133,7 +133,7 @@ namespace MarcerGameDvdLauncher
                 _cachedBuffer[i].Text = null!;
         }
 
-        // Renders a centered, bordered help box with key bindings inside the
+        // Renders a centered help box with key bindings inside the
         // available console area. The caller is responsible for waiting on a
         // key and redrawing the menu afterward.
         public void ShowHelpBox(int availableLines)
@@ -147,26 +147,18 @@ namespace MarcerGameDvdLauncher
             Console.BackgroundColor = ConsoleColor.DarkGray;
             Console.ForegroundColor = ConsoleColor.White;
 
-            var topBorder = "+" + new string('-', Math.Max(0, boxWidth - 2)) + "+";
-            Console.SetCursorPosition(0, topRow);
-            Console.Write(topBorder);
-
-            for (var i = 0; i < boxHeight - 2; i++)
+            // Fill the box area without borders for cleaner appearance
+            for (var i = 0; i < boxHeight; i++)
             {
-                var row = topRow + 1 + i;
-                var content = i < helpLines.Length
-                    ? PadToWidth(helpLines[i], boxWidth - 2)
-                    : new string(' ', Math.Max(0, boxWidth - 2));
-                Console.SetCursorPosition(0, row);
-                Console.Write("|" + content + "|");
-            }
-
-            var bottomRow = topRow + boxHeight - 1;
-            if (bottomRow < Console.WindowHeight)
-            {
-                var bottomBorder = "+" + new string('-', Math.Max(0, boxWidth - 2)) + "+";
-                Console.SetCursorPosition(0, bottomRow);
-                Console.Write(bottomBorder);
+                var row = topRow + i;
+                if (row < Console.WindowHeight)
+                {
+                    Console.SetCursorPosition(0, row);
+                    var content = i == 0 || i == boxHeight - 1 || i >= helpLines.Length + 2
+                        ? new string(' ', boxWidth)
+                        : PadToWidth(helpLines[i - 1], boxWidth);
+                    Console.Write(content);
+                }
             }
             Console.ResetColor();
         }
@@ -178,12 +170,13 @@ namespace MarcerGameDvdLauncher
                 "  ",
                 "   ↑ / ↓      Move selection up / down",
                 "   Enter / →  Open folder / launch ZIP with Hatari",
-                "   ← / BS     Go up one directory (never exceeds root)",
-                "   ESC / Q    Exit the program",
-                "   PgUp       Jump one page up",
-                "   PgDn       Jump one page down",
-                "   *          Toggle favorite on selected ZIP",
-                "   ?          Show this help",
+                "   ← / Backspace  Go up one directory (never exceeds root)",
+                "   ESC          Exit the program",
+                "   q            Exit the program (alternative)",
+                "   PgUp         Jump one page up",
+                "   PgDn         Jump one page down",
+                "   *            Toggle favorite on selected ZIP",
+                "   ?            Show this help",
                 "  ",
                 "  Navigation is strictly limited to RootDirectory.",
                 "  The overlay shows both root and patch layers combined.",
