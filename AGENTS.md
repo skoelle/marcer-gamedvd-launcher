@@ -71,6 +71,7 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
 
 ### Launching a Game
 - If Enter is pressed on a ZIP, Hatari is called with the configured executable, config file, and the full path to the ZIP file as arguments.
+- `Hatari.ConfigFile` is optional. When empty, the bundled `MarcerGameDvd-Hatari.cfg` (shipped with the launcher) is used automatically.
 
 ### Error Handling & Edge Cases
 - Paths with special characters or spaces must work robustly.
@@ -78,7 +79,8 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
 - Empty directories must be displayed correctly (or reported correctly).
 - In the root directory, Backspace must have no effect (no error, do not leave the program).
 - Navigation (Backspace, Enter, etc.) must remain robust even for very deep or large directory trees.
- - Hatari.Executable is validated during startup: the path is resolved (relative to the EXE directory when applicable) and must point to an existing file. If validation fails the program must present a clear error and exit.
+  - Hatari.Executable is validated during startup: the path is resolved (relative to the EXE directory when applicable) and must point to an existing file. If validation fails the program must present a clear error and exit.
+  - `Hatari.ConfigFile` (if provided) is resolved relative to the EXE directory and validated. If empty, the bundled `MarcerGameDvd-Hatari.cfg` is used automatically.
 
 ### Miscellaneous
 - Build and start scripts (`scripts/build.cmd` / `scripts/build.sh` / `scripts/start.cmd` / `scripts/start.sh`) are present and must be used.
