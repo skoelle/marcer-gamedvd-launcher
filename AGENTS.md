@@ -14,7 +14,7 @@ The implementation is split into focused modules (files) under the `src/MarcerGa
 - MarcerGameDvdLauncher/NavigationController.cs: Encapsulates selection, scrolling and relative-path navigation logic (cursor, page up/down, per-directory remembered selection/state); uses named scroll-fraction constants.
 - MarcerGameDvdLauncher/MenuRenderer.cs: Console rendering logic — efficient per-line redraw, double-buffering, configurable color selection via injected `AppColorConfig`, and the help box overlay.
 - MarcerGameDvdLauncher/InputController.cs: Handles key events (arrow keys, Enter, Backspace, PageUp/Down, `*`, `?`, ESC, RightArrow) and the associated navigation/drawing logic; owns `ReloadGameEntries` and the virtual `Favorites` folder integration.
-- MarcerGameDvdLauncher/HatariLauncher.cs: Responsible for validating the Hatari executable and starting Hatari with the configured argument template (replaces `{cfg}` and `{zip}`). Exposes `DefaultConfigFile` constant (`MarcerGameDvd-Hatari.cfg`); when `Hatari.ConfigFile` is empty in `launcher.config.json`, the bundled config from the executable directory is used automatically.
+- MarcerGameDvdLauncher/HatariLauncher.cs: Responsible for validating the Hatari executable and starting Hatari with the configured argument template (replaces `{cfg}` and `{zip}`). Exposes `DefaultConfigFile` constant (`MarcerGameDvd-Hatari.cfg`).
 - MarcerGameDvdLauncher/FavoritesService.cs: Manages the favorites/bookmark system — toggling favorites on ZIPs, persisting them to `favorites.txt` (via `DefaultFileName` constant), and providing the virtual `Favorites` folder view (via `FavoritesRootName` constant).
 - MarcerGameDvdLauncher/UIErrorService.cs: Centralized UI error presentation using the console message helper.
 
@@ -31,15 +31,6 @@ The Launcher cannot be executed or tested via `scripts/start.cmd` from this envi
    3. Create and push a tag: `git tag v{version} && git push origin v{version}`.
    4. The GitHub Action handles the rest (build, ZIP, release notes, GitHub Release).
 - Local release artifacts in `release/` are optional and no longer required for the release process.
-
-
-Additional policy:
-- README.md must be written in English. Any functional change that affects usage, configuration, or behavior MUST update README.md in English immediately after the change. If there are consequential changes to developer-facing policies, build steps, or requirements, AGENTS.md must be updated as well.
-
-Developer note: Visual Studio Solution
-- A Visual Studio solution file exists at `src/marcer-gamedvd-launcher.sln`. Developers may open this solution in Visual Studio to work on the project, debug and build from the IDE. The solution references `MarcerGameDvdLauncher\MarcerGameDvdLauncher.csproj` and includes Debug and Release configurations. Use `scripts/build.cmd` (Windows) or `scripts/build.sh` (Linux/macOS) and `scripts/start.cmd` (Windows) or `scripts/start.sh` (Linux/macOS) for consistent command-line builds/releases as described elsewhere in this document.
-
-With this, it is ensured that binary/release files never end up in git, and the release process is always traceable and performed exclusively manually in the web interface.
 
 # Requirements for the Marcer GameDVD Launcher (AGENTS.md)
 
@@ -80,7 +71,6 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
 - In the root directory, Backspace must have no effect (no error, do not leave the program).
 - Navigation (Backspace, Enter, etc.) must remain robust even for very deep or large directory trees.
   - Hatari.Executable is validated during startup: the path is resolved (relative to the EXE directory when applicable) and must point to an existing file. If validation fails the program must present a clear error and exit.
-  - `Hatari.ConfigFile` (if provided) is resolved relative to the EXE directory and validated. If empty, the bundled `MarcerGameDvd-Hatari.cfg` is used automatically.
 
 ### Miscellaneous
 - Build and start scripts (`scripts/build.cmd` / `scripts/build.sh` / `scripts/start.cmd` / `scripts/start.sh`) are present and must be used.
@@ -88,9 +78,8 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
  - After making any code changes that affect behavior or touch source files, run the platform build script (`scripts/build.cmd` on Windows, `scripts/build.sh` on Linux/macOS) and ensure the build completes successfully before committing. Additionally, perform a manual functional test on a Windows, Linux, or macOS machine prior to pushing a release.
 - The console window can have any number of lines; display/navigation must adapt dynamically.
 - For every release, a Release Notes file must be maintained that summarizes all changes, bugfixes, and new features in that version; Release Notes must be provided with the release asset.
-
- - **IMPORTANT:** With any functional change to the launcher, BOTH this file (AGENTS.md) AND the README.md must always be updated and kept current. Immediately after, a successful build must be executed. This is mandatory for all development on the project.
-
+- README.md must be written in English. Any functional change that affects usage, configuration, or behavior MUST update README.md in English immediately after the change. If there are consequential changes to developer-facing policies, build steps, or requirements, AGENTS.md must be updated as well.
+- **IMPORTANT:** With any functional change to the launcher, BOTH this file (AGENTS.md) AND the README.md must always be updated and kept current. Immediately after, a successful build must be executed. This is mandatory for all development on the project.
 
 ---
 
