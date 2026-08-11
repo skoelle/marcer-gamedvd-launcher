@@ -47,6 +47,32 @@ Download the ZIP for your platform from the [Releases](https://github.com/anomal
 
 - **.NET Runtime 10** or later ([download](https://dotnet.microsoft.com/download/dotnet/10.0))
 - **Hatari Emulator** (Windows native, or Linux/macOS via Wine or native build) — a Hatari configuration file (`MarcerGameDvd-Hatari.cfg`) is bundled with the launcher and used automatically when `Hatari.ConfigFile` is empty.
+- **TOS 1.04** ROM image (`TOS.IMG`) — required by Hatari to boot the Atari ST system.
+
+### 🕹️ Setting Up Hatari
+
+Before using the launcher, you need to install Hatari and provide a TOS ROM:
+
+1. **Download Hatari** from the official site: [https://hatari.tuxfamily.org/download.html](https://hatari.tuxfamily.org/download.html)
+   - **Windows:** Download and extract the latest Windows binary.
+   - **Linux:** Install via your package manager (e.g. `sudo apt install hatari`) or build from source.
+   - **macOS:** Download the macOS build or install via Homebrew: `brew install hatari`.
+
+2. **Get TOS 1.04** (also known as TOS UK or TOS 1.04):
+   - TOS is copyrighted Atari ROM software — you must own a legal copy.
+   - Place the ROM file as `TOS.IMG` in the same directory as the launcher executable (or the Hatari working directory).
+   - The bundled `MarcerGameDvd-Hatari.cfg` is preconfigured to look for `TOS.IMG` in the current directory.
+
+3. **Configure the path** in `launcher.config.json`:
+   ```json
+   "Hatari": {
+     "Executable": "C:\\Tools\\hatari\\hatari.exe",
+     "ConfigFile": "",
+     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
+   }
+   ```
+   - Set `Hatari.Executable` to the full path of your `hatari` (or `hatari.exe`) binary.
+   - Leave `Hatari.ConfigFile` empty to use the bundled configuration automatically.
 
 ### ⚡ Quick Start
 
