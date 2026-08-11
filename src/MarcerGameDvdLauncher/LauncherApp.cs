@@ -63,17 +63,11 @@ namespace MarcerGameDvdLauncher
             if (!File.Exists(cfg.Hatari.Executable))
                 throw new InvalidOperationException($"Hatari executable not found: {cfg.Hatari.Executable}");
 
-            // If no Hatari config file was specified, fall back to the bundled
-            // MarcerGameDvd-Hatari.cfg that ships with the launcher.
-            // Use current working directory to allow running from different locations
-            if (string.IsNullOrWhiteSpace(cfg.Hatari.ConfigFile))
-            {
-                cfg.Hatari.ConfigFile = Path.Combine(Directory.GetCurrentDirectory(), HatariLauncher.DefaultConfigFile);
-            }
-
             // Validate the Hatari config file (either user-specified or bundled fallback)
-            if (!File.Exists(cfg.Hatari.ConfigFile))
+            if (!string.IsNullOrEmpty(cfg.Hatari.ConfigFile) && !File.Exists(cfg.Hatari.ConfigFile))
                 throw new InvalidOperationException($"Hatari configuration file not found: {cfg.Hatari.ConfigFile}");
+            if (string.IsNullOrWhiteSpace(cfg.Hatari.ArgsTemplate) || !cfg.Hatari.ArgsTemplate.Contains("{cfg}"))
+                throw new InvalidOperationException("Hatari.ArgsTemplate must contain the {cfg} placeholder.");
             if (string.IsNullOrWhiteSpace(cfg.Hatari.ArgsTemplate) || !cfg.Hatari.ArgsTemplate.Contains("{zip}"))
                 throw new InvalidOperationException("Hatari.ArgsTemplate must contain the {zip} placeholder.");
 
