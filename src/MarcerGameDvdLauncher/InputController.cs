@@ -171,6 +171,8 @@ namespace MarcerGameDvdLauncher
                             {
                                 errorService.ShowError(ex.Message);
                             }
+                            // Redraw menu after Hatari has exited
+                            DrawMenu(availableLines);
                         }
                         // flush input to avoid leftover key events after an enter/navigation
                         ProgramHelpers.FlushInputBuffer();

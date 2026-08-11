@@ -53,37 +53,36 @@ namespace MarcerGameDvdLauncher
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
 
-        // Shows a simple modal message on the reserved last console line and
-        // blocks until the Return key is physically released. The message is
-        // then removed and the method returns. This is designed to be a
-        // lightweight modal for the console UI and uses the last console line
-        // which the application reserves for transient messages.
-        public static void ShowModalUntilReturnReleased(string? message)
+        // Shows a simple modal message in the center of the console and
+        // blocks until the given process has exited. The message is then
+        // removed and the method returns.
+        public static void ShowModalUntilProcessExited(System.Diagnostics.Process? process, string? message)
         {
             try
             {
-                var lastRow = AvailableLines;
-                var width = Console.WindowWidth;
+                int width = Console.WindowWidth;
+                int height = Console.WindowHeight;
+                int centerRow = height / 2;
+
                 var text = message ?? string.Empty;
-                if (text.Length > width) text = text.Substring(0, Math.Max(0, width - 3)) + "...";
-                var padding = Math.Max(0, width - text.Length);
-                var line = text + new string(' ', padding);
+                if (text.Length > width - 4) text = text.Substring(0, Math.Max(0, width - 7)) + "...";
+                int leftPad = Math.Max(0, (width - text.Length) / 2);
+                var line = new string(' ', leftPad) + text;
 
                 Console.BackgroundColor = ConsoleColor.DarkGray;
                 Console.ForegroundColor = ConsoleColor.White;
-                try { Console.SetCursorPosition(0, lastRow); } catch { }
-                try { Console.Write(line); } catch { }
+                try { Console.SetCursorPosition(0, centerRow); } catch { }
+                try { Console.Write(line.PadRight(width)); } catch { }
                 Console.ResetColor();
 
-                // Wait until Return key is not pressed
-                // GetAsyncKeyState returns a short where the high-order bit is set when key is down
-                while ((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0)
+                // Wait until the external process has exited
+                while (process != null && !process.HasExited)
                 {
-                    Thread.Sleep(10);
+                    Thread.Sleep(100);
                 }
 
                 // Clear the line
-                try { Console.SetCursorPosition(0, lastRow); } catch { }
+                try { Console.SetCursorPosition(0, centerRow); } catch { }
                 try { Console.Write(new string(' ', width)); } catch { }
             }
             catch

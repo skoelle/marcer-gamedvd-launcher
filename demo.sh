@@ -83,6 +83,11 @@ fake_zip "$ROOT_DIR/E/Racing/Pole Position.zip"
 fake_zip "$ROOT_DIR/E/Racing/Out Run.zip"
 fake_zip "$ROOT_DIR/E/Racing/Daytona USA.zip"
 
+# === Folders G-Z: empty placeholder folders ===
+for letter in {G..Z}; do
+    mkdir -p "$ROOT_DIR/$letter"
+done
+
 # --- PATCH layer (overlay/additions) ---
 echo "Creating patch layer..."
 

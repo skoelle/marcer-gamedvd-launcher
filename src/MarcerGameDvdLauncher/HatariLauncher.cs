@@ -55,11 +55,10 @@ namespace MarcerGameDvdLauncher
                     UseShellExecute = false,
                     WorkingDirectory = Directory.GetCurrentDirectory()
                 };
-                System.Diagnostics.Process.Start(psi);
-                // Show a modal indicating the emulator was started and wait until
-                // the user releases the Return key before clearing the modal. This
-                // prevents accidental key repeats from triggering other actions.
-                ProgramHelpers.ShowModalUntilReturnReleased("Hatari started. Release Return to continue...");
+                var process = System.Diagnostics.Process.Start(psi);
+                // Show a modal indicating the emulator is running and wait until
+                // the process has exited before clearing the modal.
+                ProgramHelpers.ShowModalUntilProcessExited(process, "Hatari is running...");
             }
             catch (Exception ex)
             {
