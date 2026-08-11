@@ -166,6 +166,7 @@ HATARI_FAKE="$DEMO_DIR/hatari.exe"
 cat > "$HATARI_FAKE" <<'HATEXEC'
 #!/bin/bash
 echo "[DEMO] Hatari would launch with: $0 $@"
+read -n 1 -r -p $'Press any key to continue... '
 HATEXEC
 chmod +x "$HATARI_FAKE"
 
