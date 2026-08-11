@@ -65,7 +65,7 @@
 | `AvailableLines` helper | ✅ Done | `ProgramHelpers.AvailableLines` |
 | Colors configurable | ✅ Done | `Colors` section in config |
 | Win32 constants documented | ✅ Done | Marked "intentionally hardcoded" |
-| ArgsTemplate fallback removed | ✅ Done | Config is single source of truth |
+| `Hatari.ConfigFile` optional with bundled fallback | ✅ Done | Empty ConfigFile falls back to bundled `MarcerGameDvd-Hatari.cfg` |
 | `FavoritesService.Save()` swallow comment | ✅ Done | Explains intentional behavior |
 | `UIErrorService` no-rethrow doc | ✅ Done | Explains design decision |
 
