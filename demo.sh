@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEMO_DIR="$SCRIPT_DIR/.demo"
 ROOT_DIR="$DEMO_DIR/root"
 PATCH_DIR="$DEMO_DIR/patch"
-CONFIG_FILE="$SCRIPT_DIR/launcher.config.json"
+CONFIG_FILE="$DEMO_DIR/launcher.config.json"
 
 # --- Step 1: Build ---
 echo "=== Building MarcerGameDvdLauncher ==="
@@ -160,7 +160,7 @@ echo "=== Writing launcher.config.json ==="
 HATARI_FAKE="$DEMO_DIR/hatari.exe"
 cat > "$HATARI_FAKE" <<'HATEXEC'
 #!/bin/bash
-echo "[DEMO] Hatari would launch with: $@"
+echo "[DEMO] Hatari would launch with: $0 $@"
 HATEXEC
 chmod +x "$HATARI_FAKE"
 
@@ -171,7 +171,7 @@ cat > "$CONFIG_FILE" <<EOF
   "Hatari": {
     "Executable": "$HATARI_FAKE",
     "ConfigFile": "",
-    "ArgsTemplate": "{zip}"
+    "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
   }
 }
 EOF
