@@ -55,8 +55,8 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
 - Only display subfolders and ZIP files; ignore other file types and hidden files.
 - Navigation and control exclusively with these keys:
   - Arrow down/up: scroll by single entries
-  - Enter: open folder or launch ZIP with Hatari
-  - Backspace: jump to parent directory (never outside root)
+  - Enter / RightArrow: open folder or launch ZIP with Hatari
+  - Backspace / LeftArrow: jump to parent directory (never outside root)
   - ESC: exit the program
   - PageUp/PageDown: jump by one page up/down through the file list
   - `?`: show a help box with key bindings

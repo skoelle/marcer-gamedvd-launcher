@@ -163,6 +163,13 @@ namespace MarcerGameDvdLauncher
                         if (!isDirectory && _gameEntries.Count > 0 && _gameEntries[navigationController.SelectedIndex].Kind == EntryKind.Zip)
                         {
                             string zipToLaunch = _gameEntries[navigationController.SelectedIndex].InPatch ? _gameEntries[navigationController.SelectedIndex].PatchPath : _gameEntries[navigationController.SelectedIndex].RootPath;
+                            if (!File.Exists(zipToLaunch))
+                            {
+                                errorService.ShowError($"ZIP file not found: {zipToLaunch}");
+                                DrawMenu(availableLines);
+                                ProgramHelpers.FlushInputBuffer();
+                                break;
+                            }
                             try
                             {
                                 hatariLauncher.Launch(zipToLaunch);

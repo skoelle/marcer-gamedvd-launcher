@@ -120,5 +120,11 @@ namespace MarcerGameDvdLauncher
             }
             if (waitForKey) Console.ReadKey(intercept: true);
         }
+
+        // Convenience overload: flate argument list instead of explicit array.
+        public static void ShowConsoleMessage(params string[] lines)
+        {
+            ShowConsoleMessage(lines, ConsoleColor.Gray, clear: true, waitForKey: true);
+        }
     }
 }
