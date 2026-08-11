@@ -93,7 +93,11 @@ namespace MarcerGameDvdLauncher
             else
             {
                 // out of cache bounds - attempt a direct write
-                WriteConsoleLine(row, newLine);
+                // Validate row against current console height to prevent ArgumentOutOfRangeException
+                if (row < Console.WindowHeight)
+                {
+                    WriteConsoleLine(row, newLine);
+                }
             }
         }
 

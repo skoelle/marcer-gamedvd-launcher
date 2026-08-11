@@ -18,6 +18,10 @@ namespace MarcerGameDvdLauncher
             if (!File.Exists(exePath))
                 throw new ArgumentException($"Hatari executable not found: {exePath}", nameof(exePath));
 
+            // Validate argsTemplate
+            if (string.IsNullOrWhiteSpace(argsTemplate) || !argsTemplate.Contains("{zip}"))
+                throw new ArgumentException("Hatari.ArgsTemplate must contain the {zip} placeholder.", nameof(argsTemplate));
+
             _exePath = exePath;
             _cfgPath = cfgPath;
             _argsTemplate = argsTemplate;
@@ -33,14 +37,25 @@ namespace MarcerGameDvdLauncher
                 throw new ArgumentException("ZIP archive path must not be empty.", nameof(zipFilePath));
             try
             {
-                string args = _argsTemplate.Replace("{cfg}", _cfgPath).Replace("{zip}", zipFilePath);
+                // Build arguments: only include config section if cfgPath is not empty
+                string args = _argsTemplate;
+                if (!string.IsNullOrWhiteSpace(_cfgPath))
+                {
+                    args = args.Replace("{cfg}", _cfgPath);
+                }
+                else
+                {
+                    // Remove {cfg} placeholder entirely if config file is empty
+                    args = args.Replace("{cfg}", string.Empty);
+                }
+                args = args.Replace("{zip}", zipFilePath);
 
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = _exePath,
                     Arguments = args,
                     UseShellExecute = false,
-                    WorkingDirectory = Path.GetDirectoryName(_exePath) ?? string.Empty
+                    WorkingDirectory = Directory.GetCurrentDirectory()
                 };
                 System.Diagnostics.Process.Start(psi);
                 // Show a modal indicating the emulator was started and wait until
