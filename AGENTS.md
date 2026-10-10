@@ -19,6 +19,8 @@ The implementation is split into focused modules (files) under the `src/MarcerGa
 - MarcerGameDvdLauncher/UIErrorService.cs: Centralized UI error presentation using the console message helper.
 
 Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (AGENTS.md) and README.md as required by project policy.
+
+**Specification:** [`SPEC.md`](SPEC.md) is the technology-neutral behavioral specification of the launcher (used as the basis for reimplementation in other languages or as a desktop app). Behavioral changes must be reflected in SPEC.md as well — keep sections 1–17 and the Conformance Checklist in sync with the implementation.
 **Note for Automated Tests/CI:**
 The Launcher cannot be executed or tested via `scripts/start.cmd` from this environment (build system, automation agent) since no Windows console environment is present. For release workflows and developer validation, it is ALWAYS required to do a manual test run via `scripts/start.cmd` (Windows) or `scripts/start.sh` (Linux/macOS) per documentation and policy before delivery.
 
