@@ -62,6 +62,7 @@ DEFAULT_CONFIG = {
         "timepoints_after_click": [10, 25, 45],
         "entry_timeout_s": 120,
         "icon_min_score": 0.5,
+        "step_wait": 2.0,
     },
     "tmp_dir": "/tmp/marcer-shotgen",
     "xvfb_screen": "1024x768x24",
@@ -361,13 +362,11 @@ def _xdotool(args, display: str, timeout: int = 10):
                           env={**os.environ, "DISPLAY": display})
 
 
-def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
-               log) -> None:
-    """Double-click the detected icon via XTest on Hatari's SDL window.
+def find_hatari_window(P: dict, grab_png: Path):
+    """Locate Hatari's SDL window via xdotool, matched by screenshot size.
 
-    The grab screenshot provides the window content size so that the
-    icon's screenshot pixel maps onto the X window. Hatari 2.4.1 has no
-    mousemove control command, so the real X pointer is used instead.
+    Returns (wid, kv) where kv holds X/Y/WIDTH/HEIGHT from the window
+    geometry. Raises RuntimeError when no window can be found.
     """
     from PIL import Image
     with Image.open(grab_png) as im:
@@ -386,22 +385,47 @@ def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
             dist = abs(w - shot_w) + abs(h - shot_h)
             if best is None or dist < best[0]:
                 best = (dist, wid, kv)
-        if best is None:
-            raise RuntimeError("no hatari window found via xdotool")
-        _, wid, kv = best
-        wx, wy = int(kv["X"]), int(kv["Y"])
-        ww, wh = int(kv["WIDTH"]), int(kv["HEIGHT"])
-        x = wx + round(icon_sx * ww / shot_w)
-        y = wy + round(icon_sy * wh / shot_h)
+    if best is None:
+        raise RuntimeError("no hatari window found via xdotool")
+    return best[1], best[2]
+
+
+def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
+                    icon_sx: int, icon_sy: int, log) -> None:
+    """Double-click a screenshot pixel on a known Hatari window.
+
+    Serialized under CLICK_LOCK (X pointers are global per display). The
+    30ms doubleclick delay is required so GEM opens the icon instead of
+    just selecting it (verified live; Hatari 2.4.1 has no mousemove
+    control command, so the real X pointer via XTest is used).
+    """
+    disp = P["display"]
+    wx, wy = int(kv["X"]), int(kv["Y"])
+    ww, wh = int(kv["WIDTH"]), int(kv["HEIGHT"])
+    x = wx + round(icon_sx * ww / shot_w)
+    y = wy + round(icon_sy * wh / shot_h)
+    with CLICK_LOCK:
         # raise first: parallel workers share one display and their
         # windows overlap
         _xdotool(["windowraise", wid], disp)
         _xdotool(["mousemove", "--sync", str(x), str(y)], disp)
-        # short delay: a slow doubleclick only selects the GEM icon,
-        # 30ms between the two clicks reliably opens it (verified live)
         _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
     log(f"xdotool doubleclick window={wid} at ({x},{y}) "
         f"[icon ({icon_sx},{icon_sy}) in {shot_w}x{shot_h}]")
+
+
+def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
+               log) -> None:
+    """Double-click the detected icon on Hatari's SDL window.
+
+    The grab screenshot provides the window content size so that the
+    icon's screenshot pixel maps onto the X window.
+    """
+    from PIL import Image
+    with Image.open(grab_png) as im:
+        shot_w, shot_h = im.size
+    wid, kv = find_hatari_window(P, grab_png)
+    click_window_xy(P, wid, kv, shot_w, shot_h, icon_sx, icon_sy, log)
 
 
 def find_template(img_path: Path, template, min_score: float):
@@ -445,24 +469,60 @@ def find_template(img_path: Path, template, min_score: float):
     return best
 
 
-def find_icon(path: Path, cfg: dict):
-    """Locate the GEM program icon in a desktop screenshot.
+ICON_TEMPLATE_FILES = {
+    "prg": "icon-prg.png",
+    "drive": "icon-drive.png",
+}
 
+
+def find_icon(path: Path, cfg: dict, template: str = "prg"):
+    """Locate a GEM icon in a screenshot via NCC.
+
+    template: "prg" (program icon) or "drive" (disk drive icon).
     Returns {"sx", "sy", "score"} (screenshot pixel, template center)
     or None.
     """
-    from PIL import Image
-    tpl_path = ASSETS_DIR / "icon-prg.png"
+    tpl_name = ICON_TEMPLATE_FILES.get(template)
+    if tpl_name is None:
+        return None
+    tpl_path = ASSETS_DIR / tpl_name
     if not tpl_path.exists():
         return None
+    from PIL import Image
     with Image.open(tpl_path) as tpl:
-        template = tpl.convert("L")
-        res = find_template(path, template,
+        grayscale = tpl.convert("L")
+        res = find_template(path, grayscale,
                             cfg["click_retry"]["icon_min_score"])
     if res is None:
         return None
     cx, cy, score = res
     return {"sx": cx, "sy": cy, "score": round(score, 3)}
+
+
+def find_desktop_click(path: Path, cfg: dict):
+    """Pick the click strategy and icon for a desktop screenshot.
+
+    prefers a program icon (single click, game starts directly). If no
+    program icon is found (or only a weak false-positive), falls back to
+    the disk drive icon ("drive" strategy: open DISKSTATION A first, then
+    click the PRG that appears in the opened window).
+
+    Returns {"strategy": "prg"|"drive", "sx", "sy", "score"} or None.
+    """
+    min_score = cfg["click_retry"]["icon_min_score"]
+    prg = find_icon(path, cfg, "prg")
+    drv = find_icon(path, cfg, "drive")
+    # a real program icon scores ~1.0 and always wins; a lone drive beats
+    # a weak prg false-positive (flat-region peaks ~0.66)
+    if prg and drv:
+        if prg["score"] >= drv["score"]:
+            return {"strategy": "prg", **prg}
+        return {"strategy": "drive", **drv}
+    if prg:
+        return {"strategy": "prg", **prg}
+    if drv:
+        return {"strategy": "drive", **drv}
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -471,6 +531,48 @@ def find_icon(path: Path, cfg: dict):
 
 def safe_filename(name: str) -> str:
     return re.sub(r'[:?*"\x00-\x1f]', "_", name)
+
+
+def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
+                        grabs, log):
+    """Execute the click sequence for a desktop retry.
+
+    prg: one double click on the program icon (game starts directly).
+    drive: double click DISKSTATION A, wait for the window to open, take a
+           screenshot and double click the program icon that appeared in it
+           (depth 1; a later stage may recurse into subfolders).
+
+    returns (clicked, last_grab): clicked is True when the final program
+    double click was sent; last_grab is the most recent screenshot path
+    (used to size the window for coordinate mapping).
+    """
+    strategy = click_info.get("strategy", "prg")
+
+    if strategy == "prg":
+        click_icon(P, grabs[-1], click_info["sx"], click_info["sy"], log)
+        return True, grabs[-1]
+
+    # strategy == "drive": open DISKSTATION A first
+    click_icon(P, grabs[-1], click_info["sx"], click_info["sy"], log)
+    step_wait = float(click_cfg.get("step_wait", 2.0))
+    log(f"drive click done, waiting {step_wait}s for the window")
+    if not sleep_until(time.monotonic() + step_wait):
+        return False, grabs[-1]
+
+    # fresh screenshot of the opened window
+    fifo_write(fifo, "hatari-shortcut screenshot")
+    if not sleep_until(time.monotonic() + 2):
+        return False, grabs[-1]
+    all_grabs = sorted(outdir.glob("*.png"))
+    if not all_grabs:
+        return False, grabs[-1]
+    win_shot = all_grabs[-1]
+    win_icon = find_icon(win_shot, cfg, "prg")
+    if not win_icon:
+        log("drive opened but no program icon in the window")
+        return False, win_shot
+    click_icon(P, win_shot, win_icon["sx"], win_icon["sy"], log)
+    return True, win_shot
 
 
 def process_entry(cfg: dict, P: dict, entry: dict, log,
@@ -592,12 +694,14 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                 log(f"probe at {tp}s: kind={kind_at}")
                 probe_done = True
                 if kind_at == "desktop":
+                    strategy = click_info.get("strategy", "prg")
                     try:
-                        click_icon(P, grabs[-1], click_info["sx"],
-                                   click_info["sy"], log)
-                        clicked = True
+                        clicked, last_grab = perform_click_chain(
+                            P, cfg, click_cfg, click_info, fifo, outdir,
+                            grabs, log)
                     except Exception as ex:
-                        log(f"xdotool click failed: {ex}")
+                        log(f"click chain failed ({strategy}): {ex}")
+                        clicked = False
 
                     def _mark_click():
                         entry["click_retried"] = True
@@ -609,6 +713,11 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                         schedule = list(click_cfg.get(
                             "timepoints_after_click", cfg["timepoints"]))
                         tp_i = 0
+                    else:
+                        # chain failed (no program icon in the opened
+                        # window, or xdotool error): keep the latest shot
+                        # as the preview but do not retry automatically
+                        log(f"click chain did not start a game ({strategy})")
                 else:
                     if kind_at is not None:
                         # game (or black) at probe: no click, this shot
@@ -957,10 +1066,13 @@ def cmd_detect(cfg: dict, P: dict, args) -> int:
     idx = load_index(out)
     entries = idx["entries"]
     lock = acquire_lock(out)
-    stats = {"checked": 0, "found": 0, "no_icon": 0, "skipped": 0}
+    stats = {"checked": 0, "found": 0, "no_icon": 0, "skipped": 0,
+             "strategy": {"prg": 0, "drive": 0}}
     try:
         desktops = [rel for rel in sorted(entries)
-                    if entries[rel]["status"] == "desktop"]
+                    if entries[rel]["status"] == "desktop"
+                    and (not args.only
+                         or args.only.lower() in rel.lower())]
         print(f"desktop entries: {len(desktops)}", flush=True)
         for i, rel in enumerate(desktops, 1):
             if STOP_EVENT.is_set():
@@ -983,7 +1095,7 @@ def cmd_detect(cfg: dict, P: dict, args) -> int:
                 if not p.is_file():
                     continue
                 try:
-                    res = find_icon(p, cfg)
+                    res = find_desktop_click(p, cfg)
                 except Exception as ex:
                     print(f"  detect error {rel}: {ex}",
                           file=sys.stderr, flush=True)
@@ -995,6 +1107,7 @@ def cmd_detect(cfg: dict, P: dict, args) -> int:
                 e["click"] = found
                 e["icon_found"] = True
                 stats["found"] += 1
+                stats["strategy"][found["strategy"]] += 1
             else:
                 e["icon_found"] = False
                 stats["no_icon"] += 1
@@ -1005,7 +1118,9 @@ def cmd_detect(cfg: dict, P: dict, args) -> int:
         save_index(out, idx)
     finally:
         release_lock(lock)
-    print(f"detect: checked {stats['checked']}, icons {stats['found']}, "
+    print(f"detect: checked {stats['checked']}, icons {stats['found']} "
+          f"(prg {stats['strategy']['prg']}, "
+          f"drive {stats['strategy']['drive']}), "
           f"no icon {stats['no_icon']}, skipped {stats['skipped']}")
     return 0
 
@@ -1062,6 +1177,8 @@ def main() -> int:
              "(offline, no Hatari)")
     p_detect.add_argument("--force", action="store_true",
                           help="redetect even if a result already exists")
+    p_detect.add_argument("--only", type=str, default="",
+                          help="only paths containing this substring")
 
     args = ap.parse_args()
     if args.cmd == "run" and args.jobs < 1:

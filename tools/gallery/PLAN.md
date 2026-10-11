@@ -84,3 +84,4 @@ Rules:
 | Date | Finding | Spec change | Where |
 |---|---|---|---|
 | 2026-10-11 | Crew filter must focus the matching ZIP variant (screenshot + lightbox), even when empty | §5.3 crew focus / `focus_variant`; §7.3 | gallery.py, app.js |
+| 2026-10-11 | Lightbox UX polish: filmstrip-only variant switcher (no tabs), candidate strip fixed min-height, wider side panel (380px), Year nowrap, selected release variant highlighted in info table | §6.5 | app.js, style.css |

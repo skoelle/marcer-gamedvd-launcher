@@ -533,10 +533,17 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
   image and metadata. Status underline: green = done, amber = desktop,
   gray = empty.
 - **Candidate strip**: preview + all `_cNN` images of the *selected*
-  variant selectable.
-- **Metadata table**: all fields of the selected variant's gameinfo entry,
-  plus all XLS variants of the folder in a compact table (title, cracker,
-  crew, publisher, language, year, flags).
+  variant selectable. The strip always reserves a fixed height (~56 px)
+  so the layout does not jump when candidates appear/disappear between
+  variants.
+- **Metadata table** (right-hand side panel, fixed width ~380 px): all
+  fields of the selected variant's gameinfo entry, plus all XLS variants
+  of the folder in a compact table (title, cracker, crew, year). The
+  **Year column never wraps** (`white-space: nowrap`). The release
+  variant that matches the currently selected ZIP (by cracker or crew
+  name contained in the ZIP filename) is **highlighted** with a subtle
+  background and bold text so the user always sees which XLS row the
+  open ZIP corresponds to.
 - Navigation: `←`/`→` move to the previous/next **card of the current page**
   (v1 limit: within the loaded page), `↑`/`↓` switch variant, `PgUp`/`PgDn`
   switch image (preview/candidates), `Esc` closes, click on the backdrop

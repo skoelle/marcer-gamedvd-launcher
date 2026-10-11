@@ -477,11 +477,21 @@ function renderLightbox() {
     add("Flags", flags.join(", "));
     let html = `<h3>Game info</h3><table>${rows.join("")}</table>`;
     if (i.variants && i.variants.length > 1) {
+      // mark the gameinfo variant that matches the currently selected ZIP
+      let selIdx = -1;
+      if (v) {
+        const zl = (v.name || "").toLowerCase();
+        selIdx = i.variants.findIndex((rv) => {
+          const cr = (rv.cracked_by || "").trim().toLowerCase();
+          const crw = (rv.crew || "").trim().toLowerCase();
+          return (cr && zl.includes(cr)) || (crw && zl.includes(crw));
+        });
+      }
       html += `<h3>Release variants (${i.variants.length})</h3>` +
         `<table class="variants-table"><tr>` +
         `<th>Title</th><th>Cracker</th><th>Crew</th><th>Year</th></tr>` +
-        i.variants.map((rv) =>
-          `<tr><td>${esc(rv.title)}</td><td>${esc(rv.cracked_by)}</td>` +
+        i.variants.map((rv, ri) =>
+          `<tr class="${ri === selIdx ? "selected" : ""}"><td>${esc(rv.title)}</td><td>${esc(rv.cracked_by)}</td>` +
           `<td>${esc(rv.crew)}</td><td>${esc(rv.release)}</td></tr>`).join("") +
         `</table>`;
     }
