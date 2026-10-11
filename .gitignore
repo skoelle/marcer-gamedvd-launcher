@@ -11,6 +11,7 @@ obj/
 # OS junk
 .DS_Store
 Thumbs.db
+stdout.log
 
 # Python virtual environment
 .venv/

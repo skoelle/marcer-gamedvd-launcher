@@ -218,7 +218,7 @@ This command validates the version, checks for uncommitted changes, generates a 
 
 ## 📚 Documentation
 
-The design and specification documents live in [`docs/`](docs/):
+The design and specification documents live in [`docs/`](docs/README.md):
 
 | Document | Contents |
 |---|---|
