@@ -259,7 +259,8 @@ def _finalize_card(card, kind):
 
 
 def _facets(cards, kind):
-    pubs, crews, langs, years, letters = set(), set(), set(), set(), set()
+    pubs, crews, crackers, langs, years, letters = (
+        set(), set(), set(), set(), set(), set())
     for c in cards:
         if c["letter"]:
             letters.add(c["letter"])
@@ -272,12 +273,17 @@ def _facets(cards, kind):
                 val = (v.get("crew") or "").strip()
                 if val:
                     crews.add(val)
+            if "cracked_by" in kind_fields(kind):
+                val = (v.get("cracked_by") or "").strip()
+                if val:
+                    crackers.add(val)
             y = extract_year(v.get("release"))
             if y:
                 years.add(y)
     return {
         "publishers": sorted(pubs, key=str.lower),
         "crews": sorted(crews, key=str.lower),
+        "crackers": sorted(crackers, key=str.lower),
         "languages": sorted(langs, key=str.lower),
         "years": sorted(years),
         "letters": sorted(letters, key=lambda s: (s != "0-9", s)),
@@ -297,10 +303,11 @@ def kind_fields(kind):
 def kind_filters(kind):
     """API filter names applicable to a section (SPEC 6.8)."""
     return {
-        "cracked": {"publisher", "crew", "language", "year",
+        "cracked": {"publisher", "crew", "cracker", "language", "year",
                     "raw", "pasti", "boxscan", "tos"},
         "pd": {"publisher", "language", "year", "tos"},
-        "utils": {"publisher", "crew", "language", "year", "raw", "tos"},
+        "utils": {"publisher", "crew", "cracker", "language", "year", "raw",
+                  "tos"},
     }[kind]
 
 
@@ -309,7 +316,7 @@ _CREW_STOPWORDS = frozenset({"and", "the", "co", "crew", "inc", "ltd",
 
 
 def _norm_crew(s):
-    """Normalize a crew string for fuzzy matching.
+    """Normalize a group string (crew/cracker) for fuzzy matching.
 
     Lowercases, expands `&` / `+` to "and" and collapses whitespace so
     that e.g. gameinfo "Equinox & MDK" matches ZIP "Equinox and MDK".
@@ -320,45 +327,48 @@ def _norm_crew(s):
 
 
 def _crew_tokens(s):
-    """Tokenize a crew string: alphanumeric, no stopwords, length >= 2."""
+    """Tokenize a group string: alphanumeric, no stopwords, length >= 2."""
     raw = re.findall(r"[a-z0-9]+", (s or "").lower())
     return [t for t in raw if t not in _CREW_STOPWORDS and len(t) >= 2]
 
 
-def _crew_focus_variant(card, crew):
-    """Index of the ZIP variant that belongs to `crew`, or -1.
+def _focus_variant(card, value, kind):
+    """Index of the ZIP variant that belongs to `value`, or -1.
 
-    Matching is tried in increasing fuzziness:
-      1) normalized crew string is a substring of the normalized ZIP name
+    `kind` is `"crew"` or `"cracker"`. Matching is tried in increasing
+    fuzziness:
+      1) normalized value is a substring of the normalized ZIP name
          (`&`/`+` == "and", e.g. "Equinox & MDK" -> "Equinox and MDK");
-      2) gameinfo variant with this crew -> its cracker name in ZIP names;
-      3) token subset: all crew tokens (ignoring stopwords) appear in the
-         ZIP name (typos / missing connective, e.g. "Hotline & MCA" ->
+      2) (crew only) gameinfo variant with this crew -> its cracker name
+         in ZIP names;
+      3) token subset: all tokens (ignoring stopwords) appear in the ZIP
+         name (typos / missing connective, e.g. "Hotline & MCA" ->
          "Hotline MCA"), requiring at least one token with length >= 3.
     Among multiple matches the first with a screenshot preview wins.
     """
-    crew_n = _norm_crew(crew)
-    if not crew_n:
+    value_n = _norm_crew(value)
+    if not value_n:
         return -1
     variants = card["variants"]
     # 1) normalized substring match
     subs = [i for i, v in enumerate(variants)
-            if crew_n in _norm_crew(v["name"])]
+            if value_n in _norm_crew(v["name"])]
     if subs:
         return _first_with_preview(variants, subs)
-    # 2) gameinfo variant with this crew → match its cracker in ZIP names
-    for iv in (card.get("info") or {}).get("variants") or []:
-        if _norm_crew(iv.get("crew")) != crew_n:
-            continue
-        cracker = (iv.get("cracked_by") or "").strip().lower()
-        if not cracker:
-            continue
-        hits = [i for i, v in enumerate(variants)
-                if cracker in v["name"].lower()]
-        if hits:
-            return _first_with_preview(variants, hits)
+    # 2) (crew only) gameinfo variant with this crew → its cracker in names
+    if kind == "crew":
+        for iv in (card.get("info") or {}).get("variants") or []:
+            if _norm_crew(iv.get("crew")) != value_n:
+                continue
+            cracker = (iv.get("cracked_by") or "").strip().lower()
+            if not cracker:
+                continue
+            hits = [i for i, v in enumerate(variants)
+                    if cracker in v["name"].lower()]
+            if hits:
+                return _first_with_preview(variants, hits)
     # 3) token subset match (typo / missing connective tolerant)
-    ct = _crew_tokens(crew)
+    ct = _crew_tokens(value)
     if ct and any(len(t) >= 3 for t in ct):
         hits = []
         for i, v in enumerate(variants):
@@ -378,14 +388,15 @@ def _first_with_preview(variants, indices):
     return indices[0]
 
 
-def _apply_crew_focus(card, crew):
-    """Return a shallow-adjusted view of `card` focused on the crew variant.
+def _apply_focus(card, value, kind):
+    """Return a shallow-adjusted view of `card` focused on the group variant.
 
-    Does not mutate the stored card. Sets focus_variant / preview /
-    display_status for the public payload. Empty previews are allowed
-    (placeholder) — the card is always shown when the crew matches.
+    `kind` is `"crew"` or `"cracker"`. Does not mutate the stored card.
+    Sets focus_variant / preview / display_status for the public payload.
+    Empty previews are allowed (placeholder) — the card is always shown
+    when the group matches.
     """
-    focus = _crew_focus_variant(card, crew)
+    focus = _focus_variant(card, value, kind)
     out = dict(card)
     out["focus_variant"] = focus
     if focus >= 0:
@@ -543,11 +554,15 @@ class DataStore:
 def _matches(card, params, section):
     crew = (params.get("crew", "any") or "any")
     crew_active = (crew != "any" and "crew" in kind_filters(section))
+    cracker = (params.get("cracker", "any") or "any")
+    cracker_active = (cracker != "any"
+                      and "cracker" in kind_filters(section))
+    focus_active = crew_active or cracker_active
     if section == "cracked":
         st = params.get("status", "with_screenshot") or "with_screenshot"
         if st == "with_screenshot":
-            # crew filter always shows the crew variant, even empty
-            if not crew_active and not card["screenshots"]:
+            # crew/cracker focus always shows the focused variant, even empty
+            if not focus_active and not card["screenshots"]:
                 return False
         elif st != "any" and card["display_status"] != st:
             return False
@@ -560,6 +575,7 @@ def _matches(card, params, section):
     fields = kind_filters(section)
     for facet, attr in (("publisher", "_publisher"),
                         ("crew", "_crew"),
+                        ("cracker", "_cracker"),
                         ("language", "_language")):
         val = params.get(facet, "any") or "any"
         if val != "any":
@@ -779,10 +795,15 @@ class GalleryHandler(BaseHTTPRequestHandler):
         _sort_cards(matched, sort, order)
         page = matched[offset:offset + limit]
 
-        # crew filter: focus each card on the matching ZIP variant
+        # crew/cracker filter: focus each card on the matching ZIP variant
+        # (cracker takes precedence over crew; SPEC 5.3)
+        fields = kind_filters(section)
+        cracker = (params.get("cracker", "any") or "any")
         crew = (params.get("crew", "any") or "any")
-        if crew != "any" and "crew" in kind_filters(section):
-            page = [_apply_crew_focus(c, crew) for c in page]
+        if cracker != "any" and "cracker" in fields:
+            page = [_apply_focus(c, cracker, "cracker") for c in page]
+        elif crew != "any" and "crew" in fields:
+            page = [_apply_focus(c, crew, "crew") for c in page]
 
         return self._json({
             "total": len(matched),

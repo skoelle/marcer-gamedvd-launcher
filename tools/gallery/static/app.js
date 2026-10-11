@@ -17,15 +17,15 @@ const TRI_OPTIONS = [["any", "any"], ["yes", "yes"], ["no", "no"]];
 const LETTERS = ["0-9", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
 
 const SECTION_CONTROLS = {
-  cracked: ["status", "publisher", "crew", "language", "year",
+  cracked: ["status", "publisher", "crew", "cracker", "language", "year",
             "raw", "pasti", "boxscan", "tos"],
   pd: ["publisher", "language", "year"],
-  utils: ["publisher", "crew", "language", "year", "raw", "tos"],
+  utils: ["publisher", "crew", "cracker", "language", "year", "raw", "tos"],
 };
 const FACET_LABELS = {
   status: "Status", publisher: "Publisher", crew: "Crew",
-  language: "Language", year: "Year", raw: "RAW", pasti: "PASTI",
-  boxscan: "Boxscan", tos: "TOS/Bad",
+  cracker: "Cracker", language: "Language", year: "Year", raw: "RAW",
+  pasti: "PASTI", boxscan: "Boxscan", tos: "TOS/Bad",
 };
 
 const state = {
@@ -35,6 +35,7 @@ const state = {
   letter: "any",
   publisher: "any",
   crew: "any",
+  cracker: "any",
   language: "any",
   year: "any",
   raw: "any",
@@ -67,7 +68,7 @@ const normCrew = (s) => String(s == null ? "" : s).trim().toLowerCase()
 function readURL() {
   const u = new URLSearchParams(location.search);
   for (const key of ["section", "status", "q", "letter", "publisher",
-    "crew", "language", "year", "raw", "pasti", "boxscan", "tos",
+    "crew", "cracker", "language", "year", "raw", "pasti", "boxscan", "tos",
     "sort", "order"]) {
     if (u.has(key)) state[key] = u.get(key);
   }
@@ -85,7 +86,7 @@ function writeURL(push) {
   keep("status", state.status, defaultStatus);
   keep("q", state.q, "");
   keep("letter", state.letter, "any");
-  for (const k of ["publisher", "crew", "language", "year",
+  for (const k of ["publisher", "crew", "cracker", "language", "year",
     "raw", "pasti", "boxscan", "tos"]) keep(k, state[k], "any");
   keep("sort", state.sort, "name");
   keep("order", state.order, "asc");
@@ -119,7 +120,7 @@ function entriesQuery(extra) {
   if (state.q) p.set("q", state.q);
   if (state.letter !== "any") p.set("letter", state.letter);
   const fields = SECTION_CONTROLS[state.section] || [];
-  for (const k of ["publisher", "crew", "language", "year",
+  for (const k of ["publisher", "crew", "cracker", "language", "year",
     "raw", "pasti", "boxscan", "tos"]) {
     if (fields.includes(k) && state[k] !== "any") p.set(k, state[k]);
   }
@@ -153,8 +154,9 @@ function buildFacets() {
   const facets = (meta && meta.facets && meta.facets[section]) || {};
   const fields = SECTION_CONTROLS[section] || [];
   // hide controls not available for this section / without gameinfo
-  for (const id of ["status", "publisher", "crew", "language", "year",
-    "raw", "pasti", "boxscan", "tos", "sort", "order", "clear", "search"]) {
+  for (const id of ["status", "publisher", "crew", "cracker", "language",
+    "year", "raw", "pasti", "boxscan", "tos", "sort", "order", "clear",
+    "search"]) {
     const el = $(id);
     if (!el) continue;
     if (id === "sort" || id === "order" || id === "clear" || id === "search") {
@@ -164,11 +166,12 @@ function buildFacets() {
     el.hidden = !fields.includes(id);
   }
   if (!meta || !meta.gameinfo) {
-    for (const id of ["publisher", "crew", "language", "year",
+    for (const id of ["publisher", "crew", "cracker", "language", "year",
       "raw", "pasti", "boxscan", "tos"]) $(id).hidden = true;
   } else {
     facetOptions("publisher", facets.publishers || [], "Publisher: any");
     facetOptions("crew", facets.crews || [], "Crew: any");
+    facetOptions("cracker", facets.crackers || [], "Cracker: any");
     facetOptions("language", facets.languages || [], "Language: any");
     facetOptions("year", facets.years || [], "Year: any");
   }
@@ -286,7 +289,9 @@ function renderGrid(cards) {
         }
       }
     } else if (c.focus_variant === -1) {
-      // crew focus with no matching ZIP: hint + up to 4 other screenshots
+      // crew/cracker focus with no matching ZIP: hint + up to 4 other shots
+      const missLabel = state.cracker !== "any"
+        ? "no cracker ZIP — other variants" : "no crew ZIP — other variants";
       const thumbs = c.variants
         .map((vv, vi) => ({ vv, vi }))
         .filter((x) => x.vv.preview)
@@ -295,7 +300,7 @@ function renderGrid(cards) {
           `data-crewv="${x.vi}" title="${esc(x.vv.name)} (${esc(x.vv.status)})">`)
         .join("");
       body = thumbs
-        ? `<div class="crew-miss">no crew ZIP — other variants</div>` +
+        ? `<div class="crew-miss">${missLabel}</div>` +
           `<div class="crew-thumbs">${thumbs}</div>`
         : `<div class="ph"></div>`;
     } else {
@@ -444,7 +449,8 @@ function renderLightbox() {
   $("lb-title").textContent = card.name;
   const v = card.variants[lb.variant];
   const missPrefix = card.focus_variant === -1
-    ? "crew ZIP not found — " : "";
+    ? (state.cracker !== "any" ? "cracker ZIP not found — "
+      : "crew ZIP not found — ") : "";
   $("lb-sub").textContent = v
     ? `${missPrefix}${v.status}${v.layer ? " · " + v.layer : ""}${v.size ? " · " + Math.round(v.size / 1024) + " KB" : ""}`
     : `${missPrefix}no ZIP variants`;
@@ -529,7 +535,11 @@ function renderLightbox() {
           return (cr && zl.includes(cr)) || (crw && zl.includes(crw));
         });
       }
-      // no ZIP matched (crew focus): mark the variant belonging to the crew
+      // no ZIP matched (crew/cracker focus): mark the group's variant
+      if (selIdx === -1 && state.cracker !== "any") {
+        selIdx = i.variants.findIndex((rv) =>
+          normCrew(rv.cracked_by) === normCrew(state.cracker));
+      }
       if (selIdx === -1 && state.crew !== "any") {
         selIdx = i.variants.findIndex((rv) =>
           normCrew(rv.crew) === normCrew(state.crew));
@@ -730,8 +740,8 @@ function wireEvents() {
       loadEntries();
     }, 250);
   });
-  for (const id of ["status", "publisher", "crew", "language", "year",
-    "raw", "pasti", "boxscan", "tos", "sort"]) {
+  for (const id of ["status", "publisher", "crew", "cracker", "language",
+    "year", "raw", "pasti", "boxscan", "tos", "sort"]) {
     $(id).addEventListener("change", () => {
       state[id] = $(id).value;
       state.offset = 0;
@@ -747,8 +757,8 @@ function wireEvents() {
   const clearAll = () => {
     Object.assign(state, {
       status: defaultStatus, q: "", letter: "any",
-      publisher: "any", crew: "any", language: "any", year: "any",
-      raw: "any", pasti: "any", boxscan: "any", tos: "any",
+      publisher: "any", crew: "any", cracker: "any", language: "any",
+      year: "any", raw: "any", pasti: "any", boxscan: "any", tos: "any",
       sort: "name", order: "asc", offset: 0,
     });
     syncControls();
@@ -773,7 +783,8 @@ function wireEvents() {
     state.offset = 0;
     // reset incompatible filters
     state.status = defaultStatus;
-    for (const k of ["raw", "pasti", "boxscan", "tos", "crew"]) state[k] = "any";
+    for (const k of ["raw", "pasti", "boxscan", "tos", "crew", "cracker"])
+      state[k] = "any";
     if (state.sort === "cracker" && state.section === "pd") state.sort = "name";
     syncControls();
     loadEntries();

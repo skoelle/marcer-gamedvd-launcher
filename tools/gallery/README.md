@@ -35,15 +35,15 @@ results. There is no live refresh/polling in v1.
 
 - **Sections**: tabs for Cracked Games / PD Games / Utilities (when
   `MARCER_DATA_DIR` is set).
-- **Filters**: status preset, search, letter nav, publisher/crew/language/
-  year facets, RAW/PASTI/Boxscan/TOS tri-state flags, sort + order.
+- **Filters**: status preset, search, letter nav, publisher/crew/cracker/
+  language/year facets, RAW/PASTI/Boxscan/TOS tri-state flags, sort + order.
   The URL always reflects the current list state (shareable).
-- **Crew focus**: picking a crew shows each card's screenshot for that
-  crew's ZIP, even when the variant has no screenshot yet. Matching is
-  fuzzy (`&`/`+` = `and`, and a token fallback for typos/missing
-  connectives like "Hotline & MCA" ↔ "Hotline MCA"); when no ZIP can be
-  identified the card shows a hint plus up to four screenshots of the
-  folder's other variants.
+- **Crew/cracker focus**: picking a crew or cracker shows each card's
+  screenshot for that group's ZIP, even when the variant has no screenshot
+  yet (cracker takes precedence when both are set). Matching is fuzzy
+  (`&`/`+` = `and`, and a token fallback for typos/missing connectives like
+  "Hotline & MCA" ↔ "Hotline MCA"); when no ZIP can be identified the card
+  shows a hint plus up to four screenshots of the folder's other variants.
 - **Lightbox**: integer-upscaled screenshot, variant filmstrip (click or
   `↑`/`↓`), candidate images, metadata + release-variant table with the
   open ZIP highlighted, deep link `?entry=<rel>`.

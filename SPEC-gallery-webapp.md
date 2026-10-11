@@ -322,12 +322,14 @@ error body `{ "error": "<message>" }`.
     "cracked": {
       "publishers": ["Ocean", "..."],
       "crews": ["Medway Boys", "..."],
+      "crackers": ["D-Bug", "..."],
       "languages": ["English", "..."],
       "years": ["1987", "..."],
       "letters": ["0-9", "A", "..."]
     },
     "pd":   { "publishers": ["..."], "letters": ["..."] },
-    "utils":{ "publishers": ["..."], "crews": ["..."], "letters": ["..."] }
+    "utils":{ "publishers": ["..."], "crews": ["..."],
+              "crackers": ["..."], "letters": ["..."] }
   },
   "show_candidates": true,
   "default_status": "with_screenshot",
@@ -338,8 +340,8 @@ error body `{ "error": "<message>" }`.
 
 - `facets` are computed once at startup from the metadata files and are
   **per section** (`facets[section]`, section 6.8) — the frontend reads
-  `facets[state.section]`. Absent values (e.g. `crews` for `pd`) are
-  omitted when the field does not apply to that section. `facets` is
+  `facets[state.section]`. Absent values (e.g. `crews`/`crackers` for `pd`)
+  are omitted when the field does not apply to that section. `facets` is
   absent when `gameinfo` is false.
 - `status_counts` always reflects the raw index (not the current filter) —
   it feeds the statistics bar; `status_labels` maps status keys to the
@@ -360,7 +362,7 @@ Query parameters (all optional, defaults in parentheses):
 | `status` | `any` \| `with_screenshot` (default) \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | cracked |
 | `q` | free text | all |
 | `letter` | `0-9` … `Z` (or facet value) \| `any` (default) | all |
-| `publisher`, `crew`, `language`, `year` | facet value \| `any` (default) | cracked (+pd/utils where the field exists) |
+| `publisher`, `crew`, `cracker`, `language`, `year` | facet value \| `any` (default) | cracked (+pd/utils where the field exists) |
 | `raw`, `pasti`, `boxscan` | `any` (default) \| `yes` \| `no` | cracked |
 | `tos` | `any` (default) \| `has` (only entries with a `tos_bad` note) | cracked |
 | `sort` | `name` (default) \| `year` \| `publisher` \| `cracker` \| `crew` | all |
@@ -383,22 +385,24 @@ Semantics:
   an additional `position` field: the card's index in the filtered list
   under the requested `sort`/`order` (defaults `name`/`asc`), or `null`
   if filtered out. The frontend uses it to jump to the card's real page.
-- **Crew focus:** when `crew=<value>` is active and the section supports the
-  crew facet, each returned card carries `focus_variant` (index into
-  `variants`, or `-1` when no ZIP could be identified for that crew). The
-  card's `preview` and `display_status` then reflect that focused variant
-  — **even if it has no screenshot** (empty preview → placeholder). This
-  overrides `status=with_screenshot` for crew-matched cards: they always
-  appear. Matching is tried in increasing fuzziness: (1) the normalized
-  crew string (lowercased, `&`/`+` treated as `and`, whitespace collapsed)
-  is a substring of the normalized ZIP name; (2) a gameinfo variant with
-  that crew whose `cracked_by` appears in a ZIP name; (3) token subset —
-  all crew tokens (alphanumeric, stopwords like `and`/`the`/`co` removed)
-  appear in the ZIP name, tolerating typos or a missing connective such as
-  "Hotline & MCA" vs. "Hotline MCA". Among multiple matches the first with
-  a screenshot preview wins. When `focus_variant` is `-1` (crew known at
-  gameinfo level but no ZIP in the folder), the card stays visible and the
-  frontend presents a fallback (section 6.3).
+- **Crew/cracker focus:** when `crew=<value>` or `cracker=<value>` is active
+  and the section supports the facet, each returned card carries
+  `focus_variant` (index into `variants`, or `-1` when no ZIP could be
+  identified for that value). When both are active **cracker takes
+  precedence**. The card's `preview` and `display_status` then reflect that
+  focused variant — **even if it has no screenshot** (empty preview →
+  placeholder). This overrides `status=with_screenshot` for focused cards:
+  they always appear. Matching is tried in increasing fuzziness: (1) the
+  normalized value (lowercased, `&`/`+` treated as `and`, whitespace
+  collapsed) is a substring of the normalized ZIP name; (2) *(crew only)* a
+  gameinfo variant with that crew whose `cracked_by` appears in a ZIP name;
+  (3) token subset — all tokens (alphanumeric, stopwords like
+  `and`/`the`/`co` removed) appear in the ZIP name, tolerating typos or a
+  missing connective such as "Hotline & MCA" vs. "Hotline MCA". Among
+  multiple matches the first with a screenshot preview wins. When
+  `focus_variant` is `-1` (value known at gameinfo level but no ZIP in the
+  folder), the card stays visible and the frontend presents a fallback
+  (section 6.3).
 - Sorting is a **total order**: primary key per `sort`, ties always broken
   by lowercased name, then by `rel`. This guarantees stable pagination (no
   duplicates or gaps across pages) *(requirement, section 8.5)*.
@@ -505,8 +509,8 @@ decision: local desktop browser)*.
 2. **Section tabs**: `Screenshots` (cracked) | `PD Games` | `Utilities`
    (PD/Utils hidden in screenshots-only mode).
 3. **Control bar**: search input, status select, facet filters
-   (publisher/crew/language/year/flags/tos), sort select + order toggle,
-   letter navigation row (A–Z + `0-9` + `Any`).
+   (publisher/crew/cracker/language/year/flags/tos), sort select + order
+   toggle, letter navigation row (A–Z + `0-9` + `Any`).
 4. **Grid**: grouped cards (section 6.4), paginated.
 5. **Pagination**: page indicator + prev/next + page-size-constant
    (`offset/limit`); keyboard PageUp/PageDown works on the grid (6.6).
@@ -525,13 +529,14 @@ Filter/search/sort state is reflected in the URL query string
 - Name: game folder name (`folder`), below the badge (as today).
 - Variant count chip when a folder has more than one ZIP (e.g. `×3`).
 - Preview image, or placeholder block when `screenshots` is false.
-- **Crew focus fallback** (`focus_variant === -1`): when a crew filter
-  matched the card via gameinfo but no ZIP in the folder could be
-  identified, the card is not blank. Instead it shows a short hint
-  (`no crew ZIP — other variants`) plus up to **four small thumbnails** of
-  the other variants that do have screenshots (2×2 grid); clicking a thumb
-  opens the lightbox on that ZIP. When no variant has any screenshot, the
-  plain placeholder is shown.
+- **Crew/cracker focus fallback** (`focus_variant === -1`): when a
+  crew/cracker filter matched the card via gameinfo but no ZIP in the
+  folder could be identified, the card is not blank. Instead it shows a
+  short hint (`no crew ZIP — other variants` / `no cracker ZIP — other
+  variants`) plus up to **four small thumbnails** of the other variants
+  that do have screenshots (2×2 grid); clicking a thumb opens the lightbox
+  on that ZIP. When no variant has any screenshot, the plain placeholder
+  is shown.
 - Candidate strip (48 px thumbs, as today) when `show_candidates` is
   enabled and candidates exist — clicking a candidate opens the lightbox on
   that image. The strip is only shown on **single-variant** cards and is
@@ -661,9 +666,10 @@ Shown in the header, sourced from `/api/meta`:
    if any variant or the folder/path matches.
 2. **Filters**: AND across different facets, OR (any-variant) within one
    facet; tri-state flags (`any|yes|no`).
-3. **Crew focus** (`crew=<value>`): the grid shows the screenshot of the
-   ZIP belonging to that crew (`focus_variant`, section 5.3), even when
-   that variant has no screenshot (placeholder). When no ZIP can be
+3. **Crew/cracker focus** (`crew=<value>` / `cracker=<value>`): the grid
+   shows the screenshot of the ZIP belonging to that value (`focus_variant`,
+   section 5.3), even when that variant has no screenshot (placeholder);
+   cracker takes precedence when both are set. When no ZIP can be
    identified (`focus_variant === -1`) the card shows a hint plus up to
    four screenshots of the folder's other variants (section 6.3). Clicking
    the card opens the lightbox on that variant.
