@@ -34,6 +34,7 @@ All absolute paths in this document are symbolic. Consumers resolve them via
 |---|---|
 | `MARCER_ROOT_DIR` | Game DVD root (main layer) |
 | `MARCER_PATCH_DIR` | Patch/update layer |
+| `MARCER_DATA_DIR` | Extracted game metadata output directory (games-*.json, manifest) |
 | `MARCER_OUT_DIR` | Generated screenshot output directory |
 | `<PATCH>/Title Sorted/` | XLS metadata + title-sorted game trees inside the patch layer |
 | `<OUT>/` | Screenshot artifacts (`index.json`, PNG tree) |
@@ -222,7 +223,7 @@ dump flags (`RAW-Dump`/`Pasti Dump`/`Boxscan`), TOS/bad notes, special notes.
 
 ### 4.3 Desktop application (infos + screenshots)
 
-A separate desktop app (future project, out of launcher scope) would:
+A separate desktop app (planned in Flutter, out of launcher scope) would:
 - Browse the same trees (ROOT/PATCH overlay semantics as the launcher).
 - Show the XLS metadata (section 5 data model) **and** the screenshot preview
   images from `<OUT>/` (join: gameinfo `folder` → `index.json` entries whose
@@ -240,33 +241,72 @@ The same extractor can produce reports such as:
 - Screenshot coverage: folders/ZIPs without a `done` screenshot in
   `index.json`.
 
+### 4.5 Unified catalog (`catalog-gen`) for multiple consumers
+
+Three different apps will consume the prepared data:
+
+| # | Consumer | Joins today |
+|---|---|---|
+| 1 | Console launcher (C#) | gameinfo only (`games-cracked.json`); screenshots not planned for display |
+| 2 | Desktop app (Flutter) | gameinfo + screenshot previews (runtime join) |
+| 3 | Gallery webapp (`tools/gallery`) | `index.json` + `games-*.json` at runtime, per `SPEC-gallery-webapp.md` §4 |
+
+Idea: a `tools/catalog-gen` step that **pre-joins** `games-*.json` +
+`<OUT>/index.json` into a single `catalog.json` in `MARCER_DATA_DIR`:
+
+```json
+{
+  "folder": "10th Frame", "letter": "0-9", "layers": ["ROOT"],
+  "variants": [ … ],
+  "screenshots": { "preview": "…png", "status": "done", "with_screenshot": true },
+  "zips": [ { "name": "10th Frame - Pedro.zip", "layer": "ROOT",
+              "preview": "…png", "status": "done" } ]
+}
+```
+
+- **Why:** the folder↔ZIP↔screenshot join would be implemented once instead
+  of N times; one `schema_version`, one staleness check (`manifest.json`
+  covers sources; catalog adds the `index.json` mtime).
+- **Paths stay symbolic/relative** — consumers prepend `MARCER_OUT_DIR` /
+  `MARCER_DATA_DIR` themselves (required: the Flutter app and any tool may
+  run on a different machine than the generator).
+- **Trade-off:** runtime join (what `tools/gallery` does today) is simpler
+  and always current; a pre-joined catalog adds one regeneration step after
+  every screenshot run or XLS update. Pull this in only when the N×-join
+  duplication actually hurts (roadmap M6); a consumer can also be switched
+  from runtime join to catalog later without breaking either source file.
+
 ---
 
 ## 5. Proposed Data Model and Storage
 
 ### 5.1 Storage location (decision)
 
-**Decision:** extracted metadata is generated into **`<PATCH>/Data/`**
-(`MARCER_PATCH_DIR/Data/`).
+**Decision:** extracted metadata is generated into **`MARCER_DATA_DIR`** —
+a dedicated top-level data directory next to the patch and screenshot
+directories (never inside the patch tree itself).
 
 Rationale:
 - The data belongs to the DVD/patch content, not to the launcher code — it
   updates together with the XLS sources, like the screenshot artifacts
   already do in `<OUT>/`.
 - No repo weight; no sync burden between XLS updates and git.
-- Both consumers (console launcher on any platform, future desktop app on the
-  iMac) read the same files from the NAS/patch mount.
+- A dedicated directory keeps derived artifacts out of the source trees
+  (XLS files, games) — no risk of mixing generated output with archive
+  content.
+- Both consumers (console launcher on any platform, future desktop app on
+  the iMac) read the same files from the NAS mount.
 - The launcher build (GitHub Actions) stays independent of the NAS.
 
 Rules:
 - The extractor tool is the **only writer**. Launcher and desktop app are
   strictly read-only consumers.
 - The launcher must treat the data as **optional** (graceful fallback when
-  `<PATCH>/Data/` is missing or incomplete).
+  `MARCER_DATA_DIR` is missing or incomplete).
 - Data files are derived artifacts; they are not committed to git and not
   shipped inside the launcher release ZIP.
 
-### 5.2 File layout under `<PATCH>/Data/`
+### 5.2 File layout under `MARCER_DATA_DIR`
 
 | File | Content |
 |---|---|
@@ -275,6 +315,7 @@ Rules:
 | `games-utils.json` | Extracted `Utils_.xls` (utilities) |
 | `manifest.json` | Generation metadata (see 5.4) |
 | `unmatched-report.txt` (optional) | Human-readable matching gaps (section 3.3) |
+| `catalog.json` *(planned, M6)* | Pre-joined catalog: `games-*.json` + screenshot index (section 4.5) |
 
 One file per source kind keeps each file small and lets the launcher load
 only `games-cracked.json` (the only tree it browses today).
@@ -344,7 +385,9 @@ launcher can log a hint ("game info data outdated") without failing.
 ### 5.5 Launcher integration (sketch, future feature)
 
 - New optional config key in `launcher.config.json`: `GameInfoDirectory`.
-  Default when absent: auto-detect `<PatchDirectory>/Data`.
+  Default when absent: auto-detect the `Data` directory next to
+  `PatchDirectory` (i.e. `<PatchDirectory>/../Data`, matching the
+  `MARCER_DATA_DIR` layout used by the extractor).
 - Load `games-cracked.json` once at startup into a
   `folder → variants[]` dictionary (a few MB JSON is negligible for .NET).
 - New key binding for the info overlay (section 4.1); no behavior change when
@@ -361,16 +404,17 @@ Mirrors the conventions of `tools/screenshot-gen`:
 | Aspect | Proposal |
 |---|---|
 | Language | Python 3 (same as `shotgen.py`) |
-| XLS parsing | `olefile` (already installed system-wide) + embedded BIFF5 parser; alternatively pinned in repo `.venv` |
+| XLS parsing | `olefile` (pinned in the repo `.venv`) + embedded BIFF5 parser |
 | Wrapper | `run.sh` that sources `local/paths.env` and runs with the repo venv (like `tools/screenshot-gen/run.sh`) |
-| Inputs | The three XLS files under `<PATCH>/Title Sorted/` (paths via `paths.env`; overridable via CLI flags) |
-| Matching | Section 3.3 strategy, against the three title-sorted trees under `<PATCH>/Title Sorted/` |
-| Outputs | Section 5.2 files into `<PATCH>/Data/` (atomic write: temp file + rename) |
+| Inputs | The three XLS files under `<PATCH>/Title Sorted/` (paths via `paths.env`; PATCH copy preferred, ROOT as fallback) |
+| Matching | Section 3.3 strategy, against the three title-sorted trees in ROOT and PATCH (union) |
+| Outputs | Section 5.2 files into `MARCER_DATA_DIR` (atomic write: temp file + rename) |
 | Runtime | Seconds, not hours (no emulator involved; read-only NAS access) |
 | Exit codes | 0 = success (even with unmatched entries), non-zero = source/IO error |
 
-Non-goals: writing anywhere under `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR` other
-than `<PATCH>/Data/`; network access; modifying the XLS sources.
+Non-goals: writing anywhere under `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR`
+(generated output goes exclusively to `MARCER_DATA_DIR`); network access;
+modifying the XLS sources.
 
 ---
 
@@ -379,19 +423,20 @@ than `<PATCH>/Data/`; network access; modifying the XLS sources.
 | Milestone | Content | Depends on |
 |---|---|---|
 | **M0** | This analysis document | — |
-| **M1** | `tools/gameinfo-gen` extractor + `<PATCH>/Data/` output + unmatched report — **done 2026-10-11** (cracked: 3,108/3,289 folders matched = 94.5 %) | M0 |
+| **M1** | `tools/gameinfo-gen` extractor + `MARCER_DATA_DIR` output + unmatched report — **done 2026-10-11** (cracked: 3,108/3,289 folders matched = 94.5 %) | M0 |
 | **M2** | Launcher: optional `GameInfoDirectory` + info overlay (`i` key) | M1 |
 | **M3** | Launcher: search/sort over the catalog (SPEC + README + AGENTS updates) | M2 |
-| **M4** | Desktop app: browse + infos + screenshot previews (join with `<OUT>/index.json`) | M1 (+ screenshot coverage from `tools/screenshot-gen`) |
+| **M4** | Desktop app (Flutter): browse + infos + screenshot previews (join with `<OUT>/index.json` at runtime, see 4.5) | M1 (+ screenshot coverage from `tools/screenshot-gen`) |
 | **M5** | Audit reports (dumps, TOS notes, coverage) as generator option | M1 |
+| **M6** | `tools/catalog-gen`: pre-joined `catalog.json` for all consumers (4.5) — *candidate, pull earlier if the N× join duplication hurts* | M1 |
 
 Open questions (deferred to the respective milestones):
 - M2: which subset of fields the info box shows (screen space is limited).
 - M3: sort/search key bindings and interaction with the ROOT/PATCH overlay.
-- M4: technology choice for the desktop app; screenshot scaling; whether it
-  reuses `<OUT>/index.json` or a merged catalog file.
-- M1: whether PD/Utils trees get their own folder matching pass in the first
-  version or only a title-index extraction (no folder key).
+- M4: screenshot scaling; join at runtime (as `tools/gallery` does today) or
+  consume `catalog.json` from M6.
+- M1: ~~whether PD/Utils trees get their own folder matching pass~~ — done:
+  all three kinds get full folder matching (section 6).
 
 ---
 
@@ -399,13 +444,13 @@ Open questions (deferred to the respective milestones):
 
 - [x] Extractor reads all three XLS files via `local/paths.env` only; no
       hard-coded absolute paths.
-- [x] Extractor writes exclusively to `<PATCH>/Data/`; NAS sources remain
+- [x] Extractor writes exclusively to `MARCER_DATA_DIR`; NAS sources remain
       read-only.
 - [x] `manifest.json` matches the real output files (counts, timestamps)
       (`tools/gameinfo-gen/run.sh check` exits 0).
-- [ ] Launcher works unchanged when `<PATCH>/Data/` is absent (graceful
+- [ ] Launcher works unchanged when the game info data is absent (graceful
       fallback). *(M2, launcher not touched yet — default behavior unchanged.)*
-- [ ] Launcher never writes to `<PATCH>/Data/`. *(M2)*
+- [ ] Launcher never writes to `MARCER_DATA_DIR`. *(M2)*
 - [ ] `SPEC.md`, `AGENTS.md` and `README.md` updated with each behavioral
       change (M2, M3).
 - [ ] Manual test run via `scripts/start.cmd` (Windows) or `scripts/start.sh`
