@@ -110,31 +110,34 @@ class _FilterBarState extends State<FilterBar> {
             ),
             if (c.catalogMode) ...[
               const SizedBox(height: 4),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  SizedBox(
-                    width: 240,
-                    child: Focus(
-                      focusNode: widget.searchFocus,
-                      onKeyEvent: _searchKeys,
-                      child: TextField(
-                        controller: _search,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          hintText: 'Search  ( / )',
-                          prefixIcon: const Icon(Icons.search, size: 16),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(4),
+                  _fixed(
+                    SizedBox(
+                      width: 240,
+                      child: Focus(
+                        focusNode: widget.searchFocus,
+                        onKeyEvent: _searchKeys,
+                        child: TextField(
+                          controller: _search,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: 'Search  ( / )',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 5),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 5),
+                          style: const TextStyle(fontSize: 12),
+                          onChanged: _onSearchChanged,
                         ),
-                        style: const TextStyle(fontSize: 12),
-                        onChanged: _onSearchChanged,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
                   if (fields.contains('publisher'))
                     _facetMenu(
                       'Publisher: any',
@@ -143,8 +146,7 @@ class _FilterBarState extends State<FilterBar> {
                       c.setPublisher,
                       width: 170,
                     ),
-                  if (fields.contains('crew')) ...[
-                    const SizedBox(width: 8),
+                  if (fields.contains('crew'))
                     _facetMenu(
                       'Crew: any',
                       f.crew,
@@ -152,9 +154,7 @@ class _FilterBarState extends State<FilterBar> {
                       c.setCrew,
                       width: 150,
                     ),
-                  ],
-                  if (fields.contains('cracker')) ...[
-                    const SizedBox(width: 8),
+                  if (fields.contains('cracker'))
                     _facetMenu(
                       'Cracker: any',
                       f.cracker,
@@ -162,9 +162,7 @@ class _FilterBarState extends State<FilterBar> {
                       c.setCracker,
                       width: 150,
                     ),
-                  ],
-                  if (fields.contains('language')) ...[
-                    const SizedBox(width: 8),
+                  if (fields.contains('language'))
                     _facetMenu(
                       'Language: any',
                       f.language,
@@ -172,9 +170,7 @@ class _FilterBarState extends State<FilterBar> {
                       c.setLanguage,
                       width: 130,
                     ),
-                  ],
-                  if (fields.contains('year')) ...[
-                    const SizedBox(width: 8),
+                  if (fields.contains('year'))
                     _facetMenu(
                       'Year: any',
                       f.year,
@@ -182,29 +178,17 @@ class _FilterBarState extends State<FilterBar> {
                       c.setYear,
                       width: 100,
                     ),
-                  ],
-                  const Spacer(),
-                  if (f.section == 'cracked') ...[
+                  if (f.section == 'cracked')
                     _statusDropdown(f.status, c.setStatus),
-                    const SizedBox(width: 8),
-                  ],
-                  if (fields.contains('raw')) ...[
+                  if (fields.contains('raw'))
                     _triDropdown('raw', f.raw, (v) => c.setFlag('raw', v)),
-                    const SizedBox(width: 8),
-                  ],
-                  if (fields.contains('pasti')) ...[
+                  if (fields.contains('pasti'))
                     _triDropdown('pasti', f.pasti, (v) => c.setFlag('pasti', v)),
-                    const SizedBox(width: 8),
-                  ],
-                  if (fields.contains('boxscan')) ...[
+                  if (fields.contains('boxscan'))
                     _triDropdown(
                         'boxscan', f.boxscan, (v) => c.setFlag('boxscan', v)),
-                    const SizedBox(width: 8),
-                  ],
-                  if (fields.contains('tos')) ...[
+                  if (fields.contains('tos'))
                     _tosDropdown(f.tos, c.setTos),
-                    const SizedBox(width: 8),
-                  ],
                   _facetDropdown(
                     'Sort: ',
                     f.sort,
@@ -213,9 +197,8 @@ class _FilterBarState extends State<FilterBar> {
                     width: 120,
                     labelOf: (v) => 'Sort: $v',
                   ),
-                  const SizedBox(width: 6),
                   _labelButton(f.order == 'asc' ? 'asc' : 'desc',
-                      c.toggleOrder, width: 36),
+                      c.toggleOrder, width: 44),
                 ],
               ),
               const SizedBox(height: 4),
@@ -251,9 +234,13 @@ class _FilterBarState extends State<FilterBar> {
     );
   }
 
+  /// Fixed 30px height so every control in the wrapping filter row lines up.
+  Widget _fixed(Widget child) => SizedBox(height: 30, child: child);
+
   Widget _labelButton(String text, VoidCallback onTap, {double width = 48}) {
     return SizedBox(
       width: width,
+      height: 30,
       child: TextButton(
         onPressed: onTap,
         style: TextButton.styleFrom(
@@ -279,6 +266,7 @@ class _FilterBarState extends State<FilterBar> {
 
     return SizedBox(
       width: width,
+      height: 30,
       child: DropdownMenu<String>(
         key: ValueKey('$anyLabel:$value'),
         width: width,
@@ -294,6 +282,8 @@ class _FilterBarState extends State<FilterBar> {
           border: OutlineInputBorder(
               borderRadius: BorderRadius.all(Radius.circular(4))),
           contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          suffixIconConstraints: BoxConstraints(
+              minWidth: 24, maxWidth: 24, minHeight: 28, maxHeight: 28),
         ),
         dropdownMenuEntries: [
           for (final v in items)
@@ -322,6 +312,7 @@ class _FilterBarState extends State<FilterBar> {
 
     return SizedBox(
       width: width,
+      height: 30,
       child: DropdownButtonFormField<String>(
         key: ValueKey('$anyLabel:$value'),
         initialValue: items.contains(value) ? value : items.first,
@@ -351,6 +342,7 @@ class _FilterBarState extends State<FilterBar> {
     final keys = ['with_screenshot', 'any', ...kStatusOrder];
     return SizedBox(
       width: 150,
+      height: 30,
       child: DropdownButtonFormField<String>(
         key: ValueKey('status:$value'),
         initialValue: keys.contains(value) ? value : 'with_screenshot',
@@ -381,6 +373,7 @@ class _FilterBarState extends State<FilterBar> {
       String flag, String value, ValueChanged<String> onChanged) {
     return SizedBox(
       width: 100,
+      height: 30,
       child: DropdownButtonFormField<String>(
         key: ValueKey('$flag:$value'),
         initialValue: value,
@@ -406,7 +399,8 @@ class _FilterBarState extends State<FilterBar> {
 
   Widget _tosDropdown(String value, ValueChanged<String> onChanged) {
     return SizedBox(
-      width: 110,
+      width: 120,
+      height: 30,
       child: DropdownButtonFormField<String>(
         key: ValueKey('tos:$value'),
         initialValue: value,
@@ -419,8 +413,14 @@ class _FilterBarState extends State<FilterBar> {
         ),
         style: const TextStyle(fontSize: 12, color: Colors.white),
         items: const [
-          DropdownMenuItem(value: 'any', child: Text('TOS/Bad: any')),
-          DropdownMenuItem(value: 'has', child: Text('TOS/Bad: has')),
+          DropdownMenuItem(
+              value: 'any',
+              child: Text('TOS/Bad: any',
+                  maxLines: 1, overflow: TextOverflow.ellipsis)),
+          DropdownMenuItem(
+              value: 'has',
+              child: Text('TOS/Bad: has',
+                  maxLines: 1, overflow: TextOverflow.ellipsis)),
         ],
         onChanged: (v) {
           if (v != null) onChanged(v);
