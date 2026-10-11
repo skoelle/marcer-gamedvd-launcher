@@ -184,7 +184,7 @@ tools/gallery/
     index.html         app shell
     app.js             frontend logic (grid, filters, lightbox, keyboard)
     style.css          design (based on GALLERY_TEMPLATE)
-    favicon.svg        pixel-art Atari Fuji favicon
+    favicon.svg        GEM-style 3.5" floppy favicon (Atari green)
   config.example.json  committed defaults (no paths inside)
   config.local.json    optional, git-ignored machine overrides
 ```
