@@ -31,6 +31,7 @@ class GameInfoPanel extends StatelessWidget {
     required this.info,
     this.variant,
     this.filter,
+    this.onPlay,
   });
 
   final InfoSummary? info;
@@ -43,6 +44,10 @@ class GameInfoPanel extends StatelessWidget {
   /// ZIP name matched a release variant.
   final CatalogFilter? filter;
 
+  /// Launches the shown ZIP with Hatari (the "(P)lay" button); hidden when
+  /// null.
+  final VoidCallback? onPlay;
+
   @override
   Widget build(BuildContext context) {
     final info = this.info;
@@ -51,7 +56,10 @@ class GameInfoPanel extends StatelessWidget {
       children: [
         if (info == null) ...[
           _heading('No game info'),
-          if (variant != null) ..._zipTable(variant!),
+          if (variant != null) ...[
+            _headingRow('This ZIP'),
+            ..._zipTable(variant!),
+          ],
         ] else ...[
           _heading('Game info'),
           ..._infoRows(info),
@@ -63,13 +71,31 @@ class GameInfoPanel extends StatelessWidget {
           ],
           if (variant != null) ...[
             const SizedBox(height: 8),
-            _heading('This ZIP'),
+            _headingRow('This ZIP'),
             ..._zipTable(variant!),
           ],
         ],
       ],
     );
   }
+
+  /// Heading with the optional "(P)lay" button on the right.
+  Widget _headingRow(String text) => Row(
+        children: [
+          Expanded(child: _heading(text)),
+          if (onPlay != null)
+            TextButton.icon(
+              onPressed: onPlay,
+              icon: const Icon(Icons.play_arrow, size: 18),
+              label: const Text('(P)lay', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+        ],
+      );
 
   Widget _heading(String text) => Text(
         text,

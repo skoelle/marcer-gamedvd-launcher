@@ -269,6 +269,11 @@ class _GameLightboxState extends State<GameLightbox> {
       _goImage(-1);
       return KeyEventResult.handled;
     }
+    if (key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.keyP) {
+      _launchCurrent();
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
   }
 
@@ -623,7 +628,20 @@ class _GameLightboxState extends State<GameLightbox> {
               size: v.size,
             ),
       filter: widget.controller.filter,
+      onPlay: v == null ? null : _launchCurrent,
     );
+  }
+
+  /// Launches the currently shown ZIP with Hatari (the selected variant of a
+  /// catalog card, or the browse-mode entry).
+  void _launchCurrent() {
+    final item = _item;
+    if (item is GameCard) {
+      widget.controller.launchCardVariant(item, _variantIdx);
+    } else if (item is Entry) {
+      final path = item.effectivePath;
+      if (path != null) widget.controller.launchZip(path);
+    }
   }
 }
 

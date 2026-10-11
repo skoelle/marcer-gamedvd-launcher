@@ -73,6 +73,7 @@ class _HelpOverlayState extends State<HelpOverlay> {
    Enter / →      Open folder / show gallery lightbox
    Backspace      Parent directory (clears filters in catalog view)
    *              Toggle favorite on selected ZIP
+   P              Launch the selected ZIP with Hatari
    /              Focus the search field
    T              Toggle catalog grid / folder view
    ?              Show this help
@@ -81,6 +82,7 @@ class _HelpOverlayState extends State<HelpOverlay> {
   The default view is the gallery-style catalog grid (section tabs,
   search, dropdowns). Press T (or the Folders button) for the optional
   overlay folder browser. Navigation is strictly limited to RootDirectory.
+  In the lightbox Space/P launches the shown ZIP.
 
   Press any key to continue...''',
                       style: TextStyle(color: Colors.white, fontSize: 14)),

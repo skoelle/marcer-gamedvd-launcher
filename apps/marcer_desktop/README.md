@@ -24,6 +24,8 @@ Plan: [`PLAN.md`](PLAN.md). Architecture decision:
   regenerates the platform icon sets from the gallery favicon.
 - `desktop.config.example.json` — config template (absolute paths).
   Real `desktop.config.json` is git-ignored.
+- `MarcerGameDvd-Hatari.cfg` — bundled Hatari config, shipped next to the
+  executable and used when `Hatari.ConfigFile` is empty (launch fallback).
 - `run.sh` — seeds `desktop.config.json` from `../../local/paths.env` on
   first run, then `flutter run -d linux`.
 
@@ -69,10 +71,24 @@ locations.
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `OutDirectory` | no | screenshot archive (`index.json`, PNGs) |
 | `DataDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
-| `Hatari.*` | no (MVP) | launch config, used from Phase 5+ |
+| `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
+| `Hatari.ConfigFile` | no | empty ⇒ bundled `MarcerGameDvd-Hatari.cfg` |
+| `Hatari.ArgsTemplate` | no | must contain `{cfg}` and `{zip}` |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
-| `Window.width/height` | no | initial window size (default 1280×800) |
+| `Window.width/height` | no | reserved — parsed but not applied yet |
+
+## Launch (Hatari)
+
+Press `P` (list/grid), `Space`/`P` (lightbox) or the **(P)lay** button in the
+detail sidebar to start the selected ZIP in Hatari. Arguments are built from
+`Hatari.ArgsTemplate` with literal `{cfg}`/`{zip}` substitution (no shell);
+`{cfg}` falls back to the bundled `MarcerGameDvd-Hatari.cfg` (searched in the
+same locations as the config) when `Hatari.ConfigFile` is empty. Launching is
+**non-blocking** — the status bar shows a "Hatari is running…" indicator and
+errors appear as a modal (missing executable, vanished ZIP, …). The bundled
+config expects a TOS ROM (`TOS.IMG`) next to the app, matching the console
+launcher.
 
 ## License
 

@@ -9,6 +9,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
 import 'favorites_service.dart';
+import 'hatari_launcher.dart';
 
 /// Sentinel rel-path for the virtual `Favorites` view (`SPEC.md` §11.3);
 /// cannot collide with a real directory name (NUL is invalid in paths).
@@ -42,6 +43,13 @@ class CatalogController extends ChangeNotifier {
   String progress = '';
   final List<String> notices = [];
 
+  /// True while a Hatari process launched from the app is running.
+  bool launching = false;
+
+  /// Last launch error (SPEC.md E3/E4/E7), shown as a modal and cleared on
+  /// acknowledgement.
+  String? launchError;
+
   /// Active top-level view; the gallery-like catalog grid is the default.
   AppView view = AppView.catalog;
 
@@ -64,9 +72,12 @@ class CatalogController extends ChangeNotifier {
   Future<void> init() async {
     progress = 'Loading catalog…';
     notifyListeners();
+    // Capture a plain config value (not `this`) so the isolate closure stays
+    // sendable even when listeners are attached to the controller.
+    final cfg = config;
     final bundle = await Isolate.run(() => CatalogBundle.loadSync(
-          outDir: config.outDirectory,
-          dataDir: config.resolveDataDirectory(),
+          outDir: cfg.outDirectory,
+          dataDir: cfg.resolveDataDirectory(),
         ));
     notices.addAll(bundle.warnings);
     screenshots = bundle.index;
@@ -343,6 +354,85 @@ class CatalogController extends ChangeNotifier {
     final info = infoFor(e);
     if (info != null) return _titleOf(info);
     return e.name;
+  }
+
+  // ------------------------------------------------------------------ launch
+
+  /// Absolute path of a catalog card's ZIP variant (patch wins; SPEC.md R14).
+  String zipPathForVariant(CardVariant v) {
+    final rel = v.rel;
+    final patch = config.patchDirectory;
+    if (patch.isNotEmpty && (v.layer == 'PATCH' || v.layer == 'BOTH')) {
+      final patchPath = p.join(patch, rel);
+      if (File(patchPath).existsSync()) return patchPath;
+    }
+    return p.join(config.rootDirectory, rel);
+  }
+
+  /// The ZIP a catalog card should launch: the crew/cracker-focused variant
+  /// when a focus filter is active, otherwise the variant whose preview is the
+  /// card preview (falling back to the first).
+  CardVariant? launchVariantForCard(GameCard card) {
+    if (card.variants.isEmpty) return null;
+    var idx = (card.focusVariant ?? -1) >= 0 ? card.focusVariant! : -1;
+    if (idx < 0 && card.previewPath != null) {
+      final match =
+          card.variants.indexWhere((v) => v.previewPath == card.previewPath);
+      if (match >= 0) idx = match;
+    }
+    return card.variants[idx < 0 ? 0 : idx];
+  }
+
+  /// Launches [zipPath] with Hatari (non-blocking). Sets [launchError] when the
+  /// configuration or ZIP is invalid; [launching] while the process runs.
+  Future<void> launchZip(String zipPath) async {
+    final result = await launchHatari(config, zipPath);
+    if (result.error != null) {
+      launchError = result.error;
+      notifyListeners();
+      return;
+    }
+    launchError = null;
+    launching = true;
+    notifyListeners();
+    final code = await result.process!.exitCode;
+    launching = false;
+    if (code != 0) launchError = 'Hatari exited with code $code.';
+    notifyListeners();
+  }
+
+  /// Launches the ZIP of a catalog card's variant [index] (lightbox "Play").
+  Future<void> launchCardVariant(GameCard card, int index) async {
+    if (index < 0 || index >= card.variants.length) return;
+    await launchZip(zipPathForVariant(card.variants[index]));
+  }
+
+  /// Launches the current selection: a ZIP in browse mode, the card's ZIP in
+  /// catalog mode.
+  Future<void> launchSelected() async {
+    if (catalogMode) {
+      final card = selectedCard;
+      if (card == null) return;
+      final v = launchVariantForCard(card);
+      if (v == null) {
+        launchError = 'No ZIP to launch.';
+        notifyListeners();
+        return;
+      }
+      await launchZip(zipPathForVariant(v));
+      return;
+    }
+    final e = selectedEntry;
+    if (e == null || e.kind != EntryKind.zip) return;
+    final path = e.effectivePath;
+    if (path == null) return;
+    await launchZip(path);
+  }
+
+  void clearLaunchError() {
+    if (launchError == null) return;
+    launchError = null;
+    notifyListeners();
   }
 
   // ------------------------------------------------------------- navigation

@@ -31,7 +31,11 @@ void main() {
   String? configError;
   if (configPath != null) {
     try {
-      config = DesktopConfig.load(configPath);
+      // Hatari paths + the bundled config resolve against the executable dir;
+      // the bundled config is searched in CWD → exe dir → (macOS) .app parent.
+      final exeDir = searchDirs.length > 1 ? searchDirs[1] : searchDirs.first;
+      config = DesktopConfig.load(configPath,
+          appDir: exeDir, searchDirs: searchDirs);
     } catch (e) {
       configError = '$configPath: $e';
     }
@@ -97,19 +101,47 @@ class _HomePageState extends State<HomePage> {
   late final CatalogController _controller;
   final FocusNode _searchFocus = FocusNode(debugLabel: 'search');
   bool _showHelp = false;
+  bool _showingLaunchError = false;
 
   @override
   void initState() {
     super.initState();
     _controller = CatalogController(widget.config);
+    _controller.addListener(_onControllerChanged);
     _controller.init();
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onControllerChanged);
     _searchFocus.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Surfaces launch errors (SPEC.md E3/E4/E7) as a modal, once per error.
+  void _onControllerChanged() {
+    final err = _controller.launchError;
+    if (err == null || _showingLaunchError || !mounted) return;
+    _showingLaunchError = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Cannot launch'),
+          content: Text(err),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      _controller.clearLaunchError();
+      _showingLaunchError = false;
+    });
   }
 
   void _toggleHelp() {
@@ -219,6 +251,17 @@ class _StatusBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: Row(
         children: [
+          if (c.launching) ...[
+            const SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(strokeWidth: 1.5),
+            ),
+            const SizedBox(width: 6),
+            const Text('Hatari is running…',
+                style: TextStyle(fontSize: 11, color: Colors.lightGreen)),
+            const SizedBox(width: 16),
+          ],
           Text(messages.join('  ·  '),
               style: const TextStyle(fontSize: 11, color: Colors.grey)),
           if (notices.isNotEmpty) ...[

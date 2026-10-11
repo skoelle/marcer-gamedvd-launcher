@@ -176,6 +176,10 @@ class _CenterGridState extends State<CenterGrid> {
       c.toggleView();
       return KeyEventResult.handled;
     }
+    if (char == 'p' || char == 'P') {
+      c.launchSelected();
+      return KeyEventResult.handled;
+    }
     if (char == 'q' || char == 'Q') {
       io.exit(0);
     }

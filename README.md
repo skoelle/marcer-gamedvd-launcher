@@ -51,6 +51,10 @@ archive and its derived artifacts.
   several ZIPs.
 - **Gallery-style status bar** — with-screenshot ratio, status counts, matched
   folder count, `index.json` mtime and gameinfo generation time.
+- **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
+  list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
+  detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
+  bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking.
 - **Favorites** (`*`) persisted to `favorites.txt`.
 - **Degrades gracefully** — missing `index.json` or gameinfo data simply shows
   empty states instead of crashing.
@@ -78,7 +82,11 @@ Download the ZIP for your platform from the [Releases](https://github.com/skoell
 | Linux | `MarcerDesktop-*-linux-x64.zip` |
 | macOS | `MarcerDesktop-*-osx-arm64.zip` |
 
-The release ZIPs ship `desktop.config.example.json` — copy it next to the executable (or the `.app`), rename it to `desktop.config.json`, and set your absolute paths.
+The release ZIPs ship `desktop.config.example.json` **and** the bundled
+`MarcerGameDvd-Hatari.cfg` — copy the example next to the executable (or the
+`.app`), rename it to `desktop.config.json`, and set your absolute paths. For
+launching, also point `Hatari.Executable` at your Hatari binary and put
+`TOS.IMG` next to the app.
 
 ### ⚙️ Configuration (`desktop.config.json`)
 
@@ -96,7 +104,9 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `OutDirectory` | no | screenshot archive (`index.json`, PNGs) |
 | `DataDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
-| `Hatari.*` | no (MVP) | launch config, used from Phase 5+ |
+| `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
+| `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
+| `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
 | `Window.width/height` | no | reserved — parsed but **not applied** yet (the window uses the platform default) |
@@ -111,13 +121,18 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `Enter` / `→` | Open the folder / show the lightbox |
 | `Backspace` | Parent directory (in catalog view: clear filters) |
 | `*` | Toggle favorite on the selected ZIP |
+| `P` | Launch the selected ZIP with Hatari |
 | `/` | Focus the search field |
 | `T` | Toggle catalog grid / folder view |
 | `?` | Show the help overlay |
 | `ESC` / `q` | Exit |
 
 In the **lightbox**: `←`/`→` switch card, `↑`/`↓` switch variant, `PgUp`/`PgDn`
-switch image, `Esc` closes.
+switch image, `Space`/`P` launch the shown ZIP, `Esc` closes.
+
+> **Launching** needs `Hatari.Executable` in `desktop.config.json` and a TOS ROM
+> (`TOS.IMG`) next to the app — same convention as the console launcher; the
+> bundled `MarcerGameDvd-Hatari.cfg` looks for it in the working directory.
 
 ### 🛠️ Build & Run (developers)
 

@@ -78,6 +78,7 @@ class DetailPanel extends StatelessWidget {
             info: card.info,
             variant: _primaryVariant(card),
             filter: c.filter,
+            onPlay: () => c.launchSelected(),
           ),
         ),
       ],

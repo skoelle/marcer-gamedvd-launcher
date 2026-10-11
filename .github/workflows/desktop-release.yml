@@ -74,6 +74,7 @@ jobs:
         working-directory: apps/marcer_desktop
         run: |
           Copy-Item desktop.config.example.json build/windows/x64/runner/Release/desktop.config.example.json
+          Copy-Item MarcerGameDvd-Hatari.cfg build/windows/x64/runner/Release/MarcerGameDvd-Hatari.cfg
           Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "$env:GITHUB_WORKSPACE/MarcerDesktop-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
 
       - name: Create ZIP (Linux)
@@ -81,6 +82,7 @@ jobs:
         working-directory: apps/marcer_desktop/build/linux/x64/release/bundle
         run: |
           cp "$GITHUB_WORKSPACE/apps/marcer_desktop/desktop.config.example.json" .
+          cp "$GITHUB_WORKSPACE/apps/marcer_desktop/MarcerGameDvd-Hatari.cfg" .
           zip -r "$GITHUB_WORKSPACE/MarcerDesktop-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip" .
 
       - name: Create ZIP (macOS)
@@ -90,6 +92,7 @@ jobs:
           mkdir -p dist
           cp -R "build/macos/Build/Products/Release/MarcerGameDVDLauncher.app" dist/
           cp desktop.config.example.json dist/
+          cp MarcerGameDvd-Hatari.cfg dist/
           ditto -c -k --sequesterRsrc dist "$GITHUB_WORKSPACE/MarcerDesktop-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
 
       - name: Upload artifact
