@@ -1,0 +1,256 @@
+# Marcer GameDVD Console Launcher
+
+A fast, keyboard-driven console launcher for the Hatari emulator. Browse your Atari ST game archive, navigate folders, and launch ZIPs — all from the terminal. Supports overlay/patch mode for comparing and merging game directories.
+
+Part of the [Marcer GameDVD](../..) project. For the primary desktop app, see [`apps/marcer_desktop`](../marcer_desktop/README.md).
+
+Built for the [Marcer GameDVD](https://www.facebook.com/groups/360493904888475/) community on Facebook.
+
+---
+
+## 🎮 Features
+
+- **Overlay/Patch Mode:** Recursively merges a main game directory with an optional patch directory. If a file or folder exists in both, the patch version takes precedence.
+- **Layer Labels:** Each entry shows its source — `[BOTH]`, `[ROOT]`, or `[PTCH]` — with a matching color scheme.
+- **Favorites:** Press `*` on any ZIP to bookmark it. Bookmarked games appear in a virtual `Favorites` folder at the top of the root listing.
+- **Robust Navigation:** Cursor position is remembered per directory. Scrolling and page jumps adapt dynamically to any console height.
+- **Minimal Redraw:** Only changed lines are redrawn — no flicker, no `Console.Clear`, smooth even in huge directory trees.
+
+### Color Scheme
+
+Colors are configurable via the `Colors` section in `launcher.config.json` (see [Configuration](#%EF%B8%8F-configuration)). Defaults are shown below:
+
+| Entry | Label | Default Color | Meaning |
+|---|---|---|---|
+| Folder in both layers | `[BOTH]` | Yellow | Exists in main + patch |
+| Patch-only folder | `[PTCH]` | DarkYellow | Only in patch layer |
+| Main-only folder | `[ROOT]` | Gray | Only in main layer |
+| ZIP in both layers | `[BOTH]` | Green | Exists in main + patch |
+| Main-only ZIP | `[ROOT]` | DarkGreen | Only in main layer |
+| Patch-only ZIP | `[PTCH]` | Magenta | Only in patch layer |
+| Selected entry | — | Black on DarkCyan | Highlighted entry |
+| Virtual entry (Favorites) | — | White | Pseudo-folder |
+
+---
+
+## 🕹️ End Users
+
+### 📥 Download
+
+Download the ZIP for your platform from the [Releases](https://github.com/skoelle/marcer-gamedvd-launcher/releases) page:
+
+| Platform | Archive |
+|---|---|
+| Windows | `MarcerGameDvdConsole-*-win-x64.zip` |
+| Linux | `MarcerGameDvdConsole-*-linux-x64.zip` |
+| macOS | `MarcerGameDvdConsole-*-osx-x64.zip` |
+
+### 💻 System Requirements
+
+- **.NET Runtime 10** or later ([download](https://dotnet.microsoft.com/download/dotnet/10.0))
+- **Hatari Emulator** (Windows native, or Linux/macOS via Wine or native build) — a Hatari configuration file (`MarcerGameDvd-Hatari.cfg`) is bundled with the launcher and used automatically when `Hatari.ConfigFile` is empty.
+- **TOS 1.04** ROM image (`TOS.IMG`) — required by Hatari to boot the Atari ST system.
+
+### 🕹️ Setting Up Hatari
+
+Before using the launcher, you need to install Hatari and provide a TOS ROM:
+
+1. **Download Hatari** from the official site: [https://hatari.tuxfamily.org/download.html](https://hatari.tuxfamily.org/download.html)
+   - **Windows:** Download and extract the latest Windows binary.
+   - **Linux:** Install via your package manager (e.g. `sudo apt install hatari`) or build from source.
+   - **macOS:** Download the macOS build or install via Homebrew: `brew install hatari`.
+
+2. **Get TOS 1.04** (also known as TOS UK or TOS 1.04):
+   - TOS is copyrighted Atari ROM software — you must own a legal copy.
+   - Place the ROM file as `TOS.IMG` in the same directory as the launcher executable (or the Hatari working directory).
+   - The bundled `MarcerGameDvd-Hatari.cfg` is preconfigured to look for `TOS.IMG` in the current directory.
+
+3. **Configure the path** in `launcher.config.json`:
+   ```json
+   "Hatari": {
+     "Executable": "C:\\Tools\\hatari\\hatari.exe",
+     "ConfigFile": "",
+     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
+   }
+   ```
+   - Set `Hatari.Executable` to the full path of your `hatari` (or `hatari.exe`) binary.
+   - Leave `Hatari.ConfigFile` empty to use the bundled configuration automatically.
+
+### ⚡ Quick Start
+
+1. Extract the release ZIP to any folder.
+2. Copy `launcher.config.example.json` to `launcher.config.json`.
+3. Edit `launcher.config.json` — set your game directory and Hatari paths (see [Configuration](#%EF%B8%8F-configuration) below).
+4. Run the launcher:
+   - **Windows:** Double-click `MarcerGameDvdConsole.exe` or run from a terminal.
+   - **Linux:** `chmod +x MarcerGameDvdConsole && ./MarcerGameDvdConsole`
+   - **macOS:** `chmod +x MarcerGameDvdConsole && ./MarcerGameDvdConsole`
+5. Browse and launch games with your keyboard.
+
+### ⚙️ Configuration
+
+The launcher reads `launcher.config.json` from the same directory as the executable. A template is included in the release — copy it and adjust:
+
+```json
+{
+  "RootDirectory": "C:\\Games\\Hatari\\ROMS",
+  "PatchDirectory": "C:\\Games\\Hatari\\PATCH",
+  "Hatari": {
+    "Executable": "C:\\Tools\\hatari\\hatari.exe",
+    "ConfigFile": "",
+    "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
+  },
+  "Colors": {
+    "FolderBoth": "Yellow",
+    "FolderPatchOnly": "DarkYellow",
+    "FolderRootOnly": "Gray",
+    "ZipBoth": "Green",
+    "ZipRootOnly": "DarkGreen",
+    "ZipPatchOnly": "Magenta",
+    "SelectedForeground": "Black",
+    "SelectedBackground": "DarkCyan",
+    "VirtualEntry": "White"
+  }
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `RootDirectory` | ✅ | Game root folder. Navigation never leaves this directory. |
+| `PatchDirectory` | ❌ | Optional overlay/patch directory merged at runtime. |
+| `Hatari.Executable` | ✅ | Path to the Hatari executable. Validated at startup. |
+| `Hatari.ConfigFile` | ❌ | Path to a Hatari configuration file. If empty, the bundled `MarcerGameDvd-Hatari.cfg` (shipped with the launcher) is used automatically. |
+| `Hatari.ArgsTemplate` | ✅ | Argument template. Must contain `{zip}`, optionally `{cfg}`. |
+| `Colors` | ❌ | Optional color overrides. See [Color Scheme](#-color-scheme) below. Missing or invalid values fall back to defaults. |
+
+**Notes:**
+- Relative paths are resolved relative to the executable's directory.
+- Include quotes around `{cfg}` and `{zip}` in the template if your paths contain spaces.
+- After editing `launcher.config.json`, restart the application.
+
+### 🎨 Color Scheme
+
+Colors are fully configurable via the `Colors` section of `launcher.config.json`. Each field accepts a [ConsoleColor](https://learn.microsoft.com/dotnet/api/system.consolecolor) name (case-insensitive). Omitting the entire `Colors` section — or any individual field — falls back to the built-in defaults:
+
+| Field | Default | Applies to |
+|---|---|---|
+| `FolderBoth` | Yellow | Folders in both layers |
+| `FolderPatchOnly` | DarkYellow | Folders in patch only |
+| `FolderRootOnly` | Gray | Folders in root only |
+| `ZipBoth` | Green | ZIPs in both layers |
+| `ZipRootOnly` | DarkGreen | ZIPs in root only |
+| `ZipPatchOnly` | Magenta | ZIPs in patch only |
+| `SelectedForeground` | Black | Foreground for the highlighted entry |
+| `SelectedBackground` | DarkCyan | Background for the highlighted entry |
+| `VirtualEntry` | White | Virtual entries (e.g. the Favorites pseudo-folder) |
+
+### ⌨️ Controls
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` | Move selection |
+| `Enter` / `→` | Open folder or launch ZIP |
+| `Backspace` / `←` | Go up one directory level |
+| `PageUp` / `PageDown` | Jump one page |
+| `*` | Toggle favorite on selected ZIP |
+| `?` | Show help overlay |
+| `ESC` / `Q` | Exit |
+
+**Navigation rules:**
+- Backspace in the root directory has no effect — you can never leave it.
+- Empty directories are displayed correctly.
+- When a ZIP or folder exists in both layers, the patch version is always launched/opened.
+
+### 🔄 Keeping Your Patch Directory Updated
+
+The community uses [ftp-sync](https://github.com/slippyex/ftp-sync) to keep the patch directory in sync with Marcer's FTP server. This downloads only changed or new files — fast and bandwidth-friendly.
+
+**Setup:**
+
+1. Clone and install ftp-sync:
+   ```bash
+   git clone https://github.com/slippyex/ftp-sync.git
+   cd ftp-sync
+   npm install
+   ```
+
+2. Create a `config.json` with your paths and the FTP credentials from the community:
+   ```json
+   {
+     "ftpConfig": {
+       "host": "<ftp-host>",
+       "user": "<username>",
+       "password": "<password>",
+       "port": 2121
+     },
+     "localDir": "C:\\Games\\MarcersGameDVD\\",
+     "remoteDir": "/GameDVD",
+     "patchDir": "C:\\Games\\MarcersGameDVD-Patch\\"
+   }
+   ```
+   > 💡 Ask in the [Facebook group](https://www.facebook.com/groups/360493904888475/) for the current FTP credentials.
+
+3. Run the sync:
+   ```bash
+   npm run sync config.json
+   ```
+   Press `s` to start syncing. Press `q` to exit when done.
+
+4. Point the launcher's `PatchDirectory` in `launcher.config.json` to the `patchDir` from your ftp-sync config.
+
+---
+
+## 🛠️ Developers
+
+### 📋 Prerequisites
+
+- [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0)
+- Windows: `build.cmd` / `start.cmd`
+- Linux / macOS: `build.sh` / `start.sh` (run `chmod +x scripts/*.sh` first)
+
+### 🔨 Build & Run
+
+**Windows:**
+```bat
+scripts\build.cmd
+scripts\start.cmd
+```
+
+**Linux / macOS:**
+```bash
+scripts/build.sh
+scripts/start.sh
+```
+
+> ⚠️ Do **not** use `dotnet build` or `dotnet run` directly — always use the platform build script to ensure consistent output.
+
+### 🧪 Demo Mode
+
+`demo.sh` creates a complete test environment with fake ZIPs and two layers (root + patch), then launches the launcher:
+
+```bash
+scripts/demo.sh
+```
+
+This builds the project, generates a structured `.demo/` directory with sample folders and ZIPs, writes a matching `launcher.config.json`, and starts the launcher. Useful for quickly testing overlay behavior and navigation without setting up real game files.
+
+> ⚠️ Windows is not supported for `demo.sh`. Use `start.cmd` with your own game files instead.
+
+### 🚀 Release
+
+The console launcher is released independently via the `vX.Y.Z` tag scheme (`.github/workflows/release.yml`), producing `MarcerGameDvdConsole-v…-{win,linux,osx}-x64.zip`. See the [root README](../../README.md#-release-process) for the full monorepo release process.
+
+---
+
+## 📝 Notes
+
+- Full technical requirements and build rules are in [`AGENTS.md`](../../AGENTS.md).
+- Technology-neutral behavioral specification (for reimplementation in other languages or as a desktop app) is in [`SPEC.md`](../../SPEC.md).
+- After any functional change, both `README.md` and `AGENTS.md` must be updated.
+- Every release **must** include release notes listing all changes and bugfixes.
+
+---
+
+## License
+
+Licensed under the [MIT License](../../LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

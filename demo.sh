@@ -3,7 +3,7 @@
 # Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 # Licensed under the MIT License. See LICENSE file in project root for details.
 
-# === Demo setup and run script for MarcerGameDvdLauncher ===
+# === Demo setup and run script for MarcerGameDvdConsole ===
 # Creates a structured test directory with main and patch layers,
 # populates them with fake ZIPs, then launches the launcher.
 
@@ -16,8 +16,8 @@ PATCH_DIR="$DEMO_DIR/patch"
 CONFIG_FILE="$DEMO_DIR/launcher.config.json"
 
 # --- Step 1: Build ---
-echo "=== Building MarcerGameDvdLauncher ==="
-cd "$SCRIPT_DIR/src/MarcerGameDvdLauncher"
+echo "=== Building MarcerGameDvdConsole ==="
+cd "$SCRIPT_DIR/apps/marcer_console"
 dotnet build -c Release --verbosity quiet
 echo "[OK] Build successful."
 
@@ -184,15 +184,15 @@ EOF
 echo "[OK] Config written to $CONFIG_FILE"
 
 # Copy config to EXE output directory (app looks for it there)
-EXE_DIR="$SCRIPT_DIR/src/MarcerGameDvdLauncher/bin/Release/net10.0"
+EXE_DIR="$SCRIPT_DIR/apps/marcer_console/bin/Release/net10.0"
 cp "$CONFIG_FILE" "$EXE_DIR/launcher.config.json"
 echo "[OK] Config copied to $EXE_DIR"
 
 # --- Step 4: Launch the application ---
 echo ""
-echo "=== Launching MarcerGameDvdLauncher ==="
+echo "=== Launching MarcerGameDvdConsole ==="
 echo "Controls: Arrow keys, Enter, Backspace, ESC to exit"
 echo ""
 
-cd "$SCRIPT_DIR/src/MarcerGameDvdLauncher"
+cd "$SCRIPT_DIR/apps/marcer_console"
 dotnet run -c Release

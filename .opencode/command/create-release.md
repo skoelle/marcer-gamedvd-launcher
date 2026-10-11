@@ -8,7 +8,7 @@ Create a release tag and push it to origin. The matching GitHub Action will auto
 
 | App | Argument | Tag | Workflow |
 |---|---|---|---|
-| Console launcher (`src/`) | `/create-release 1.0.0` | `v1.0.0` | `release.yml` |
+| Console launcher (`apps/marcer_console/`) | `/create-release 1.0.0` | `v1.0.0` | `release.yml` |
 | Flutter desktop (`apps/marcer_desktop/`) | `/create-release desktop 0.1.0` | `desktop-v0.1.0` | `desktop-release.yml` |
 
 ## Steps

@@ -3,17 +3,17 @@
 # Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 # Licensed under the MIT License. See LICENSE file in project root for details.
 
-# === Build script for MarcerGameDvdLauncher (requires .NET SDK 6 or newer) ===
-echo "Building MarcerGameDvdLauncher..."
+# === Build script for MarcerGameDvdConsole (requires .NET SDK 6 or newer) ===
+echo "Building MarcerGameDvdConsole..."
 
 if ! command -v dotnet &> /dev/null; then
     echo "[ERROR] .NET SDK not found. Please install from https://dotnet.microsoft.com/download"
     exit 1
 fi
 
-# Build in MarcerGameDvdLauncher subdirectory (script is in scripts/, code in src/)
+# Build in MarcerGameDvdConsole subdirectory (script is in scripts/, code in apps/marcer_console/)
 cd "$(dirname "$0")"
-cd "../src/MarcerGameDvdLauncher"
+cd "../apps/marcer_console"
 
 dotnet build -c Release
 if [ $? -ne 0 ]; then
@@ -22,7 +22,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Check for the built binary
-BINPATH=$(find "bin/Release" \( -name "MarcerGameDvdLauncher" -o -name "MarcerGameDvdLauncher.exe" \) -print -quit 2>/dev/null)
+BINPATH=$(find "bin/Release" \( -name "MarcerGameDvdConsole" -o -name "MarcerGameDvdConsole.exe" \) -print -quit 2>/dev/null)
 if [ -n "$BINPATH" ] && [ -f "$BINPATH" ]; then
     echo "[OK] Build complete. Binary: \"$BINPATH\""
 else

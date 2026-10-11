@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
-namespace MarcerGameDvdLauncher
+namespace MarcerGameDvdConsole
 {
     // Manages loading, saving and querying favorite ZIP paths.
     public class FavoritesService(string filePath)

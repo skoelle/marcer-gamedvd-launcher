@@ -41,26 +41,26 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build
-        working-directory: src/MarcerGameDvdLauncher
+        working-directory: apps/marcer_console
         run: dotnet publish -c Release -r ${{ matrix.rid }} -p:Version=${{ steps.version.outputs.version }} --self-contained false
 
       - name: Create ZIP (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          Compress-Archive -Path "src/MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/publish/*" -DestinationPath "MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
+          Compress-Archive -Path "apps/marcer_console/bin/Release/net10.0/${{ matrix.rid }}/publish/*" -DestinationPath "MarcerGameDvdConsole-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
 
       - name: Create ZIP (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: |
-          cd src/MarcerGameDvdLauncher/bin/Release/net10.0/${{ matrix.rid }}/publish
-          zip -r $GITHUB_WORKSPACE/MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip .
+          cd apps/marcer_console/bin/Release/net10.0/${{ matrix.rid }}/publish
+          zip -r $GITHUB_WORKSPACE/MarcerGameDvdConsole-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}
-          path: MarcerGameDvdLauncher-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip
+          name: MarcerGameDvdConsole-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}
+          path: MarcerGameDvdConsole-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip
 
   release:
     needs: build
@@ -100,7 +100,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          name: MarcerGameDvdLauncher ${{ github.ref_name }}
+          name: Marcer Console ${{ github.ref_name }}
           body_path: release-notes.md
           files: artifacts/**/*.zip
           generate_release_notes: false

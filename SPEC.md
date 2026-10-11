@@ -6,7 +6,7 @@ The purpose of this document is to allow a **1:1 reimplementation** of the tool 
 any programming language and with any presentation technology (terminal/CLI, desktop
 GUI, web UI, ...). It describes *what the application does*, not *how it is built*.
 
-- Implementation reference: `src/MarcerGameDvdLauncher/` (C#/.NET, terminal UI)
+- Implementation reference: `apps/marcer_console/` (C#/.NET, terminal UI)
 - User-facing documentation: `README.md`
 - Development policy: `AGENTS.md`
 

@@ -3,14 +3,14 @@
 # Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 # Licensed under the MIT License. See LICENSE file in project root for details.
 
-# Starts MarcerGameDvdLauncher (script is in scripts/, code in src/)
+# Starts MarcerGameDvdConsole (script is in scripts/, code in apps/marcer_console/)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-EXE_PATH="$SCRIPT_DIR/../src/MarcerGameDvdLauncher/bin/Release/net10.0/MarcerGameDvdLauncher"
+EXE_PATH="$SCRIPT_DIR/../apps/marcer_console/bin/Release/net10.0/MarcerGameDvdConsole"
 
 if [ ! -f "$EXE_PATH" ]; then
   echo "[ERROR] Application not built. Please run build.sh first."
   exit 1
 fi
 
-cd "$SCRIPT_DIR/../src/MarcerGameDvdLauncher/bin/Release/net10.0"
-./MarcerGameDvdLauncher
+cd "$SCRIPT_DIR/../apps/marcer_console/bin/Release/net10.0"
+./MarcerGameDvdConsole

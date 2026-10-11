@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
-namespace MarcerGameDvdLauncher;
+namespace MarcerGameDvdConsole;
 
 /// <summary>
 /// Centralized service for error and user message output in the console UI.

@@ -3,7 +3,7 @@
 
 using System.Runtime.InteropServices;
 
-namespace MarcerGameDvdLauncher
+namespace MarcerGameDvdConsole
 {
     // Small helpers refactored into their own file to keep Program.cs focused.
     internal static class ProgramHelpers

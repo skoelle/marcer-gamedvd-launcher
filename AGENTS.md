@@ -4,19 +4,19 @@ applyTo: '**'
 
 ## Module Overview (Marcer GameDVD Launcher)
 
-The implementation is split into focused modules (files) under the `src/MarcerGameDvdLauncher/` folder. Keep this section up to date when files are added, removed or responsibilities change.
+The implementation is split into focused modules (files) under the `apps/marcer_console/` folder (the console launcher is now a legacy/secondary app; the primary application is the Flutter desktop app under `apps/marcer_desktop/`). Keep this section up to date when files are added, removed or responsibilities change.
 
-- MarcerGameDvdLauncher/Program.cs: Minimal entry point. Sets the console title (via `DefaultTitle` constant) and starts the application by creating `LauncherApp`.
-- MarcerGameDvdLauncher/LauncherApp.cs: Application lifecycle host — loads configuration, initializes components and runs the main directory navigation loop (contains `AppHost` internal class). Key-handling logic is delegated to `InputController`.
-- MarcerGameDvdLauncher/AppConfiguration.cs: POCO configuration classes (`AppConfig`, `AppHatariConfig`, `AppColorConfig`) used to deserialize `launcher.config.json`; color values resolved via `Enum.TryParse<ConsoleColor>` with default fallback.
-- MarcerGameDvdLauncher/ProgramHelpers.cs: Small shared helpers (resolve relative paths, centralized console message helper, input buffer flushing) used across modules.
-- MarcerGameDvdLauncher/OverlayDirectoryBrowser.cs: Filesystem overlay and browsing logic — merges root and patch directories, enumerates folders and ZIPs, protects against path traversal and ensures navigation cannot leave the configured roots.
-- MarcerGameDvdLauncher/NavigationController.cs: Encapsulates selection, scrolling and relative-path navigation logic (cursor, page up/down, per-directory remembered selection/state); uses named scroll-fraction constants.
-- MarcerGameDvdLauncher/MenuRenderer.cs: Console rendering logic — efficient per-line redraw, double-buffering, configurable color selection via injected `AppColorConfig`, and the help box overlay.
-- MarcerGameDvdLauncher/InputController.cs: Handles key events (arrow keys, Enter, Backspace, PageUp/Down, `*`, `?`, ESC, RightArrow) and the associated navigation/drawing logic; owns `ReloadGameEntries` and the virtual `Favorites` folder integration.
-- MarcerGameDvdLauncher/HatariLauncher.cs: Responsible for validating the Hatari executable and starting Hatari with the configured argument template (replaces `{cfg}` and `{zip}`). Exposes `DefaultConfigFile` constant (`MarcerGameDvd-Hatari.cfg`).
-- MarcerGameDvdLauncher/FavoritesService.cs: Manages the favorites/bookmark system — toggling favorites on ZIPs, persisting them to `favorites.txt` (via `DefaultFileName` constant), and providing the virtual `Favorites` folder view (via `FavoritesRootName` constant).
-- MarcerGameDvdLauncher/UIErrorService.cs: Centralized UI error presentation using the console message helper.
+- apps/marcer_console/Program.cs: Minimal entry point. Sets the console title (via `DefaultTitle` constant) and starts the application by creating `LauncherApp`.
+- apps/marcer_console/LauncherApp.cs: Application lifecycle host — loads configuration, initializes components and runs the main directory navigation loop (contains `AppHost` internal class). Key-handling logic is delegated to `InputController`.
+- apps/marcer_console/AppConfiguration.cs: POCO configuration classes (`AppConfig`, `AppHatariConfig`, `AppColorConfig`) used to deserialize `launcher.config.json`; color values resolved via `Enum.TryParse<ConsoleColor>` with default fallback.
+- apps/marcer_console/ProgramHelpers.cs: Small shared helpers (resolve relative paths, centralized console message helper, input buffer flushing) used across modules.
+- apps/marcer_console/OverlayDirectoryBrowser.cs: Filesystem overlay and browsing logic — merges root and patch directories, enumerates folders and ZIPs, protects against path traversal and ensures navigation cannot leave the configured roots.
+- apps/marcer_console/NavigationController.cs: Encapsulates selection, scrolling and relative-path navigation logic (cursor, page up/down, per-directory remembered selection/state); uses named scroll-fraction constants.
+- apps/marcer_console/MenuRenderer.cs: Console rendering logic — efficient per-line redraw, double-buffering, configurable color selection via injected `AppColorConfig`, and the help box overlay.
+- apps/marcer_console/InputController.cs: Handles key events (arrow keys, Enter, Backspace, PageUp/Down, `*`, `?`, ESC, RightArrow) and the associated navigation/drawing logic; owns `ReloadGameEntries` and the virtual `Favorites` folder integration.
+- apps/marcer_console/HatariLauncher.cs: Responsible for validating the Hatari executable and starting Hatari with the configured argument template (replaces `{cfg}` and `{zip}`). Exposes `DefaultConfigFile` constant (`MarcerGameDvd-Hatari.cfg`).
+- apps/marcer_console/FavoritesService.cs: Manages the favorites/bookmark system — toggling favorites on ZIPs, persisting them to `favorites.txt` (via `DefaultFileName` constant), and providing the virtual `Favorites` folder view (via `FavoritesRootName` constant).
+- apps/marcer_console/UIErrorService.cs: Centralized UI error presentation using the console message helper.
 
 Tooling (Python, not part of the launcher build; paths via git-ignored `local/paths.env`, run via each tool's `run.sh` with the repo `.venv`):
 - tools/gameinfo-gen/: Extracts game metadata from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR` (see `ANALYSIS-game-data.md`).
@@ -35,10 +35,10 @@ The Launcher cannot be executed or tested via `scripts/start.cmd` from this envi
 
 **Release Process (automated via GitHub Actions):**
 - Monorepo with **one tag scheme per app**, so each app is released independently:
-  - Console launcher (`src/`): tag `v*` → `.github/workflows/release.yml` → `MarcerGameDvdLauncher-v…-{win,linux,osx}-x64.zip`.
+  - Console launcher (`apps/marcer_console/`): tag `v*` → `.github/workflows/release.yml` → `MarcerGameDvdConsole-v…-{win,linux,osx}-x64.zip` (GitHub Release title: `Marcer Console vX.Y.Z`).
   - Flutter desktop (`apps/marcer_desktop/`): tag `desktop-v*` → `.github/workflows/desktop-release.yml` → `MarcerDesktop-v…-{win,linux,osx}-x64.zip`.
 - Each workflow triggers only on its own tag prefix (`v*` never matches `desktop-v*` and vice versa), so releasing one app never rebuilds the other. Release notes are matched with the same prefix (`git describe --match`).
-- Path-based CI (build + test on `main`/PRs, **no release**): `.github/workflows/ci-launcher.yml` (`src/**`), `.github/workflows/ci-desktop.yml` (`apps/marcer_desktop/**`) — GitHub does not evaluate `paths` for tag pushes, so path filtering is only used for CI, never for releases.
+- Path-based CI (build + test on `main`/PRs, **no release**): `.github/workflows/ci-launcher.yml` (`apps/marcer_console/**`), `.github/workflows/ci-desktop.yml` (`apps/marcer_desktop/**`) — GitHub does not evaluate `paths` for tag pushes, so path filtering is only used for CI, never for releases.
 - Developer steps for a release:
    1. Ensure `README.md` and `AGENTS.md` are up to date.
    2. Commit all changes.

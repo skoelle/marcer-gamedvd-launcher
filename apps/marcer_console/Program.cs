@@ -1,12 +1,12 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
-namespace MarcerGameDvdLauncher
+namespace MarcerGameDvdConsole
 {
     class Program
     {
         // Console window title. Not configurable — fixed application display name.
-        private const string DEFAULT_TITLE = "Marcer GameDVD Launcher";
+        private const string DEFAULT_TITLE = "Marcer GameDVD Console";
 
         static void Main(string[] args)
         {

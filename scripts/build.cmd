@@ -2,17 +2,17 @@ REM Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 REM Licensed under the MIT License. See LICENSE file in project root for details.
 @echo off
 
-REM === Build script for MarcerGameDvdLauncher (requires .NET SDK 6 or newer) ===
-echo Building MarcerGameDvdLauncher...
+REM === Build script for MarcerGameDvdConsole (requires .NET SDK 6 or newer) ===
+echo Building MarcerGameDvdConsole...
 where dotnet >nul 2>nul
 if errorlevel 1 (
   echo [ERROR] .NET SDK not found. Please install from https://dotnet.microsoft.com/download
   exit /b 1
 )
 
-REM Im src-Ordner bauen (build.cmd liegt in scripts/)
+REM Im marcer_console-Ordner bauen (build.cmd liegt in scripts/)
 cd /d %~dp0
-cd ..\src\MarcerGameDvdLauncher
+cd ..\apps\marcer_console
 
 dotnet build -c Release
 if errorlevel 1 (
@@ -21,7 +21,7 @@ if errorlevel 1 (
 )
 
 REM Finden der fertigen .exe (Release-Verzeichnis)
-for /f "delims=" %%I in ('dir /b /s /a-d bin\Release\*MarcerGameDvdLauncher*.exe') do set EXEPATH=%%I
+for /f "delims=" %%I in ('dir /b /s /a-d bin\Release\*MarcerGameDvdConsole*.exe') do set EXEPATH=%%I
 if exist "%EXEPATH%" (
   echo [OK] Build complete. EXE: "%EXEPATH%"
 ) else (
