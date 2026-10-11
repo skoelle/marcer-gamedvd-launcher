@@ -294,6 +294,30 @@ def sleep_until(t_target: float) -> bool:
 # image analysis
 # --------------------------------------------------------------------------
 
+def has_drive_led(rgb) -> bool:
+    """Detect Hatari's floppy drive LED overlay.
+
+    When the statusbar is hidden, Hatari paints a small green drive-LED
+    rectangle in the top-right corner over an otherwise blank (white)
+    screen. Such shots (documentation/manuals and some data disks) carry no
+    game content.
+    """
+    import numpy as np
+    a = np.asarray(rgb.convert("RGB"))
+    h, w = a.shape[:2]
+    if h < 20 or w < 40:
+        return False
+    ai = a.astype(int)
+    white = (np.abs(ai - 238) < 12).all(axis=2).mean()
+    if white < 0.9:
+        return False
+    green = (a[:, :, 1] > 150) & (a[:, :, 0] < 120) & (a[:, :, 2] < 120)
+    if not green.any():
+        return False
+    ys, xs = np.where(green)
+    return bool(xs.min() >= w * 0.9 and ys.max() <= h * 0.1)
+
+
 def analyze_image(path: Path, cfg: dict) -> dict:
     from PIL import Image, ImageFilter, ImageStat
     import imagehash
@@ -317,6 +341,7 @@ def analyze_image(path: Path, cfg: dict) -> dict:
     entropy = gray.entropy()
     edges = ImageStat.Stat(gray.filter(ImageFilter.FIND_EDGES)).mean[0]
     phash = str(imagehash.phash(rgb))
+    drive_led = has_drive_led(rgb)
 
     f = cfg["filters"]
     if mean <= f["black_mean_max"] or std <= f["black_std_max"]:
@@ -335,7 +360,8 @@ def analyze_image(path: Path, cfg: dict) -> dict:
     return {"kind": kind, "mean": round(mean, 4), "std": round(std, 2),
             "entropy": round(entropy, 3), "unique_colors": n_colors,
             "edges": round(edges, 2), "green_frac": round(green / n, 4),
-            "phash": phash, "score": round(score, 4)}
+            "phash": phash, "score": round(score, 4),
+            "drive_led": drive_led}
 
 
 def phash_distance(a: str, b: str) -> int:
@@ -816,6 +842,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "--memsize", prof["memsize"],
             "--sound", "off",
             "--statusbar", "off",
+            "--drive-led", "false",
             "--crop", "on",
             "--fast-boot", "on",
             "--confirm-quit", "off",
@@ -1352,6 +1379,123 @@ def cmd_detect(cfg: dict, P: dict, args) -> int:
     return 0
 
 
+BOOTABLE_EXTS = {".stx", ".msa", ".st", ".dim", ".ipf", ".prg", ".stt",
+                 ".pckd", ".pkd"}
+
+
+def _is_bootable(zip_contents) -> bool:
+    """True when the archive contains a bootable disk/program image."""
+    for name in zip_contents or []:
+        if Path(name).suffix.lower() in BOOTABLE_EXTS:
+            return True
+    return False
+
+
+def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
+    """Remove previews that only show Hatari's drive LED overlay.
+
+    Such screenshots (documentation/manuals and some data disks) are a
+    blank white screen with the green drive LED in the top-right corner;
+    they carry no game content. Affected preview/candidate PNGs and their
+    metadata JSON are deleted, the index entry is reset and flagged with
+    ``drive_led: true``. Bootable entries additionally get
+    ``drive_led_refetch: true`` so a later pass can re-capture them with
+    ``--drive-led false``.
+    """
+    out = Path(P["out"])
+    idx = load_index(out)
+    entries = idx["entries"]
+    lock = acquire_lock(out)
+    stats = {"scanned": 0, "entries": 0, "previews": 0, "candidates": 0,
+             "jsons": 0, "refetch": 0, "bootable": 0}
+
+    def _is_led(path: Path) -> bool:
+        try:
+            from PIL import Image
+            with Image.open(path) as im:
+                return has_drive_led(im)
+        except Exception:
+            return False
+
+    try:
+        targets = [rel for rel in sorted(entries)
+                   if (not args.only
+                       or args.only.lower() in rel.lower())]
+        for rel in targets:
+            e = entries[rel]
+            prev = e.get("preview")
+            cands = list(e.get("candidates") or [])
+            if not prev and not cands:
+                continue
+            mirror = out / Path(rel).parent
+            preview_led = bool(prev) and _is_led(mirror / prev)
+            led_cands = [c for c in cands if _is_led(mirror / c)]
+            if not preview_led and not led_cands:
+                continue
+            base = safe_filename(Path(rel).stem)
+            meta = mirror / f"{base}.json"
+
+            if not preview_led:
+                # the preview is fine; only drop the LED-white candidates
+                # (intermediate white shots) and leave everything else
+                stats["entries"] += 1
+                stats["candidates"] += len(led_cands)
+                if not args.dry_run:
+                    for c in led_cands:
+                        (mirror / c).unlink(missing_ok=True)
+                    e["candidates"] = [c for c in cands
+                                       if c not in set(led_cands)]
+                stats["scanned"] += 1
+                continue
+
+            # the preview itself is a blank LED screen: reset the entry
+            stats["entries"] += 1
+            bootable = _is_bootable(e.get("zip_contents"))
+            if bootable:
+                stats["bootable"] += 1
+                stats["refetch"] += 1
+            stats["previews"] += 1
+            stats["candidates"] += len(led_cands)
+            if meta.is_file():
+                stats["jsons"] += 1
+
+            if not args.dry_run:
+                if prev:
+                    (mirror / prev).unlink(missing_ok=True)
+                for c in led_cands:
+                    (mirror / c).unlink(missing_ok=True)
+                if meta.is_file():
+                    meta.unlink()
+
+                # reset the index entry to a clean, re-fetchable state
+                e["preview"] = None
+                e["candidates"] = []
+                e["kind"] = None
+                e["status"] = "desktop"
+                e["last_run"] = None
+                e.pop("click", None)
+                e.pop("click_result", None)
+                e.pop("click_retried", None)
+                e.pop("icon_found", None)
+                e.pop("duration_s", None)
+                e["drive_led"] = True
+                if bootable:
+                    e["drive_led_refetch"] = True
+            stats["scanned"] += 1
+
+        if not args.dry_run:
+            save_index(out, idx)
+    finally:
+        release_lock(lock)
+
+    print(f"cleanup-drive-led: entries {stats['entries']} "
+          f"(bootable {stats['bootable']}, refetch {stats['refetch']}), "
+          f"previews {stats['previews']}, candidates {stats['candidates']}, "
+          f"jsons {stats['jsons']}"
+          + (" [dry-run, nothing changed]" if args.dry_run else ""))
+    return 0
+
+
 def main() -> int:
     global STOP_EVENT
     STOP_EVENT = threading.Event()
@@ -1407,6 +1551,15 @@ def main() -> int:
     p_detect.add_argument("--only", type=str, default="",
                           help="only paths containing this substring")
 
+    p_clean = sub.add_parser(
+        "cleanup-drive-led",
+        help="delete previews that only show Hatari's drive-LED overlay "
+             "and clean the index")
+    p_clean.add_argument("--dry-run", action="store_true",
+                         help="report what would be removed, change nothing")
+    p_clean.add_argument("--only", type=str, default="",
+                         help="only paths containing this substring")
+
     args = ap.parse_args()
     if args.cmd == "run" and args.jobs < 1:
         ap.error("--jobs must be >= 1")
@@ -1419,6 +1572,8 @@ def main() -> int:
         return cmd_run(cfg, P, args)
     if args.cmd == "detect":
         return cmd_detect(cfg, P, args)
+    if args.cmd == "cleanup-drive-led":
+        return cmd_cleanup_drive_led(cfg, P, args)
     return 2
 
 

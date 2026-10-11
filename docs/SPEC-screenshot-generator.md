@@ -261,7 +261,8 @@ paths, so extending later is a config change, not a code change.
       e. wait configured time points, send screenshot command per point
       f. stop Hatari via process group kill after last point or timeout
       g. collect screenshots, compute metrics (section 8)
-      h. classify (black / desktop / game), detect duplicates (section 8)
+      h. classify (black / desktop / game, drive_led), detect duplicates
+         (section 8)
       i. select best preview image (section 8.5)
       j. write preview PNG + metadata JSON to mirrored output path
       k. update index entry, append log
@@ -279,6 +280,10 @@ one shared display cannot provide for two Hatari instances. Entry mutation
 and every index save are serialized under a single lock, so parallel
 workers can never overwrite each other's updates. The output-dir lock
 still allows only one tool process per `MARCER_OUT_DIR`.
+
+Besides `index`, `run` and `detect`, the tool has the `cleanup-drive-led`
+subcommand (section 8.7), a standalone offline pass that removes old
+drive-LED white screenshots and cleans the index.
 
 ---
 
@@ -310,6 +315,7 @@ hatari
   --memsize 1
   --sound off
   --statusbar off
+  --drive-led false
   --crop on
   --fast-boot on
   --confirm-quit off
@@ -327,6 +333,11 @@ Notes:
   previews may use `--zoom 2` (untested with respect to timing impact).
 - `--crop on` removes the statusbar from captures *(verified option exists,
   effect not yet visually confirmed)*.
+- `--drive-led false` hides the floppy drive LED overlay that Hatari
+  otherwise draws in the top-right corner when the statusbar is hidden.
+  Without it, titles with no game output (manuals, box scans, raw dumps,
+  data disks) produced a blank white screen with just that green LED
+  *(verified; see section 8.7)*.
 - `--sound off` speeds up emulation *(option verified, effect untested)*.
 - `--fast-boot on` speeds up boot. A fallback profile `st-nofastboot`
   disables it for titles that break with it (untested whether any exist).
@@ -569,6 +580,37 @@ file (for example a desktop shot replaced by a game shot after the click
 retry), the previous file is kept as an additional `_cNN` candidate
 instead of being overwritten.
 
+### 8.7 Drive-LED white screens (detection and cleanup)
+
+With `--statusbar off` Hatari draws a floppy drive LED overlay in the
+top-right corner. Titles that produce no game output (manuals, box scans,
+raw dumps, and some data disks) therefore became a blank white screen with
+only that green LED. The generator now always passes `--drive-led false`
+(section 6), so new captures are clean.
+
+`analyze_image` also reports a boolean `drive_led`: a predominantly white
+background plus a green block in the top-right corner (at 832x552 the LED
+is x806..825, y6..14, 180 green pixels; the test uses relative bounds so it
+scales). It carries no game content.
+
+`cleanup-drive-led` (section 5) cleans old affected images:
+
+- preview is LED-white: the preview PNG, its LED-white candidates and the
+  metadata JSON are deleted; the index entry is reset (`preview`/`kind`/
+  `click*` cleared, `status: desktop`) and flagged `drive_led: true`.
+  Bootable entries (a disk/program image in the ZIP) additionally get
+  `drive_led_refetch: true` so a later pass can re-capture them with the
+  LED disabled.
+- only some candidates are LED-white: only those candidate PNGs are
+  deleted; the preview, metadata JSON and status are left untouched and no
+  flag is set.
+
+Only files the detector identifies as LED-white are ever deleted. A
+`--dry-run` reports the counts and changes nothing; `--only <substring>`
+limits the pass. Live run *(verified)*: 1787 entries touched, 1150
+preview-white (163 bootable -> `drive_led_refetch`), 639 candidate-only;
+0 LED-white previews/candidates remained afterwards.
+
 ---
 
 ## 9. Robustness
@@ -682,7 +724,10 @@ retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
 source}` or absent), `icon_found` (true/false after `detect`),
 `click_retried` (true after an attempt), `click_result`
 (`click-icon-prg` | `click-icon-drive` | `click-failed` |
-`click-not-needed` | null). Updated after every entry so an
+`click-not-needed` | null). For drive-LED cleanup (section 8.7): `drive_led`
+(true when a blank LED-white preview/candidate was found and removed) and
+`drive_led_refetch` (true when a bootable `drive_led` entry should be
+re-captured later). Updated after every entry so an
 interrupted run loses at most one entry of work.
 
 ---
@@ -918,6 +963,9 @@ A conforming implementation satisfies all of the following.
       (never silently dropped).
 - [ ] F4 The preview is the best `game` shot, or a `desktop` shot with
       `preview_is_desktop: true` if no game shot exists.
+- [ ] F5 Drive-LED white screens are detected (`drive_led`) and removed by
+      `cleanup-drive-led`, which deletes only detector-confirmed LED-white
+      files and flags the affected entries (section 8.7).
 
 **Output**
 - [ ] O1 Output mirrors the source tree under `MARCER_OUT_DIR`.

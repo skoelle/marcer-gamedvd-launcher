@@ -27,6 +27,10 @@ tools/screenshot-gen/run.sh run --jobs 8   # parallel workers (e.g. night runs)
 # existing desktop previews, then boot once more and click it:
 tools/screenshot-gen/run.sh detect         # offline icon detection (no Hatari)
 tools/screenshot-gen/run.sh run --retry-desktop   # click + capture (one attempt)
+
+# Remove blank white previews that only show Hatari's drive-LED overlay:
+tools/screenshot-gen/run.sh cleanup-drive-led --dry-run   # report only
+tools/screenshot-gen/run.sh cleanup-drive-led             # delete + flag
 ```
 
 Interrupt with Ctrl+C at any time. Progress is saved after every entry.
@@ -113,6 +117,30 @@ Within a display the click sequence is serialized with a global lock and
 raises its own Hatari window first; Hatari 2.4.1 has no `mousemove` control
 command, which is why the real X pointer (XTest via `xdotool`) is used for
 positioning.
+
+### Drive-LED white screens (`--drive-led false`, `cleanup-drive-led`)
+
+When the statusbar is hidden, Hatari paints a small green floppy drive LED
+in the top-right corner. Titles that produce no game output (manuals, box
+scans, raw dumps, and some data disks) therefore became a blank white
+screen with only that green LED. The generator now always passes
+`--drive-led false`, so new screenshots no longer contain it.
+
+`analyze_image` reports a `drive_led` boolean (white background plus a green
+block in the top-right corner) and `cleanup-drive-led` removes the old
+affected images:
+
+- preview is LED-white: the preview PNG, its LED-white candidates and the
+  metadata JSON are deleted, the index entry is reset and flagged
+  `drive_led: true`; bootable entries (a disk/program image in the ZIP) also
+  get `drive_led_refetch: true`;
+- only some candidates are LED-white: just those candidate PNGs are deleted,
+  the preview, JSON and status stay untouched.
+
+Nothing is ever deleted unless the detector identifies it as LED-white.
+`--dry-run` reports the counts without changing anything; `--only
+<substring>` limits the pass. The `drive_led_refetch` flag marks the entries
+that a later pass should re-capture with the LED disabled.
 
 ## Config
 
