@@ -27,19 +27,24 @@ For every ZIP entry in scope (section 4.4):
 3. Filter out unusable images (black, empty, duplicates).
 4. Detect screenshots that only show the TOS desktop and flag them
    (kind `desktop`, see section 8.4).
-5. Select the best remaining image as preview and store it, mirroring the
+5. For `desktop` entries: optionally locate the GEM program icon in the
+   existing preview offline (`detect`), boot once more and click the icon
+   once to start the program (`run --retry-desktop`, section 7.4).
+6. Select the best remaining image as preview and store it, mirroring the
    source tree, together with a metadata JSON file.
-6. Be resumable, log per entry, and never modify the NAS data.
+7. Be resumable, log per entry, and never modify the NAS data.
 
 ### 1.2 Non-goals
 
 - No modification, move or delete of anything under `MARCER_ROOT_DIR` or
   `MARCER_PATCH_DIR`. Read access only.
 - No downloads of ROMs, disk images or anything else.
-- No parallel runs (explicit user decision, one Hatari instance at a time).
+- No parallel runs of the tool process (one run per `MARCER_OUT_DIR`;
+  within a run, `run --jobs N` is allowed, section 5).
 - No in-launcher screenshot display in this stage (section 12 is a future stage).
-- No automatic key injection to start games that do not boot automatically
-  (explicit future stage, section 15 milestone M7, much later).
+- No keyboard key injection and no `--auto` autostart (still a future stage,
+  section 15 milestone M7). The implemented desktop click retry (section 7.4)
+  covers exactly one icon double click, nothing more.
 - No screenshots for PD games, utilities, tools, Falcon titles, Bonus or
   anything outside the scope trees (section 4.4).
 
@@ -60,9 +65,10 @@ Checked on the development machine (read-only or with explicit approval):
 | Hatari | ok | 2.4.1 from apt | none |
 | Hatari options | verified | `--screenshot-dir`, `--crop`, `--statusbar`, `--cmd-fifo`, `--run-vbls`, `--benchmark`, `--disk-a` (accepts ZIP), `--tos`, `--machine`, `--sound off`, `--fast-boot`, `--confirm-quit`, `--zoom`, `--protect-floppy` all exist in 2.4.1 | none |
 | Hatari `--screenshot-format` | missing | option does not exist in 2.4.1 (format comes from config, default PNG verified) | do not use this flag |
+| Hatari `hatari-event mousemove` | missing | 2.4.1 supports only `doubleclick`, `rightdown`, `rightup`, `keypress/keydown/keyup` (control.c verified); `mousemove` exists in newer versions only | mouse positioning via xdotool instead |
 | TOS ROM | ok | TOS 1.04 German image, 196607 bytes, provided in `local/` (git-ignored) | reference via `MARCER_TOS_IMG` |
 | Xvfb | ok | installed, fixed display `:99` verified working | none |
-| xdotool | ok | installed | fallback only |
+| xdotool | ok | installed, **required** for the desktop click retry (section 7.4) | none |
 | ImageMagick | ok | `import` and `convert` available | fallback grabs and analysis |
 | ffmpeg | ok | available | not required for MVP |
 | Python | ok | 3.12.3, repo `.venv` already exists | install Pillow, imagehash, numpy into `.venv` |
@@ -243,7 +249,9 @@ paths, so extending later is a config change, not a code change.
         |
 [2] load or refresh index  (bounded scan of scope trees only)
         |
-[3] select pending entries (status != done, or --force)
+[3] select pending entries (status != done, or --force;
+         with --retry-desktop: only status == desktop with a stored
+         icon hit that has not been clicked yet, section 7.4)
         |
 [4] per entry:
       a. copy ZIP from NAS to local staging dir     (NAS is read-only)
@@ -380,14 +388,73 @@ used per screenshot.
 ### 7.3 Key injection (future extension, not MVP)
 
 Some titles do not auto-boot and stay on the TOS desktop or a loader prompt
-(observed in the smoke test). Handling this is **much later** work (M7):
+(observed in the smoke test). Keyboard key injection and `--auto` autostart
+are **much later** work (M7) and remain out of scope. The implemented
+alternative is the icon click retry of section 7.4.
 
-- Possible approaches: inject START/Return/Space via `hatari-event` or
-  xdotool after a delay; parse the boot sector or AUTO folder of the staged
-  disk to autostart a known PRG name with `--auto`.
-- Both are marked *(untested)* and out of MVP scope. For now such entries end
-  up as kind `desktop` and are flagged (section 8.4), which preserves the
-  information for a later pass.
+### 7.4 Desktop click retry (implemented, verified)
+
+For entries whose first run ended as kind `desktop`, the program icon on the
+GEM desktop can be clicked once so the title actually starts. This is a two
+phase workflow:
+
+**Phase 1: `detect` (offline, no Hatari).**
+
+- Runs over all index entries with `status: desktop` (takes the existing
+  preview PNG, falls back to candidates). No boot, CPU only.
+- Matches `assets/icon-prg.png` (tight crop of the standard GEM program
+  icon, 60x54 px at the verified capture geometry) with zero-mean
+  normalized cross correlation (FFT, numpy/scipy). The inverted template is
+  tried as well so inverted (selected) icons still match.
+- Hit: entry gets `click` = `{sx, sy, score, source}` (screenshot pixel of
+  the template center) and `icon_found: true`. Score threshold default 0.5
+  (config `click_retry.icon_min_score`); pilot scores for true positives
+  were 0.53 to 1.0 *(verified)*.
+- Miss: entry gets `icon_found: false` and is never booted by the retry
+  (catches crack intros and other non-GEM screens misclassified as
+  desktop). `detect --force` redoes both cases.
+- The command takes the output-dir lock, so it cannot run concurrently with
+  `run`.
+
+**Phase 2: `run --retry-desktop` (Hatari).**
+
+Pending filter: `status == desktop` and a stored `click` and not
+`click_retried` (`--force` allows a second attempt). Per entry:
+
+1. Boot as usual, but the first capture timepoint is
+   `click_retry.probe_time` (default 10 s) only.
+2. Analyze the probe screenshot. If it is **not** desktop (game or black):
+   no click, mark `click_retried`, and continue the normal capture
+   timepoints (the probe shot already covers its timepoint).
+3. If it shows the desktop: find the running Hatari X window via xdotool
+   (`search --class hatari`, pick the window whose size matches the
+   screenshot), raise it, move the real X pointer (XTest) to window origin
+   + icon screenshot pixel (scaled by window/screenshot size ratio, both
+   are 832x552 in the base profile), and send a double click with 30 ms
+   between the clicks *(verified: 150 ms only selects the icon in GEM,
+   30 ms reliably opens it)*.
+4. Record the attempt (`click_retried: true`, `clicked: true/false`) in
+   index and metadata, restart the capture timepoints
+   (`click_retry.timepoints_after_click`, default `10, 25, 45`) from the
+   click moment, with the entry budget `click_retry.entry_timeout_s`
+   (default 120 s).
+5. The old desktop preview is not overwritten silently: with
+   `keep_candidates` it is renamed to the next free `_cNN` candidate name
+   before the new preview is written.
+
+Notes:
+
+- Hatari 2.4.1 has no `mousemove` control command (section 2), therefore
+  the pointer is driven through XTest via `xdotool` and only the window
+  geometry mapping is needed; the FIFO keeps handling screenshots.
+- Parallel workers share one X display and their windows overlap, so the
+  whole click sequence (find window, raise, move, click) is serialized
+  under a global lock and always raises its own window first.
+- `run --retry-desktop` refuses to start when `xdotool` is not in PATH.
+- An entry that stays `desktop` after the click (program did not start or
+  is not game-like for the classifier) keeps `click_retried: true` and is
+  not retried again automatically; the updated preview and candidates
+  show the newer state.
 
 ---
 
@@ -449,7 +516,10 @@ also exist (desktop shots are then only candidates of last resort).
 
 Config flag `keep_candidates` (default true in the MVP, later false):
 store all non-duplicate candidates next to the preview with suffixes
-`_c01`, `_c02`, and so on.
+`_c01`, `_c02`, and so on. When a new run replaces an existing preview
+file (for example a desktop shot replaced by a game shot after the click
+retry), the previous file is kept as an additional `_cNN` candidate
+instead of being overwritten.
 
 ---
 
@@ -534,6 +604,8 @@ would look up a preview later (section 12).
   "kind": "game",
   "preview_is_desktop": false,
   "preview": "10th Frame - Masters.png",
+  "click": null,
+  "click_retried": false,
   "capture_method": "cmd-fifo",
   "shots": [
     {
@@ -556,8 +628,11 @@ would look up a preview later (section 12).
 ### 10.4 Index JSON
 
 Array or object map keyed by entry relative path with: `status`, `kind`,
-`size`, `mtime`, `profile`, `last_run`, `preview_path`. Updated after every
-entry so an interrupted run loses at most one entry of work.
+`size`, `mtime`, `profile`, `last_run`, `preview_path`, and for the click
+retry (section 7.4): `click` (icon hit object or absent),
+`icon_found` (true/false after `detect`), `click_retried` (true after an
+attempt). Updated after every entry so an interrupted run loses at most
+one entry of work.
 
 ---
 
@@ -630,7 +705,10 @@ Risks:
    time points, desktop detection, later per-entry tuning from metadata.
    Pilot data: 4/10 titles showed content within 45s, 6/10 never auto-started.
 2. **Titles that never auto-start.** Known case, currently surfaced as kind
-   `desktop`. Real fix is M7 (key injection or `--auto`), far future.
+   `desktop`. The desktop click retry (section 7.4) starts titles whose
+   desktop shows the standard GEM program icon; titles without a matching
+   icon (or where the click does not start the program) remain flagged.
+   Keyboard key injection and `--auto` remain M7.
 3. **Disk-2-plus skip patterns** may false-positive on game names that contain
    the word `disk`. Patterns must stay conservative and configurable.
 4. **Falcon titles** need Falcon TOS, which is not available here. Falcon
@@ -682,7 +760,18 @@ Resolved decisions:
 - Tune time points and thresholds based on pilot data.
 - Re-run the pilot with `--force` and compare success rate.
 
-### 14.3 Full run
+### 14.3 Click retry pilot (verified)
+
+- `detect` on the live index: true positive scores 0.53..1.0, non-GEM
+  screens (e.g. crack intros) correctly marked `icon_found: false`
+  *(verified)*.
+- `run --retry-desktop --only <1st Division Manager> --limit 1` on a
+  copied index: probe `desktop`, xdotool double click at the detected icon,
+  after-click timepoints produced launch screen, black and game shots,
+  entry graduated `desktop` -> `done`, old preview preserved as `_c01`,
+  metadata contains `click`/`click_retried` *(verified)*.
+
+### 14.4 Full run
 
 - Process all in-scope entries. Expected duration is unknown until the pilot
   gives a median per-entry time; the run must be resumable at any point.
@@ -706,8 +795,10 @@ state.
 - **M5** Filters and selection: desktop detection, dedup, scoring, preview
   choice. Checkable against the smoke test image and pilot entries.
 - **M6** Pilot run of 20 entries, evaluation, threshold tuning.
-- **M7** (much later) Auto-start handling for titles that stay on the desktop
-  (key injection or `--auto`). Depends on M6 data.
+- **M7** (much later) Remaining auto-start handling for desktop titles the
+  icon click retry cannot start: keyboard key injection or `--auto`
+  (section 7.3). The icon click retry itself (section 7.4) is implemented
+  and verified.
 - **M8** (later) Full run over the whole scope.
 - **M9** (later) Launcher or gallery integration (section 12).
 
@@ -743,6 +834,12 @@ A conforming implementation satisfies all of the following.
 - [ ] P3 Xvfb uses a fixed display number, never auto-selection.
 - [ ] P4 Hatari and Xvfb are killed via process group on timeout or exit.
 - [ ] P5 Per-entry timeout is enforced and the run continues after it.
+- [ ] P6 `detect` finds the GEM program icon in existing desktop previews
+      offline and stores `click`/`icon_found`; misses are never booted.
+- [ ] P7 `run --retry-desktop` boots only unclicked entries with a stored
+      icon hit, clicks the icon once via xdotool (30 ms double click,
+      window raised, global click lock), restarts the capture timepoints,
+      and records the attempt (`click_retried`, `clicked`).
 
 **Filtering**
 - [ ] F1 Black or empty shots are rejected by configurable thresholds.
@@ -761,11 +858,15 @@ A conforming implementation satisfies all of the following.
       entry of work); with parallel jobs all updates are serialized under
       one lock.
 - [ ] O4 The run is resumable without `--force`, and `--force` reprocesses.
+- [ ] O5 A replaced preview file is kept as an additional `_cNN` candidate
+      when `keep_candidates` is set (section 8.6).
 
 **Process**
 - [ ] R1 Missing required environment variables abort with a clear message.
 - [ ] R2 Ctrl+C leaves a consistent index and exits non-zero.
 - [ ] R3 Python packages are installed only into the repo `.venv`.
+- [ ] R4 `run --retry-desktop` aborts with a clear message when `xdotool`
+      is not available in PATH.
 
 ---
 

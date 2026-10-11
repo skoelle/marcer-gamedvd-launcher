@@ -49,9 +49,10 @@ Everything else is *(untested)* and must be confirmed during implementation.
 - **No writes** anywhere: not to the game trees, not to `MARCER_OUT_DIR`,
   not to `MARCER_DATA_DIR`, not to the repository working tree. The app is a
   strictly read-only consumer.
-- **No remote exposure.** Default bind is `127.0.0.1`. Binding to other
-  interfaces is an explicit configuration opt-in; there is no authentication,
-  no TLS, no public deployment story.
+- **LAN bind by default.** Default bind is `0.0.0.0` so the app is
+  reachable from other devices on the local network. There is no
+  authentication, no TLS, no public deployment story; loopback-only binds
+  are available via config/CLI (`--host 127.0.0.1`).
 - **No live refresh in v1.** Changes made by a running `shotgen run` become
   visible when the user reloads (the server revalidates `index.json` on each
   API request, see section 8.4). There is no polling, push or WebSocket.
@@ -160,7 +161,7 @@ run with the repository `.venv` via `run.sh`.**
 
 Rationale (summarized from DECISION-app-architecture.md §4):
 
-- Single-user localhost app serving JSON, static files and PNGs — the
+- Single-user local-network app serving JSON, static files and PNGs — the
   stdlib `http.server` / `ThreadingHTTPServer` covers this without adding
   any package to the `.venv`.
 - Python matches the sibling tools (`shotgen.py`, `gameinfo.py`) and their
@@ -193,9 +194,9 @@ npm, no CDN references (the app must work fully offline).
 ### 3.3 Running
 
 ```bash
-tools/gallery/run.sh                 # start with defaults (127.0.0.1:8764)
+tools/gallery/run.sh                 # start with defaults (0.0.0.0:8764)
 tools/gallery/run.sh --port 9000     # override port
-tools/gallery/run.sh --host 0.0.0.0  # explicit opt-in, prints a warning
+tools/gallery/run.sh --host 127.0.0.1  # loopback only
 ```
 
 `run.sh` sources `local/paths.env` like the sibling tools and executes
@@ -624,8 +625,9 @@ mirrors SPEC-screenshot-generator.md §9 write safety (S1/S2).
 
 ### 8.3 Network exposure
 
-- Default `host = 127.0.0.1`. Other values only via config/CLI flag; a
-  bind to a non-loopback address prints a clear warning (no auth exists).
+- Default `host = 0.0.0.0` (LAN-reachable; no auth). Loopback-only binds
+  are available via config/CLI flag (`--host 127.0.0.1`); a bind to a
+  non-loopback address still prints a clear warning (no auth exists).
 - No CORS headers for arbitrary origins; the app is same-origin only.
 
 ### 8.4 Data freshness (v1)
@@ -668,7 +670,7 @@ capped at 200.
 
 ```json
 {
-  "host": "127.0.0.1",
+  "host": "0.0.0.0",
   "port": 8764,
   "page_size": 60,
   "show_candidates": true,
@@ -709,7 +711,7 @@ Manual test pass (required before delivery, per AGENTS.md policy):
    `?q=…&status=…`, Back/Forward behavior.
 10. **Security**: `/img/../../etc/passwd`, `/img/..%2f..%2fetc/passwd`,
     absolute paths, symlink attempt → all `404`; non-PNG img → `404`;
-    bind warning on `--host 0.0.0.0`.
+    bind warning on default `0.0.0.0` (no auth on LAN).
 11. **Freshness**: start server, run `shotgen run --limit 1`, reload page →
     new/updated card visible (section 8.4 reload path).
 12. **Performance**: `/api/entries` timings on the full dataset with the
@@ -751,7 +753,7 @@ A conforming implementation satisfies all of the following.
       documentation.
 - [x] S3 `/img/` and `/static/` reject traversal (realpath containment,
       PNG-only), verified with the section 10 attacks.
-- [x] S4 Default bind is `127.0.0.1`; non-loopback binds print a warning.
+- [x] S4 Default bind is `0.0.0.0`; non-loopback binds print a warning.
 
 **Data**
 - [x] D1 Join uses `parts[2]`/`parts[3]` only; entries without gameinfo are

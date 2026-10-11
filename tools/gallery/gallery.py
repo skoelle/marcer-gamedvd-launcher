@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
 DEFAULTS = {
-    "host": "127.0.0.1",
+    "host": "0.0.0.0",
     "port": 8764,
     "page_size": 60,
     "show_candidates": True,
@@ -350,12 +350,12 @@ class DataStore:
             return False
         with self.lock:
             if not force and self._stamps() == self._mtimes \
-                    and self.meta.get("entries_total"):
+                    and self.meta.get("index", {}).get("entries"):
                 return False
             t0 = time.monotonic()
             self._load()
             log(f"[data] (re)loaded in {time.monotonic() - t0:.2f}s "
-                f"({self.meta.get('entries_total')} index entries, "
+                f"({self.meta.get('index', {}).get('entries')} index entries, "
                 f"{len(self.cards['cracked'])} cracked cards)")
         return True
 
@@ -681,7 +681,7 @@ def main():
     ap = argparse.ArgumentParser(
         prog="gallery", description="Marcer GameDVD gallery webapp")
     ap.add_argument("--host", default=None,
-                    help="bind address (default from config: 127.0.0.1)")
+                    help="bind address (default from config: 0.0.0.0)")
     ap.add_argument("--port", type=int, default=None,
                     help="port (default from config: 8764)")
     args = ap.parse_args()

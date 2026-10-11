@@ -23,6 +23,10 @@ Tooling (Python, not part of the launcher build; paths via git-ignored `local/pa
 - tools/gallery/: Interactive gallery webapp over the screenshot archive joined with game metadata (see `SPEC-gallery-webapp.md`); replaces the former static `shotgen html` gallery.
 - tools/screenshot-gen/: Generates preview screenshots via Hatari on a virtual display (see `SPEC-screenshot-generator.md`).
 
+Apps (Flutter desktop, not part of the C# launcher build; plan in `apps/marcer_desktop/PLAN.md`, decision in `DECISION-app-architecture.md`):
+- apps/marcer_desktop/: Flutter desktop app (Surface A inventory browser, later Surface B couch mode). Config via git-ignored `desktop.config.json` (see `desktop.config.example.json`); run via `apps/marcer_desktop/run.sh` (needs Flutter SDK in `~/flutter` and the Linux desktop toolchain). **Not** built via `scripts/build.*`.
+- apps/marcer_desktop/packages/marcer_catalog/: Pure Dart data layer (overlay merge per SPEC §7, gameinfo join, screenshot index, config). Read-only consumers; unit tests via `dart test`.
+
 Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (AGENTS.md) and README.md as required by project policy.
 
 **Specification:** [`SPEC.md`](SPEC.md) is the technology-neutral behavioral specification of the launcher (used as the basis for reimplementation in other languages or as a desktop app). Behavioral changes must be reflected in SPEC.md as well — keep sections 1–17 and the Conformance Checklist in sync with the implementation.

@@ -92,7 +92,8 @@ Explicitly rejected alternatives:
 - Python lives in the existing repo `.venv` and shares the data conventions
   with `tools/screenshot-gen` and the future `tools/gameinfo-gen` (both
   Python). No new runtime enters the repo (no npm, no Rust).
-- Localhost/LAN only; no remote exposure, no auth.
+- LAN bind by default (`0.0.0.0`); no auth, no remote exposure story
+  beyond the local network.
 
 ## 5. Shared data layer
 
@@ -139,7 +140,8 @@ Implementation strategy for the overlay merge and catalog joins:
 - Neither app may write to `MARCER_ROOT_DIR`, `MARCER_PATCH_DIR`,
   `<OUT>/`, or `<PATCH>/Data/` (read-only consumers; same safety rules as the
   launcher and `shotgen`).
-- The gallery web app binds to localhost/LAN only and serves no path outside
+- The gallery web app binds to the local network (`0.0.0.0` by default,
+  no auth) and serves no path outside
   the configured data roots.
 - The Flutter desktop app must degrade gracefully when `index.json` or
   `<PATCH>/Data/` are absent (show empty states, never crash).

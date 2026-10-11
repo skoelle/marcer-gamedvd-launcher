@@ -18,10 +18,14 @@ specification.
 ## Usage
 
 ```bash
-tools/gallery/run.sh                 # http://127.0.0.1:8764/
+tools/gallery/run.sh                 # http://0.0.0.0:8764/ (LAN-reachable)
 tools/gallery/run.sh --port 9000     # other port
-tools/gallery/run.sh --host 0.0.0.0  # LAN access (prints a warning: no auth)
+tools/gallery/run.sh --host 127.0.0.1  # loopback only
 ```
+
+There is no authentication or TLS — anyone who can reach the bind address
+can browse the archive. Use `--host 127.0.0.1` (or a firewall) if that is
+not desired.
 
 The server revalidates `index.json` and the metadata files on each API
 request (mtime check), so a page reload shows the latest screenshot-run
