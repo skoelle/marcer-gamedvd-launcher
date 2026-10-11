@@ -524,14 +524,17 @@ Filter/search/sort state is reflected in the URL query string
 Opened by clicking a card or pressing Enter/Space on the focused card:
 
 - Large original screenshot (first preview or selected candidate), letterbox
-  on dark background, aspect ratio preserved (`object-fit: contain`, main
-  image capped ~55vh to leave room for the filmstrip).
+  on dark background, aspect ratio preserved. The main image is **upscaled
+  only by integer factors** (1×, 2×, 3× … of the natural pixel size) so
+  pixel-art stays crisp — fractional browser scaling is avoided.
 - **Variant filmstrip** (sole variant switcher): one thumbnail per ZIP of
   the folder (preview or empty placeholder), horizontal scroll, active
   variant highlighted; hover shows the full ZIP name (native `title`
   tooltip) plus a short label under each thumb. Click switches the main
   image and metadata. Status underline: green = done, amber = desktop,
-  gray = empty.
+  gray = empty. When a variant has **more than one candidate** image
+  (`candidates.length > 1`), a small `(N)` count badge is shown at the
+  bottom-right of its filmstrip thumbnail.
 - **Candidate strip**: preview + all `_cNN` images of the *selected*
   variant selectable. The strip always reserves a fixed height (~56 px)
   so the layout does not jump when candidates appear/disappear between

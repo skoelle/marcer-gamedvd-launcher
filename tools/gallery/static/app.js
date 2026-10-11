@@ -402,6 +402,22 @@ function lightboxImages(card) {
   return imgs;
 }
 
+// integer-only upscale of the lightbox main image (pixel-art safe)
+function fitIntegerScale(img) {
+  if (!img || !img.naturalWidth) return;
+  const wrap = img.parentElement;
+  if (!wrap) return;
+  const availW = wrap.clientWidth;
+  const availH = wrap.clientHeight;
+  if (!availW || !availH) return;
+  const scale = Math.max(1, Math.floor(Math.min(
+    availW / img.naturalWidth,
+    availH / img.naturalHeight
+  )));
+  img.style.width = (img.naturalWidth * scale) + "px";
+  img.style.height = (img.naturalHeight * scale) + "px";
+}
+
 function renderLightbox() {
   if (!lb) return;
   const card = pageCards[lb.idx];
@@ -419,9 +435,12 @@ function renderLightbox() {
   const imgs = lightboxImages(card);
   lb.img = Math.min(lb.img, Math.max(0, imgs.length - 1));
   if (imgs.length) {
-    $("lb-image").src = imgSrc(imgs[lb.img]);
-    $("lb-image").hidden = false;
+    const lbImg = $("lb-image");
+    lbImg.onload = () => fitIntegerScale(lbImg);
+    lbImg.src = imgSrc(imgs[lb.img]);
+    lbImg.hidden = false;
     $("lb-ph").hidden = true;
+    if (lbImg.complete && lbImg.naturalWidth) fitIntegerScale(lbImg);
   } else {
     $("lb-image").hidden = true;
     $("lb-image").removeAttribute("src");
@@ -435,7 +454,9 @@ function renderLightbox() {
       : `<div class="ph-thumb">–</div>`;
     const st = vv.preview ? `st-${vv.status === "done" ? "done" : "desktop"}` : "st-empty";
     const short = vv.name.replace(/\.zip$/i, "").replace(/^[^-]*-\s*/, "");
-    return `<button type="button" class="lb-film-item ${st} ${i === lb.variant ? "active" : ""}" data-v="${i}" title="${esc(vv.name)} (${esc(vv.status)})">${thumb}<span class="film-name">${esc(short)}</span></button>`;
+    const nCand = (vv.candidates || []).length;
+    const badge = nCand > 1 ? `<span class="cand-count">(${nCand})</span>` : "";
+    return `<button type="button" class="lb-film-item ${st} ${i === lb.variant ? "active" : ""}" data-v="${i}" title="${esc(vv.name)} (${esc(vv.status)})">${thumb}${badge}<span class="film-name">${esc(short)}</span></button>`;
   }).join("");
   const activeFilm = $("lb-film").querySelector(".lb-film-item.active");
   if (activeFilm) activeFilm.scrollIntoView({ block: "nearest", inline: "nearest" });

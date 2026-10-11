@@ -338,7 +338,7 @@ footer {
 }
 .lb-image-wrap img {
   max-width: 100%;
-  max-height: 55vh;
+  max-height: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -403,6 +403,7 @@ footer {
   border-radius: 4px;
   padding: 2px;
   background: #0e1216;
+  position: relative;
 }
 .lb-film-item:hover { border-color: var(--border-hi); }
 .lb-film-item.active { border-color: var(--accent); }
@@ -425,6 +426,18 @@ footer {
   justify-content: center;
   color: #556;
   font-size: 0.65em;
+}
+.lb-film-item .cand-count {
+  position: absolute;
+  bottom: 22px;
+  right: 5px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #cde;
+  font-size: 0.62em;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  pointer-events: none;
 }
 .lb-film-item .film-name {
   display: block;
