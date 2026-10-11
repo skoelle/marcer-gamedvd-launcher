@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
 import 'catalog_controller.dart';
+import 'config_locator.dart';
 import 'theme.dart';
 import 'widgets/card_grid.dart';
 import 'widgets/detail_panel.dart';
@@ -17,13 +18,28 @@ import 'widgets/game_lightbox.dart';
 import 'widgets/help_overlay.dart';
 
 void main() {
-  final configPath = '${Directory.current.path}/desktop.config.json';
+  final searchDirs = configSearchDirs(
+    cwd: Directory.current.path,
+    exeDir: File(Platform.resolvedExecutable).parent.path,
+    isMacOS: Platform.isMacOS,
+  );
+  final configPath = resolveConfigPath(
+    dirs: searchDirs,
+    exists: (path) => File(path).existsSync(),
+  );
   DesktopConfig? config;
   String? configError;
-  try {
-    config = DesktopConfig.load(configPath);
-  } catch (e) {
-    configError = '$configPath: $e';
+  if (configPath != null) {
+    try {
+      config = DesktopConfig.load(configPath);
+    } catch (e) {
+      configError = '$configPath: $e';
+    }
+  } else {
+    configError = 'desktop.config.json not found. Searched:\n'
+        '${searchDirs.map((d) => '  $d').join('\n')}\n\n'
+        'Copy desktop.config.example.json there and rename it to '
+        'desktop.config.json.';
   }
   runApp(MarcerDesktopApp(config: config, configError: configError));
 }

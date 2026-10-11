@@ -41,6 +41,17 @@ flutter analyze                   # lint
 
 ## Config (`desktop.config.json`)
 
+The app looks for `desktop.config.json` in this order (first existing wins):
+
+1. current working directory
+2. the directory of the executable (portable ZIP release)
+3. macOS only: the folder containing the `.app` bundle
+
+The release ZIPs ship `desktop.config.example.json` — copy it next to the
+executable (or the `.app`), rename it to `desktop.config.json`, and set your
+absolute paths. Without a config the app shows a page listing the searched
+locations.
+
 | Field | Required | Notes |
 |---|---|---|
 | `RootDirectory` | yes | game root; navigation never leaves it |
