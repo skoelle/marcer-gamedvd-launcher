@@ -170,7 +170,7 @@ class GameCard {
     required this.crackerSort,
     required this.languageSort,
     required this.searchText,
-    this.focusVariant = -1,
+    this.focusVariant,
   });
 
   final String id;
@@ -201,10 +201,15 @@ class GameCard {
   final String languageSort;
   final String searchText;
 
-  /// Index of the ZIP variant focused by an active crew filter
-  /// (gallery `_apply_crew_focus`), or -1 when no filter applies / no ZIP
-  /// could be identified for that crew.
-  final int focusVariant;
+  /// Index of the ZIP variant focused by an active crew/cracker filter
+  /// (gallery `_apply_focus`): `null` when no focus filter applies, `-1`
+  /// when the filter is active but no ZIP could be identified for it,
+  /// otherwise the focused variant index.
+  final int? focusVariant;
+
+  /// True while a crew/cracker focus filter has been applied to the card
+  /// (gallery `focus_variant != null`).
+  bool get focusActive => focusVariant != null;
 
   /// Sort tie key (gallery `_tie`): `(name.lower, firstVariantRel)`.
   int tieCompare(GameCard other) {
@@ -424,37 +429,97 @@ String _infoSearchText(InfoSummary? info) {
   return parts.join(' ').toLowerCase();
 }
 
-/// Index of the ZIP variant that belongs to [crew], or -1
-/// (gallery `_crew_focus_variant`): ZIP name contains the crew string;
-/// fallback — a gameinfo variant with that crew whose `cracked_by`
-/// appears in a ZIP name.
-int crewFocusVariant(GameCard card, String crew) {
-  final crewL = crew.trim().toLowerCase();
-  if (crewL.isEmpty) return -1;
-  for (var i = 0; i < card.variants.length; i++) {
-    if (card.variants[i].name.toLowerCase().contains(crewL)) return i;
+/// Normalize a group string (crew/cracker) for fuzzy matching
+/// (gallery `_norm_crew`): lowercases, expands `&`/`+` to "and" and
+/// collapses whitespace so e.g. "Equinox & MDK" matches "Equinox and MDK".
+String normCrew(String? s) {
+  var out = (s ?? '').trim().toLowerCase();
+  out = out.replaceAll(RegExp(r'\s*[&+]\s*'), ' and ');
+  return out.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+const Set<String> _crewStopwords = {
+  'and', 'the', 'co', 'crew', 'inc', 'ltd', 'team', 'software'
+};
+
+final RegExp _alnumRe = RegExp(r'[a-z0-9]+');
+
+/// Tokenize a group string: alphanumeric, no stopwords, length >= 2
+/// (gallery `_crew_tokens`).
+List<String> crewTokens(String? s) {
+  final raw = _alnumRe.allMatches((s ?? '').toLowerCase());
+  return [
+    for (final m in raw)
+      if (!_crewStopwords.contains(m.group(0)) &&
+          m.group(0)!.length >= 2)
+        m.group(0)!,
+  ];
+}
+
+/// First matching index whose variant has a screenshot preview, otherwise
+/// the first (gallery `_first_with_preview`).
+int _firstWithPreview(List<CardVariant> variants, List<int> indices) {
+  for (final i in indices) {
+    if (variants[i].previewPath != null) return i;
   }
-  for (final iv in card.info?.variants ?? const <Map<String, dynamic>>[]) {
-    if (((iv['crew'] ?? '') as String).trim().toLowerCase() != crewL) {
-      continue;
+  return indices.first;
+}
+
+/// Index of the ZIP variant that belongs to [value], or -1
+/// (gallery `_focus_variant`). [kind] is `'crew'` or `'cracker'`.
+///
+/// Matching is tried in increasing fuzziness:
+///   1) normalized [value] is a substring of the normalized ZIP name;
+///   2) (crew only) a gameinfo variant with this crew whose `cracked_by`
+///      appears in a ZIP name;
+///   3) token subset: all tokens (ignoring stopwords) appear in the ZIP
+///      name, requiring at least one token with length >= 3.
+/// Among multiple matches the first with a screenshot preview wins.
+int focusVariant(GameCard card, String value, String kind) {
+  final valueN = normCrew(value);
+  if (valueN.isEmpty) return -1;
+  final variants = card.variants;
+  // 1) normalized substring match
+  final subs = <int>[
+    for (var i = 0; i < variants.length; i++)
+      if (normCrew(variants[i].name).contains(valueN)) i,
+  ];
+  if (subs.isNotEmpty) return _firstWithPreview(variants, subs);
+  // 2) (crew only) gameinfo variant with this crew → its cracker in names
+  if (kind == 'crew') {
+    for (final iv in card.info?.variants ?? const <Map<String, dynamic>>[]) {
+      if (normCrew((iv['crew'] ?? '') as String) != valueN) continue;
+      final cracker = ((iv['cracked_by'] ?? '') as String).trim().toLowerCase();
+      if (cracker.isEmpty) continue;
+      final hits = <int>[
+        for (var i = 0; i < variants.length; i++)
+          if (variants[i].name.toLowerCase().contains(cracker)) i,
+      ];
+      if (hits.isNotEmpty) return _firstWithPreview(variants, hits);
     }
-    final cracker = ((iv['cracked_by'] ?? '') as String).trim().toLowerCase();
-    if (cracker.isEmpty) continue;
-    for (var i = 0; i < card.variants.length; i++) {
-      if (card.variants[i].name.toLowerCase().contains(cracker)) return i;
+  }
+  // 3) token subset match (typo / missing connective tolerant)
+  final tokens = crewTokens(value);
+  if (tokens.isNotEmpty && tokens.any((t) => t.length >= 3)) {
+    final hits = <int>[];
+    for (var i = 0; i < variants.length; i++) {
+      final nameTokens =
+          _alnumRe.allMatches(variants[i].name.toLowerCase()).map((m) => m.group(0)!).toSet();
+      if (tokens.every(nameTokens.contains)) hits.add(i);
     }
+    if (hits.isNotEmpty) return _firstWithPreview(variants, hits);
   }
   return -1;
 }
 
-/// Shallow-adjusted copy of [card] focused on the crew variant
-/// (gallery `_apply_crew_focus`): sets `focusVariant` and overrides
+/// Shallow-adjusted copy of [card] focused on the group variant
+/// (gallery `_apply_focus`): sets `focusVariant` and overrides
 /// preview / display status / screenshots of the payload — even when the
 /// focused variant has no screenshot (empty preview → placeholder).
-/// Returns an unchanged copy with `focusVariant = -1` when no ZIP could
-/// be identified for the crew.
-GameCard applyCrewFocus(GameCard card, String crew) {
-  final focus = crewFocusVariant(card, crew);
+/// Sets `focusVariant = -1` when the filter is active but no ZIP could be
+/// identified.
+GameCard applyFocus(GameCard card, String value, String kind) {
+  final focus = focusVariant(card, value, kind);
   if (focus < 0) {
     return _copyCard(card, focusVariant: -1, previewPath: null, screenshots: false);
   }

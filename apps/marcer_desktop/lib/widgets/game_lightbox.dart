@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
+import 'game_info_panel.dart';
 
 /// Gallery-style lightbox over the current center list: header with badges
 /// and position, integer-scaled main image (pixel-art safe), variant
@@ -369,6 +370,14 @@ class _GameLightboxState extends State<GameLightbox> {
   Widget _header(_Variant? v, int totalVariants) {
     final counts =
         _statusCounts.entries.map((e) => '${e.value}× ${e.key}').join('  ');
+    // gallery `lb-sub` miss prefix: focus filter active but no ZIP matched.
+    final item = _item;
+    final focusMiss = item is GameCard && item.focusVariant == -1;
+    final missPrefix = focusMiss
+        ? (widget.controller.filter.cracker != 'any'
+            ? 'cracker ZIP not found — '
+            : 'crew ZIP not found — ')
+        : '';
     final sub = v == null
         ? 'no ZIP variants'
         : [
@@ -376,6 +385,7 @@ class _GameLightboxState extends State<GameLightbox> {
             if (v.layer.isNotEmpty) v.layer,
             if (v.size != null) '${(v.size! / 1024).round()} KB',
           ].join('  ·  ');
+    final subText = '$missPrefix$sub';
     // gallery `lb-pos`: `3 / 60 · variant 2 / 3` (variant part only when
     // the folder has more than one ZIP).
     var pos = '${_itemIdx + 1} / ${_items.length}';
@@ -412,7 +422,7 @@ class _GameLightboxState extends State<GameLightbox> {
             ],
           ),
           const SizedBox(height: 2),
-          Text(sub,
+          Text(subText,
               style: const TextStyle(fontSize: 11, color: Colors.grey)),
           const SizedBox(height: 4),
           Wrap(
@@ -595,225 +605,18 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 
   Widget _infoPanel(_Variant? v) {
-    final info = _info;
-    return ListView(
-      padding: const EdgeInsets.all(14),
-      children: [
-        if (info == null) ...[
-          _heading('No game info'),
-          if (v != null) ..._zipTable(v),
-        ] else ...[
-          _heading('Game info'),
-          ..._infoRows(info),
-          if (info.variants.length > 1) ...[
-            const SizedBox(height: 8),
-            _heading('Release variants (${info.variants.length})'),
-            const SizedBox(height: 4),
-            _variantsTable(info, v),
-          ],
-          if (v != null) ...[
-            const SizedBox(height: 8),
-            _heading('This ZIP'),
-            ..._zipTable(v),
-          ],
-        ],
-      ],
-    );
-  }
-
-  Widget _heading(String text) => Text(
-        text,
-        style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: Colors.white70,
-            decoration: TextDecoration.underline),
-      );
-
-  List<Widget> _infoRows(InfoSummary info) {
-    final rows = <Widget>[];
-    const fields = <String, String>{
-      'publisher': 'Publisher',
-      'cracked_by': 'Cracked by',
-      'crew': 'Crew',
-      'language': 'Language',
-      'disks': 'Disks',
-      'release': 'Release',
-      'version': 'Version',
-      'licence': 'Licence',
-      'screen_format': 'Screen format',
-      'intro_code': 'Intro code',
-      'cracktro': 'Cracktro',
-      'add_info': 'Add. info',
-      'special_note': 'Special note',
-      'tos_bad': 'TOS/BAD',
-    };
-    if (info.title.isNotEmpty) rows.add(_kv('Title', info.title));
-    final values = <String, String>{
-      'publisher': info.publisher,
-      'cracked_by': info.crackedBy,
-      'crew': info.crew,
-      'language': info.language,
-      'disks': info.disks?.toString() ?? '',
-      'release': info.release,
-      'version': info.version,
-      'licence': info.licence,
-      'screen_format': info.screenFormat,
-      'intro_code': info.introCode,
-      'cracktro': info.cracktro,
-      'add_info': info.addInfo,
-      'special_note': info.specialNote,
-      'tos_bad': info.tosBad,
-    };
-    fields.forEach((key, label) {
-      final val = values[key] ?? '';
-      if (val.isEmpty) return;
-      rows.add(_kv(label, val));
-    });
-    final flags = <String>[
-      if (info.rawDump) 'RAW dump',
-      if (info.pastiDump) 'Pasti dump',
-      if (info.boxscan) 'Boxscan',
-      if (info.specialFlag.isNotEmpty) 'Special',
-    ];
-    if (flags.isNotEmpty) rows.add(_kv('Flags', flags.join(', ')));
-    return rows;
-  }
-
-  /// Release-variants table; the row matching the selected ZIP (cracker or
-  /// crew name contained in the ZIP filename) is highlighted.
-  Widget _variantsTable(InfoSummary info, _Variant? v) {
-    var selIdx = -1;
-    if (v != null) {
-      final zl = v.title.toLowerCase();
-      for (var i = 0; i < info.variants.length; i++) {
-        final rv = info.variants[i];
-        final cr = ((rv['cracked_by'] ?? '') as String).trim().toLowerCase();
-        final crw = ((rv['crew'] ?? '') as String).trim().toLowerCase();
-        if ((cr.isNotEmpty && zl.contains(cr)) ||
-            (crw.isNotEmpty && zl.contains(crw))) {
-          selIdx = i;
-          break;
-        }
-      }
-    }
-    const header = TextStyle(
-        fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey);
-    const cell = TextStyle(fontSize: 10, color: Colors.white70);
-    return Container(
-      decoration:
-          BoxDecoration(border: Border.all(color: const Color(0xFF2A2A2A))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            color: const Color(0xFF202020),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            child: const Row(
-              children: [
-                Expanded(flex: 4, child: Text('Title', style: header)),
-                Expanded(flex: 3, child: Text('Cracker', style: header)),
-                Expanded(flex: 3, child: Text('Crew', style: header)),
-                SizedBox(
-                    width: 44,
-                    child: Text('Year',
-                        style: header, textAlign: TextAlign.right)),
-              ],
+    return GameInfoPanel(
+      info: _info,
+      variant: v == null
+          ? null
+          : ZipVariantView(
+              name: v.title,
+              status: v.status,
+              layer: v.layer,
+              rel: v.rel,
+              size: v.size,
             ),
-          ),
-          for (var ri = 0; ri < info.variants.length; ri++)
-            Container(
-              color: ri == selIdx
-                  ? Colors.cyan.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              child: Row(
-                children: [
-                  Expanded(
-                      flex: 4,
-                      child: Text(
-                        '${info.variants[ri]['title'] ?? ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ri == selIdx
-                            ? cell.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600)
-                            : cell,
-                      )),
-                  Expanded(
-                      flex: 3,
-                      child: Text(
-                        '${info.variants[ri]['cracked_by'] ?? ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ri == selIdx
-                            ? cell.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600)
-                            : cell,
-                      )),
-                  Expanded(
-                      flex: 3,
-                      child: Text(
-                        '${info.variants[ri]['crew'] ?? ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ri == selIdx
-                            ? cell.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600)
-                            : cell,
-                      )),
-                  SizedBox(
-                    width: 44,
-                    child: Text(
-                      '${info.variants[ri]['release'] ?? ''}',
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      textAlign: TextAlign.right,
-                      style: ri == selIdx
-                          ? cell.copyWith(
-                              color: Colors.white, fontWeight: FontWeight.w600)
-                          : cell,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _zipTable(_Variant v) {
-    return [
-      _kv('File', v.title),
-      _kv('Status', v.status),
-      if (v.layer.isNotEmpty) _kv('Layer', v.layer),
-      if (v.size != null)
-        _kv('Size', '${(v.size! / 1024).toStringAsFixed(0)} KB'),
-      _kv('Path', v.rel),
-    ];
-  }
-
-  Widget _kv(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(label,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(fontSize: 12, color: Colors.white70)),
-          ),
-        ],
-      ),
+      filter: widget.controller.filter,
     );
   }
 }

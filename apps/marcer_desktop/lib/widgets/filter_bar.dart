@@ -84,12 +84,18 @@ class _FilterBarState extends State<FilterBar> {
           children: [
             Row(
               children: [
-                for (final s in kSections) ...[
-                  _tabButton(s, f.section == s, () => c.setSection(s)),
-                  const SizedBox(width: 6),
-                ],
-                const Spacer(),
-                _labelButton('clear', c.resetFilters),
+                if (c.catalogMode) ...[
+                  for (final s in kSections) ...[
+                    _tabButton(s, f.section == s, () => c.setSection(s)),
+                    const SizedBox(width: 6),
+                  ],
+                  const Spacer(),
+                  _labelButton('clear', c.resetFilters),
+                  const SizedBox(width: 10),
+                ] else
+                  const Spacer(),
+                _labelButton(c.catalogMode ? 'Folders (T)' : 'Catalog (T)',
+                    c.toggleView, width: 92),
                 const SizedBox(width: 10),
                 IconButton(
                   tooltip: 'Toggle list / grid view (V)',
@@ -102,107 +108,119 @@ class _FilterBarState extends State<FilterBar> {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                SizedBox(
-                  width: 240,
-                  child: Focus(
-                    focusNode: widget.searchFocus,
-                    onKeyEvent: _searchKeys,
-                    child: TextField(
-                      controller: _search,
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: 'Search  ( / )',
-                        prefixIcon: const Icon(Icons.search, size: 16),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
+            if (c.catalogMode) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 240,
+                    child: Focus(
+                      focusNode: widget.searchFocus,
+                      onKeyEvent: _searchKeys,
+                      child: TextField(
+                        controller: _search,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          hintText: 'Search  ( / )',
+                          prefixIcon: const Icon(Icons.search, size: 16),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 5),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 5),
+                        style: const TextStyle(fontSize: 12),
+                        onChanged: _onSearchChanged,
                       ),
-                      style: const TextStyle(fontSize: 12),
-                      onChanged: _onSearchChanged,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                if (fields.contains('publisher'))
+                  const SizedBox(width: 8),
+                  if (fields.contains('publisher'))
+                    _facetDropdown(
+                      'Publisher: any',
+                      f.publisher,
+                      ['any', ...facets.publishers],
+                      c.setPublisher,
+                      width: 170,
+                    ),
+                  if (fields.contains('crew')) ...[
+                    const SizedBox(width: 8),
+                    _facetDropdown(
+                      'Crew: any',
+                      f.crew,
+                      ['any', ...facets.crews],
+                      c.setCrew,
+                      width: 150,
+                    ),
+                  ],
+                  if (fields.contains('cracker')) ...[
+                    const SizedBox(width: 8),
+                    _facetDropdown(
+                      'Cracker: any',
+                      f.cracker,
+                      ['any', ...facets.crackers],
+                      c.setCracker,
+                      width: 150,
+                    ),
+                  ],
+                  if (fields.contains('language')) ...[
+                    const SizedBox(width: 8),
+                    _facetDropdown(
+                      'Language: any',
+                      f.language,
+                      ['any', ...facets.languages],
+                      c.setLanguage,
+                      width: 130,
+                    ),
+                  ],
+                  if (fields.contains('year')) ...[
+                    const SizedBox(width: 8),
+                    _facetDropdown(
+                      'Year: any',
+                      f.year,
+                      ['any', ...facets.years],
+                      c.setYear,
+                      width: 100,
+                    ),
+                  ],
+                  const Spacer(),
+                  if (f.section == 'cracked') ...[
+                    _statusDropdown(f.status, c.setStatus),
+                    const SizedBox(width: 8),
+                  ],
+                  if (fields.contains('raw')) ...[
+                    _triDropdown('raw', f.raw, (v) => c.setFlag('raw', v)),
+                    const SizedBox(width: 8),
+                  ],
+                  if (fields.contains('pasti')) ...[
+                    _triDropdown('pasti', f.pasti, (v) => c.setFlag('pasti', v)),
+                    const SizedBox(width: 8),
+                  ],
+                  if (fields.contains('boxscan')) ...[
+                    _triDropdown(
+                        'boxscan', f.boxscan, (v) => c.setFlag('boxscan', v)),
+                    const SizedBox(width: 8),
+                  ],
+                  if (fields.contains('tos')) ...[
+                    _tosDropdown(f.tos, c.setTos),
+                    const SizedBox(width: 8),
+                  ],
                   _facetDropdown(
-                    'Publisher: any',
-                    f.publisher,
-                    ['any', ...facets.publishers],
-                    c.setPublisher,
-                    width: 170,
+                    'Sort: ',
+                    f.sort,
+                    [for (final k in kSortKeys) k],
+                    c.setSort,
+                    width: 120,
+                    labelOf: (v) => 'Sort: $v',
                   ),
-                if (fields.contains('crew')) ...[
-                  const SizedBox(width: 8),
-                  _facetDropdown(
-                    'Crew: any',
-                    f.crew,
-                    ['any', ...facets.crews],
-                    c.setCrew,
-                    width: 150,
-                  ),
+                  const SizedBox(width: 6),
+                  _labelButton(f.order == 'asc' ? 'asc' : 'desc',
+                      c.toggleOrder, width: 36),
                 ],
-                if (fields.contains('language')) ...[
-                  const SizedBox(width: 8),
-                  _facetDropdown(
-                    'Language: any',
-                    f.language,
-                    ['any', ...facets.languages],
-                    c.setLanguage,
-                    width: 130,
-                  ),
-                ],
-                if (fields.contains('year')) ...[
-                  const SizedBox(width: 8),
-                  _facetDropdown(
-                    'Year: any',
-                    f.year,
-                    ['any', ...facets.years],
-                    c.setYear,
-                    width: 100,
-                  ),
-                ],
-                const Spacer(),
-                if (f.section == 'cracked') ...[
-                  _statusDropdown(f.status, c.setStatus),
-                  const SizedBox(width: 8),
-                ],
-                if (fields.contains('raw')) ...[
-                  _triDropdown('raw', f.raw, (v) => c.setFlag('raw', v)),
-                  const SizedBox(width: 8),
-                ],
-                if (fields.contains('pasti')) ...[
-                  _triDropdown('pasti', f.pasti, (v) => c.setFlag('pasti', v)),
-                  const SizedBox(width: 8),
-                ],
-                if (fields.contains('boxscan')) ...[
-                  _triDropdown(
-                      'boxscan', f.boxscan, (v) => c.setFlag('boxscan', v)),
-                  const SizedBox(width: 8),
-                ],
-                if (fields.contains('tos')) ...[
-                  _tosDropdown(f.tos, c.setTos),
-                  const SizedBox(width: 8),
-                ],
-                _facetDropdown(
-                  'Sort: ',
-                  f.sort,
-                  [for (final k in kSortKeys) k],
-                  c.setSort,
-                  width: 120,
-                  labelOf: (v) => 'Sort: $v',
-                ),
-                const SizedBox(width: 6),
-                _labelButton(f.order == 'asc' ? 'asc' : 'desc',
-                    c.toggleOrder, width: 36),
-              ],
-            ),
-            const SizedBox(height: 4),
-            _letterRow(facets.letters, f.letter, c.setLetter),
+              ),
+              const SizedBox(height: 4),
+              _letterRow(facets.letters, f.letter, c.setLetter),
+            ],
           ],
         ),
       ),

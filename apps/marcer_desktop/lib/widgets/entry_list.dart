@@ -146,6 +146,10 @@ class _EntryListState extends State<EntryList> {
       c.toggleViewOverride();
       return KeyEventResult.handled;
     }
+    if (char == 't' || char == 'T') {
+      c.toggleView();
+      return KeyEventResult.handled;
+    }
     if (char == 'q' || char == 'Q') {
       io.exit(0);
     }

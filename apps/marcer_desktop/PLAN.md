@@ -2,21 +2,21 @@
 
 Status: **Phase 0 + Phase 3 (+ 3b catalog/grid/lightbox) done (2026-10-11)** —
 Flutter 3.47.7 stable in `~/flutter`, `marcer_catalog` data layer with the
-gallery-style card universe (32 `dart test`: overlay, gameinfo join, screenshot
+gallery-style card universe (41 `dart test`: overlay, gameinfo join, screenshot
 index, `GameCard` build, facets, `CatalogFilter`/`matchesCard`/`sortCards`,
-crew focus, config incl. `ShowCandidates`/`DefaultStatus`).
-Master-detail UI: gallery filter bar (section tabs cracked/pd/utils, search,
-status/publisher/crew/language/year dropdowns, tri-state raw/pasti/boxscan,
-TOS/Bad, sort+order, letter row, clear), overlay folder tree with lazy
-expansion + virtual Favorites folder, **list or grid (icon) center view**
-(auto: grid in catalog mode or when the folder contains ZIPs; `V` toggles),
-detail panel (preview + candidates + gameinfo metadata), **gallery-style
-lightbox** (header, large preview, variant filmstrip, candidate strip, 330px
-info panel; `←/→` cards, `↑/↓` variants, `PgUp/PgDn` images), help overlay,
-favorites persistence (§11, R25/R26), status bar with result counts +
-degradation notices. `flutter test` (4) + `flutter analyze` clean; Linux
-debug build + xvfb smoke run OK. Next: deeper manual interaction test, then
-Phase 5 (launch).
+fuzzy crew/cracker focus, config incl. `ShowCandidates`/`DefaultStatus`).
+Master-detail UI: **gallery-style catalog grid is the default view** (section
+tabs cracked/pd/utils, search, status/publisher/crew/cracker/language/year
+dropdowns, tri-state raw/pasti/boxscan, TOS/Bad, sort+order, letter row,
+clear), right-hand **gallery-style detail sidebar** (Game info + Release
+variants table + This ZIP), **optional overlay folder browser** (`T` / Folders
+button: folder tree with lazy expansion + virtual Favorites folder + list or
+grid entry view; filter bar hidden), **gallery-style lightbox** (header, large
+preview, variant filmstrip, candidate strip, info panel; `←/→` cards, `↑/↓`
+variants, `PgUp/PgDn` images), help overlay, favorites persistence (§11,
+R25/R26), status bar with result counts + degradation notices. `flutter test`
+(10) + `flutter analyze` clean; Linux debug build + xvfb smoke run OK. Next:
+deeper manual interaction test, then Phase 5 (launch).
 Written 2026-10-11.
 Governing decision: [`DECISION-app-architecture.md`](../../DECISION-app-architecture.md)
 (Desktop app = Flutter, one project, two surfaces; this file covers **Surface A**).
@@ -34,12 +34,13 @@ Governing decision: [`DECISION-app-architecture.md`](../../DECISION-app-architec
 | Topic | Decision |
 |---|---|
 | Project location | **Subdirectory of this repo**: `apps/marcer_desktop/` |
-| List model | **Hybrid**: overlay folder tree (SPEC §7) + filtered ZIP list + detail panel (Playnite-like) |
+| List model | **Hybrid**: gallery-style catalog grid as the **default** (global cards + gallery-style detail sidebar); optional overlay folder browser (`T`) with tree + entry list (SPEC §7) |
 | Config | **Own `desktop.config.json`** schema (decoupled from `launcher.config.json`) |
 | MVP scope | **Data layer + read-only UI** — no Hatari launch yet, no couch mode |
 
-Rejected for the MVP (explicitly deferred, see §6): flat catalog-only UI (breaks SPEC
-tree navigation), reusing `launcher.config.json`, launching games from the UI.
+Rejected for the MVP (explicitly deferred, see §6): flat catalog-only UI without
+tree navigation (the folder browser is retained as an optional `T` mode), reusing
+`launcher.config.json`, launching games from the UI.
 
 ---
 
@@ -151,23 +152,35 @@ Playnite-inspired master-detail layout, hybrid model:
 
 - **Top bar (gallery-style, 2026-10-11):** section tabs `cracked` / `pd` /
   `utils`, `clear`, view toggle; search field (`/` focuses, Esc clears) with
-  250ms debounce; status / publisher / crew / language / year dropdowns;
-  tri-state `raw` / `pasti` / `boxscan` (`any`/`yes`/`no`); `TOS/Bad`;
-  sort (`name`/`year`/`publisher`/`cracker`/`crew`) + asc/desc; letter row
-  (`any`, `0-9`, `A`–`Z`, dimmed when absent from facets). Facet values come
-  from `CatalogUniverse` (index.json + gameinfo, **no FS scan**).
+  250ms debounce; status / publisher / crew / cracker / language / year
+  dropdowns; tri-state `raw` / `pasti` / `boxscan` (`any`/`yes`/`no`);
+  `TOS/Bad`; sort (`name`/`year`/`publisher`/`cracker`/`crew`) + asc/desc;
+  letter row (`any`, `0-9`, `A`–`Z`, dimmed when absent from facets). Facet
+  values come from `CatalogUniverse` (index.json + gameinfo, **no FS scan**).
   Section switches reset the incompatible filters (status → `DefaultStatus`,
-  raw/pasti/boxscan/tos/crew → `any`, cracker sort → name on pd) exactly
-  like the gallery tabs.
-- **Catalog mode:** any non-default filter switches the center to the global
-  card grid (`CatalogFilter.isActive`); `clear` / Backspace returns to the
-  folder browser. Result counts in the status bar.
-  **Crew focus** (gallery `_apply_crew_focus`): with an active crew filter
-  each card's preview/status reflects the crew's ZIP variant — even when it
-  has no screenshot — and the lightbox opens on exactly that variant
-  (`focusVariant`). Grid cards show an `×N` chip for multi-ZIP folders and
-  (when `ShowCandidates` is true, single variant, no crew focus) a candidate
-  thumb strip; clicking a thumb opens the lightbox on that image.
+  raw/pasti/boxscan/tos/crew/cracker → `any`, cracker sort → name on pd)
+  exactly like the gallery tabs.
+- **Default view (2026-10-11):** the app starts in the **catalog grid**
+  (`AppView.catalog`, `catalogMode`); the overlay folder browser is an
+  optional mode toggled with `T` (or the Folders/Catalog button). The filter
+  bar (tabs, search, facets, sort, letters) is shown in catalog mode only —
+  switching to the folder browser hides it but keeps the filter state.
+- **Catalog mode:** the global card grid (`CatalogFilter.isActive` only
+  decides whether the result is considered "filtered"); `clear` resets the
+  filters. Result counts in the status bar.
+  **Crew/cracker focus** (gallery `_apply_focus`): with an active crew or
+  cracker filter (cracker takes precedence) each card's preview/status
+  reflects that group's ZIP variant — even when it has no screenshot — and
+  the lightbox opens on exactly that variant (`focusVariant`). Matching is
+  fuzzy: normalized (`&`/`+` = "and") substring, then (crew only) a gameinfo
+  cracker fallback, then a token-subset match tolerating typos/missing
+  connectives; the first match with a preview wins. When no ZIP can be
+  identified the card shows a hint plus up to four other variant
+  screenshots. Grid cards show an `×N` chip for multi-ZIP folders, a 2×2
+  grid of up to four variant screenshots when no focus is active and ≥2
+  variants have a screenshot, and (when `ShowCandidates` is true, single
+  variant, no focus) a candidate thumb strip; clicking a thumb opens the
+  lightbox on that image.
 - **Left:** overlay folder tree per `SPEC.md` §7 with `Enter`/`Backspace` semantics,
   layer labels `BOTH`/`ROOT`/`PTCH`, virtual `Favorites` folder per `SPEC.md` §11
   (stored in `favorites.txt`, keyed by effective path).

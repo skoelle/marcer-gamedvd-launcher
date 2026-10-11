@@ -75,12 +75,13 @@ class _HelpOverlayState extends State<HelpOverlay> {
    *              Toggle favorite on selected ZIP
    /              Focus the search field
    V              Toggle list / grid view
+   T              Toggle catalog grid / folder view
    ?              Show this help
    ESC / q        Exit the program
 
-  Global filters (section tabs, search, dropdowns) switch the center
-  to the catalog grid; "clear" or Backspace returns to the folder view.
-  Navigation is strictly limited to RootDirectory.
+  The default view is the gallery-style catalog grid (section tabs,
+  search, dropdowns). Press T (or the Folders button) for the optional
+  overlay folder browser. Navigation is strictly limited to RootDirectory.
 
   Press any key to continue...''',
                       style: TextStyle(color: Colors.white, fontSize: 14)),

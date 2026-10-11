@@ -176,6 +176,10 @@ class _CenterGridState extends State<CenterGrid> {
       c.toggleViewOverride();
       return KeyEventResult.handled;
     }
+    if (char == 't' || char == 'T') {
+      c.toggleView();
+      return KeyEventResult.handled;
+    }
     if (char == 'q' || char == 'Q') {
       io.exit(0);
     }
@@ -234,14 +238,116 @@ class _CenterGridState extends State<CenterGrid> {
     );
   }
 
-  /// Gallery `openLightbox(idx, fv)`: start on the crew-focused variant
-  /// when a crew filter is active, otherwise on the first variant.
+  /// Gallery `openLightbox(idx, fv)`: start on the crew/cracker-focused
+  /// variant when a focus filter is active, otherwise on the first variant.
   void _openLightboxForSelection({int image = 0}) {
     final c = widget.controller;
     final card = c.selectedCard;
-    final fv = (card != null && card.focusVariant >= 0) ? card.focusVariant : 0;
+    final fv = (card != null && (card.focusVariant ?? -1) >= 0)
+        ? card.focusVariant!
+        : 0;
     widget.onOpenLightbox(fv, image);
   }
+
+  /// Number of variants that have a screenshot preview
+  /// (gallery `countPreviews`).
+  int _countPreviews(GameCard card) =>
+      card.variants.where((v) => v.previewPath != null).length;
+
+  static const Map<String, int> _statusRank = {'done': 0, 'desktop': 1};
+
+  /// Up to 4 clickable variant screenshots, best status first
+  /// (gallery `variantThumbs`): `done`, then `desktop`, then the rest,
+  /// ties broken by variant index.
+  List<({int index, String path})> _variantThumbs(GameCard card) {
+    final items = <({int index, String path})>[
+      for (var i = 0; i < card.variants.length; i++)
+        if (card.variants[i].previewPath != null)
+          (index: i, path: card.variants[i].previewPath!),
+    ];
+    items.sort((a, b) {
+      final ra = _statusRank[card.variants[a.index].status] ?? 2;
+      final rb = _statusRank[card.variants[b.index].status] ?? 2;
+      final cmp = ra.compareTo(rb);
+      return cmp != 0 ? cmp : a.index.compareTo(b.index);
+    });
+    return items.take(4).toList();
+  }
+
+  Widget _thumbGrid(
+      CatalogController c, GameCard card, int index,
+      List<({int index, String path})> thumbs) {
+    return GridView.count(
+      crossAxisCount: 2,
+      padding: const EdgeInsets.all(4),
+      mainAxisSpacing: 4,
+      crossAxisSpacing: 4,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        for (final t in thumbs)
+          GestureDetector(
+            onTap: () {
+              c.moveSelectionTo(index);
+              widget.onOpenLightbox(t.index, 0);
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFF2A2A2A)),
+                borderRadius: BorderRadius.circular(2),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Image.file(
+                io.File(t.path),
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.none,
+                errorBuilder: (_, _, _) => Container(color: Colors.black),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Grid card body (gallery `renderGrid` branch order):
+  /// focus miss → hint + 4 other shots; no focus + ≥2 previews → 2×2;
+  /// preview → single image (+ candidate strip); else placeholder.
+  Widget _cardBody(CatalogController c, GameCard card, int index) {
+    if (card.focusVariant == -1) {
+      final thumbs = _variantThumbs(card);
+      if (thumbs.isEmpty) return _placeholder();
+      final label = c.crackerFocusActive
+          ? 'no cracker ZIP — other variants'
+          : 'no crew ZIP — other variants';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 4, 6, 0),
+            child: Text(label,
+                style: const TextStyle(fontSize: 10, color: Color(0xFFE6A23C))),
+          ),
+          Expanded(child: _thumbGrid(c, card, index, thumbs)),
+        ],
+      );
+    }
+    if (!card.focusActive && _countPreviews(card) >= 2) {
+      return _thumbGrid(c, card, index, _variantThumbs(card));
+    }
+    if (card.previewPath != null) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          _previewImage(card.previewPath),
+          ?_candidatesOverlay(card, index),
+        ],
+      );
+    }
+    return _placeholder();
+  }
+
+  Widget _placeholder() => const Center(
+        child: Icon(Icons.videogame_asset, size: 42, color: Colors.white24),
+      );
 
   Widget _cardTile(
       CatalogController c, GameCard card, bool selected, int index) {
@@ -251,6 +357,9 @@ class _CenterGridState extends State<CenterGrid> {
       if (card.displayStatus.isNotEmpty) card.displayStatus,
       if (card.year != 'unknown') card.year,
     ];
+    final thumbsBody = card.focusVariant == -1
+        ? _variantThumbs(card).isNotEmpty
+        : (!card.focusActive && _countPreviews(card) >= 2);
     return _tileFrame(
       selected: selected,
       index: index,
@@ -259,20 +368,19 @@ class _CenterGridState extends State<CenterGrid> {
         c.moveSelectionTo(index);
         if (c.activate()) _openLightboxForSelection();
       },
-      image: _previewImage(card.previewPath),
-      overlay: _candidatesOverlay(card, index),
+      image: _cardBody(c, card, index),
       badges: chips,
       title: card.name,
-      dim: card.previewPath == null,
+      dim: card.previewPath == null && !thumbsBody,
     );
   }
 
   /// Gallery grid `.cands`: thumbnails of the sole variant's candidates on
-  /// top of the preview (hidden when a crew focus or multiple ZIPs apply).
-  /// Click opens the lightbox on that candidate image.
+  /// top of the preview (hidden when a focus filter is active or multiple
+  /// ZIPs apply). Click opens the lightbox on that candidate image.
   Widget? _candidatesOverlay(GameCard card, int index) {
     if (!widget.controller.config.showCandidates) return null;
-    if (card.focusVariant >= 0 || card.variants.length != 1) return null;
+    if (card.focusActive || card.variants.length != 1) return null;
     if (card.previewPath == null) return null;
     final cands = card.variants.first.candidatePaths;
     if (cands.isEmpty) return null;

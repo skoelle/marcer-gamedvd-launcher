@@ -6,11 +6,19 @@ import 'card.dart';
 /// API filter names applicable to a section (gallery `kind_filters`).
 Set<String> kindFilters(String kind) => switch (kind) {
       'pd' => {'publisher', 'language', 'year', 'tos'},
-      'utils' =>
-        {'publisher', 'crew', 'language', 'year', 'raw', 'tos'},
+      'utils' => {
+          'publisher',
+          'crew',
+          'cracker',
+          'language',
+          'year',
+          'raw',
+          'tos',
+        },
       _ => {
           'publisher',
           'crew',
+          'cracker',
           'language',
           'year',
           'raw',
@@ -30,6 +38,7 @@ class CatalogFilter {
     this.letter = 'any',
     this.publisher = 'any',
     this.crew = 'any',
+    this.cracker = 'any',
     this.language = 'any',
     this.year = 'any',
     this.raw = 'any',
@@ -46,6 +55,7 @@ class CatalogFilter {
   String letter;
   String publisher;
   String crew;
+  String cracker;
   String language;
   String year;
   String raw;
@@ -67,6 +77,7 @@ class CatalogFilter {
       letter != 'any' ||
       publisher != 'any' ||
       crew != 'any' ||
+      cracker != 'any' ||
       language != 'any' ||
       year != 'any' ||
       raw != 'any' ||
@@ -84,6 +95,7 @@ class CatalogFilter {
     letter = 'any';
     publisher = 'any';
     crew = 'any';
+    cracker = 'any';
     language = 'any';
     year = 'any';
     raw = 'any';
@@ -101,6 +113,7 @@ class CatalogFilter {
         letter: letter,
         publisher: publisher,
         crew: crew,
+        cracker: cracker,
         language: language,
         year: year,
         raw: raw,
@@ -115,11 +128,13 @@ class CatalogFilter {
 /// Port of `gallery.py _matches`.
 bool matchesCard(GameCard c, CatalogFilter f) {
   final fields = kindFilters(f.section);
-  final crewActive =
-      f.crew != 'any' && fields.contains('crew');
+  final crewActive = f.crew != 'any' && fields.contains('crew');
+  final crackerActive = f.cracker != 'any' && fields.contains('cracker');
+  final focusActive = crewActive || crackerActive;
   if (f.section == 'cracked') {
     if (f.status == 'with_screenshot') {
-      if (!crewActive && !c.screenshots) return false;
+      // crew/cracker focus always shows the focused variant, even empty
+      if (!focusActive && !c.screenshots) return false;
     } else if (f.status != 'any' && c.displayStatus != f.status) {
       return false;
     }
@@ -135,6 +150,11 @@ bool matchesCard(GameCard c, CatalogFilter f) {
   }
   if (f.crew != 'any') {
     if (!fields.contains('crew') || !c.crews.contains(f.crew)) return false;
+  }
+  if (f.cracker != 'any') {
+    if (!fields.contains('cracker') || !c.crackers.contains(f.cracker)) {
+      return false;
+    }
   }
   if (f.language != 'any') {
     if (!fields.contains('language') || !c.languages.contains(f.language)) {
@@ -211,16 +231,19 @@ void sortCards(List<GameCard> cards, String sort, String order) {
 }
 
 /// Filter + sort (gallery request pipeline without pagination — the desktop
-/// grid virtualizes instead). When a crew filter is active the returned
-/// cards are crew-focused copies (gallery `_apply_crew_focus`): preview /
-/// status / `focusVariant` reflect the crew's ZIP variant.
+/// grid virtualizes instead). When a crew/cracker filter is active the
+/// returned cards are focus-adjusted copies (gallery `_apply_focus`):
+/// preview / status / `focusVariant` reflect the group's ZIP variant.
+/// Cracker takes precedence over crew (SPEC-gallery-webapp.md §5.3).
 List<GameCard> queryCards(List<GameCard> cards, CatalogFilter f) {
   final out = cards.where((c) => matchesCard(c, f)).toList();
   sortCards(out, f.sort, f.order);
-  final crewFocus =
-      f.crew != 'any' && kindFilters(f.section).contains('crew');
-  if (crewFocus) {
-    return [for (final c in out) applyCrewFocus(c, f.crew)];
+  final fields = kindFilters(f.section);
+  if (f.cracker != 'any' && fields.contains('cracker')) {
+    return [for (final c in out) applyFocus(c, f.cracker, 'cracker')];
+  }
+  if (f.crew != 'any' && fields.contains('crew')) {
+    return [for (final c in out) applyFocus(c, f.crew, 'crew')];
   }
   return out;
 }

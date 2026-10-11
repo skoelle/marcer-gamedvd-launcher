@@ -1,10 +1,12 @@
 # Marcer GameDVD Desktop App (Flutter, Surface A)
 
-Inventory browser for the Marcer GameDVD archive: windowed master-detail UI
-(Playnite-inspired), overlay tree per `SPEC.md` §7, gameinfo metadata and
-screenshot previews, gallery-style global filters with a card grid
-(section tabs, search, facets, sort), list/grid auto-switch and a
-lightbox (filmstrip + info panel). **Read-only** consumer of all data roots.
+Inventory browser for the Marcer GameDVD archive: windowed master-detail UI,
+gameinfo metadata and screenshot previews, gallery-style global filters with a
+**catalog grid as the default view** (section tabs, search, facets incl.
+crew/cracker, sort) and a gallery-style detail sidebar (Game info + Release
+variants + This ZIP); an optional overlay folder browser (`T` / Folders button)
+per `SPEC.md` §7, plus a gallery-style lightbox (filmstrip + info panel).
+**Read-only** consumer of all data roots.
 
 Plan: [`PLAN.md`](PLAN.md). Architecture decision:
 [`DECISION-app-architecture.md`](../../DECISION-app-architecture.md).

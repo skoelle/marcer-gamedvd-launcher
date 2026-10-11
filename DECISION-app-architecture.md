@@ -27,10 +27,12 @@ models:
 1. **Gallery web app** — browse the screenshot archive like a gallery
    (card grid, filter by kind, search, full-size view). The "small variant",
    runs in a browser, no installation.
-2. **Inventory browser** (desktop app) — dense list-based catalog browsing
-   over the game trees with a game-info detail sidebar, full keyboard control,
-   "looks like a real desktop app" (master-detail). Consumes the gameinfo
-   data of `ANALYSIS-game-data.md` and the screenshot previews.
+2. **Inventory browser** (desktop app) — gallery-style catalog grid over the
+   game trees with a game-info detail sidebar, full keyboard control,
+   "looks like a real desktop app" (master-detail). The default view is the
+   global catalog grid; an optional overlay folder browser (`T`) keeps the
+   tree navigation. Consumes the gameinfo data of `ANALYSIS-game-data.md`
+   and the screenshot previews.
 3. **Couch launcher** (the long-term "heart's project") — fullscreen 10-foot
    UI for the TV: big tiles, cover art/screenshots as backgrounds, navigation
    and launching via joystick/gamepad. Same data as (2), completely different

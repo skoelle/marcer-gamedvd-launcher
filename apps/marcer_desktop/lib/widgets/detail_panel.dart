@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
+import 'game_info_panel.dart';
 
 /// Right panel: preview screenshot + game metadata (Playnite-style detail).
 class DetailPanel extends StatelessWidget {
@@ -42,64 +43,66 @@ class DetailPanel extends StatelessWidget {
   }
 
   Widget _cardInfo(CatalogController c, GameCard card) {
-    return ListView(
-      padding: const EdgeInsets.all(14),
+    // Gallery-style detail (no large preview — the lightbox shows the image).
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            height: 220,
-            color: Colors.black,
-            child: card.previewPath != null
-                ? Image.file(
-                    File(card.previewPath!),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) =>
-                        _noPreview('Failed to load ${card.previewPath}'),
-                  )
-                : _noPreview('No screenshot'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(card.name,
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  if (card.layer.isNotEmpty)
+                    _badge(card.layer, _layerColorName(card.layer)),
+                  if (card.displayStatus.isNotEmpty)
+                    _badge(card.displayStatus, Colors.blueGrey),
+                  if (card.year != 'unknown') _badge(card.year, Colors.teal),
+                  if (card.variants.length > 1)
+                    _badge('${card.variants.length} variants', Colors.indigo),
+                ],
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 12),
-        Text(card.name,
-            style:
-                const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            if (card.layer.isNotEmpty)
-              _badge(card.layer, _layerColorName(card.layer)),
-            if (card.displayStatus.isNotEmpty)
-              _badge(card.displayStatus, Colors.blueGrey),
-            if (card.year != 'unknown') _badge(card.year, Colors.teal),
-            if (card.variants.length > 1)
-              _badge('${card.variants.length} variants', Colors.indigo),
-          ],
+        const Divider(height: 1),
+        Expanded(
+          child: GameInfoPanel(
+            info: card.info,
+            variant: _primaryVariant(card),
+            filter: c.filter,
+          ),
         ),
-        const SizedBox(height: 12),
-        if (card.info == null)
-          const Text('No metadata for this entry',
-              style: TextStyle(color: Colors.grey, fontSize: 12))
-        else
-          ..._metadataRowsFromVariants(card.info!.variants),
-        if (card.variants.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          const Text('Variants',
-              style: TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 4),
-          for (final v in card.variants)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 3),
-              child: Text(
-                '${v.status}  ${v.name}',
-                style: const TextStyle(
-                    fontSize: 11, color: Colors.white70, fontFamily: 'monospace'),
-              ),
-            ),
-        ],
       ],
+    );
+  }
+
+  /// The ZIP shown in the "This ZIP" table: the crew/cracker-focused variant
+  /// when a focus filter is active, else the variant that produced the card's
+  /// primary preview, else the first variant.
+  ZipVariantView? _primaryVariant(GameCard card) {
+    if (card.variants.isEmpty) return null;
+    var idx = (card.focusVariant ?? -1) >= 0 ? card.focusVariant! : -1;
+    if (idx < 0 && card.previewPath != null) {
+      final match = card.variants
+          .indexWhere((v) => v.previewPath == card.previewPath);
+      if (match >= 0) idx = match;
+    }
+    if (idx < 0) idx = 0;
+    final v = card.variants[idx];
+    return ZipVariantView(
+      name: v.name,
+      status: v.status,
+      layer: v.layer,
+      rel: v.rel,
+      size: v.size,
     );
   }
 

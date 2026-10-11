@@ -348,7 +348,7 @@ void main() {
     });
   });
 
-  group('crew focus (gallery _apply_crew_focus)', () {
+  group('crew focus (gallery _apply_focus)', () {
     test('focuses the ZIP whose name contains the crew', () {
       // rels sorted case-sensitively: 'Alpha the crew.zip' (0) < 'a.zip' (1).
       const cracked = '''
@@ -368,7 +368,7 @@ void main() {
       final card = u.cracked.first;
       expect(card.variants.length, 2);
 
-      final focused = applyCrewFocus(card, 'The Crew');
+      final focused = applyFocus(card, 'The Crew', 'crew');
       expect(focused.focusVariant, 0);
       expect(focused.previewPath, isNull); // pending variant, no shot
       expect(focused.screenshots, isFalse);
@@ -401,7 +401,7 @@ void main() {
                 preview: 'a2.png'),
       }, crackedGames: cracked);
       final card = u.cracked.first;
-      final focused = applyCrewFocus(card, 'The Crew');
+      final focused = applyFocus(card, 'The Crew', 'crew');
       expect(focused.focusVariant, 0);
       expect(focused.previewPath, endsWith('/A/Alpha/a2.png'));
       expect(focused.screenshots, isTrue);
@@ -419,8 +419,9 @@ void main() {
         relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
       }, crackedGames: cracked);
       final card = u.cracked.first;
-      final focused = applyCrewFocus(card, 'The Crew');
+      final focused = applyFocus(card, 'The Crew', 'crew');
       expect(focused.focusVariant, -1);
+      expect(focused.focusActive, isTrue);
       expect(focused.previewPath, isNull);
       expect(focused.screenshots, isFalse);
       // display status is untouched in the focus=-1 case (gallery: dict copy)
@@ -431,14 +432,152 @@ void main() {
       expect(out.single.previewPath, isNull);
     });
 
-    test('no crew filter → cards pass through unchanged', () {
+    test('no crew filter → cards pass through unchanged (focusVariant null)', () {
       final u = buildUniverse({
         relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
       });
       final out = queryCards(u.cracked, CatalogFilter());
-      expect(out.single.focusVariant, -1);
+      expect(out.single.focusVariant, isNull);
+      expect(out.single.focusActive, isFalse);
       expect(out.single.screenshots, isTrue);
       expect(out.single.previewPath, endsWith('/A/Alpha/a.png'));
+    });
+  });
+
+  group('fuzzy group matching (gallery _norm_crew/_crew_tokens)', () {
+    test('normCrew expands & / + to "and" and collapses whitespace', () {
+      expect(normCrew('Equinox  &  MDK'), 'equinox and mdk');
+      expect(normCrew('Hotline+MCA'), 'hotline and mca');
+      expect(normCrew(null), '');
+    });
+
+    test('crewTokens drops stopwords and 1-char tokens', () {
+      expect(crewTokens('The Hotline & MCA Crew'), ['hotline', 'mca']);
+    });
+
+    test('&/and equivalence matches the ZIP name (tier 1)', () {
+      const cracked = '''
+      [{"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
+        "matched_via": "exact", "matched_title": "Alpha Game",
+        "variants": [{"title": "Alpha Game", "crew": "Equinox & MDK",
+          "release": "1990"}]}]
+      ''';
+      final u = buildUniverse({
+        'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Equinox and MDK - g.zip':
+            entryJson(
+                'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Equinox and MDK - g.zip',
+                'done',
+                'ROOT',
+                preview: 'a.png'),
+      }, crackedGames: cracked);
+      final card = u.cracked.first;
+      expect(focusVariant(card, 'Equinox & MDK', 'crew'), 0);
+    });
+
+    test('token subset tolerates missing connective (tier 3)', () {
+      const cracked = '''
+      [{"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
+        "matched_via": "exact", "matched_title": "Alpha Game",
+        "variants": [{"title": "Alpha Game", "crew": "Hotline & MCA",
+          "release": "1990"}]}]
+      ''';
+      final u = buildUniverse({
+        'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Hotline MCA g.zip':
+            entryJson(
+                'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Hotline MCA g.zip',
+                'done',
+                'ROOT',
+                preview: 'a.png'),
+      }, crackedGames: cracked);
+      final card = u.cracked.first;
+      expect(focusVariant(card, 'Hotline & MCA', 'crew'), 0);
+    });
+
+    test('first-with-preview wins among multiple matches', () {
+      const cracked = '''
+      [{"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
+        "matched_via": "exact", "matched_title": "Alpha Game",
+        "variants": [{"title": "Alpha Game", "crew": "Hotline & MCA",
+          "release": "1990"}]}]
+      ''';
+      final u = buildUniverse({
+        'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Hotline MCA a.zip':
+            entryJson(
+                'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Hotline MCA a.zip',
+                'pending',
+                'ROOT'),
+        'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Hotline MCA b.zip':
+            entryJson(
+                'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Hotline MCA b.zip',
+                'done',
+                'ROOT',
+                preview: 'b.png'),
+      }, crackedGames: cracked);
+      final card = u.cracked.first;
+      expect(card.variants.length, 2);
+      // variant 0 has no preview, variant 1 does → focus lands on 1
+      expect(focusVariant(card, 'Hotline & MCA', 'crew'), 1);
+    });
+  });
+
+  group('cracker focus + facet (gallery crew dropdown)', () {
+    const cracked = '''
+    [{"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
+      "matched_via": "exact", "matched_title": "Alpha Game",
+      "variants": [{"title": "Alpha Game", "crew": "The Crew",
+        "cracked_by": "Crackerman", "release": "1990"}]}]
+    ''';
+
+    test('cracker focus matches cracked_by in ZIP name (no tier 2)', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+        'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Crackerman - x.zip':
+            entryJson(
+                'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Crackerman - x.zip',
+                'done',
+                'ROOT',
+                preview: 'a2.png'),
+      }, crackedGames: cracked);
+      final card = u.cracked.first;
+      expect(focusVariant(card, 'Crackerman', 'cracker'), 0);
+      final out =
+          queryCards(u.cracked, CatalogFilter()..cracker = 'Crackerman');
+      expect(out.single.focusVariant, 0);
+    });
+
+    test('cracker takes precedence over crew in queryCards', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+        'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Crackerman - x.zip':
+            entryJson(
+                'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Crackerman - x.zip',
+                'done',
+                'ROOT',
+                preview: 'a2.png'),
+      }, crackedGames: cracked);
+      final out = queryCards(
+          u.cracked, CatalogFilter()..crew = 'The Crew'..cracker = 'Crackerman');
+      expect(out.single.focusVariant, 0);
+      expect(out.single.previewPath, endsWith('/A/Alpha/a2.png'));
+    });
+
+    test('cracker is a facet for cracked + utils, not pd', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+      }, crackedGames: cracked);
+      expect(u.crackedFacets.crackers, ['Crackerman']);
+      expect(kindFilters('cracked'), contains('cracker'));
+      expect(kindFilters('utils'), contains('cracker'));
+      expect(kindFilters('pd'), isNot(contains('cracker')));
+    });
+
+    test('cracker filter matches by card crackers list', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+      }, crackedGames: cracked);
+      final card = u.cracked.first;
+      expect(matchesCard(card, CatalogFilter()..cracker = 'Crackerman'), isTrue);
+      expect(matchesCard(card, CatalogFilter()..cracker = 'Nobody'), isFalse);
     });
   });
 }

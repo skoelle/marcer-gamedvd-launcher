@@ -14,6 +14,10 @@ import 'favorites_service.dart';
 /// cannot collide with a real directory name (NUL is invalid in paths).
 const String kFavoritesRel = '\u0000favorites';
 
+/// Top-level view of the app: the global gallery-like catalog grid (default)
+/// or the optional overlay folder browser.
+enum AppView { catalog, folders }
+
 /// Application state for Surface A: navigation (SPEC §8), favorites (§11),
 /// the gallery-style global filters (catalog mode) and the joins into
 /// gameinfo + screenshot index.
@@ -37,6 +41,9 @@ class CatalogController extends ChangeNotifier {
   bool ready = false;
   String progress = '';
   final List<String> notices = [];
+
+  /// Active top-level view; the gallery-like catalog grid is the default.
+  AppView view = AppView.catalog;
 
   // --- navigation state (SPEC §8.1) ---
   String currentRel = '';
@@ -90,11 +97,27 @@ class CatalogController extends ChangeNotifier {
 
   // ------------------------------------------------------- catalog (global)
 
-  /// True while any filter deviates from the factory state — the app then
-  /// shows the global catalog grid instead of the folder browser.
-  bool get catalogMode => filter.isActive;
+  /// True in the default gallery-like catalog grid (vs. the optional
+  /// overlay folder browser).
+  bool get catalogMode => view == AppView.catalog;
+
+  /// `T`: toggle between the catalog grid (default) and the folder browser.
+  void toggleView() {
+    view = catalogMode ? AppView.folders : AppView.catalog;
+    selectedIndex = 0;
+    notifyListeners();
+  }
 
   CatalogFacets get facets => universe.facetsFor(filter.section);
+
+  bool get crewFocusActive =>
+      filter.crew != 'any' && kindFilters(filter.section).contains('crew');
+  bool get crackerFocusActive =>
+      filter.cracker != 'any' && kindFilters(filter.section).contains('cracker');
+
+  /// True while a crew/cracker focus filter is active (gallery
+  /// `focusActive`); drives the grid miss/2×2 bodies and lightbox labels.
+  bool get focusActive => crackerFocusActive || crewFocusActive;
 
   /// Filtered + sorted cards of the active section (memoized until the next
   /// filter change).
@@ -128,6 +151,7 @@ class CatalogController extends ChangeNotifier {
     filter.boxscan = 'any';
     filter.tos = 'any';
     filter.crew = 'any';
+    filter.cracker = 'any';
     // `cracker` sort is not meaningful for pd — fall back to name.
     if (value == 'pd' && filter.sort == 'cracker') filter.sort = 'name';
     _filtersChanged();
@@ -150,6 +174,11 @@ class CatalogController extends ChangeNotifier {
 
   void setCrew(String value) {
     filter.crew = value;
+    _filtersChanged();
+  }
+
+  void setCracker(String value) {
+    filter.cracker = value;
     _filtersChanged();
   }
 

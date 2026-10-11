@@ -164,8 +164,10 @@ class _HomePageState extends State<HomePage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(width: 260, child: FolderTree(controller: c)),
-                    const VerticalDivider(width: 1),
+                    if (!c.catalogMode) ...[
+                      SizedBox(width: 260, child: FolderTree(controller: c)),
+                      const VerticalDivider(width: 1),
+                    ],
                     Expanded(
                       child: c.gridMode
                           ? CenterGrid(

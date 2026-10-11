@@ -13,6 +13,7 @@ class CatalogFacets {
   const CatalogFacets({
     this.publishers = const [],
     this.crews = const [],
+    this.crackers = const [],
     this.languages = const [],
     this.years = const [],
     this.letters = const [],
@@ -20,6 +21,7 @@ class CatalogFacets {
 
   final List<String> publishers;
   final List<String> crews;
+  final List<String> crackers;
   final List<String> languages;
   final List<String> years;
   final List<String> letters;
@@ -150,9 +152,10 @@ String _stem(String name) {
 /// Facets over all cards of a section (gallery `_facets`), incl. the
 /// `0-9`-first letter ordering.
 CatalogFacets _facets(List<GameCard> cards, String kind) {
-  final pubs = <String>{}, crews = <String>{}, langs = <String>{},
-      years = <String>{}, letters = <String>{};
+  final pubs = <String>{}, crews = <String>{}, crackers = <String>{},
+      langs = <String>{}, years = <String>{}, letters = <String>{};
   final withCrew = kindFields(kind).contains('crew');
+  final withCracker = kindFields(kind).contains('cracked_by');
   for (final c in cards) {
     if (c.letter.isNotEmpty) letters.add(c.letter);
     for (final v in c.info?.variants ?? const <Map<String, dynamic>>[]) {
@@ -160,6 +163,9 @@ CatalogFacets _facets(List<GameCard> cards, String kind) {
       if (val('publisher').isNotEmpty) pubs.add(val('publisher'));
       if (val('language').isNotEmpty) langs.add(val('language'));
       if (withCrew && val('crew').isNotEmpty) crews.add(val('crew'));
+      if (withCracker && val('cracked_by').isNotEmpty) {
+        crackers.add(val('cracked_by'));
+      }
       final y = extractYear(v['release'] as String?);
       if (y.isNotEmpty) years.add(y);
     }
@@ -169,6 +175,7 @@ CatalogFacets _facets(List<GameCard> cards, String kind) {
   return CatalogFacets(
     publishers: lowerSort(pubs),
     crews: lowerSort(crews),
+    crackers: lowerSort(crackers),
     languages: lowerSort(langs),
     years: (years.toList()..sort()),
     letters: (letters.toList()
