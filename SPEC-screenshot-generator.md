@@ -271,9 +271,11 @@ paths, so extending later is a config change, not a code change.
 ```
 
 Step [4] runs serially by default. With `run --jobs N` up to N entries are
-processed in parallel: every worker owns its staging dir, log file and
-Hatari process group, and they share one Xvfb display (screenshots are
-framebuffer-internal, so no per-worker display is needed). Entry mutation
+processed in parallel: every worker owns its staging dir, log file, Hatari
+process group and its own Xvfb display (`:99`, `:100`, ...; assigned
+automatically). Screenshots themselves are framebuffer-internal, but the
+desktop click retry (section 7.4) needs the real X pointer and focus, which
+one shared display cannot provide for two Hatari instances. Entry mutation
 and every index save are serialized under a single lock, so parallel
 workers can never overwrite each other's updates. The output-dir lock
 still allows only one tool process per `MARCER_OUT_DIR`.
@@ -428,28 +430,42 @@ Pending filter: `status == desktop` and a stored `click` and not
 1. Boot as usual, but the first capture timepoint is
    `click_retry.probe_time` (default 10 s) only.
 2. Analyze the probe screenshot. If it is **not** desktop (game or black):
-   no click, mark `click_retried`, and continue the normal capture
-   timepoints (the probe shot already covers its timepoint).
+   no click, mark `click_retried` and `click_result: click-not-needed`, and
+   continue the normal capture timepoints (the probe shot already covers its
+   timepoint).
 3. If it shows the desktop, run the click strategy (below), then restart
    the capture timepoints from the click moment.
-4. Record the attempt (`click_retried: true`, `clicked: true/false`) in
-   index and metadata, restart the capture timepoints
+4. Record the attempt (`click_retried: true`, `clicked: true/false`,
+   `click_result`) in index and metadata, restart the capture timepoints
    (`click_retry.timepoints_after_click`, default `10, 25, 45`) from the
    click moment, with the entry budget `click_retry.entry_timeout_s`
    (default 120 s).
 5. The old desktop preview is not overwritten silently: with
    `keep_candidates` it is renamed to the next free `_cNN` candidate name
-   before the new preview is written.
+   before the new preview is written. Every intermediate click-chain
+   screenshot (drive window, folder window, program window) is kept as an
+   additional `_cNN` candidate as well, so the path to a successful click
+   stays traceable even on success.
+
+`click_result` records how the retry ended and is independent of the pixel
+classifier (so a title whose start screen is not `game`-like, e.g. a
+3-colour GEM dialog, still counts as a successful click):
+
+- `click-icon-prg` — `prg` click confirmed a program start,
+- `click-icon-drive` — `drive` click confirmed a program start,
+- `click-failed` — the strategy ran but no program start was confirmed,
+- `click-not-needed` — the probe was already non-desktop.
 
 **Click mechanics (shared by all strategies).** Find the running Hatari X
-window via xdotool (`search --class hatari`, pick the window whose size
-matches the screenshot), raise it, move the real X pointer (XTest) to
-window origin + icon screenshot pixel (scaled by window/screenshot size
-ratio, both are 832x552 in the base profile), then send the double click
-through Hatari's own `hatari-event doubleclick` control command over the
-FIFO. Sending the click through the emulator input path is far more
-reliable than XTest clicks, which GEM often only registers as a single
-selection *(verified)*.
+window via xdotool. When the worker knows its Hatari process id (parallel
+mode), it resolves its own window with `search --pid <pid>` (fallback:
+`getwindowpid` on the candidates, then the size match). Then it raises the
+window, moves the real X pointer (XTest) to window origin + icon screenshot
+pixel (scaled by window/screenshot size ratio, both are 832x552 in the base
+profile), and sends the double click through Hatari's own
+`hatari-event doubleclick` control command over the FIFO. Sending the click
+through the emulator input path is far more reliable than XTest clicks,
+which GEM often only registers as a single selection *(verified)*.
 
 **Strategy `prg`** (desktop shows the program icon): one double click on
 the icon. If the screen does not change, retry up to
@@ -474,9 +490,14 @@ Notes:
   the pointer is positioned through XTest via `xdotool` and only the window
   geometry mapping is needed; the FIFO handles both screenshots and the
   `doubleclick` event.
-- Parallel workers share one X display and their windows overlap, so the
-  whole click sequence (find window, raise, move, click) is serialized
-  under a global lock and always raises its own window first.
+- Each parallel worker runs on its own Xvfb display (section 5). Hatari's
+  SDL only processes mouse motion and focus for its own window, and two
+  instances on one display fight over the single X pointer, so the retry
+  needs one display per worker. Within a display the whole click sequence
+  (find window, raise, focus, move, click) is serialized under a global
+  lock and always raises/focuses its own window first. The window is
+  resolved by process id (section 7.4 mechanics), which also makes one
+  display robust when it is reused serially.
 - `run --retry-desktop` refuses to start when `xdotool` is not in PATH.
 - An entry that stays `desktop` after the click (program did not start or
   is not game-like for the classifier) keeps `click_retried: true` and is
@@ -633,6 +654,7 @@ would look up a preview later (section 12).
   "preview": "10th Frame - Masters.png",
   "click": null,
   "click_retried": false,
+  "click_result": null,
   "capture_method": "cmd-fifo",
   "shots": [
     {
@@ -658,7 +680,9 @@ Array or object map keyed by entry relative path with: `status`, `kind`,
 `size`, `mtime`, `profile`, `last_run`, `preview_path`, and for the click
 retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
 source}` or absent), `icon_found` (true/false after `detect`),
-`click_retried` (true after an attempt). Updated after every entry so an
+`click_retried` (true after an attempt), `click_result`
+(`click-icon-prg` | `click-icon-drive` | `click-failed` |
+`click-not-needed` | null). Updated after every entry so an
 interrupted run loses at most one entry of work.
 
 ---
@@ -796,14 +820,16 @@ Resolved decisions:
   copied index: probe `desktop`, double click at the detected `prg` icon,
   after-click timepoints produced launch screen, black and game shots,
   entry graduated `desktop` -> `done`, old preview preserved as `_c01`,
-  metadata contains `click`/`click_retried` *(verified)*.
+  metadata contains `click`/`click_retried`, `click_result:
+  click-icon-prg` *(verified)*.
 - `run --retry-desktop --only <Bank It - Hotline> --limit 1`: probe
   `desktop` with only drive icons -> `drive` strategy. Double click
   DISKSTATION A opened the `A:\BANK_IT.HAT\` window (folder `BANK_IT`),
   descending one level revealed `BANKIT.PRG`; the program double click
   started the game (BANK IT window) after the click retry kicked in. The
-  index stored `click.strategy: drive` at the DISKSTATION A centre and
-  `click_retried: true`; the newer screenshots were kept as preview and
+  index stored `click.strategy: drive` at the DISKSTATION A centre,
+  `click_retried: true` and `click_result: click-icon-drive`; the newer
+  screenshots and the intermediate chain shots were kept as preview and
   candidates *(verified)*.
 
 ### 14.4 Full run
@@ -866,7 +892,8 @@ A conforming implementation satisfies all of the following.
 - [ ] P1 Each entry produces Hatari logs and per-shot metadata.
 - [ ] P2 Screenshots are captured via `hatari-shortcut screenshot` over the
       cmd FIFO (verified method), with documented fallbacks.
-- [ ] P3 Xvfb uses a fixed display number, never auto-selection.
+- [ ] P3 Xvfb uses explicit display numbers, never auto-selection; with
+      `--jobs N` each worker gets its own fixed display.
 - [ ] P4 Hatari and Xvfb are killed via process group on timeout or exit.
 - [ ] P5 Per-entry timeout is enforced and the run continues after it.
 - [ ] P6 `detect` finds the GEM program or drive icon in existing desktop
@@ -878,7 +905,10 @@ A conforming implementation satisfies all of the following.
       `click_retry.drive_max_depth` levels (folder icons) to the program
       icon. Clicks use `hatari-event doubleclick` over the FIFO, are
       retried when they do not take effect, restart the capture timepoints,
-      and the attempt is recorded (`click_retried`, `clicked`).
+      and the attempt is recorded (`click_retried`, `clicked`,
+      `click_result`). Each worker resolves its own Hatari window by process
+      id, so `--jobs N` is safe, and all intermediate chain screenshots are
+      kept as `_cNN` candidates.
 
 **Filtering**
 - [ ] F1 Black or empty shots are rejected by configurable thresholds.

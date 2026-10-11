@@ -366,29 +366,64 @@ def _xdotool(args, display: str, timeout: int = 10):
                           env={**os.environ, "DISPLAY": display})
 
 
-def find_hatari_window(P: dict, grab_png: Path):
+def find_hatari_window(P: dict, grab_png: Path, pid: int = None):
     """Locate Hatari's SDL window via xdotool, matched by screenshot size.
 
-    Returns (wid, kv) where kv holds X/Y/WIDTH/HEIGHT from the window
-    geometry. Raises RuntimeError when no window can be found.
+    When ``pid`` is given (the running Hatari process), the window is
+    resolved by process id so that parallel workers click into their own
+    window instead of whichever window is found first. Returns (wid, kv)
+    where kv holds X/Y/WIDTH/HEIGHT from the window geometry. Raises
+    RuntimeError when no window can be found.
     """
     from PIL import Image
     with Image.open(grab_png) as im:
         shot_w, shot_h = im.size
 
     disp = P["display"]
+
+    def _geometry(wid):
+        geo = _xdotool(["getwindowgeometry", "--shell", wid], disp)
+        return dict(line.split("=", 1)
+                    for line in geo.stdout.splitlines() if "=" in line)
+
     with CLICK_LOCK:
+        # preferred: ask xdotool for the windows of our own Hatari process
+        if pid is not None:
+            try:
+                res = _xdotool(["search", "--all", "--class", "hatari",
+                                "--pid", str(pid)], disp)
+            except subprocess.CalledProcessError:
+                res = None
+            if res is not None:
+                ids = [ln for ln in res.stdout.splitlines() if ln.strip()]
+                best = None
+                for wid in ids:
+                    kv = _geometry(wid)
+                    w, h = int(kv["WIDTH"]), int(kv["HEIGHT"])
+                    dist = abs(w - shot_w) + abs(h - shot_h)
+                    if best is None or dist < best[0]:
+                        best = (dist, wid, kv)
+                if best is not None:
+                    return best[1], best[2]
+
+        # fallback: scan all hatari windows, match by size, and prefer the
+        # one whose _NET_WM_PID equals our pid
         res = _xdotool(["search", "--all", "--class", "hatari"], disp)
         ids = [line for line in res.stdout.splitlines() if line.strip()]
         best = None
         for wid in ids:
-            geo = _xdotool(["getwindowgeometry", "--shell", wid], disp)
-            kv = dict(line.split("=", 1)
-                      for line in geo.stdout.splitlines() if "=" in line)
+            kv = _geometry(wid)
             w, h = int(kv["WIDTH"]), int(kv["HEIGHT"])
             dist = abs(w - shot_w) + abs(h - shot_h)
-            if best is None or dist < best[0]:
-                best = (dist, wid, kv)
+            try:
+                wp = _xdotool(["getwindowpid", wid], disp).stdout.strip()
+                wp = int(wp) if wp else None
+            except (subprocess.CalledProcessError, ValueError):
+                wp = None
+            same = (pid is not None and wp == pid)
+            key = (0 if same else 1, dist)
+            if best is None or key < best[0]:
+                best = (key, wid, kv)
     if best is None:
         raise RuntimeError("no hatari window found via xdotool")
     return best[1], best[2]
@@ -411,9 +446,15 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
     x = wx + round(icon_sx * ww / shot_w)
     y = wy + round(icon_sy * wh / shot_h)
     with CLICK_LOCK:
-        # raise first: parallel workers share one display and their
-        # windows overlap
+        # raise and focus first: parallel workers share one display and
+        # their windows overlap. Hatari's SDL only processes mouse motion
+        # when its window has input focus, so focus must be set explicitly
+        # (windowfocus uses XSetInputFocus and works without a WM).
         _xdotool(["windowraise", wid], disp)
+        try:
+            _xdotool(["windowfocus", wid], disp)
+        except subprocess.CalledProcessError:
+            pass
         # move with --sync so the pointer is guaranteed to be in place
         # before the click, but fall back to a plain move: --sync can block
         # indefinitely under Xvfb when the target equals the current pixel
@@ -432,7 +473,7 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
 
 
 def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
-               log, fifo: Path = None) -> None:
+               log, fifo: Path = None, pid: int = None) -> None:
     """Double-click the detected icon on Hatari's SDL window.
 
     The grab screenshot provides the window content size so that the
@@ -441,7 +482,7 @@ def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
     from PIL import Image
     with Image.open(grab_png) as im:
         shot_w, shot_h = im.size
-    wid, kv = find_hatari_window(P, grab_png)
+    wid, kv = find_hatari_window(P, grab_png, pid=pid)
     click_window_xy(P, wid, kv, shot_w, shot_h, icon_sx, icon_sy, log,
                     fifo=fifo)
 
@@ -611,7 +652,7 @@ def _screen_changed(a: Path, b: Path, frac: float = 0.02) -> bool:
 
 
 def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
-                        grabs, log):
+                        grabs, log, pid: int = None):
     """Execute the click sequence for a desktop retry.
 
     prg: one double click on the program icon (game starts directly).
@@ -619,16 +660,35 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
            descend into the window: click the program icon if present, or
            open a folder and look again (bounded by drive_max_depth).
 
-    returns (clicked, last_grab): clicked is True when the final program
-    double click was sent; last_grab is the most recent screenshot path
-    (used to size the window for coordinate mapping).
+    ``pid`` is the running Hatari process, used to resolve its own window
+    when parallel workers share one X display.
+
+    returns (clicked, last_grab, chain_shots, result):
+      clicked     - True when a program start was confirmed
+      last_grab   - most recent screenshot path (window sizing)
+      chain_shots - every screenshot taken during the chain, in order
+                    (for candidate retention)
+      result      - "click-icon-prg" | "click-icon-drive" | "click-failed"
     """
     strategy = click_info.get("strategy", "prg")
+    chain_shots = list(grabs)
 
     if strategy == "prg":
-        click_icon(P, grabs[-1], click_info["sx"], click_info["sy"], log,
-                   fifo=fifo)
-        return True, grabs[-1]
+        before = grabs[-1]
+        attempts = int(click_cfg.get("prg_attempts", 3))
+        for pa in range(1, attempts + 1):
+            click_icon(P, before, click_info["sx"], click_info["sy"], log,
+                       fifo=fifo, pid=pid)
+            if not sleep_until(time.monotonic() + 2.0):
+                return False, before, chain_shots, "click-failed"
+            new_shot = _grab_now(fifo, outdir, 2.0) or before
+            chain_shots.append(new_shot)
+            if _screen_changed(before, new_shot):
+                log(f"program started (prg, attempt {pa})")
+                return True, new_shot, chain_shots, "click-icon-prg"
+            log(f"program icon did not start (attempt {pa}), retrying")
+        log("program icon never started (prg)")
+        return False, chain_shots[-1], chain_shots, "click-failed"
 
     # strategy == "drive": open DISKSTATION A first
     step_wait = float(click_cfg.get("step_wait", 2.0))
@@ -639,11 +699,12 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
     attempts = int(click_cfg.get("drive_attempts", 3))
     for attempt in range(1, attempts + 1):
         click_icon(P, grabs[-1], click_info["sx"], click_info["sy"], log,
-                   fifo=fifo)
+                   fifo=fifo, pid=pid)
         log(f"drive click attempt {attempt}, waiting {step_wait}s")
         if not sleep_until(time.monotonic() + step_wait):
-            return False, win_shot
+            return False, win_shot, chain_shots, "click-failed"
         win_shot = _grab_now(fifo, outdir, 2.0) or win_shot
+        chain_shots.append(win_shot)
         # a program or folder icon only appears once the window is open;
         # on the plain desktop neither template matches, so this is a
         # reliable "window open" signal
@@ -653,7 +714,7 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         log("no window icon visible, retrying drive click")
     if target is None:
         log("drive window did not open with a usable icon")
-        return False, win_shot
+        return False, win_shot, chain_shots, "click-failed"
 
     for depth in range(1, max_depth + 1):
         kind, hit = target
@@ -663,28 +724,31 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
             before = win_shot
             prg_attempts = int(click_cfg.get("prg_attempts", 3))
             for pa in range(1, prg_attempts + 1):
-                click_icon(P, win_shot, hit["sx"], hit["sy"], log, fifo=fifo)
+                click_icon(P, win_shot, hit["sx"], hit["sy"], log,
+                           fifo=fifo, pid=pid)
                 if not sleep_until(time.monotonic() + step_wait):
-                    return False, win_shot
+                    return False, win_shot, chain_shots, "click-failed"
                 new_shot = _grab_now(fifo, outdir, 2.0) or win_shot
+                chain_shots.append(new_shot)
                 if _screen_changed(before, new_shot):
                     log(f"program started at depth {depth} "
                         f"(attempt {pa})")
-                    return True, new_shot
+                    return True, new_shot, chain_shots, "click-icon-drive"
                 log(f"program icon did not start (attempt {pa}), retrying")
             log(f"program icon never started at depth {depth}")
-            return False, new_shot
-        click_icon(P, win_shot, hit["sx"], hit["sy"], log, fifo=fifo)
+            return False, new_shot, chain_shots, "click-failed"
+        click_icon(P, win_shot, hit["sx"], hit["sy"], log, fifo=fifo, pid=pid)
         log(f"folder opened at depth {depth}, descending")
         if not sleep_until(time.monotonic() + step_wait):
-            return False, win_shot
+            return False, win_shot, chain_shots, "click-failed"
         win_shot = _grab_now(fifo, outdir, 2.0) or win_shot
+        chain_shots.append(win_shot)
         target = find_window_target(win_shot, cfg)
         if target is None:
             log(f"window depth {depth}: no further program or folder icon")
-            return False, win_shot
+            return False, win_shot, chain_shots, "click-failed"
     log(f"max depth {max_depth} reached without a program icon")
-    return False, win_shot
+    return False, win_shot, chain_shots, "click-failed"
 
 
 def process_entry(cfg: dict, P: dict, entry: dict, log,
@@ -726,6 +790,8 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     t_start = time.time()
     status, kind = "error", None
     shots_meta, preview, candidates = [], None, []
+    click_result = None
+    chain_shots = []
 
     click_cfg = cfg.get("click_retry") or {}
     click_info = entry.get("click")
@@ -808,16 +874,19 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                 if kind_at == "desktop":
                     strategy = click_info.get("strategy", "prg")
                     try:
-                        clicked, last_grab = perform_click_chain(
-                            P, cfg, click_cfg, click_info, fifo, outdir,
-                            grabs, log)
+                        clicked, last_grab, chain_shots, click_result = \
+                            perform_click_chain(
+                                P, cfg, click_cfg, click_info, fifo, outdir,
+                                grabs, log, pid=proc.pid)
                     except Exception as ex:
                         log(f"click chain failed ({strategy}): {ex}")
                         clicked = False
+                        click_result = "click-failed"
 
                     def _mark_click():
                         entry["click_retried"] = True
                         entry["click"] = {**click_info, "clicked": clicked}
+                        entry["click_result"] = click_result
                     commit(_mark_click)
                     if clicked:
                         t0 = time.monotonic()
@@ -834,8 +903,11 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                     if kind_at is not None:
                         # game (or black) at probe: no click, this shot
                         # already covers the timepoint it was taken at
+                        click_result = "click-not-needed"
+
                         def _mark_no_click():
                             entry["click_retried"] = True
+                            entry["click_result"] = click_result
                         commit(_mark_no_click)
                     schedule = [t for t in cfg["timepoints"] if t > tp]
                     tp_i = 0
@@ -893,15 +965,33 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                 target = mirror_dir / preview_name
                 others = [m for m in deduped if m is not pick]
                 if cfg["keep_candidates"]:
-                    for i, m in enumerate(others, 1):
-                        cname = f"{base}_c{i:02d}.png"
-                        shutil.copy2(outdir / m["file"], mirror_dir / cname)
+                    added = {pick["file"]}
+                    ci = 0
+
+                    def _add_candidate(src_file, src_dir):
+                        nonlocal ci
+                        if src_file in added:
+                            return
+                        added.add(src_file)
+                        ci += 1
+                        cname = f"{base}_c{ci:02d}.png"
+                        shutil.copy2(src_dir / src_file, mirror_dir / cname)
                         candidates.append(cname)
+
+                    for m in others:
+                        _add_candidate(m["file"], outdir)
+                    # keep every intermediate click-chain screenshot too
+                    # (drive window, folder window, program window), so the
+                    # path to a successful click stays traceable
+                    for sp in chain_shots:
+                        if isinstance(sp, Path):
+                            _add_candidate(sp.name, outdir)
                     if target.exists():
                         # keep the previous preview (e.g. an old desktop
                         # shot) as an additional candidate instead of
                         # silently overwriting it
-                        old = f"{base}_c{len(candidates) + 1:02d}.png"
+                        ci += 1
+                        old = f"{base}_c{ci:02d}.png"
                         os.replace(target, mirror_dir / old)
                         candidates.append(old)
                 shutil.copy2(outdir / pick["file"], target)
@@ -911,6 +1001,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             entry["kind"] = kind
             entry["preview"] = preview
             entry["candidates"] = candidates
+            entry["click_result"] = click_result
             entry["last_run"] = time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                               time.gmtime())
             entry["duration_s"] = round(time.time() - t_start, 1)
@@ -935,6 +1026,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "candidates": candidates,
             "click": entry.get("click"),
             "click_retried": bool(entry.get("click_retried")),
+            "click_result": click_result,
             "capture_method": "cmd-fifo",
             "shots": shots_meta,
             "zip_contents": zip_contents,
@@ -985,12 +1077,14 @@ def release_lock(lock: Path) -> None:
 
 def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   pending: list, jobs: int, t_start: float,
-                  done_counts: dict):
+                  done_counts: dict, displays: list):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
-    parallel workers never overwrite each other's updates. Returns
-    (interrupted, processed).
+    parallel workers never overwrite each other's updates. Each worker gets
+    its own Xvfb display: Hatari's SDL only processes mouse motion when its
+    window has input focus, and two instances sharing one display would
+    steal each other's pointer. Returns (interrupted, processed).
     """
     state_lock = threading.Lock()
     queue = deque(pending)
@@ -1015,6 +1109,8 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
 
     def worker(wid):
         nonlocal processed, interrupted, limit_reported, hours_reported
+        # each worker runs on its own display
+        Pw = {**P, "display": displays[(wid - 1) % len(displays)]}
         try:
             while True:
                 with state_lock:
@@ -1041,7 +1137,7 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                     cur = processed
 
                 print(f"[w{wid}][{cur}/{total_shown}] {e['rel']}", flush=True)
-                process_entry(cfg, P, e, make_log(e, wid),
+                process_entry(cfg, Pw, e, make_log(e, wid),
                               state_lock=state_lock,
                               click_retry=args.retry_desktop,
                               force=args.force)
@@ -1063,15 +1159,30 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
     return interrupted, processed
 
 
+def _display_list(base: str, jobs: int):
+    """Return ``jobs`` display names starting at ``base`` (e.g. :99, :100)."""
+    try:
+        base_num = int(base.lstrip(":"))
+    except ValueError:
+        base_num = 99
+    return [f":{base_num + i}" for i in range(jobs)]
+
+
 def cmd_run(cfg: dict, P: dict, args) -> int:
     if args.retry_desktop and shutil.which("xdotool") is None:
         sys.exit("error: --retry-desktop needs xdotool in PATH")
     out = Path(P["out"])
     out.mkdir(parents=True, exist_ok=True)
     lock = acquire_lock(out)
-    xvfb = ensure_xvfb(P["display"], cfg["xvfb_screen"])
-    if xvfb:
-        print(f"Xvfb started on {P['display']} (pid {xvfb.pid})", flush=True)
+
+    jobs = max(1, args.jobs)
+    displays = _display_list(P["display"], jobs)
+    xvfbs = []
+    for disp in displays:
+        xv = ensure_xvfb(disp, cfg["xvfb_screen"])
+        if xv:
+            print(f"Xvfb started on {disp} (pid {xv.pid})", flush=True)
+            xvfbs.append(xv)
 
     idx = load_index(out)
     entries = idx["entries"]
@@ -1093,10 +1204,10 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
             continue
         pending.append(e)
 
-    jobs = max(1, args.jobs)
     print(f"pending entries: {len(pending)}", flush=True)
     if jobs > 1:
-        print(f"parallel jobs: {jobs}", flush=True)
+        print(f"parallel jobs: {jobs} on displays {', '.join(displays)}",
+              flush=True)
     t_start = time.monotonic()
     done_counts = {}
     processed = 0
@@ -1105,7 +1216,8 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
     try:
         if jobs > 1:
             interrupted, processed = _run_parallel(
-                cfg, P, args, out, idx, pending, jobs, t_start, done_counts)
+                cfg, P, args, out, idx, pending, jobs, t_start, done_counts,
+                displays)
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -1146,8 +1258,8 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
     finally:
         save_index(out, idx)
         release_lock(lock)
-        if xvfb:
-            kill_group(xvfb.pid)
+        for xv in xvfbs:
+            kill_group(xv.pid)
         elapsed = time.monotonic() - t_start
         print(f"\nprocessed {processed} entries in {elapsed/60:.1f} min",
               flush=True)

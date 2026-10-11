@@ -33,13 +33,15 @@ Interrupt with Ctrl+C at any time. Progress is saved after every entry.
 A later `run` skips completed entries and retries failed or timed out ones.
 
 By default entries are processed one at a time. `--jobs N` runs N workers
-in parallel; each worker boots its own Hatari instance in the shared Xvfb
-display and needs roughly 220 MB RAM and ~35% of one CPU core. All index
-writes are serialized under a lock, so parallel workers never overwrite
-each other's updates, and Ctrl+C stops every worker after its current
-entry. Keep total CPU below ~90%, otherwise the wall-clock screenshot
-timepoints may drift. `--jobs 1` (the default) is the classic serial
-behavior.
+in parallel; each worker boots its own Hatari instance on its **own Xvfb
+display** (`:99`, `:100`, ...) and needs roughly 220 MB RAM and ~35% of one
+CPU core. Separate displays are required for the click retry (Hatari only
+tracks the mouse when its window has focus, so two instances on one display
+would fight over the pointer). All index writes are serialized under a
+lock, so parallel workers never overwrite each other's updates, and Ctrl+C
+stops every worker after its current entry. Keep total CPU below ~90%,
+otherwise the wall-clock screenshot timepoints may drift. `--jobs 1` (the
+default) is the classic serial behavior.
 
 ### Desktop click retry (`detect` + `run --retry-desktop`)
 
@@ -85,15 +87,32 @@ repeated until the screen actually changes. Window icons match their
 templates near 1.0, so `click_retry.window_icon_min_score` (default 0.85)
 rejects the flat-region false positives that appear on a plain desktop.
 
-The attempt is recorded once per entry (`click_retried: true`,
-`clicked: true/false` in index and metadata JSON); `--retry-desktop
---force` allows a second attempt. When a previous desktop preview is
-replaced by a game screenshot, the old PNG is kept as an additional
-candidate (`_cNN`) instead of being overwritten. Parallel workers share
-one X display, so the click sequence itself is serialized with a global
-lock and raises its own Hatari window first. Hatari 2.4.1 has no
-`mousemove` control command, which is why the real X pointer (XTest via
-`xdotool`) is used for positioning.
+The attempt is recorded once per entry. `click_retried: true` marks that a
+retry ran, and a new `click_result` field records how it ended:
+
+- `click-icon-prg` — successful `prg` click (program started),
+- `click-icon-drive` — successful `drive` click (DISKSTATION A -> ... ->
+  program started),
+- `click-failed` — the strategy ran but no program start was confirmed,
+- `click-not-needed` — the probe was already a game/other screen, no click
+  was sent.
+
+Success is judged by the click chain itself (the screen changes after the
+program double click), not by the image classifier, so titles whose start
+screen is not recognized as `game` (e.g. a 3-colour GEM dialog) still count
+as a successful click. `--retry-desktop --force` allows a second attempt.
+
+When a previous preview is replaced, it is kept as an additional candidate
+(`_cNN`) instead of being overwritten, and every intermediate click-chain
+screenshot (drive window, folder window, program window) is kept as a
+candidate too, so the path to a successful click stays traceable.
+
+Each parallel worker runs on its own Xvfb display, so
+`run --retry-desktop --jobs N` can safely click several titles at once.
+Within a display the click sequence is serialized with a global lock and
+raises its own Hatari window first; Hatari 2.4.1 has no `mousemove` control
+command, which is why the real X pointer (XTest via `xdotool`) is used for
+positioning.
 
 ## Config
 
