@@ -52,6 +52,8 @@ results. There is no live refresh/polling in v1.
   open ZIP highlighted, deep link `?entry=<rel>`.
 - **Deep links**: `?entry=…` jumps to the card's page and opens it;
   closing the lightbox keeps the list state.
+- **Favicon**: pixel-art Atari Fuji on a green CRT screen
+  (`static/favicon.svg`).
 
 | Context | Keys |
 |---|---|

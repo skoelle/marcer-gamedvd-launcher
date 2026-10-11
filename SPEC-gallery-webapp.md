@@ -184,6 +184,7 @@ tools/gallery/
     index.html         app shell
     app.js             frontend logic (grid, filters, lightbox, keyboard)
     style.css          design (based on GALLERY_TEMPLATE)
+    favicon.svg        pixel-art Atari Fuji favicon
   config.example.json  committed defaults (no paths inside)
   config.local.json    optional, git-ignored machine overrides
 ```
@@ -299,7 +300,7 @@ error body `{ "error": "<message>" }`.
 | Endpoint | Purpose |
 |---|---|
 | `/` | serves `static/index.html` |
-| `/static/<file>` | serves `app.js`, `style.css` (fixed file set, no listing) |
+| `/static/<file>` | serves `app.js`, `style.css`, `favicon.svg` (fixed file set, no listing) |
 | `/api/meta` | statistics, facets, availability, ordering info |
 | `/api/entries` | filtered/sorted/paginated cards (section 5.3) |
 | `/img/<rel path>` | original preview/candidate PNG (section 5.4) |

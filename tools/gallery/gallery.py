@@ -691,10 +691,11 @@ class GalleryHandler(BaseHTTPRequestHandler):
                 return self._file(STATIC_DIR / "index.html", "text/html")
             if path.startswith("/static/"):
                 name = path[len("/static/"):]
-                if name not in ("app.js", "style.css"):
+                if name not in ("app.js", "style.css", "favicon.svg"):
                     return self._error(404, "not found")
-                ctype = ("text/javascript" if name.endswith(".js")
-                         else "text/css")
+                ctype = {"app.js": "text/javascript",
+                         "style.css": "text/css",
+                         "favicon.svg": "image/svg+xml"}[name]
                 return self._file(STATIC_DIR / name, ctype)
             if path == "/api/meta":
                 self.store.reload()
