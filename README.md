@@ -239,6 +239,17 @@ This builds the project, generates a structured `.demo/` directory with sample f
 
 > ⚠️ Windows is not supported for `demo.sh`. Use `start.cmd` with your own game files instead.
 
+### 🔧 Tools
+
+Helper tools for maintaining and enriching the game archive (not part of the launcher release ZIP):
+
+| Tool | Purpose | Docs |
+|---|---|---|
+| [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `<PatchDirectory>/Data/` — the data source for future info display, search and the desktop app. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md) |
+| [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`. | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) |
+
+Both tools are Python scripts run via their `run.sh` wrapper with the repo `.venv`; paths come exclusively from the git-ignored `local/paths.env`.
+
 ### 🚀 Release Process
 
 Releases are automated via GitHub Actions (`.github/workflows/release.yml`).
@@ -282,6 +293,7 @@ This command validates the version, checks for uncommitted changes, generates a 
 
 - Full technical requirements and build rules are in [`AGENTS.md`](AGENTS.md).
 - Technology-neutral behavioral specification (for reimplementation in other languages or as a desktop app) is in [`SPEC.md`](SPEC.md).
+- Analysis of external game metadata sources (XLS workbooks, data model, roadmap) is in [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md).
 - After any functional change, both `README.md` and `AGENTS.md` must be updated.
 - Every release **must** include release notes listing all changes and bugfixes.
 

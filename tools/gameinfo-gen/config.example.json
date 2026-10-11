@@ -10,7 +10,6 @@
     "utils": "Utilitys - Title Sorted"
   },
   "title_sorted_dir": "Title Sorted",
-  "out_subdir": "Data",
   "fuzzy_cutoff": 0.92,
   "prefer_patch_xls": true
 }

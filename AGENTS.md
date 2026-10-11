@@ -18,6 +18,10 @@ The implementation is split into focused modules (files) under the `src/MarcerGa
 - MarcerGameDvdLauncher/FavoritesService.cs: Manages the favorites/bookmark system — toggling favorites on ZIPs, persisting them to `favorites.txt` (via `DefaultFileName` constant), and providing the virtual `Favorites` folder view (via `FavoritesRootName` constant).
 - MarcerGameDvdLauncher/UIErrorService.cs: Centralized UI error presentation using the console message helper.
 
+Tooling (Python, not part of the launcher build; paths via git-ignored `local/paths.env`, run via each tool's `run.sh` with the repo `.venv`):
+- tools/gameinfo-gen/: Extracts game metadata from the GameDVD XLS workbooks into JSON under `<PATCH>/Data/` (see `ANALYSIS-game-data.md`).
+- tools/screenshot-gen/: Generates preview screenshots via Hatari on a virtual display (see `SPEC-screenshot-generator.md`).
+
 Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (AGENTS.md) and README.md as required by project policy.
 
 **Specification:** [`SPEC.md`](SPEC.md) is the technology-neutral behavioral specification of the launcher (used as the basis for reimplementation in other languages or as a desktop app). Behavioral changes must be reflected in SPEC.md as well — keep sections 1–17 and the Conformance Checklist in sync with the implementation.

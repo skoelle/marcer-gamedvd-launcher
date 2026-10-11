@@ -5,8 +5,8 @@
 
 Implements ANALYSIS-game-data.md (M1):
   extract   parse the XLS workbooks, match on-disk folders, write JSON to
-            <PATCH>/Data/ (games-cracked.json, games-pd.json, games-utils.json,
-            manifest.json, unmatched-report.txt)
+            MARCER_DATA_DIR (games-cracked.json, games-pd.json,
+            games-utils.json, manifest.json, unmatched-report.txt)
   check     validate the generated output against the sources (exit 1 on
             missing or stale output)
   report    print an audit summary (TOS/bad notes, dump flags, coverage)
@@ -60,7 +60,6 @@ DEFAULT_CONFIG = {
         "utils": "Utilitys - Title Sorted",
     },
     "title_sorted_dir": "Title Sorted",
-    "out_subdir": "Data",
     "fuzzy_cutoff": 0.92,
     "prefer_patch_xls": True,
 }
@@ -148,8 +147,13 @@ def paths() -> dict:
     if not patch:
         sys.exit("error: environment variable MARCER_PATCH_DIR is not set "
                  "(add it to local/paths.env)")
+    data = os.environ.get("MARCER_DATA_DIR", "").strip()
+    if not data:
+        sys.exit("error: environment variable MARCER_DATA_DIR is not set "
+                 "(add it to local/paths.env)")
     root = os.environ.get("MARCER_ROOT_DIR", "").strip()
-    return {"patch": Path(patch), "root": Path(root) if root else None}
+    return {"patch": Path(patch), "data": Path(data),
+            "root": Path(root) if root else None}
 
 
 # --------------------------------------------------------------------------
@@ -581,7 +585,7 @@ def build_unmatched_report(results: dict) -> str:
 def cmd_extract(args) -> int:
     cfg = load_config()
     paths_ = paths()
-    out_dir = paths_["patch"] / cfg["title_sorted_dir"] / cfg["out_subdir"]
+    out_dir = paths_["data"]
     kinds = (args.kind,) if args.kind else KINDS
 
     anomalies_all = []
@@ -637,7 +641,7 @@ def cmd_extract(args) -> int:
 def cmd_check(args) -> int:
     cfg = load_config()
     paths_ = paths()
-    out_dir = paths_["patch"] / cfg["title_sorted_dir"] / cfg["out_subdir"]
+    out_dir = paths_["data"]
     mp = out_dir / "manifest.json"
     if not mp.is_file():
         log(f"error: {mp} not found (run extract first)")
