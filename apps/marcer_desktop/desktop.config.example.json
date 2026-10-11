@@ -1,0 +1,15 @@
+{
+  "RootDirectory": "/absolute/path/to/MarcersGameDVD",
+  "PatchDirectory": "/absolute/path/to/MarcersGamesDVD-Update/Patch",
+  "OutDirectory": "/absolute/path/to/MarcersGamesDVD-Update/Screenshots",
+  "DataDirectory": "/absolute/path/to/MarcersGamesDVD-Update/Data",
+  "Hatari": {
+    "Executable": "/absolute/path/to/hatari",
+    "ConfigFile": "",
+    "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
+  },
+  "Window": {
+    "width": 1280,
+    "height": 800
+  }
+}

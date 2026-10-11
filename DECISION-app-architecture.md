@@ -123,17 +123,21 @@ Implementation strategy for the overlay merge and catalog joins:
 - **Implemented:** gallery webapp (`tools/gallery`, `SPEC-gallery-webapp.md`)
   — stdlib Python server + HTML/CSS/JS frontend; the static `shotgen html`
   gallery has been removed.
+- **Decided 2026-10-11 (follow-up):** Flutter desktop app lives in this
+  repository at `apps/marcer_desktop/` (pure-Dart data layer in
+  `apps/marcer_desktop/packages/marcer_catalog/`), Flutter stable SDK in
+  `~/flutter`, own `desktop.config.json` with absolute paths (committed as
+  `apps/marcer_desktop/desktop.config.example.json`). Phased plan:
+  `apps/marcer_desktop/PLAN.md` (Phase 0 scaffold done).
 - **Not yet decided / deferred:**
-  - Flutter SDK/toolchain setup and project layout (new repo, subdirectory, or
-    separate repository).
   - When Surface B (couch mode) is added, how the mode switch is presented
     (config flag, CLI arg, or runtime switch).
   - Whether the gallery server and a future tool share a common
     module layout under `tools/`.
   - Packaging/release strategy for the Flutter app (GitHub Actions matrix
     mirroring `.github/workflows/release.yml`).
-- **No code is written yet** for the Flutter desktop app (inventory browser
-  / couch launcher).
+- **Flutter desktop app:** Phase 0 scaffold written (2026-10-11); UI and
+  launch still to come per `apps/marcer_desktop/PLAN.md`.
 
 ## 7. Conformance Notes for Future Implementations
 

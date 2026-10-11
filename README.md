@@ -251,6 +251,16 @@ Helper tools for maintaining and enriching the game archive (not part of the lau
 
 All tools are Python scripts run via their `run.sh` wrapper with the repo `.venv`; paths come exclusively from the git-ignored `local/paths.env`.
 
+### 🖥️ Desktop App (Flutter, in development)
+
+Windowed desktop app (Surface A: master-detail inventory browser, later Surface B: fullscreen couch mode) built with Flutter — see [`DECISION-app-architecture.md`](DECISION-app-architecture.md) for the technology decision and [`apps/marcer_desktop/PLAN.md`](apps/marcer_desktop/PLAN.md) for the phased plan.
+
+- **Layout:** `apps/marcer_desktop/` (Flutter app) with the pure-Dart data layer `apps/marcer_desktop/packages/marcer_catalog/` (overlay merge per [`SPEC.md`](SPEC.md) §7, gameinfo join, screenshot index).
+- **Config:** git-ignored `desktop.config.json` with absolute paths (template: [`desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json)); auto-seeded from `local/paths.env` on first `run.sh` start.
+- **Run:** `apps/marcer_desktop/run.sh` (requires the Flutter stable SDK in `~/flutter` plus the Linux desktop toolchain: `clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev`).
+- **Tests:** `cd apps/marcer_desktop/packages/marcer_catalog && dart test`.
+- The app is a **read-only** consumer of all data roots and degrades gracefully when `index.json` or the gameinfo `Data/` directory are absent. It is **not** built via `scripts/build.*`; it is currently not part of the launcher release ZIPs.
+
 ### 🚀 Release Process
 
 Releases are automated via GitHub Actions (`.github/workflows/release.yml`).
