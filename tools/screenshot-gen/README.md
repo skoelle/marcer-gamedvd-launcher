@@ -22,6 +22,7 @@ tools/screenshot-gen/run.sh run --hours 8  # night run with time budget
 tools/screenshot-gen/run.sh run --limit 3  # small test batch
 tools/screenshot-gen/run.sh run --only Xevious   # only matching paths
 tools/screenshot-gen/run.sh run --jobs 8   # parallel workers (e.g. night runs)
+tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
 
 # Desktop entries (game never started): find the GEM program icon in the
 # existing desktop previews, then boot once more and click it:
@@ -39,7 +40,10 @@ tools/screenshot-gen/run.sh prune             # delete
 ```
 
 Interrupt with Ctrl+C at any time. Progress is saved after every entry.
-A later `run` skips completed entries and retries failed or timed out ones.
+A later `run` skips completed entries (`done`, `desktop`, `no_usable_shots`)
+and retries unfinished or failed ones (`pending`, `interrupted`, `timeout`,
+`error`). The `no_usable_shots` entries are not retried by a normal run;
+repeat them explicitly with `run --retry-no-usable`.
 
 By default entries are processed one at a time. `--jobs N` runs N workers
 in parallel; each worker boots its own Hatari instance on its **own Xvfb

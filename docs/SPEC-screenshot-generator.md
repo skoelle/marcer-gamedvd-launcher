@@ -259,7 +259,8 @@ paths, so extending later is a config change, not a code change.
         |
 [3] select pending entries (status != done, or --force;
          with --retry-desktop: only status == desktop with a stored
-         icon hit that has not been clicked yet, section 7.4)
+         icon hit that has not been clicked yet, section 7.4;
+         with --retry-no-usable: only status == no_usable_shots)
         |
 [4] per entry:
       a. copy ZIP from NAS to local staging dir     (NAS is read-only)
@@ -642,7 +643,9 @@ preview-white (163 bootable -> `drive_led_refetch`), 639 candidate-only;
   (restart per entry is too slow), stop on tool exit if the tool started it.
 - **Resume:** index plus per-entry metadata are the state. Entries with final
   status (`done`, `desktop`, `no_usable_shots`) are skipped on rerun.
-  `--force` reprocesses. Interrupted entries without metadata are retried.
+  `no_usable_shots` is not retried automatically; use `run
+  --retry-no-usable` to reprocess it explicitly. `--force` reprocesses
+  everything. Interrupted entries without metadata are retried.
 - **Logging:** one log file per entry (Hatari stdout and tool events) plus a
   run summary. Logs live under `MARCER_OUT_DIR/logs/`, mirrored by entry
   relative path.

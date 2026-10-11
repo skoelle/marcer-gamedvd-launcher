@@ -1246,7 +1246,11 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
                 continue
             if e.get("click_retried") and not args.force:
                 continue
-        elif e["status"] in ("done", "desktop") and not args.force:
+        elif args.retry_no_usable:
+            if e["status"] != "no_usable_shots":
+                continue
+        elif e["status"] in ("done", "desktop", "no_usable_shots") \
+                and not args.force:
             continue
         if args.only and args.only.lower() not in rel.lower():
             continue
@@ -1619,6 +1623,9 @@ def main() -> int:
                        help="retry desktop-only entries with a detected icon: "
                             "click it once after boot, then capture "
                             "(requires a prior 'detect' run)")
+    p_run.add_argument("--retry-no-usable", action="store_true",
+                       help="retry only entries that ended as no_usable_shots "
+                            "(not reprocessed by a normal run)")
 
     p_detect = sub.add_parser(
         "detect",
@@ -1647,6 +1654,10 @@ def main() -> int:
     args = ap.parse_args()
     if args.cmd == "run" and args.jobs < 1:
         ap.error("--jobs must be >= 1")
+    if getattr(args, "retry_desktop", False) \
+            and getattr(args, "retry_no_usable", False):
+        ap.error("--retry-desktop and --retry-no-usable are mutually "
+                 "exclusive")
     cfg = load_config()
     P = paths()
 
