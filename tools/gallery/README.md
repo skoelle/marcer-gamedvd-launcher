@@ -52,8 +52,8 @@ results. There is no live refresh/polling in v1.
   open ZIP highlighted, deep link `?entry=<rel>`.
 - **Deep links**: `?entry=…` jumps to the card's page and opens it;
   closing the lightbox keeps the list state.
-- **Favicon**: GEM-style 3.5" floppy disk on the Atari ST green
-  (`static/favicon.svg`).
+- **Favicon**: GEM desktop drawer/drive icon on the Atari ST green
+  (`static/favicon.svg`, pixel-traced from `local/drawer.png`).
 
 | Context | Keys |
 |---|---|

@@ -184,7 +184,7 @@ tools/gallery/
     index.html         app shell
     app.js             frontend logic (grid, filters, lightbox, keyboard)
     style.css          design (based on GALLERY_TEMPLATE)
-    favicon.svg        GEM-style 3.5" floppy favicon (Atari green)
+    favicon.svg        GEM drawer/drive favicon (traced from local/drawer.png)
   config.example.json  committed defaults (no paths inside)
   config.local.json    optional, git-ignored machine overrides
 ```
