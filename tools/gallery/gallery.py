@@ -303,6 +303,55 @@ def kind_filters(kind):
     }[kind]
 
 
+def _crew_focus_variant(card, crew):
+    """Index of the ZIP variant that belongs to `crew`, or -1.
+
+    Matching: ZIP name contains the crew string (case-insensitive);
+    fallback: find a gameinfo variant with that crew and match its
+    cracker name against ZIP names.
+    """
+    crew_l = (crew or "").strip().lower()
+    if not crew_l:
+        return -1
+    # 1) ZIP name contains the crew string
+    for i, v in enumerate(card["variants"]):
+        if crew_l in v["name"].lower():
+            return i
+    # 2) gameinfo variant with this crew → match its cracker in ZIP names
+    for iv in (card.get("info") or {}).get("variants") or []:
+        if (iv.get("crew") or "").strip().lower() != crew_l:
+            continue
+        cracker = (iv.get("cracked_by") or "").strip().lower()
+        if not cracker:
+            continue
+        for i, v in enumerate(card["variants"]):
+            if cracker in v["name"].lower():
+                return i
+    return -1
+
+
+def _apply_crew_focus(card, crew):
+    """Return a shallow-adjusted view of `card` focused on the crew variant.
+
+    Does not mutate the stored card. Sets focus_variant / preview /
+    display_status for the public payload. Empty previews are allowed
+    (placeholder) — the card is always shown when the crew matches.
+    """
+    focus = _crew_focus_variant(card, crew)
+    out = dict(card)
+    out["focus_variant"] = focus
+    if focus >= 0:
+        v = card["variants"][focus]
+        out["preview"] = v["preview"]
+        out["display_status"] = v["status"]
+        out["screenshots"] = v["preview"] is not None
+    else:
+        # crew known at gameinfo level but no ZIP identified → empty card
+        out["preview"] = None
+        out["screenshots"] = False
+    return out
+
+
 class DataStore:
     """In-memory index + metadata with mtime-based revalidation."""
 
@@ -440,10 +489,13 @@ class DataStore:
 
 
 def _matches(card, params, section):
+    crew = (params.get("crew", "any") or "any")
+    crew_active = (crew != "any" and "crew" in kind_filters(section))
     if section == "cracked":
         st = params.get("status", "with_screenshot") or "with_screenshot"
         if st == "with_screenshot":
-            if not card["screenshots"]:
+            # crew filter always shows the crew variant, even empty
+            if not crew_active and not card["screenshots"]:
                 return False
         elif st != "any" and card["display_status"] != st:
             return False
@@ -529,6 +581,8 @@ def _public_card(card, section):
         "preview": card["preview"],
         "variants": card["variants"],
     }
+    if "focus_variant" in card:
+        out["focus_variant"] = card["focus_variant"]
     if card.get("info"):
         out["info"] = card["info"]
     return out
@@ -667,6 +721,12 @@ class GalleryHandler(BaseHTTPRequestHandler):
                    if _matches(c, params, section)]
         _sort_cards(matched, sort, order)
         page = matched[offset:offset + limit]
+
+        # crew filter: focus each card on the matching ZIP variant
+        crew = (params.get("crew", "any") or "any")
+        if crew != "any" and "crew" in kind_filters(section):
+            page = [_apply_crew_focus(c, crew) for c in page]
+
         return self._json({
             "total": len(matched),
             "offset": offset,

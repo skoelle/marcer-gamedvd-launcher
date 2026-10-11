@@ -83,4 +83,4 @@ Rules:
 
 | Date | Finding | Spec change | Where |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-10-11 | Crew filter must focus the matching ZIP variant (screenshot + lightbox), even when empty | §5.3 crew focus / `focus_variant`; §7.3 | gallery.py, app.js |

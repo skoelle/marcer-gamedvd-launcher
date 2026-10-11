@@ -267,12 +267,16 @@ function renderGrid(cards) {
     const nzip = c.variants.length;
     const chip = nzip > 1 ? `<span class="chip">×${nzip}</span>` : "";
     const layer = c.layer ? `<span class="layer">${esc(c.layer)}</span>` : "";
+    const fv = (c.focus_variant != null && c.focus_variant >= 0)
+      ? c.focus_variant : 0;
     let body;
     if (c.preview) {
       body = `<img loading="lazy" src="${imgSrc(c.preview)}" alt="">`;
       if (showCands) {
-        const cands = (c.variants[0] && c.variants[0].candidates) || [];
-        if (cands.length && c.variants.length === 1) {
+        const src = c.variants[fv] || c.variants[0] || {};
+        const cands = src.candidates || [];
+        if (cands.length && (c.focus_variant == null || c.focus_variant < 0)
+            && c.variants.length === 1) {
           body += `<div class="cands">` +
             cands.map((p) => `<img loading="lazy" src="${imgSrc(p)}" alt="" data-cand="${i}">`).join("") +
             `</div>`;
@@ -281,7 +285,7 @@ function renderGrid(cards) {
     } else {
       body = `<div class="ph"></div>`;
     }
-    return `<div class="card" data-idx="${i}" tabindex="-1">` +
+    return `<div class="card" data-idx="${i}" data-v="${fv}" tabindex="-1">` +
       `${badgeFor(c)}${chip}${layer}` +
       `<div class="name">${esc(c.name)}</div>${body}</div>`;
   }).join("");
@@ -530,7 +534,10 @@ function gridKeydown(e) {
     case "End": e.preventDefault(); setFocus(cards.length - 1); break;
     case "Enter": case " ":
       e.preventDefault();
-      if (focusIdx >= 0) openLightbox(focusIdx);
+      if (focusIdx >= 0) {
+        const fv = parseInt(cards[focusIdx].dataset.v || "0", 10);
+        openLightbox(focusIdx, fv);
+      }
       break;
     case "Escape":
       focusIdx = -1;
@@ -619,13 +626,15 @@ function wireEvents() {
     const cardEl = e.target.closest(".card");
     if (!cardEl) return;
     const idx = parseInt(cardEl.dataset.idx, 10);
+    const fv = parseInt(cardEl.dataset.v || "0", 10);
     if (cand) {
-      const cands = (pageCards[idx].variants[0] || {}).candidates || [];
+      const src = pageCards[idx].variants[fv] || pageCards[idx].variants[0] || {};
+      const cands = src.candidates || [];
       const ci = cands.findIndex((p) => imgSrc(p) === cand.getAttribute("src"));
-      openLightbox(idx, 0, ci >= 0 ? ci + 1 : 0);
+      openLightbox(idx, fv, ci >= 0 ? ci + 1 : 0);
       return;
     }
-    openLightbox(idx);
+    openLightbox(idx, fv);
   });
   $("grid").addEventListener("mouseover", (e) => {
     const cardEl = e.target.closest(".card");
