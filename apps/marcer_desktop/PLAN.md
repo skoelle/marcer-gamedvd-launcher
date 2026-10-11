@@ -1,14 +1,21 @@
 # PLAN: Marcer GameDVD Desktop App (Flutter, Surface A)
 
-Status: **Phase 0 + Phase 3 core done (2026-10-11)** — Flutter 3.47.7 stable in
-`~/flutter`, `marcer_catalog` skeleton (12 `dart test`), master-detail UI
-implemented: filter bar (search, layer, screenshots, publisher, year), overlay
-folder tree with lazy expansion + virtual Favorites folder, entry list with
-SPEC §9.1 line format / §10 keyboard bindings / §9.3 colors, detail panel
-(preview + candidates + gameinfo metadata), help overlay (§9.4 text),
-favorites persistence (§11, R25/R26), status bar with degradation notices.
-`flutter test` (4) + `flutter analyze` clean.
-Next: manual run validation, then Phase 1 completion and Phase 5 (launch).
+Status: **Phase 0 + Phase 3 (+ 3b catalog/grid/lightbox) done (2026-10-11)** —
+Flutter 3.47.7 stable in `~/flutter`, `marcer_catalog` data layer with the
+gallery-style card universe (26 `dart test`: overlay, gameinfo join, screenshot
+index, `GameCard` build, facets, `CatalogFilter`/`matchesCard`/`sortCards`).
+Master-detail UI: gallery filter bar (section tabs cracked/pd/utils, search,
+status/publisher/crew/language/year dropdowns, tri-state raw/pasti/boxscan,
+TOS/Bad, sort+order, letter row, clear), overlay folder tree with lazy
+expansion + virtual Favorites folder, **list or grid (icon) center view**
+(auto: grid in catalog mode or when the folder contains ZIPs; `V` toggles),
+detail panel (preview + candidates + gameinfo metadata), **gallery-style
+lightbox** (header, large preview, variant filmstrip, candidate strip, 330px
+info panel; `←/→` cards, `↑/↓` variants, `PgUp/PgDn` images), help overlay,
+favorites persistence (§11, R25/R26), status bar with result counts +
+degradation notices. `flutter test` (4) + `flutter analyze` clean; Linux
+debug build + xvfb smoke run OK. Next: deeper manual interaction test, then
+Phase 5 (launch).
 Written 2026-10-11.
 Governing decision: [`DECISION-app-architecture.md`](../../DECISION-app-architecture.md)
 (Desktop app = Flutter, one project, two surfaces; this file covers **Surface A**).
@@ -137,18 +144,33 @@ git-ignored (same policy as `launcher.config.json`).
 
 Playnite-inspired master-detail layout, hybrid model:
 
-- **Top bar:** quick filter dropdowns (section/category, publisher, year, language,
-  layer, screenshot status) + text search field.
+- **Top bar (gallery-style, 2026-10-11):** section tabs `cracked` / `pd` /
+  `utils`, `clear`, view toggle; search field (`/` focuses, Esc clears) with
+  250ms debounce; status / publisher / crew / language / year dropdowns;
+  tri-state `raw` / `pasti` / `boxscan` (`any`/`yes`/`no`); `TOS/Bad`;
+  sort (`name`/`year`/`publisher`/`cracker`/`crew`) + asc/desc; letter row
+  (`any`, `0-9`, `A`–`Z`, dimmed when absent from facets). Facet values come
+  from `CatalogUniverse` (index.json + gameinfo, **no FS scan**).
+- **Catalog mode:** any non-default filter switches the center to the global
+  card grid (`CatalogFilter.isActive`); `clear` / Backspace returns to the
+  folder browser. Result counts in the status bar.
 - **Left:** overlay folder tree per `SPEC.md` §7 with `Enter`/`Backspace` semantics,
   layer labels `BOTH`/`ROOT`/`PTCH`, virtual `Favorites` folder per `SPEC.md` §11
   (stored in `favorites.txt`, keyed by effective path).
-- **Center:** virtualized list (`ListView.builder`) of the selected folder's ZIPs, or of
-  the filtered set — with layer label + color per `SPEC.md` §9.3.
+- **Center:** list view (SPEC §9.1 line format, §10 keys, §9.3 colors) **or**
+  grid/icon view — auto: grid in catalog mode or when the folder contains at
+  least one ZIP; `V` toggles (override resets on directory change). Grid
+  shows folder tiles, ZIP cards with preview and catalog `GameCard`s.
+- **Lightbox (gallery-style):** Enter on a ZIP/card opens the lightbox —
+  header with layer/status badges, large preview, variant filmstrip,
+  candidate strip, 330px info panel; `←/→` item, `↑/↓` variant,
+  `PgUp/PgDn` image, Esc close.
 - **Right:** detail panel — large preview screenshot, candidate gallery, metadata
-  (title, publisher, crew, language, disks, release, flags, `matched_via`).
-- **Keyboard:** identical bindings to `SPEC.md` §10 (arrows, PageUp/PageDown, Enter,
-  Backspace, `*` toggle favorite, `?` help overlay, ESC/Q quit); mouse input additionally
-  allowed (R8). Full keyboard control is a hard requirement for this surface.
+  (title, publisher, crew, language, disks, release, flags, `matched_via`) for
+  entries and catalog cards.
+- **Keyboard:** `SPEC.md` §10 bindings plus `/` (search), `V` (view toggle);
+  mouse input additionally allowed (R8). Full keyboard control is a hard
+  requirement for this surface.
 - **Colors/rendering:** dark Playnite-like theme, but layer/selection colors follow the
   `SPEC.md` §9.3 mapping as the configurable baseline.
 - **No launching in the MVP.**

@@ -32,12 +32,16 @@ class ScreenshotIndex {
     }
   }
 
+  /// Empty index for an unconfigured output directory.
+  ScreenshotIndex.empty(String reason) : this._(const {}, '', reason);
+
   final Map<String, ScreenshotEntry> _entries;
   final String outDirectory;
   final String? _loadError;
 
   String? get loadError => _loadError;
   int get length => _entries.length;
+  Map<String, ScreenshotEntry> get entries => _entries;
 
   ScreenshotEntry? operator [](String relPath) => _entries[relPath];
 
@@ -78,6 +82,7 @@ class ScreenshotEntry {
     required this.layer,
     required this.preview,
     required this.candidates,
+    this.size,
     this.zipContents = const [],
   });
 
@@ -92,6 +97,7 @@ class ScreenshotEntry {
       candidates: ((json['candidates'] as List<dynamic>?) ?? const [])
           .map((e) => e as String)
           .toList(),
+      size: (json['size'] as num?)?.toInt(),
       zipContents: ((json['zip_contents'] as List<dynamic>?) ?? const [])
           .map((e) => e.toString())
           .toList(),
@@ -105,5 +111,6 @@ class ScreenshotEntry {
   final String layer;
   final String? preview;
   final List<String> candidates;
+  final int? size;
   final List<String> zipContents;
 }

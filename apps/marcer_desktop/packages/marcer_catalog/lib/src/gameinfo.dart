@@ -12,30 +12,50 @@ import 'dart:io';
 ///
 /// Degrades gracefully (DECISION §7): missing files yield empty results.
 class GameInfoIndex {
-  GameInfoIndex._(this._byLetterFolder);
+  GameInfoIndex._(this._byLetterFolder, this._byKind, this._byKindKey);
 
   /// Loads all `games-<kind>.json` files found in [dataDir] (may be empty).
   factory GameInfoIndex.load(String dataDir) {
     final byLetterFolder = <String, GameInfo>{};
+    final byKind = <String, List<GameInfo>>{};
+    final byKindKey = <String, Map<String, GameInfo>>{};
     final dir = Directory(dataDir);
-    if (!dir.existsSync()) return GameInfoIndex._(byLetterFolder);
+    if (!dir.existsSync()) {
+      return GameInfoIndex._(byLetterFolder, byKind, byKindKey);
+    }
     for (final kind in ['cracked', 'pd', 'utils']) {
       final file = File('$dataDir/games-$kind.json');
       if (!file.existsSync()) continue;
       final map = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
       final games = (map['games'] as List<dynamic>?) ?? const [];
+      final list = <GameInfo>[];
+      final keyed = <String, GameInfo>{};
       for (final g in games) {
         final game = GameInfo.fromJson(g as Map<String, dynamic>, kind);
+        list.add(game);
         final key = '${game.letter.toLowerCase()}|${game.folder.toLowerCase()}';
         byLetterFolder[key] ??= game;
+        keyed[key] ??= game;
       }
+      byKind[kind] = list;
+      byKindKey[kind] = keyed;
     }
-    return GameInfoIndex._(byLetterFolder);
+    return GameInfoIndex._(byLetterFolder, byKind, byKindKey);
   }
 
   final Map<String, GameInfo> _byLetterFolder;
+  final Map<String, List<GameInfo>> _byKind;
+  final Map<String, Map<String, GameInfo>> _byKindKey;
 
   int get length => _byLetterFolder.length;
+
+  /// All games of one section (`cracked` | `pd` | `utils`).
+  List<GameInfo> byKind(String kind) => _byKind[kind] ?? const [];
+
+  /// Section-scoped join by letter/folder (case-insensitive) — the cracked
+  /// card join must only see `games-cracked.json`, like the gallery.
+  GameInfo? lookupKind(String kind, String letter, String folder) =>
+      _byKindKey[kind]?['${letter.toLowerCase()}|${folder.toLowerCase()}'];
 
   /// Extracts letter/folder from a screenshot-index rel zip path and joins.
   GameInfo? lookupByRel(String relPath) {

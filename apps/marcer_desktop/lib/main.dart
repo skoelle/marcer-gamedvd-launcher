@@ -8,10 +8,12 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import 'catalog_controller.dart';
 import 'theme.dart';
+import 'widgets/card_grid.dart';
 import 'widgets/detail_panel.dart';
 import 'widgets/entry_list.dart';
 import 'widgets/filter_bar.dart';
 import 'widgets/folder_tree.dart';
+import 'widgets/game_lightbox.dart';
 import 'widgets/help_overlay.dart';
 
 void main() {
@@ -77,6 +79,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   late final CatalogController _controller;
+  final FocusNode _searchFocus = FocusNode(debugLabel: 'search');
   bool _showHelp = false;
 
   @override
@@ -88,6 +91,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _searchFocus.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -102,6 +106,17 @@ class _HomePageState extends State<HomePage> {
       });
       setState(() => _showHelp = true);
     }
+  }
+
+  void _openLightbox() {
+    final c = _controller;
+    if (!c.catalogMode) {
+      final e = c.selectedEntry;
+      if (e == null || e.kind != EntryKind.zip) return;
+    } else if (c.selectedCard == null) {
+      return;
+    }
+    GameLightbox.show(context, c);
   }
 
   @override
@@ -127,7 +142,7 @@ class _HomePageState extends State<HomePage> {
         return Scaffold(
           body: Column(
             children: [
-              FilterBar(controller: c),
+              FilterBar(controller: c, searchFocus: _searchFocus),
               const Divider(height: 1),
               Expanded(
                 child: Row(
@@ -136,10 +151,19 @@ class _HomePageState extends State<HomePage> {
                     SizedBox(width: 260, child: FolderTree(controller: c)),
                     const VerticalDivider(width: 1),
                     Expanded(
-                      child: EntryList(
-                        controller: c,
-                        onToggleHelp: _toggleHelp,
-                      ),
+                      child: c.gridMode
+                          ? CenterGrid(
+                              controller: c,
+                              onToggleHelp: _toggleHelp,
+                              onOpenLightbox: _openLightbox,
+                              onFocusSearch: () => _searchFocus.requestFocus(),
+                            )
+                          : EntryList(
+                              controller: c,
+                              onToggleHelp: _toggleHelp,
+                              onOpenLightbox: _openLightbox,
+                              onFocusSearch: () => _searchFocus.requestFocus(),
+                            ),
                     ),
                     const VerticalDivider(width: 1),
                     SizedBox(width: 420, child: DetailPanel(controller: c)),
@@ -164,7 +188,11 @@ class _StatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = controller;
-    final messages = <String>[c.displayPath, '${c.entryCount} entries'];
+    final messages = <String>[
+      if (!c.catalogMode) c.displayPath,
+      c.countText,
+      if (c.statusSummary != null) c.statusSummary!,
+    ];
     final notices = [...c.notices];
     final favErr = c.favorites?.lastSaveError;
     if (favErr != null) notices.add('favorites save failed: $favErr');

@@ -2,7 +2,9 @@
 
 Inventory browser for the Marcer GameDVD archive: windowed master-detail UI
 (Playnite-inspired), overlay tree per `SPEC.md` §7, gameinfo metadata and
-screenshot previews. **Read-only** consumer of all data roots.
+screenshot previews, gallery-style global filters with a card grid
+(section tabs, search, facets, sort), list/grid auto-switch and a
+lightbox (filmstrip + info panel). **Read-only** consumer of all data roots.
 
 Plan: [`PLAN.md`](PLAN.md). Architecture decision:
 [`DECISION-app-architecture.md`](../../DECISION-app-architecture.md).
@@ -10,9 +12,10 @@ Plan: [`PLAN.md`](PLAN.md). Architecture decision:
 ## Structure
 
 - `packages/marcer_catalog/` — pure Dart data layer (overlay merge, gameinfo
-  join, screenshot index, config). No Flutter dependency; unit-tested via
-  `dart test`.
-- `lib/` — Flutter app (Phase 3 UI; currently Phase 0 scaffold).
+  join, screenshot index, `GameCard` universe + facets + filter/sort engine,
+  config). No Flutter dependency; unit-tested via `dart test`.
+- `lib/` — Flutter app (Phase 3 UI: folder browser, catalog filters,
+  list/grid views, lightbox).
 - `desktop.config.example.json` — config template (absolute paths).
   Real `desktop.config.json` is git-ignored.
 - `run.sh` — seeds `desktop.config.json` from `../../local/paths.env` on
@@ -32,6 +35,7 @@ Plan: [`PLAN.md`](PLAN.md). Architecture decision:
 export PATH="$HOME/flutter/bin:$PATH"
 ./run.sh                          # run app (linux desktop)
 cd packages/marcer_catalog && dart test   # data-layer unit tests
+flutter test                      # app unit tests
 flutter analyze                   # lint
 ```
 

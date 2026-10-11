@@ -67,16 +67,20 @@ class _HelpOverlayState extends State<HelpOverlay> {
                           fontSize: 16,
                           fontWeight: FontWeight.bold)),
                   SizedBox(height: 12),
-                  Text('''   ↑ / ↓          Move selection up / down
+                  Text('''   ↑ / ↓          Move selection (row in grid view)
+   ← / →          Move selection left / right (grid)
    PgUp / PgDn    Jump one page up / down
-   Enter / →      Open folder (launch comes in a later phase)
+   Enter / →      Open folder / show gallery lightbox
+   Backspace      Parent directory (clears filters in catalog view)
    *              Toggle favorite on selected ZIP
-   ← / Backspace  Go up one directory (never exceeds root)
+   /              Focus the search field
+   V              Toggle list / grid view
    ?              Show this help
    ESC / q        Exit the program
 
+  Global filters (section tabs, search, dropdowns) switch the center
+  to the catalog grid; "clear" or Backspace returns to the folder view.
   Navigation is strictly limited to RootDirectory.
-  The overlay shows both root and patch layers combined.
 
   Press any key to continue...''',
                       style: TextStyle(color: Colors.white, fontSize: 14)),

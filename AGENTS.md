@@ -24,8 +24,8 @@ Tooling (Python, not part of the launcher build; paths via git-ignored `local/pa
 - tools/screenshot-gen/: Generates preview screenshots via Hatari on a virtual display (see `SPEC-screenshot-generator.md`).
 
 Apps (Flutter desktop, not part of the C# launcher build; plan in `apps/marcer_desktop/PLAN.md`, decision in `DECISION-app-architecture.md`):
-- apps/marcer_desktop/: Flutter desktop app (Surface A inventory browser, later Surface B couch mode). Config via git-ignored `desktop.config.json` (see `desktop.config.example.json`); run via `apps/marcer_desktop/run.sh` (needs Flutter SDK in `~/flutter` and the Linux desktop toolchain). **Not** built via `scripts/build.*`.
-- apps/marcer_desktop/packages/marcer_catalog/: Pure Dart data layer (overlay merge per SPEC §7, gameinfo join, screenshot index, config). Read-only consumers; unit tests via `dart test`.
+- apps/marcer_desktop/: Flutter desktop app (Surface A inventory browser, later Surface B couch mode). Config via git-ignored `desktop.config.json` (see `desktop.config.example.json`); run via `apps/marcer_desktop/run.sh` (needs Flutter SDK in `~/flutter` and the Linux desktop toolchain). Gallery-style global filters + card universe (`GameCard`/`CatalogFilter` in the catalog package), list/grid auto-switch, lightbox. **Not** built via `scripts/build.*`.
+- apps/marcer_desktop/packages/marcer_catalog/: Pure Dart data layer (overlay merge per SPEC §7, gameinfo join, screenshot index, gallery `GameCard` universe + facets + filter/sort engine, config). Read-only consumers; unit tests via `dart test`.
 
 Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (AGENTS.md) and README.md as required by project policy.
 

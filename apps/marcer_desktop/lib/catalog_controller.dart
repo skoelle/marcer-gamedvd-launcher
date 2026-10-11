@@ -15,7 +15,8 @@ import 'favorites_service.dart';
 const String kFavoritesRel = '\u0000favorites';
 
 /// Application state for Surface A: navigation (SPEC §8), favorites (§11),
-/// filters and the joins into gameinfo + screenshot index.
+/// the gallery-style global filters (catalog mode) and the joins into
+/// gameinfo + screenshot index.
 ///
 /// Read-only towards all data roots; only `favorites.txt` is written.
 class CatalogController extends ChangeNotifier {
@@ -24,8 +25,9 @@ class CatalogController extends ChangeNotifier {
   final DesktopConfig config;
 
   late final OverlayBrowser browser;
-  ScreenshotIndex? screenshots;
-  GameInfoIndex? gameinfo;
+  late ScreenshotIndex screenshots;
+  late GameInfoIndex gameinfo;
+  late CatalogUniverse universe;
   FavoritesService? favorites;
 
   bool ready = false;
@@ -37,51 +39,32 @@ class CatalogController extends ChangeNotifier {
   int selectedIndex = 0;
   final Map<String, _SelMemory> _lastSelections = {};
 
-  // --- filters (desktop extension) ---
-  String query = '';
-  String layerFilter = 'ALL'; // ALL | BOTH | ROOT | PTCH
-  String shotsFilter = 'ALL'; // ALL | WITH | WITHOUT
-  String publisherFilter = 'ALL';
-  String yearFilter = 'ALL';
+  /// Gallery-style global filter state; [CatalogFilter.isActive] switches
+  /// the app into catalog (global) mode (user decision 2026-10-11).
+  final CatalogFilter filter = CatalogFilter();
+  List<GameCard>? _catalogCache;
+  bool _catalogDirty = true;
+
+  /// Grid override: null = auto (grid in catalog mode or when the current
+  /// folder contains ZIPs).
+  String? viewOverride;
 
   final Map<String, List<Entry>> _entryCache = {};
   final Map<String, List<Entry>> _dirCache = {};
-  List<String> _publisherOptions = const [];
-  List<String> _yearOptions = const [];
 
   // ---------------------------------------------------------------- loading
 
   Future<void> init() async {
-    progress = 'Loading screenshot index…';
+    progress = 'Loading catalog…';
     notifyListeners();
-    final outDir = config.outDirectory;
-    if (outDir.isNotEmpty) {
-      try {
-        screenshots = await Isolate.run(() => ScreenshotIndex.load(outDir));
-        final err = screenshots?.loadError;
-        if (err != null) notices.add('Screenshots: $err');
-      } catch (e) {
-        notices.add('Screenshots: $e');
-      }
-    } else {
-      notices.add('Screenshots: OutDirectory not configured');
-    }
-
-    progress = 'Loading game metadata…';
-    notifyListeners();
-    final dataDir = config.resolveDataDirectory();
-    if (dataDir.isNotEmpty) {
-      try {
-        gameinfo = await Isolate.run(() => GameInfoIndex.load(dataDir));
-        if (gameinfo!.length == 0) {
-          notices.add('Game metadata: no games found in $dataDir');
-        }
-      } catch (e) {
-        notices.add('Game metadata: $e');
-      }
-    } else {
-      notices.add('Game metadata: DataDirectory not configured');
-    }
+    final bundle = await Isolate.run(() => CatalogBundle.loadSync(
+          outDir: config.outDirectory,
+          dataDir: config.resolveDataDirectory(),
+        ));
+    notices.addAll(bundle.warnings);
+    screenshots = bundle.index;
+    gameinfo = bundle.info;
+    universe = bundle.universe;
 
     if (!Directory(config.rootDirectory).existsSync()) {
       notices.add('RootDirectory missing: ${config.rootDirectory}');
@@ -98,6 +81,118 @@ class CatalogController extends ChangeNotifier {
     );
     ready = true;
     progress = '';
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------- catalog (global)
+
+  /// True while any filter deviates from the factory state — the app then
+  /// shows the global catalog grid instead of the folder browser.
+  bool get catalogMode => filter.isActive;
+
+  CatalogFacets get facets => universe.facetsFor(filter.section);
+
+  /// Filtered + sorted cards of the active section (memoized until the next
+  /// filter change).
+  List<GameCard> get catalogCards {
+    if (!_catalogDirty && _catalogCache != null) return _catalogCache!;
+    _catalogCache = queryCards(universe.cardsFor(filter.section), filter);
+    _catalogDirty = false;
+    return _catalogCache!;
+  }
+
+  GameCard? get selectedCard {
+    if (!catalogMode) return null;
+    final cards = catalogCards;
+    if (cards.isEmpty) return null;
+    return cards[selectedIndex.clamp(0, cards.length - 1)];
+  }
+
+  void _filtersChanged() {
+    _catalogDirty = true;
+    selectedIndex = 0;
+    notifyListeners();
+  }
+
+  void setSection(String value) {
+    if (filter.section == value) return;
+    filter.section = value;
+    // Gallery: `cracker` sort is not meaningful for pd — fall back to name.
+    if (value == 'pd' && filter.sort == 'cracker') filter.sort = 'name';
+    _filtersChanged();
+  }
+
+  void setStatus(String value) {
+    filter.status = value;
+    _filtersChanged();
+  }
+
+  void setLetter(String value) {
+    filter.letter = value;
+    _filtersChanged();
+  }
+
+  void setPublisher(String value) {
+    filter.publisher = value;
+    _filtersChanged();
+  }
+
+  void setCrew(String value) {
+    filter.crew = value;
+    _filtersChanged();
+  }
+
+  void setLanguage(String value) {
+    filter.language = value;
+    _filtersChanged();
+  }
+
+  void setYear(String value) {
+    filter.year = value;
+    _filtersChanged();
+  }
+
+  /// Tri-state flags: `raw`, `pasti`, `boxscan` (`any` | `yes` | `no`).
+  void setFlag(String field, String value) {
+    switch (field) {
+      case 'raw':
+        filter.raw = value;
+      case 'pasti':
+        filter.pasti = value;
+      case 'boxscan':
+        filter.boxscan = value;
+      default:
+        return;
+    }
+    _filtersChanged();
+  }
+
+  void setTos(String value) {
+    filter.tos = value;
+    _filtersChanged();
+  }
+
+  void setSort(String value) {
+    filter.sort = value;
+    _filtersChanged();
+  }
+
+  void toggleOrder() {
+    filter.order = filter.order == 'asc' ? 'desc' : 'asc';
+    _filtersChanged();
+  }
+
+  void setQuery(String value) {
+    if (filter.q == value) return;
+    filter.q = value;
+    _filtersChanged();
+  }
+
+  /// Gallery `clear`: keep the section, reset everything else.
+  void resetFilters() {
+    filter.reset();
+    _catalogDirty = true;
+    selectedIndex = 0;
     notifyListeners();
   }
 
@@ -171,87 +266,25 @@ class CatalogController extends ChangeNotifier {
     return currentRel.isEmpty ? e.name : '$currentRel/${e.name}';
   }
 
-  /// Visible entries after filters; also refreshes facet options.
-  List<Entry> get visibleEntries {
-    final base = _baseEntries;
-    _refreshFacets(base);
-    return base.where((e) => _passes(e)).toList();
-  }
-
-  bool _passes(Entry e) {
-    // Layer filter
-    if (layerFilter != 'ALL') {
-      final label = e.isVirtual ? 'ROOT' : e.layerStatus.name.toUpperCase();
-      if (label != layerFilter) return false;
-    }
-    // Search query (entry name + gameinfo title/publisher)
-    if (query.isNotEmpty) {
-      final q = query.toLowerCase();
-      final info = e.kind == EntryKind.zip ? infoFor(e) : null;
-      final title = info != null ? _titleOf(info).toLowerCase() : '';
-      final pub = info != null ? _publisherOf(info).toLowerCase() : '';
-      if (!e.name.toLowerCase().contains(q) &&
-          !title.contains(q) &&
-          !pub.contains(q)) {
-        return false;
-      }
-    }
-    if (e.kind == EntryKind.zip) {
-      if (shotsFilter == 'WITH' && !hasPreview(e)) return false;
-      if (shotsFilter == 'WITHOUT' && hasPreview(e)) return false;
-      final info = infoFor(e);
-      if (publisherFilter != 'ALL') {
-        if (info == null || _publisherOf(info) != publisherFilter) return false;
-      }
-      if (yearFilter != 'ALL') {
-        if (info == null || _yearOf(info) != yearFilter) return false;
-      }
-    }
-    return true;
-  }
-
-  void _refreshFacets(List<Entry> base) {
-    final pubs = <String>{};
-    final years = <String>{};
-    for (final e in base) {
-      if (e.kind != EntryKind.zip) continue;
-      final info = infoFor(e);
-      if (info == null) continue;
-      final pub = _publisherOf(info);
-      if (pub.isNotEmpty) pubs.add(pub);
-      final year = _yearOf(info);
-      if (year != 'unknown') years.add(year);
-    }
-    final pubList = pubs.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final yearList = years.toList()..sort();
-    _publisherOptions = pubList;
-    _yearOptions = yearList;
-    if (publisherFilter != 'ALL' && !pubList.contains(publisherFilter)) {
-      publisherFilter = 'ALL';
-    }
-    if (yearFilter != 'ALL' && !yearList.contains(yearFilter)) {
-      yearFilter = 'ALL';
-    }
-  }
-
-  List<String> get publisherOptions => _publisherOptions;
-  List<String> get yearOptions => _yearOptions;
+  /// Visible entries of the current directory (browse mode; catalog mode
+  /// uses [catalogCards] instead).
+  List<Entry> get visibleEntries => _baseEntries;
 
   // ----------------------------------------------------------- joins (reads)
 
-  ScreenshotEntry? screenshotFor(Entry e) => screenshots?[relOf(e)];
+  ScreenshotEntry? screenshotFor(Entry e) => screenshots[relOf(e)];
 
   bool hasPreview(Entry e) {
     final entry = screenshotFor(e);
     return entry != null && entry.preview != null && entry.preview!.isNotEmpty;
   }
 
-  String? previewPathFor(Entry e) => screenshots?.previewPathFor(relOf(e));
+  String? previewPathFor(Entry e) => screenshots.previewPathFor(relOf(e));
 
   List<String> candidatePathsFor(Entry e) =>
-      screenshots?.candidatePathsFor(relOf(e)) ?? const [];
+      screenshots.candidatePathsFor(relOf(e));
 
-  GameInfo? infoFor(Entry e) => gameinfo?.lookupByRel(relOf(e));
+  GameInfo? infoFor(Entry e) => gameinfo.lookupByRel(relOf(e));
 
   String sectionOf(Entry e) {
     if (inFavoritesView) return '';
@@ -268,23 +301,6 @@ class CatalogController extends ChangeNotifier {
     if (info.matchedTitle.isNotEmpty) return info.matchedTitle;
     final v = info.variants.isEmpty ? null : info.variants.first;
     return (v?['title'] as String?) ?? info.folder;
-  }
-
-  static String _publisherOf(GameInfo info) {
-    for (final v in info.variants) {
-      final pub = (v['publisher'] ?? v['company']) as String?;
-      if (pub != null && pub.isNotEmpty) return pub;
-    }
-    return '';
-  }
-
-  static String _yearOf(GameInfo info) {
-    for (final v in info.variants) {
-      final rel = (v['release'] ?? '') as String;
-      final m = RegExp(r'\d{4}').firstMatch(rel);
-      if (m != null) return m.group(0)!;
-    }
-    return 'unknown';
   }
 
   String titleFor(Entry e) {
@@ -317,13 +333,27 @@ class CatalogController extends ChangeNotifier {
       );
 
   Entry? get selectedEntry {
+    if (catalogMode) return null;
     final visible = visibleEntries;
     if (visible.isEmpty) return null;
     final idx = selectedIndex.clamp(0, visible.length - 1);
     return visible[idx];
   }
 
-  int get entryCount => visibleEntries.length;
+  /// Number of selectable items in the center view (entries or cards).
+  int get itemCount => catalogMode ? catalogCards.length : visibleEntries.length;
+
+  /// Count text for the status bar.
+  String get countText => catalogMode
+      ? '${catalogCards.length} results'
+      : '${visibleEntries.length} entries';
+
+  /// Gallery footer summary (`4414 / 22938 with screenshot`) — cracked only.
+  String? get statusSummary {
+    if (!catalogMode || filter.section != 'cracked') return null;
+    return '${universe.crackedWithScreenshot} / ${universe.cracked.length} '
+        'with screenshot';
+  }
 
   void _saveSelection() {
     final visible = visibleEntries;
@@ -351,9 +381,12 @@ class CatalogController extends ChangeNotifier {
     }
   }
 
-  void activate() {
+  /// Enter: navigates into directories; returns true when the caller should
+  /// open the lightbox (ZIP in browse mode or any card in catalog mode).
+  bool activate() {
+    if (catalogMode) return catalogCards.isNotEmpty;
     final e = selectedEntry;
-    if (e == null) return;
+    if (e == null) return false;
     if (e.kind == EntryKind.directory) {
       _saveSelection();
       if (e.isVirtual) {
@@ -362,15 +395,24 @@ class CatalogController extends ChangeNotifier {
         currentRel = currentRel.isEmpty ? e.name : '$currentRel/${e.name}';
       }
       selectedIndex = 0;
+      viewOverride = null;
       notifyListeners();
+      return false;
     }
-    // ZIP activation (launch) is Phase 5 — intentionally a no-op for now.
+    return true; // ZIP → lightbox (launch comes in a later phase)
   }
 
+  /// Backspace: parent directory in browse mode; `clear` (reset filters) in
+  /// catalog mode.
   void parent() {
+    if (catalogMode) {
+      resetFilters();
+      return;
+    }
     if (currentRel.isEmpty) return; // R17: silent no-op at root
     _saveSelection();
     currentRel = browser.parent(currentRel);
+    viewOverride = null;
     _restoreSelection();
     notifyListeners();
   }
@@ -380,28 +422,39 @@ class CatalogController extends ChangeNotifier {
     if (rel == currentRel) return;
     _saveSelection();
     currentRel = rel;
+    viewOverride = null;
     _restoreSelection();
     notifyListeners();
   }
 
-  void moveSelection(int delta) {
-    final visible = visibleEntries;
-    if (visible.isEmpty) return;
-    final next = (selectedIndex + delta).clamp(0, visible.length - 1);
+  void moveSelection(int delta) => moveSelectionTo(selectedIndex + delta);
+
+  void moveSelectionTo(int index) {
+    final n = itemCount;
+    if (n == 0) return;
+    final next = index.clamp(0, n - 1);
     if (next != selectedIndex) {
       selectedIndex = next;
       notifyListeners();
     }
   }
 
-  void moveSelectionTo(int index) {
-    final visible = visibleEntries;
-    if (visible.isEmpty) return;
-    final next = index.clamp(0, visible.length - 1);
-    if (next != selectedIndex) {
-      selectedIndex = next;
-      notifyListeners();
-    }
+  // -------------------------------------------------------------- view mode
+
+  /// Grid (icon) view vs. list view. Auto: catalog mode or a folder that
+  /// contains at least one ZIP.
+  bool get gridMode {
+    if (viewOverride == 'grid') return true;
+    if (viewOverride == 'list') return false;
+    if (catalogMode) return true;
+    return visibleEntries.any((e) => e.kind == EntryKind.zip);
+  }
+
+  /// `V`: toggle between list and grid, overriding the auto decision until
+  /// the next directory change.
+  void toggleViewOverride() {
+    viewOverride = gridMode ? 'list' : 'grid';
+    notifyListeners();
   }
 
   // -------------------------------------------------------------- favorites
@@ -423,37 +476,7 @@ class CatalogController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ----------------------------------------------------------------- filters
-
-  void setQuery(String value) {
-    query = value;
-    selectedIndex = 0;
-    notifyListeners();
-  }
-
-  void setLayerFilter(String value) {
-    layerFilter = value;
-    selectedIndex = 0;
-    notifyListeners();
-  }
-
-  void setShotsFilter(String value) {
-    shotsFilter = value;
-    selectedIndex = 0;
-    notifyListeners();
-  }
-
-  void setPublisherFilter(String value) {
-    publisherFilter = value;
-    selectedIndex = 0;
-    notifyListeners();
-  }
-
-  void setYearFilter(String value) {
-    yearFilter = value;
-    selectedIndex = 0;
-    notifyListeners();
-  }
+  // -------------------------------------------------------------- statusbar
 
   /// Path shown in the status bar.
   String get displayPath => inFavoritesView

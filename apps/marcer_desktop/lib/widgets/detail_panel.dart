@@ -17,6 +17,17 @@ class DetailPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = controller;
+    if (c.catalogMode) {
+      final card = c.selectedCard;
+      return Container(
+        color: const Color(0xFF161616),
+        child: card == null
+            ? const Center(
+                child: Text('No selection',
+                    style: TextStyle(color: Colors.grey, fontSize: 13)))
+            : _cardInfo(c, card),
+      );
+    }
     final entry = c.selectedEntry;
     return Container(
       color: const Color(0xFF161616),
@@ -29,6 +40,74 @@ class DetailPanel extends StatelessWidget {
               : _zipInfo(c, entry),
     );
   }
+
+  Widget _cardInfo(CatalogController c, GameCard card) {
+    return ListView(
+      padding: const EdgeInsets.all(14),
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            height: 220,
+            color: Colors.black,
+            child: card.previewPath != null
+                ? Image.file(
+                    File(card.previewPath!),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) =>
+                        _noPreview('Failed to load ${card.previewPath}'),
+                  )
+                : _noPreview('No screenshot'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(card.name,
+            style:
+                const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            if (card.layer.isNotEmpty)
+              _badge(card.layer, _layerColorName(card.layer)),
+            if (card.displayStatus.isNotEmpty)
+              _badge(card.displayStatus, Colors.blueGrey),
+            if (card.year != 'unknown') _badge(card.year, Colors.teal),
+            if (card.variants.length > 1)
+              _badge('${card.variants.length} variants', Colors.indigo),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (card.info == null)
+          const Text('No metadata for this entry',
+              style: TextStyle(color: Colors.grey, fontSize: 12))
+        else
+          ..._metadataRowsFromVariants(card.info!.variants),
+        if (card.variants.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Text('Variants',
+              style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 4),
+          for (final v in card.variants)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Text(
+                '${v.status}  ${v.name}',
+                style: const TextStyle(
+                    fontSize: 11, color: Colors.white70, fontFamily: 'monospace'),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Color _layerColorName(String layer) => switch (layer) {
+        'BOTH' => Colors.green,
+        'PTCH' => Colors.pink,
+        _ => Colors.lightGreen,
+      };
 
   Widget _directoryInfo(CatalogController c, Entry e) {
     return ListView(
@@ -158,11 +237,24 @@ class DetailPanel extends StatelessWidget {
 
   List<Widget> _metadataRows(
       CatalogController c, GameInfo info, ScreenshotEntry? shots) {
-    final v = info.variants.isEmpty ? const <String, dynamic>{} : info.variants.first;
     final rows = <Widget>[
       _kv('Matched via', info.matchedVia),
       if (info.variants.length > 1) _kv('Variants', '${info.variants.length}'),
+      ..._metadataRowsFromVariants(info.variants, skipVariantsCount: true),
     ];
+    if (shots != null && shots.zipContents.isNotEmpty) {
+      rows.add(_kv('ZIP contents', '${shots.zipContents.length} files'));
+    }
+    return rows;
+  }
+
+  List<Widget> _metadataRowsFromVariants(List<Map<String, dynamic>> variants,
+      {bool skipVariantsCount = false}) {
+    final v = variants.isEmpty ? const <String, dynamic>{} : variants.first;
+    final rows = <Widget>[];
+    if (!skipVariantsCount && variants.length > 1) {
+      rows.add(_kv('Variants', '${variants.length}'));
+    }
     const fields = <String, String>{
       'title': 'Title',
       'publisher': 'Publisher',
@@ -195,9 +287,6 @@ class DetailPanel extends StatelessWidget {
       if (v['special_flag'] == true) 'Special',
     ];
     if (flags.isNotEmpty) rows.add(_kv('Flags', flags.join(', ')));
-    if (shots != null && shots.zipContents.isNotEmpty) {
-      rows.add(_kv('ZIP contents', '${shots.zipContents.length} files'));
-    }
     return rows;
   }
 

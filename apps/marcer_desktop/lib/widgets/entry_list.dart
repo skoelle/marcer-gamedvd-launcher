@@ -20,10 +20,14 @@ class EntryList extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onToggleHelp,
+    required this.onOpenLightbox,
+    required this.onFocusSearch,
   });
 
   final CatalogController controller;
   final VoidCallback onToggleHelp;
+  final VoidCallback onOpenLightbox;
+  final VoidCallback onFocusSearch;
 
   @override
   State<EntryList> createState() => _EntryListState();
@@ -111,7 +115,7 @@ class _EntryListState extends State<EntryList> {
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter ||
         key == LogicalKeyboardKey.arrowRight) {
-      c.activate();
+      if (c.activate()) widget.onOpenLightbox();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.backspace ||
@@ -129,6 +133,14 @@ class _EntryListState extends State<EntryList> {
     }
     if (char == '?') {
       widget.onToggleHelp();
+      return KeyEventResult.handled;
+    }
+    if (char == '/') {
+      widget.onFocusSearch();
+      return KeyEventResult.handled;
+    }
+    if (char == 'v' || char == 'V') {
+      c.toggleViewOverride();
       return KeyEventResult.handled;
     }
     if (char == 'q' || char == 'Q') {
@@ -198,7 +210,7 @@ class _EntryListState extends State<EntryList> {
         },
         onDoubleTap: () {
           c.moveSelectionTo(index);
-          c.activate();
+          if (c.activate()) widget.onOpenLightbox();
         },
         child: Container(
           height: kItemExtent,

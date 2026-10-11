@@ -9,6 +9,9 @@
 /// - screenshot index lookup per `SPEC-screenshot-generator.md`.
 library;
 
+export 'src/card.dart';
+export 'src/catalog_filter.dart';
+export 'src/catalog_universe.dart';
 export 'src/config.dart';
 export 'src/entry.dart';
 export 'src/gameinfo.dart';

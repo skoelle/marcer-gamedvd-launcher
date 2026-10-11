@@ -235,7 +235,7 @@ GameCard buildCrackedCard({
   required String folder,
   required List<(String, ScreenshotEntry)> items,
   required GameInfo? game,
-  required String Function(String rel, String? baseName) fullPng,
+  required String? Function(String rel, String? baseName) fullPng,
 }) {
   items.sort((a, b) => a.$1.compareTo(b.$1));
   final variants = <CardVariant>[];
