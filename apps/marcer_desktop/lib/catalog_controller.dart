@@ -56,10 +56,6 @@ class CatalogController extends ChangeNotifier {
   List<GameCard>? _catalogCache;
   bool _catalogDirty = true;
 
-  /// Grid override: null = auto (grid in catalog mode or when the current
-  /// folder contains ZIPs).
-  String? viewOverride;
-
   final Map<String, List<Entry>> _entryCache = {};
   final Map<String, List<Entry>> _dirCache = {};
 
@@ -388,11 +384,51 @@ class CatalogController extends ChangeNotifier {
       ? '${catalogCards.length} results'
       : '${visibleEntries.length} entries';
 
-  /// Gallery footer summary (`4414 / 22938 with screenshot`) — cracked only.
-  String? get statusSummary {
-    if (!catalogMode || filter.section != 'cracked') return null;
-    return '${universe.crackedWithScreenshot} / ${universe.cracked.length} '
-        'with screenshot';
+  /// Gallery-style status line (`renderStats` + `renderFooter`):
+  /// `N / M with screenshot`, status counts, `info X folders`,
+  /// `index.json: …`, `gameinfo: …`, `gallery …`.
+  List<String> get statusLine {
+    final parts = <String>[];
+    if (catalogMode && filter.section == 'cracked' && gameinfo.length > 0) {
+      parts.add('${universe.crackedWithScreenshot} / ${screenshots.length} '
+          'with screenshot');
+    } else if (screenshots.length > 0) {
+      parts.add('${screenshots.length} index entries');
+    }
+    if (catalogMode) {
+      final sc = screenshots.statusCounts;
+      for (final k in const [
+        'done',
+        'desktop',
+        'pending',
+        'skipped_disk_n',
+        'no_usable_shots',
+        'interrupted',
+      ]) {
+        if ((sc[k] ?? 0) > 0) parts.add('$k ${sc[k]}');
+      }
+      final matched = gameinfo.matchedFolders;
+      if (matched != null) parts.add('info $matched folders');
+      if (universe.crackedNoInfo > 0) {
+        parts.add('${universe.crackedNoInfo} without info');
+      }
+    }
+    if (screenshots.mtime != null) {
+      parts.add('index.json: ${_fmtTime(screenshots.mtime!)}');
+    }
+    if (gameinfo.generatedAt.isNotEmpty) {
+      parts.add('gameinfo: ${gameinfo.generatedAt}');
+    }
+    if (gameinfo.length == 0) {
+      parts.add('gameinfo unavailable — screenshots only');
+    }
+    return parts;
+  }
+
+  static String _fmtTime(DateTime t) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${t.year}-${two(t.month)}-${two(t.day)} '
+        '${two(t.hour)}:${two(t.minute)}';
   }
 
   void _saveSelection() {
@@ -435,7 +471,6 @@ class CatalogController extends ChangeNotifier {
         currentRel = currentRel.isEmpty ? e.name : '$currentRel/${e.name}';
       }
       selectedIndex = 0;
-      viewOverride = null;
       notifyListeners();
       return false;
     }
@@ -452,7 +487,6 @@ class CatalogController extends ChangeNotifier {
     if (currentRel.isEmpty) return; // R17: silent no-op at root
     _saveSelection();
     currentRel = browser.parent(currentRel);
-    viewOverride = null;
     _restoreSelection();
     notifyListeners();
   }
@@ -462,7 +496,6 @@ class CatalogController extends ChangeNotifier {
     if (rel == currentRel) return;
     _saveSelection();
     currentRel = rel;
-    viewOverride = null;
     _restoreSelection();
     notifyListeners();
   }
@@ -481,20 +514,11 @@ class CatalogController extends ChangeNotifier {
 
   // -------------------------------------------------------------- view mode
 
-  /// Grid (icon) view vs. list view. Auto: catalog mode or a folder that
-  /// contains at least one ZIP.
+  /// Grid (icon) view vs. list view. Auto: grid in catalog mode or when the
+  /// current folder contains at least one ZIP.
   bool get gridMode {
-    if (viewOverride == 'grid') return true;
-    if (viewOverride == 'list') return false;
     if (catalogMode) return true;
     return visibleEntries.any((e) => e.kind == EntryKind.zip);
-  }
-
-  /// `V`: toggle between list and grid, overriding the auto decision until
-  /// the next directory change.
-  void toggleViewOverride() {
-    viewOverride = gridMode ? 'list' : 'grid';
-    notifyListeners();
   }
 
   // -------------------------------------------------------------- favorites

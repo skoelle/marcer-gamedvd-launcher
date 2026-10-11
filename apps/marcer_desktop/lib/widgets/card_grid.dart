@@ -172,10 +172,6 @@ class _CenterGridState extends State<CenterGrid> {
       widget.onFocusSearch();
       return KeyEventResult.handled;
     }
-    if (char == 'v' || char == 'V') {
-      c.toggleViewOverride();
-      return KeyEventResult.handled;
-    }
     if (char == 't' || char == 'T') {
       c.toggleView();
       return KeyEventResult.handled;

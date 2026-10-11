@@ -209,7 +209,7 @@ class _StatusBar extends StatelessWidget {
     final messages = <String>[
       if (!c.catalogMode) c.displayPath,
       c.countText,
-      if (c.statusSummary != null) c.statusSummary!,
+      ...c.statusLine,
     ];
     final notices = [...c.notices];
     final favErr = c.favorites?.lastSaveError;

@@ -142,10 +142,6 @@ class _EntryListState extends State<EntryList> {
       widget.onFocusSearch();
       return KeyEventResult.handled;
     }
-    if (char == 'v' || char == 'V') {
-      c.toggleViewOverride();
-      return KeyEventResult.handled;
-    }
     if (char == 't' || char == 'T') {
       c.toggleView();
       return KeyEventResult.handled;

@@ -12,16 +12,27 @@ import 'dart:io';
 ///
 /// Degrades gracefully (DECISION §7): missing files yield empty results.
 class GameInfoIndex {
-  GameInfoIndex._(this._byLetterFolder, this._byKind, this._byKindKey);
+  GameInfoIndex._(
+      this._byLetterFolder, this._byKind, this._byKindKey, this.manifest);
 
   /// Loads all `games-<kind>.json` files found in [dataDir] (may be empty).
   factory GameInfoIndex.load(String dataDir) {
     final byLetterFolder = <String, GameInfo>{};
     final byKind = <String, List<GameInfo>>{};
     final byKindKey = <String, Map<String, GameInfo>>{};
+    var manifest = <String, dynamic>{};
     final dir = Directory(dataDir);
     if (!dir.existsSync()) {
-      return GameInfoIndex._(byLetterFolder, byKind, byKindKey);
+      return GameInfoIndex._(byLetterFolder, byKind, byKindKey, manifest);
+    }
+    final manifestFile = File('$dataDir/manifest.json');
+    if (manifestFile.existsSync()) {
+      try {
+        manifest =
+            jsonDecode(manifestFile.readAsStringSync()) as Map<String, dynamic>;
+      } catch (_) {
+        manifest = <String, dynamic>{};
+      }
     }
     for (final kind in ['cracked', 'pd', 'utils']) {
       final file = File('$dataDir/games-$kind.json');
@@ -40,14 +51,31 @@ class GameInfoIndex {
       byKind[kind] = list;
       byKindKey[kind] = keyed;
     }
-    return GameInfoIndex._(byLetterFolder, byKind, byKindKey);
+    return GameInfoIndex._(byLetterFolder, byKind, byKindKey, manifest);
   }
 
   final Map<String, GameInfo> _byLetterFolder;
   final Map<String, List<GameInfo>> _byKind;
   final Map<String, Map<String, GameInfo>> _byKindKey;
 
+  /// Raw `manifest.json` content (gallery footer/status), possibly empty.
+  final Map<String, dynamic> manifest;
+
   int get length => _byLetterFolder.length;
+
+  /// `generated_at` timestamp from the manifest, or empty (gallery footer).
+  String get generatedAt => (manifest['generated_at'] ?? '') as String;
+
+  /// Cracked matched-folder coverage from the manifest (gallery `coverage`).
+  int? get matchedFolders {
+    for (final src in (manifest['sources'] as List<dynamic>?) ?? const []) {
+      final m = src as Map<String, dynamic>;
+      if (m['kind'] == 'cracked') {
+        return (m['matched_folders'] as num?)?.toInt();
+      }
+    }
+    return null;
+  }
 
   /// All games of one section (`cracked` | `pd` | `utils`).
   List<GameInfo> byKind(String kind) => _byKind[kind] ?? const [];

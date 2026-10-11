@@ -127,6 +127,10 @@ class CatalogUniverse {
   /// Number of cracked cards with at least one preview (status bar
   /// `4414 / 22938 with screenshot`).
   int get crackedWithScreenshot => cracked.where((c) => c.screenshots).length;
+
+  /// Cracked cards without gameinfo (gallery `sections.cracked.no_info`).
+  int get crackedNoInfo => cracked.where((c) => c.info == null).length;
+
   int get crackedVariants =>
       cracked.fold(0, (sum, c) => sum + c.variants.length);
 }

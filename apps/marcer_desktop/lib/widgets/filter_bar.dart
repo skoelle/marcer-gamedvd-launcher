@@ -89,23 +89,10 @@ class _FilterBarState extends State<FilterBar> {
                     _tabButton(s, f.section == s, () => c.setSection(s)),
                     const SizedBox(width: 6),
                   ],
-                  const Spacer(),
-                  _labelButton('clear', c.resetFilters),
-                  const SizedBox(width: 10),
-                ] else
-                  const Spacer(),
+                ],
+                const Spacer(),
                 _labelButton(c.catalogMode ? 'Folders (T)' : 'Catalog (T)',
                     c.toggleView, width: 92),
-                const SizedBox(width: 10),
-                IconButton(
-                  tooltip: 'Toggle list / grid view (V)',
-                  onPressed: c.toggleViewOverride,
-                  icon: Icon(
-                    c.gridMode ? Icons.view_list : Icons.grid_view,
-                    size: 18,
-                    color: Colors.grey,
-                  ),
-                ),
               ],
             ),
             if (c.catalogMode) ...[
@@ -138,6 +125,8 @@ class _FilterBarState extends State<FilterBar> {
                       ),
                     ),
                   ),
+                  if (f.section == 'cracked')
+                    _statusDropdown(f.status, c.setStatus),
                   if (fields.contains('publisher'))
                     _facetMenu(
                       'Publisher: any',
@@ -178,8 +167,6 @@ class _FilterBarState extends State<FilterBar> {
                       c.setYear,
                       width: 100,
                     ),
-                  if (f.section == 'cracked')
-                    _statusDropdown(f.status, c.setStatus),
                   if (fields.contains('raw'))
                     _triDropdown('raw', f.raw, (v) => c.setFlag('raw', v)),
                   if (fields.contains('pasti'))
@@ -189,7 +176,7 @@ class _FilterBarState extends State<FilterBar> {
                         'boxscan', f.boxscan, (v) => c.setFlag('boxscan', v)),
                   if (fields.contains('tos'))
                     _tosDropdown(f.tos, c.setTos),
-                  _facetDropdown(
+                  _facetMenu(
                     'Sort: ',
                     f.sort,
                     [for (final k in kSortKeys) k],
@@ -199,6 +186,7 @@ class _FilterBarState extends State<FilterBar> {
                   ),
                   _labelButton(f.order == 'asc' ? 'asc' : 'desc',
                       c.toggleOrder, width: 44),
+                  _labelButton('clear', c.resetFilters, width: 52),
                 ],
               ),
               const SizedBox(height: 4),
@@ -244,8 +232,10 @@ class _FilterBarState extends State<FilterBar> {
       child: TextButton(
         onPressed: onTap,
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           minimumSize: Size(width, 28),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          alignment: Alignment.center,
         ),
         child: Text(text, style: const TextStyle(fontSize: 12)),
       ),
@@ -261,8 +251,12 @@ class _FilterBarState extends State<FilterBar> {
     List<String> items,
     ValueChanged<String> onChanged, {
     double width = 140,
+    String Function(String)? labelOf,
   }) {
-    String label(String v) => v == 'any' ? anyLabel : v;
+    String label(String v) {
+      if (labelOf != null) return labelOf(v);
+      return v == 'any' ? anyLabel : v;
+    }
 
     return SizedBox(
       width: width,
@@ -294,48 +288,6 @@ class _FilterBarState extends State<FilterBar> {
             DropdownMenuEntry<String>(value: v, label: label(v)),
         ],
         onSelected: (v) {
-          if (v != null) onChanged(v);
-        },
-      ),
-    );
-  }
-
-  Widget _facetDropdown(
-    String anyLabel,
-    String value,
-    List<String> items,
-    ValueChanged<String> onChanged, {
-    double width = 140,
-    String Function(String)? labelOf,
-  }) {
-    String label(String v) {
-      if (labelOf != null) return labelOf(v);
-      if (v == anyLabel || v == 'any') return anyLabel;
-      return v;
-    }
-
-    return SizedBox(
-      width: width,
-      height: 28,
-      child: DropdownButtonFormField<String>(
-        key: ValueKey('$anyLabel:$value'),
-        initialValue: items.contains(value) ? value : items.first,
-        isExpanded: true,
-        isDense: true,
-        decoration: InputDecoration(
-          isDense: true,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        ),
-        style: const TextStyle(fontSize: 12, color: Colors.white),
-        items: [
-          for (final v in items)
-            DropdownMenuItem(
-              value: v,
-              child: Text(label(v), overflow: TextOverflow.ellipsis),
-            ),
-        ],
-        onChanged: (v) {
           if (v != null) onChanged(v);
         },
       ),

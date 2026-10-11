@@ -9,16 +9,19 @@ import 'dart:io';
 /// Key gotcha (PLAN.md §2): on disk `preview` and `candidates` are *basenames*;
 /// the real PNG is `<OutDirectory>/<dirname(rel)>/<preview>`.
 class ScreenshotIndex {
-  ScreenshotIndex._(this._entries, this.outDirectory, this._loadError);
+  ScreenshotIndex._(
+      this._entries, this.outDirectory, this._loadError, this.mtime);
 
   /// Loads `<outDirectory>/index.json`; missing/unreadable file yields an
   /// empty index ([loadError] set) instead of throwing (DECISION §7).
   factory ScreenshotIndex.load(String outDirectory) {
     final file = File('$outDirectory/index.json');
     if (!file.existsSync()) {
-      return ScreenshotIndex._(const {}, outDirectory, 'index.json not found');
+      return ScreenshotIndex._(
+          const {}, outDirectory, 'index.json not found', null);
     }
     try {
+      final mtime = file.statSync().modified;
       final map = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
       final entries = <String, ScreenshotEntry>{};
       final rawEntries = (map['entries'] as Map<String, dynamic>?) ?? const {};
@@ -26,22 +29,36 @@ class ScreenshotIndex {
         entries[key] =
             ScreenshotEntry.fromJson(key, value as Map<String, dynamic>);
       });
-      return ScreenshotIndex._(entries, outDirectory, null);
+      return ScreenshotIndex._(entries, outDirectory, null, mtime);
     } catch (e) {
-      return ScreenshotIndex._(const {}, outDirectory, 'parse error: $e');
+      return ScreenshotIndex._(
+          const {}, outDirectory, 'parse error: $e', null);
     }
   }
 
   /// Empty index for an unconfigured output directory.
-  ScreenshotIndex.empty(String reason) : this._(const {}, '', reason);
+  ScreenshotIndex.empty(String reason) : this._(const {}, '', reason, null);
 
   final Map<String, ScreenshotEntry> _entries;
   final String outDirectory;
   final String? _loadError;
 
+  /// `index.json` modification time (gallery footer), or null when absent.
+  final DateTime? mtime;
+
   String? get loadError => _loadError;
   int get length => _entries.length;
   Map<String, ScreenshotEntry> get entries => _entries;
+
+  /// Status histogram over all index entries (gallery `status_counts`).
+  Map<String, int> get statusCounts {
+    final out = <String, int>{};
+    for (final e in _entries.values) {
+      final s = e.status.isEmpty ? 'unknown' : e.status;
+      out[s] = (out[s] ?? 0) + 1;
+    }
+    return out;
+  }
 
   ScreenshotEntry? operator [](String relPath) => _entries[relPath];
 

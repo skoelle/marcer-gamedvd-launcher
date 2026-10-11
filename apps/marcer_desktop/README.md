@@ -17,7 +17,7 @@ Plan: [`PLAN.md`](PLAN.md). Architecture decision:
   join, screenshot index, `GameCard` universe + facets + filter/sort engine,
   config). No Flutter dependency; unit-tested via `dart test`.
 - `lib/` — Flutter app (gallery catalog grid, optional folder browser,
-  list/grid views, lightbox).
+  list/grid entry views, lightbox with a gallery-style status bar).
 - `assets/icon/app_icon.png` — master app icon; `tool/generate_icons.py`
   regenerates the platform icon sets from the gallery favicon.
 - `desktop.config.example.json` — config template (absolute paths).

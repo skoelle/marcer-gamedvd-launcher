@@ -74,7 +74,6 @@ class _HelpOverlayState extends State<HelpOverlay> {
    Backspace      Parent directory (clears filters in catalog view)
    *              Toggle favorite on selected ZIP
    /              Focus the search field
-   V              Toggle list / grid view
    T              Toggle catalog grid / folder view
    ?              Show this help
    ESC / q        Exit the program

@@ -463,11 +463,16 @@ class _GameLightboxState extends State<GameLightbox> {
       height: 96,
       color: const Color(0xFF111111),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      child: ListView.builder(
+      child: Scrollbar(
         controller: _filmScroll,
-        scrollDirection: Axis.horizontal,
-        itemCount: vs.length,
-        itemBuilder: (context, i) {
+        thumbVisibility: true,
+        scrollbarOrientation: ScrollbarOrientation.bottom,
+        child: ListView.builder(
+          controller: _filmScroll,
+          scrollDirection: Axis.horizontal,
+          itemCount: vs.length,
+          padding: const EdgeInsets.only(bottom: 8),
+          itemBuilder: (context, i) {
           final v = vs[i];
           final active = i == _variantIdx;
           final stColor = v.preview == null
@@ -555,6 +560,7 @@ class _GameLightboxState extends State<GameLightbox> {
             ),
           );
         },
+        ),
       ),
     );
   }
