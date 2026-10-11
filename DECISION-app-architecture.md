@@ -8,7 +8,8 @@ Marcer GameDVD archive. Follows the style of `ANALYSIS-game-data.md` and
 - [`SPEC.md`](SPEC.md) — technology-neutral launcher spec (UI-agnostic core, R1)
 - [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md) — game metadata sources, desktop app idea (M4)
 - [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) — screenshot pipeline and `index.json` artifacts
-- [`tools/screenshot-gen/shotgen.py`](tools/screenshot-gen/shotgen.py) — current static HTML gallery (`html` command), the speed problem this decision addresses
+- [`tools/screenshot-gen/shotgen.py`](tools/screenshot-gen/shotgen.py) — former static HTML gallery (`html` command, removed; replaced by `tools/gallery`) — the speed problem this decision addresses
+- [`tools/gallery/`](tools/gallery/README.md) — implemented gallery webapp, see [`SPEC-gallery-webapp.md`](SPEC-gallery-webapp.md)
 
 ---
 
@@ -42,7 +43,7 @@ models:
 | App | Technology | Scope |
 |---|---|---|
 | **Desktop app** (inventory browser now, couch launcher later) | **Flutter** (one project, **two surfaces**) | Surface A (now): windowed master-detail inventory browser, full keyboard control. Surface B (later): fullscreen couch mode with gamepad — switched to once everything is configured; exact switch mechanism to be decided when reached. |
-| **Gallery web app** | **HTML/CSS/JS frontend + small local Python server** | Dynamic gallery replacing `shotgen html`: server-side pagination, search/filter, full-size view of original PNGs. Same visual design as the current static gallery. Runs locally/LAN only. |
+| **Gallery web app** | **HTML/CSS/JS frontend + small local Python server** | Dynamic gallery replacing `shotgen html`: server-side pagination, search/filter, full-size view of original PNGs. Same visual design as the former static gallery. Runs locally/LAN only. |
 
 Explicitly rejected alternatives:
 
@@ -101,7 +102,7 @@ All apps are strictly **read-only consumers** of the same artifacts:
 |---|---|
 | `MARCER_ROOT_DIR` + `MARCER_PATCH_DIR` overlay trees | desktop app, web app, console launcher |
 | `<OUT>/index.json` + mirrored PNGs (`SPEC-screenshot-generator.md`) | desktop app, web app |
-| `<PATCH>/Data/*.json` (`ANALYSIS-game-data.md`, once generated) | desktop app, console launcher (M2), web app (optional later) |
+| `MARCER_DATA_DIR`/`games-*.json` (`ANALYSIS-game-data.md`) | desktop app, console launcher (M2), gallery webapp (runtime join) |
 
 Implementation strategy for the overlay merge and catalog joins:
 
@@ -118,19 +119,20 @@ Implementation strategy for the overlay merge and catalog joins:
 ## 6. Status and Follow-Ups
 
 - **Decided (this document):** app split, technologies, shared-data strategy.
+- **Implemented:** gallery webapp (`tools/gallery`, `SPEC-gallery-webapp.md`)
+  — stdlib Python server + HTML/CSS/JS frontend; the static `shotgen html`
+  gallery has been removed.
 - **Not yet decided / deferred:**
   - Flutter SDK/toolchain setup and project layout (new repo, subdirectory, or
     separate repository).
-  - Exact API shape of the Python gallery server (routes, pagination limits).
   - When Surface B (couch mode) is added, how the mode switch is presented
     (config flag, CLI arg, or runtime switch).
-  - Whether the gallery server and the future `gameinfo-gen` share a common
+  - Whether the gallery server and a future tool share a common
     module layout under `tools/`.
   - Packaging/release strategy for the Flutter app (GitHub Actions matrix
     mirroring `.github/workflows/release.yml`).
-- **No code is written yet** for any of the two apps; the static
-  `shotgen html` gallery remains the current state until the web app replaces
-  it.
+- **No code is written yet** for the Flutter desktop app (inventory browser
+  / couch launcher).
 
 ## 7. Conformance Notes for Future Implementations
 

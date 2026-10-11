@@ -20,7 +20,7 @@ Everything else is *(untested)* and must be confirmed during implementation.
 - [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) — screenshot pipeline, `index.json` schema
 - [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md) — game metadata sources and data model
 - [`DECISION-app-architecture.md`](DECISION-app-architecture.md) — why this app is Python + HTML (decision record)
-- [`tools/screenshot-gen/shotgen.py`](tools/screenshot-gen/shotgen.py) — current static gallery (`html` command, `GALLERY_TEMPLATE`) — the design reference and the component this spec replaces
+- [`tools/screenshot-gen/shotgen.py`](tools/screenshot-gen/shotgen.py) — former static gallery (`html` command, `GALLERY_TEMPLATE`) — the design reference this spec replaced; both removed in M6
 
 ---
 
@@ -142,10 +142,12 @@ Rules:
 
 ### 2.4 Design reference
 
-The visual design is the `GALLERY_TEMPLATE` in `tools/screenshot-gen/shotgen.py`
-(dark theme `#14181c`, card grid, badges, filter bar). The web app reuses
-this design language 1:1 for existing elements and extends it with the new
-components (section 6). The static template itself is deleted in M6.
+The visual design derives from the former `GALLERY_TEMPLATE` static gallery
+(dark theme `#14181c`, card grid, badges, filter bar) that this app replaced;
+the template was deleted together with `shotgen html` in M6. The web app
+reuses this design language 1:1 for existing elements (palette and layout are
+frozen in `tools/gallery/static/style.css`) and extends it with the new
+components (section 6).
 
 ---
 
@@ -448,8 +450,8 @@ Response:
 
 ### 6.1 Visual design
 
-Reuses the `GALLERY_TEMPLATE` design language unchanged for existing
-elements *(verified against `shotgen.py` `GALLERY_TEMPLATE`)*:
+Reuses the former `GALLERY_TEMPLATE` design language unchanged for existing
+elements *(palette frozen in `tools/gallery/static/style.css`)*:
 
 - Background `#14181c`, text `#dde`, card `#1c2228`, headings `#9ad`,
   badge colors: game `#173`/`#cfc`, desktop `#331`/`#fd6`, failed
@@ -743,45 +745,45 @@ Manual test pass (required before delivery, per AGENTS.md policy):
 A conforming implementation satisfies all of the following.
 
 **Safety**
-- [ ] S1 The app never writes to `MARCER_OUT_DIR`, `MARCER_DATA_DIR`, the
+- [x] S1 The app never writes to `MARCER_OUT_DIR`, `MARCER_DATA_DIR`, the
       game trees or the repository working tree.
-- [ ] S2 No path value from `local/paths.env` appears in committed files or
+- [x] S2 No path value from `local/paths.env` appears in committed files or
       documentation.
-- [ ] S3 `/img/` and `/static/` reject traversal (realpath containment,
+- [x] S3 `/img/` and `/static/` reject traversal (realpath containment,
       PNG-only), verified with the section 10 attacks.
-- [ ] S4 Default bind is `127.0.0.1`; non-loopback binds print a warning.
+- [x] S4 Default bind is `127.0.0.1`; non-loopback binds print a warning.
 
 **Data**
-- [ ] D1 Join uses `parts[2]`/`parts[3]` only; entries without gameinfo are
+- [x] D1 Join uses `parts[2]`/`parts[3]` only; entries without gameinfo are
       shown, never dropped.
-- [ ] D2 Without `MARCER_DATA_DIR` the app runs in screenshots-only mode
+- [x] D2 Without `MARCER_DATA_DIR` the app runs in screenshots-only mode
       (section 4.6).
-- [ ] D3 Status aggregation and primary preview follow section 4.4.
-- [ ] D4 Year extraction follows section 4.5 (`unknown` handling).
+- [x] D3 Status aggregation and primary preview follow section 4.4.
+- [x] D4 Year extraction follows section 4.5 (`unknown` handling).
 
 **API**
-- [ ] A1 All endpoints of section 5 exist with the documented parameters.
-- [ ] A2 Pagination is stable (total order, section 5.3) — no duplicate or
+- [x] A1 All endpoints of section 5 exist with the documented parameters.
+- [x] A2 Pagination is stable (total order, section 5.3) — no duplicate or
       skipped cards across consecutive pages.
-- [ ] A3 `entry` returns a single card with `position`.
-- [ ] A4 Errors follow section 5.5 (400/404/503), JSON error bodies.
+- [x] A3 `entry` returns a single card with `position`.
+- [x] A4 Errors follow section 5.5 (400/404/503), JSON error bodies.
 
 **UI**
-- [ ] U1 Visual design matches the `GALLERY_TEMPLATE` language (colors,
+- [x] U1 Visual design matches the `GALLERY_TEMPLATE` language (colors,
       cards, badges, lazy images).
-- [ ] U2 All section 6.6 keys work in the grid; all lightbox keys (6.5)
+- [x] U2 All section 6.6 keys work in the grid; all lightbox keys (6.5)
       work.
-- [ ] U3 Hover panels and lightbox show the gameinfo fields (or path info
+- [x] U3 Hover panels and lightbox show the gameinfo fields (or path info
       without gameinfo).
-- [ ] U4 Deep links `?entry=` and list-state params behave per section 6.9.
-- [ ] U5 Statistics bar shows global counts and current result count.
-- [ ] U6 PD/Utils sections render metadata cards without previews.
+- [x] U4 Deep links `?entry=` and list-state params behave per section 6.9.
+- [x] U5 Statistics bar shows global counts and current result count.
+- [x] U6 PD/Utils sections render metadata cards without previews.
 
 **Process**
-- [ ] P1 Zero new packages in the repo `.venv` (stdlib only).
-- [ ] P2 `run.sh` sources `local/paths.env` and uses the repo `.venv`.
-- [ ] P3 Full manual test pass (section 10) completed before delivery.
-- [ ] P4 `shotgen html` removed and all docs listed in M6 updated.
+- [x] P1 Zero new packages in the repo `.venv` (stdlib only).
+- [x] P2 `run.sh` sources `local/paths.env` and uses the repo `.venv`.
+- [x] P3 Full manual test pass (section 10) completed before delivery.
+- [x] P4 `shotgen html` removed and all docs listed in M6 updated.
 
 ---
 

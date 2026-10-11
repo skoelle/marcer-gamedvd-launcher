@@ -294,15 +294,17 @@ Rationale:
 - A dedicated directory keeps derived artifacts out of the source trees
   (XLS files, games) — no risk of mixing generated output with archive
   content.
-- Both consumers (console launcher on any platform, future desktop app on
-  the iMac) read the same files from the NAS mount.
+- All consumers (console launcher on any platform, the gallery webapp via
+  `tools/gallery`, and the future desktop app on the iMac) read the same
+  files from the NAS mount.
 - The launcher build (GitHub Actions) stays independent of the NAS.
 
 Rules:
-- The extractor tool is the **only writer**. Launcher and desktop app are
-  strictly read-only consumers.
+- The extractor tool is the **only writer**. Launcher, gallery webapp and
+  desktop app are strictly read-only consumers.
 - The launcher must treat the data as **optional** (graceful fallback when
-  `MARCER_DATA_DIR` is missing or incomplete).
+  `MARCER_DATA_DIR` is missing or incomplete). The gallery webapp likewise
+  degrades to screenshots-only mode without it.
 - Data files are derived artifacts; they are not committed to git and not
   shipped inside the launcher release ZIP.
 

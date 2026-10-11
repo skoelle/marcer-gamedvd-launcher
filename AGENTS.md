@@ -20,6 +20,7 @@ The implementation is split into focused modules (files) under the `src/MarcerGa
 
 Tooling (Python, not part of the launcher build; paths via git-ignored `local/paths.env`, run via each tool's `run.sh` with the repo `.venv`):
 - tools/gameinfo-gen/: Extracts game metadata from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR` (see `ANALYSIS-game-data.md`).
+- tools/gallery/: Interactive gallery webapp over the screenshot archive joined with game metadata (see `SPEC-gallery-webapp.md`); replaces the former static `shotgen html` gallery.
 - tools/screenshot-gen/: Generates preview screenshots via Hatari on a virtual display (see `SPEC-screenshot-generator.md`).
 
 Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (AGENTS.md) and README.md as required by project policy.

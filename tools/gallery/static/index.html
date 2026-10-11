@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<!-- Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+     Licensed under the MIT License. See LICENSE file in project root. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marcer GameDVD Screenshots</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>Marcer GameDVD Screenshots</h1>
+  <div id="stats" class="stats" aria-live="polite"></div>
+</header>
+
+<nav class="tabs" id="tabs" hidden>
+  <button data-section="cracked" class="active" type="button">Screenshots</button>
+  <button data-section="pd" type="button">PD Games</button>
+  <button data-section="utils" type="button">Utilities</button>
+</nav>
+
+<div class="banner" id="banner" hidden></div>
+
+<div class="bar" id="controls">
+  <input id="search" type="search" placeholder="Search… ( / )" autocomplete="off" spellcheck="false">
+  <select id="status" title="Status"></select>
+  <select id="publisher" title="Publisher"></select>
+  <select id="crew" title="Crew"></select>
+  <select id="language" title="Language"></select>
+  <select id="year" title="Year"></select>
+  <select id="raw" title="RAW dump"></select>
+  <select id="pasti" title="PASTI dump"></select>
+  <select id="boxscan" title="Boxscan"></select>
+  <select id="tos" title="TOS / Bad"></select>
+  <select id="sort" title="Sort by">
+    <option value="name">Sort: name</option>
+    <option value="year">Sort: year</option>
+    <option value="publisher">Sort: publisher</option>
+    <option value="cracker">Sort: cracker</option>
+    <option value="crew">Sort: crew</option>
+  </select>
+  <button id="order" type="button" title="Toggle sort order">asc</button>
+  <button id="clear" type="button" title="Clear all filters">clear</button>
+  <span class="result-count" id="result-count"></span>
+</div>
+
+<div class="letters" id="letters"></div>
+
+<main class="grid" id="grid" tabindex="0" aria-label="Game grid"></main>
+
+<div class="empty" id="empty" hidden>
+  <p>No results.</p>
+  <button id="empty-clear" type="button">Clear filters</button>
+</div>
+
+<div class="pager" id="pager" hidden>
+  <button id="page-prev" type="button">‹ Prev</button>
+  <span id="page-info"></span>
+  <button id="page-next" type="button">Next ›</button>
+</div>
+
+<footer id="footer"></footer>
+
+<div class="hover-panel" id="hover" hidden></div>
+
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true">
+  <div class="lb-inner">
+    <div class="lb-header">
+      <div>
+        <span class="lb-badge" id="lb-badge"></span>
+        <strong id="lb-title"></strong>
+        <span class="lb-meta" id="lb-sub"></span>
+      </div>
+      <div class="lb-nav">
+        <span id="lb-pos"></span>
+        <button id="lb-prev" type="button" title="Previous (←)">‹</button>
+        <button id="lb-next" type="button" title="Next (→)">›</button>
+        <button id="lb-close" type="button" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <div class="lb-body">
+      <div class="lb-image-wrap">
+        <img id="lb-image" alt="">
+        <div class="lb-ph" id="lb-ph" hidden>
+          <span>no screenshot</span>
+        </div>
+      </div>
+      <aside class="lb-side" id="lb-side"></aside>
+    </div>
+    <div class="lb-footer">
+      <div class="lb-variants" id="lb-variants"></div>
+      <div class="lb-cands" id="lb-cands"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
