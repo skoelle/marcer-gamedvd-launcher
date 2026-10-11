@@ -1,0 +1,28 @@
+name: CI Launcher
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/build.sh'
+      - '.github/workflows/ci-launcher.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/build.sh'
+      - '.github/workflows/ci-launcher.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: ./scripts/build.sh

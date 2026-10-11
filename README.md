@@ -260,31 +260,44 @@ Windowed desktop app (Surface A: master-detail inventory browser, later Surface 
 - **Config:** git-ignored `desktop.config.json` with absolute paths (template: [`desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json)); auto-seeded from `local/paths.env` on first `run.sh` start.
 - **Run:** `apps/marcer_desktop/run.sh` (requires the Flutter stable SDK in `~/flutter` plus the Linux desktop toolchain: `clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev`).
 - **Tests:** `cd apps/marcer_desktop/packages/marcer_catalog && dart test` and `flutter test` in `apps/marcer_desktop/`.
-- The app is a **read-only** consumer of all data roots and degrades gracefully when `index.json` or the gameinfo `Data/` directory are absent. It is **not** built via `scripts/build.*`; it is currently not part of the launcher release ZIPs.
+- The app is a **read-only** consumer of all data roots and degrades gracefully when `index.json` or the gameinfo `Data/` directory are absent. It is **not** built via `scripts/build.*`; it is released independently via the `desktop-v*` tag workflow (see [Release Process](#-release-process)).
 
 ### 🚀 Release Process
 
-Releases are automated via GitHub Actions (`.github/workflows/release.yml`).
+Releases are automated via GitHub Actions. This is a monorepo with **one tag scheme per app** so each app is built and released independently:
+
+| App | Tag scheme | Workflow | Artifacts |
+|---|---|---|---|
+| Console launcher (`src/`) | `vX.Y.Z` (e.g. `v0.9.8`) | [`release.yml`](.github/workflows/release.yml) | `MarcerGameDvdLauncher-v…-{win,linux,osx}-x64.zip` |
+| Flutter desktop (`apps/marcer_desktop/`) | `desktop-vX.Y.Z` (e.g. `desktop-v0.1.0`) | [`desktop-release.yml`](.github/workflows/desktop-release.yml) | `MarcerDesktop-v…-{win,linux,osx}-x64.zip` |
+
+Each workflow triggers only on its own tag prefix (`v*` never matches `desktop-v*` and vice versa), so a desktop release never rebuilds the launcher and the other way around. Path-based CI (build + test on `main` and PRs, **no release**) runs only when the relevant app changed: [`ci-launcher.yml`](.github/workflows/ci-launcher.yml) for `src/**`, [`ci-desktop.yml`](.github/workflows/ci-desktop.yml) for `apps/marcer_desktop/**`.
 
 **To create a release:**
 
 You can use the `/create-release` command (via opencode) for a fully automated flow:
 
 ```text
-/create-release 1.0.0
+/create-release 1.0.0            # console launcher → v1.0.0
+/create-release desktop 0.1.0    # Flutter desktop  → desktop-v0.1.0
 ```
 
-This command validates the version, checks for uncommitted changes, generates a release summary from recent commits, creates a release commit with the summary as the commit message, tags it, and pushes — all in one step. The GitHub Action then builds platform ZIPs and creates the GitHub Release.
+This command validates the version, checks for uncommitted changes, generates a release summary from recent commits, creates a release commit with the summary as the commit message, tags it, and pushes — all in one step. The matching GitHub Action then builds platform ZIPs and creates the GitHub Release.
 
 **Manual release:**
 1. Ensure `README.md` and `AGENTS.md` are up to date.
 2. Commit all changes.
-3. Tag and push:
+3. Tag and push (launcher example):
    ```bash
    git tag v1.2.3
    git push origin v1.2.3
    ```
-4. The workflow builds platform ZIPs, generates release notes, and creates a GitHub Release.
+   Desktop example:
+   ```bash
+   git tag desktop-v0.1.0
+   git push origin desktop-v0.1.0
+   ```
+4. The matching workflow builds platform ZIPs, generates release notes, and creates a GitHub Release.
 
 ---
 

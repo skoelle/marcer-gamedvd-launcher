@@ -34,13 +34,17 @@ Note: This overview is intentionally concise. For behavioral changes (navigation
 The Launcher cannot be executed or tested via `scripts/start.cmd` from this environment (build system, automation agent) since no Windows console environment is present. For release workflows and developer validation, it is ALWAYS required to do a manual test run via `scripts/start.cmd` (Windows) or `scripts/start.sh` (Linux/macOS) per documentation and policy before delivery.
 
 **Release Process (automated via GitHub Actions):**
-- Pushing a tag (`v*`) triggers the GitHub Action workflow (`.github/workflows/release.yml`).
-- The workflow builds platform-specific artifacts (Windows, Linux, macOS), generates release notes from git log, and creates a GitHub Release with all ZIPs attached.
+- Monorepo with **one tag scheme per app**, so each app is released independently:
+  - Console launcher (`src/`): tag `v*` → `.github/workflows/release.yml` → `MarcerGameDvdLauncher-v…-{win,linux,osx}-x64.zip`.
+  - Flutter desktop (`apps/marcer_desktop/`): tag `desktop-v*` → `.github/workflows/desktop-release.yml` → `MarcerDesktop-v…-{win,linux,osx}-x64.zip`.
+- Each workflow triggers only on its own tag prefix (`v*` never matches `desktop-v*` and vice versa), so releasing one app never rebuilds the other. Release notes are matched with the same prefix (`git describe --match`).
+- Path-based CI (build + test on `main`/PRs, **no release**): `.github/workflows/ci-launcher.yml` (`src/**`), `.github/workflows/ci-desktop.yml` (`apps/marcer_desktop/**`) — GitHub does not evaluate `paths` for tag pushes, so path filtering is only used for CI, never for releases.
 - Developer steps for a release:
    1. Ensure `README.md` and `AGENTS.md` are up to date.
    2. Commit all changes.
-   3. Create and push a tag: `git tag v{version} && git push origin v{version}`.
-   4. The GitHub Action handles the rest (build, ZIP, release notes, GitHub Release).
+   3. Create and push a tag: `git tag v{version} && git push origin v{version}` (or `git tag desktop-v{version} && git push origin desktop-v{version}`).
+   4. The matching GitHub Action handles the rest (build, ZIP, release notes, GitHub Release).
+- The `/create-release` command supports both apps: `/create-release 1.0.0` (launcher) and `/create-release desktop 0.1.0` (desktop).
 - Local release artifacts in `release/` are optional and no longer required for the release process.
 
 # Requirements for the Marcer GameDVD Launcher (AGENTS.md)

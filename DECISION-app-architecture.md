@@ -134,8 +134,9 @@ Implementation strategy for the overlay merge and catalog joins:
     (config flag, CLI arg, or runtime switch).
   - Whether the gallery server and a future tool share a common
     module layout under `tools/`.
-  - Packaging/release strategy for the Flutter app (GitHub Actions matrix
-    mirroring `.github/workflows/release.yml`).
+  - Packaging/release strategy for the Flutter app → **resolved 2026-10-11**:
+    independent `desktop-v*` tag workflow (`.github/workflows/desktop-release.yml`,
+    matrix linux/macos/windows) plus path-based CI; launcher stays on `v*`.
 - **Flutter desktop app:** Phase 0 scaffold written (2026-10-11); UI and
   launch still to come per `apps/marcer_desktop/PLAN.md`.
 

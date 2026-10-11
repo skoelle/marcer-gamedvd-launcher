@@ -1,0 +1,133 @@
+name: Release Desktop
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: linux-x64
+          - os: macos-latest
+            artifact_name: osx-x64
+          - os: windows-latest
+            artifact_name: win-x64
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+
+      - name: Enable desktop targets
+        run: |
+          flutter config --enable-linux-desktop --enable-macos-desktop --enable-windows-desktop
+
+      - name: Install dependencies
+        working-directory: apps/marcer_desktop
+        run: flutter pub get
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#desktop-v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: apps/marcer_desktop
+        run: flutter build linux --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ github.run_number }}
+
+      - name: Build (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: apps/marcer_desktop
+        run: flutter build macos --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ github.run_number }}
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: apps/marcer_desktop
+        run: flutter build windows --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ github.run_number }}
+
+      - name: Create ZIP (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        working-directory: apps/marcer_desktop
+        run: |
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "$env:GITHUB_WORKSPACE/MarcerDesktop-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
+
+      - name: Create ZIP (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: apps/marcer_desktop/build/linux/x64/release/bundle
+        run: |
+          zip -r "$GITHUB_WORKSPACE/MarcerDesktop-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip" .
+
+      - name: Create ZIP (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: apps/marcer_desktop/build/macos/Build/Products/Release
+        run: |
+          ditto -c -k --keepParent "marcer_desktop.app" "$GITHUB_WORKSPACE/MarcerDesktop-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: MarcerDesktop-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}
+          path: MarcerDesktop-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#desktop-v}" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          # Scope to desktop tags only, so launcher v* tags are ignored.
+          PREV_TAG=$(git describe --tags --match 'desktop-v*' --abbrev=0 ${CURRENT_TAG}^ 2>/dev/null || echo "")
+
+          COMMIT_HASH=$(git rev-list -n 1 ${CURRENT_TAG})
+          BODY=$(git log -1 --format=%b ${COMMIT_HASH})
+
+          if [ -n "$BODY" ]; then
+            echo "$BODY" > release-notes.md
+          elif [ -n "$PREV_TAG" ]; then
+            echo "## Changes since ${PREV_TAG}" > release-notes.md
+            echo "" >> release-notes.md
+            git log --oneline ${PREV_TAG}..${CURRENT_TAG} >> release-notes.md
+          else
+            echo "## Initial release" > release-notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: Marcer Desktop v${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          files: artifacts/**/*.zip
+          generate_release_notes: false

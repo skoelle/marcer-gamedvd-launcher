@@ -1,4 +1,4 @@
-name: Release
+name: Release Launcher
 
 on:
   push:
@@ -79,7 +79,8 @@ jobs:
         shell: bash
         run: |
           CURRENT_TAG="${GITHUB_REF_NAME}"
-          PREV_TAG=$(git describe --tags --abbrev=0 ${CURRENT_TAG}^ 2>/dev/null || echo "")
+          # Scope to launcher tags only, so desktop-v* tags are ignored.
+          PREV_TAG=$(git describe --tags --match 'v*' --abbrev=0 ${CURRENT_TAG}^ 2>/dev/null || echo "")
 
           # Get the full commit message body of the release commit
           # (the empty commit created by /create-release)

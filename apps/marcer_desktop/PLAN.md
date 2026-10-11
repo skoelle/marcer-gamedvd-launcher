@@ -216,8 +216,10 @@ Playnite-inspired master-detail layout, hybrid model:
   backgrounds, predefined filter presets (instead of dropdowns), gamepad navigation via
   the `gamepads` package; mode switch mechanism (config flag / CLI arg / runtime switch)
   to be decided when reached.
-- **Release pipeline:** GitHub Actions matrix (win/mac/linux) mirroring
-  `.github/workflows/release.yml`.
+- **Release pipeline:** done — `.github/workflows/desktop-release.yml`
+  (matrix linux/macos/windows, `subosito/flutter-action`), triggered by
+  `desktop-v*` tags; CI build+test via `.github/workflows/ci-desktop.yml`
+  (`apps/marcer_desktop/**` paths). See README "Release Process".
 - Optional: pre-joined `catalog.json` (ANALYSIS M6) instead of runtime join.
 
 ---
