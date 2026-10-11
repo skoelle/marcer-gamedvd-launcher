@@ -26,7 +26,10 @@ class EntryList extends StatefulWidget {
 
   final CatalogController controller;
   final VoidCallback onToggleHelp;
-  final VoidCallback onOpenLightbox;
+
+  /// Opens the lightbox for the selection (variant/image indices, see
+  /// `GameLightbox.show` — entries are single-variant, always (0, 0)).
+  final void Function(int variant, int image) onOpenLightbox;
   final VoidCallback onFocusSearch;
 
   @override
@@ -115,7 +118,7 @@ class _EntryListState extends State<EntryList> {
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter ||
         key == LogicalKeyboardKey.arrowRight) {
-      if (c.activate()) widget.onOpenLightbox();
+      if (c.activate()) widget.onOpenLightbox(0, 0);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.backspace ||
@@ -210,7 +213,7 @@ class _EntryListState extends State<EntryList> {
         },
         onDoubleTap: () {
           c.moveSelectionTo(index);
-          if (c.activate()) widget.onOpenLightbox();
+          if (c.activate()) widget.onOpenLightbox(0, 0);
         },
         child: Container(
           height: kItemExtent,

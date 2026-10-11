@@ -336,5 +336,109 @@ void main() {
       expect(f.isActive, isFalse);
       expect(f.section, 'pd');
     });
+
+    test('factoryStatus (gallery default_status config) drives isActive', () {
+      final f = CatalogFilter()..factoryStatus = 'done';
+      f.status = 'done';
+      expect(f.isActive, isFalse); // configured default is not "active"
+      f.status = 'with_screenshot';
+      expect(f.isActive, isTrue);
+      f.reset();
+      expect(f.status, 'done');
+    });
+  });
+
+  group('crew focus (gallery _apply_crew_focus)', () {
+    test('focuses the ZIP whose name contains the crew', () {
+      // rels sorted case-sensitively: 'Alpha the crew.zip' (0) < 'a.zip' (1).
+      const cracked = '''
+      [{"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
+        "matched_via": "exact", "matched_title": "Alpha Game",
+        "variants": [{"title": "Alpha Game", "crew": "The Crew",
+          "cracked_by": "Crackerman", "release": "1990"}]}]
+      ''';
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+        'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha the crew.zip':
+            entryJson(
+                'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha the crew.zip',
+                'pending',
+                'ROOT'),
+      }, crackedGames: cracked);
+      final card = u.cracked.first;
+      expect(card.variants.length, 2);
+
+      final focused = applyCrewFocus(card, 'The Crew');
+      expect(focused.focusVariant, 0);
+      expect(focused.previewPath, isNull); // pending variant, no shot
+      expect(focused.screenshots, isFalse);
+      expect(focused.displayStatus, 'pending');
+      expect(focused.name, card.name); // shallow copy keeps identity
+
+      // default status would hide the pending card — crew bypass + focus
+      final f = CatalogFilter()..crew = 'The Crew';
+      final out = queryCards(u.cracked, f);
+      expect(out.length, 1);
+      expect(out.first.focusVariant, 0);
+      expect(out.first.previewPath, isNull);
+    });
+
+    test('fallback: gameinfo crew variant matches cracker in ZIP name', () {
+      // rels sorted: 'Crackerman - x.zip' (0) < 'a.zip' (1).
+      const cracked = '''
+      [{"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
+        "matched_via": "exact", "matched_title": "Alpha Game",
+        "variants": [{"title": "Alpha Game", "crew": "The Crew",
+          "cracked_by": "Crackerman", "release": "1990"}]}]
+      ''';
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+        'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Crackerman - x.zip':
+            entryJson(
+                'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Crackerman - x.zip',
+                'done',
+                'ROOT',
+                preview: 'a2.png'),
+      }, crackedGames: cracked);
+      final card = u.cracked.first;
+      final focused = applyCrewFocus(card, 'The Crew');
+      expect(focused.focusVariant, 0);
+      expect(focused.previewPath, endsWith('/A/Alpha/a2.png'));
+      expect(focused.screenshots, isTrue);
+      expect(focused.displayStatus, 'done');
+    });
+
+    test('crew known but no ZIP identified → empty card, focus -1', () {
+      const cracked = '''
+      [{"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
+        "matched_via": "exact", "matched_title": "Alpha Game",
+        "variants": [{"title": "Alpha Game", "crew": "The Crew",
+          "release": "1990"}]}]
+      ''';
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+      }, crackedGames: cracked);
+      final card = u.cracked.first;
+      final focused = applyCrewFocus(card, 'The Crew');
+      expect(focused.focusVariant, -1);
+      expect(focused.previewPath, isNull);
+      expect(focused.screenshots, isFalse);
+      // display status is untouched in the focus=-1 case (gallery: dict copy)
+      expect(focused.displayStatus, card.displayStatus);
+
+      final out = queryCards(u.cracked, CatalogFilter()..crew = 'The Crew');
+      expect(out.single.focusVariant, -1);
+      expect(out.single.previewPath, isNull);
+    });
+
+    test('no crew filter → cards pass through unchanged', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+      });
+      final out = queryCards(u.cracked, CatalogFilter());
+      expect(out.single.focusVariant, -1);
+      expect(out.single.screenshots, isTrue);
+      expect(out.single.previewPath, endsWith('/A/Alpha/a.png'));
+    });
   });
 }

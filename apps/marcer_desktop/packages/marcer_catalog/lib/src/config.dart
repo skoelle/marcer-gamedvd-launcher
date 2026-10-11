@@ -14,6 +14,8 @@ class DesktopConfig {
     this.hatariExecutable = '',
     this.hatariConfigFile = '',
     this.hatariArgsTemplate = r'-c "{cfg}" --disk-a "{zip}"',
+    this.showCandidates = true,
+    this.defaultStatus = 'with_screenshot',
     this.windowWidth = 1280,
     this.windowHeight = 800,
   });
@@ -25,6 +27,14 @@ class DesktopConfig {
   final String hatariExecutable;
   final String hatariConfigFile;
   final String hatariArgsTemplate;
+
+  /// Gallery `show_candidates` config: candidate thumb strip on grid cards.
+  final bool showCandidates;
+
+  /// Gallery `default_status` config: initial status preset of the status
+  /// filter (used for the factory state, `clear` and section switches).
+  final String defaultStatus;
+
   final int windowWidth;
   final int windowHeight;
 
@@ -46,6 +56,8 @@ class DesktopConfig {
       hatariConfigFile: (hatari['ConfigFile'] ?? '') as String,
       hatariArgsTemplate:
           (hatari['ArgsTemplate'] ?? r'-c "{cfg}" --disk-a "{zip}"') as String,
+      showCandidates: (map['ShowCandidates'] ?? true) as bool,
+      defaultStatus: (map['DefaultStatus'] ?? 'with_screenshot') as String,
       windowWidth: (window['width'] as int?) ?? 1280,
       windowHeight: (window['height'] as int?) ?? 800,
     );

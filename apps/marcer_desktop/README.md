@@ -48,6 +48,8 @@ flutter analyze                   # lint
 | `OutDirectory` | no | screenshot archive (`index.json`, PNGs) |
 | `DataDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
 | `Hatari.*` | no (MVP) | launch config, used from Phase 5+ |
+| `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
+| `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
 | `Window.width/height` | no | initial window size (default 1280×800) |
 
 ## License

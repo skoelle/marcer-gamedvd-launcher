@@ -170,6 +170,7 @@ class GameCard {
     required this.crackerSort,
     required this.languageSort,
     required this.searchText,
+    this.focusVariant = -1,
   });
 
   final String id;
@@ -199,6 +200,11 @@ class GameCard {
   final String crackerSort;
   final String languageSort;
   final String searchText;
+
+  /// Index of the ZIP variant focused by an active crew filter
+  /// (gallery `_apply_crew_focus`), or -1 when no filter applies / no ZIP
+  /// could be identified for that crew.
+  final int focusVariant;
 
   /// Sort tie key (gallery `_tie`): `(name.lower, firstVariantRel)`.
   int tieCompare(GameCard other) {
@@ -416,4 +422,86 @@ String _infoSearchText(InfoSummary? info) {
     }
   }
   return parts.join(' ').toLowerCase();
+}
+
+/// Index of the ZIP variant that belongs to [crew], or -1
+/// (gallery `_crew_focus_variant`): ZIP name contains the crew string;
+/// fallback — a gameinfo variant with that crew whose `cracked_by`
+/// appears in a ZIP name.
+int crewFocusVariant(GameCard card, String crew) {
+  final crewL = crew.trim().toLowerCase();
+  if (crewL.isEmpty) return -1;
+  for (var i = 0; i < card.variants.length; i++) {
+    if (card.variants[i].name.toLowerCase().contains(crewL)) return i;
+  }
+  for (final iv in card.info?.variants ?? const <Map<String, dynamic>>[]) {
+    if (((iv['crew'] ?? '') as String).trim().toLowerCase() != crewL) {
+      continue;
+    }
+    final cracker = ((iv['cracked_by'] ?? '') as String).trim().toLowerCase();
+    if (cracker.isEmpty) continue;
+    for (var i = 0; i < card.variants.length; i++) {
+      if (card.variants[i].name.toLowerCase().contains(cracker)) return i;
+    }
+  }
+  return -1;
+}
+
+/// Shallow-adjusted copy of [card] focused on the crew variant
+/// (gallery `_apply_crew_focus`): sets `focusVariant` and overrides
+/// preview / display status / screenshots of the payload — even when the
+/// focused variant has no screenshot (empty preview → placeholder).
+/// Returns an unchanged copy with `focusVariant = -1` when no ZIP could
+/// be identified for the crew.
+GameCard applyCrewFocus(GameCard card, String crew) {
+  final focus = crewFocusVariant(card, crew);
+  if (focus < 0) {
+    return _copyCard(card, focusVariant: -1, previewPath: null, screenshots: false);
+  }
+  final v = card.variants[focus];
+  return _copyCard(
+    card,
+    focusVariant: focus,
+    previewPath: v.previewPath,
+    displayStatus: v.status,
+    screenshots: v.previewPath != null,
+  );
+}
+
+GameCard _copyCard(
+  GameCard card, {
+  required int focusVariant,
+  String? previewPath,
+  String? displayStatus,
+  bool? screenshots,
+}) {
+  return GameCard(
+    id: card.id,
+    name: card.name,
+    letter: card.letter,
+    folder: card.folder,
+    displayStatus: displayStatus ?? card.displayStatus,
+    screenshots: screenshots ?? card.screenshots,
+    statusCounts: card.statusCounts,
+    layer: card.layer,
+    year: card.year,
+    previewPath: previewPath,
+    variants: card.variants,
+    info: card.info,
+    yearNum: card.yearNum,
+    publishers: card.publishers,
+    crews: card.crews,
+    crackers: card.crackers,
+    languages: card.languages,
+    raw: card.raw,
+    pasti: card.pasti,
+    boxscan: card.boxscan,
+    tos: card.tos,
+    publisherSort: card.publisherSort,
+    crewSort: card.crewSort,
+    crackerSort: card.crackerSort,
+    languageSort: card.languageSort,
+    searchText: card.searchText,
+    focusVariant: focusVariant,
+  );
 }

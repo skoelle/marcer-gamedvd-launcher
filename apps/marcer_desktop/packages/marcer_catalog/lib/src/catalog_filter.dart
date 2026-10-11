@@ -55,10 +55,14 @@ class CatalogFilter {
   String sort;
   String order;
 
+  /// Status value considered "default" (gallery `default_status` config);
+  /// [isActive] and [reset] use it instead of a hardcoded value.
+  String factoryStatus = 'with_screenshot';
+
   /// True when anything deviates from the factory state — the app is in
   /// catalog (global) mode while active.
   bool get isActive =>
-      status != 'with_screenshot' ||
+      status != factoryStatus ||
       q.trim().isNotEmpty ||
       letter != 'any' ||
       publisher != 'any' ||
@@ -75,7 +79,7 @@ class CatalogFilter {
   /// Gallery `clear`: resets status/search/facets/flags/sort — the section
   /// tab is intentionally kept.
   void reset() {
-    status = 'with_screenshot';
+    status = factoryStatus;
     q = '';
     letter = 'any';
     publisher = 'any';
@@ -207,9 +211,16 @@ void sortCards(List<GameCard> cards, String sort, String order) {
 }
 
 /// Filter + sort (gallery request pipeline without pagination — the desktop
-/// grid virtualizes instead).
+/// grid virtualizes instead). When a crew filter is active the returned
+/// cards are crew-focused copies (gallery `_apply_crew_focus`): preview /
+/// status / `focusVariant` reflect the crew's ZIP variant.
 List<GameCard> queryCards(List<GameCard> cards, CatalogFilter f) {
   final out = cards.where((c) => matchesCard(c, f)).toList();
   sortCards(out, f.sort, f.order);
+  final crewFocus =
+      f.crew != 'any' && kindFilters(f.section).contains('crew');
+  if (crewFocus) {
+    return [for (final c in out) applyCrewFocus(c, f.crew)];
+  }
   return out;
 }

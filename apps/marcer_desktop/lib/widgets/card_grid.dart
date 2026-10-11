@@ -24,7 +24,10 @@ class CenterGrid extends StatefulWidget {
 
   final CatalogController controller;
   final VoidCallback onToggleHelp;
-  final VoidCallback onOpenLightbox;
+
+  /// Opens the lightbox for the selection: variant index (crew focus) and
+  /// image index (0 = preview, gallery `openLightbox` semantics).
+  final void Function(int variant, int image) onOpenLightbox;
   final VoidCallback onFocusSearch;
 
   @override
@@ -146,7 +149,7 @@ class _CenterGridState extends State<CenterGrid> {
     }
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
-      if (c.activate()) widget.onOpenLightbox();
+      if (c.activate()) _openLightboxForSelection();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.backspace) {
@@ -231,24 +234,107 @@ class _CenterGridState extends State<CenterGrid> {
     );
   }
 
+  /// Gallery `openLightbox(idx, fv)`: start on the crew-focused variant
+  /// when a crew filter is active, otherwise on the first variant.
+  void _openLightboxForSelection({int image = 0}) {
+    final c = widget.controller;
+    final card = c.selectedCard;
+    final fv = (card != null && card.focusVariant >= 0) ? card.focusVariant : 0;
+    widget.onOpenLightbox(fv, image);
+  }
+
   Widget _cardTile(
       CatalogController c, GameCard card, bool selected, int index) {
+    final chips = <String>[
+      if (card.variants.length > 1) '×${card.variants.length}',
+      if (card.layer.isNotEmpty) card.layer,
+      if (card.displayStatus.isNotEmpty) card.displayStatus,
+      if (card.year != 'unknown') card.year,
+    ];
     return _tileFrame(
       selected: selected,
       index: index,
       onTap: () => c.moveSelectionTo(index),
       onDoubleTap: () {
         c.moveSelectionTo(index);
-        if (c.activate()) widget.onOpenLightbox();
+        if (c.activate()) _openLightboxForSelection();
       },
       image: _previewImage(card.previewPath),
-      badges: [
-        if (card.layer.isNotEmpty) card.layer,
-        if (card.displayStatus.isNotEmpty) card.displayStatus,
-        if (card.year != 'unknown') card.year,
-      ],
+      overlay: _candidatesOverlay(card, index),
+      badges: chips,
       title: card.name,
       dim: card.previewPath == null,
+    );
+  }
+
+  /// Gallery grid `.cands`: thumbnails of the sole variant's candidates on
+  /// top of the preview (hidden when a crew focus or multiple ZIPs apply).
+  /// Click opens the lightbox on that candidate image.
+  Widget? _candidatesOverlay(GameCard card, int index) {
+    if (!widget.controller.config.showCandidates) return null;
+    if (card.focusVariant >= 0 || card.variants.length != 1) return null;
+    if (card.previewPath == null) return null;
+    final cands = card.variants.first.candidatePaths;
+    if (cands.isEmpty) return null;
+    return _candidateThumbs(
+      cands,
+      onPick: (i) {
+        widget.controller.moveSelectionTo(index);
+        widget.onOpenLightbox(0, i + 1);
+      },
+    );
+  }
+
+  Widget _entryCandidatesOverlay(CatalogController c, Entry e, int index) {
+    if (!c.config.showCandidates) return const SizedBox.shrink();
+    final preview = c.previewPathFor(e);
+    if (preview == null) return const SizedBox.shrink();
+    final cands = c.candidatePathsFor(e);
+    if (cands.isEmpty) return const SizedBox.shrink();
+    return _candidateThumbs(
+      cands,
+      onPick: (i) {
+        c.moveSelectionTo(index);
+        widget.onOpenLightbox(0, i + 1);
+      },
+    );
+  }
+
+  Widget _candidateThumbs(List<String> cands,
+      {required void Function(int index) onPick}) {
+    return Align(
+      alignment: Alignment.bottomLeft,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < cands.length && i < 6; i++)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: GestureDetector(
+                  onTap: () => onPick(i),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFF2A2A2A)),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Image.file(
+                      io.File(cands[i]),
+                      width: 44,
+                      height: 26,
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.none,
+                      errorBuilder: (_, _, _) => Container(
+                          width: 44, height: 26, color: Colors.black),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -277,9 +363,10 @@ class _CenterGridState extends State<CenterGrid> {
       onTap: () => c.moveSelectionTo(index),
       onDoubleTap: () {
         c.moveSelectionTo(index);
-        if (c.activate()) widget.onOpenLightbox();
+        if (c.activate()) widget.onOpenLightbox(0, 0);
       },
       image: _previewImage(preview),
+      overlay: _entryCandidatesOverlay(c, e, index),
       badges: [
         e.layerStatus.name.toUpperCase(),
         if (fav) 'FAVORITE',
@@ -311,6 +398,7 @@ class _CenterGridState extends State<CenterGrid> {
     required VoidCallback onTap,
     required VoidCallback onDoubleTap,
     Widget? image,
+    Widget? overlay,
     required List<String> badges,
     required String title,
     IconData? icon,
@@ -345,11 +433,17 @@ class _CenterGridState extends State<CenterGrid> {
                         ? Center(
                             child: Icon(icon, size: 56, color: iconColor),
                           )
-                        : (image ??
-                            const Center(
-                              child: Icon(Icons.videogame_asset,
-                                  size: 42, color: Colors.white24),
-                            )),
+                        : Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              image ??
+                                  const Center(
+                                    child: Icon(Icons.videogame_asset,
+                                        size: 42, color: Colors.white24),
+                                  ),
+                              ?overlay,
+                            ],
+                          ),
                   ),
                 ),
               ),
@@ -364,7 +458,7 @@ class _CenterGridState extends State<CenterGrid> {
                         spacing: 4,
                         runSpacing: 2,
                         children: [
-                          for (final b in badges.take(3))
+                          for (final b in badges.take(4))
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 5, vertical: 1),

@@ -8,6 +8,8 @@
     "ConfigFile": "",
     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
   },
+  "ShowCandidates": true,
+  "DefaultStatus": "with_screenshot",
   "Window": {
     "width": 1280,
     "height": 800

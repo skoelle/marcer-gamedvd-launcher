@@ -108,7 +108,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _openLightbox() {
+  void _openLightbox(int variant, int image) {
     final c = _controller;
     if (!c.catalogMode) {
       final e = c.selectedEntry;
@@ -116,7 +116,7 @@ class _HomePageState extends State<HomePage> {
     } else if (c.selectedCard == null) {
       return;
     }
-    GameLightbox.show(context, c);
+    GameLightbox.show(context, c, variant: variant, image: image);
   }
 
   @override

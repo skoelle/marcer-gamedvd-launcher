@@ -2,8 +2,9 @@
 
 Status: **Phase 0 + Phase 3 (+ 3b catalog/grid/lightbox) done (2026-10-11)** —
 Flutter 3.47.7 stable in `~/flutter`, `marcer_catalog` data layer with the
-gallery-style card universe (26 `dart test`: overlay, gameinfo join, screenshot
-index, `GameCard` build, facets, `CatalogFilter`/`matchesCard`/`sortCards`).
+gallery-style card universe (32 `dart test`: overlay, gameinfo join, screenshot
+index, `GameCard` build, facets, `CatalogFilter`/`matchesCard`/`sortCards`,
+crew focus, config incl. `ShowCandidates`/`DefaultStatus`).
 Master-detail UI: gallery filter bar (section tabs cracked/pd/utils, search,
 status/publisher/crew/language/year dropdowns, tri-state raw/pasti/boxscan,
 TOS/Bad, sort+order, letter row, clear), overlay folder tree with lazy
@@ -151,9 +152,18 @@ Playnite-inspired master-detail layout, hybrid model:
   sort (`name`/`year`/`publisher`/`cracker`/`crew`) + asc/desc; letter row
   (`any`, `0-9`, `A`–`Z`, dimmed when absent from facets). Facet values come
   from `CatalogUniverse` (index.json + gameinfo, **no FS scan**).
+  Section switches reset the incompatible filters (status → `DefaultStatus`,
+  raw/pasti/boxscan/tos/crew → `any`, cracker sort → name on pd) exactly
+  like the gallery tabs.
 - **Catalog mode:** any non-default filter switches the center to the global
   card grid (`CatalogFilter.isActive`); `clear` / Backspace returns to the
   folder browser. Result counts in the status bar.
+  **Crew focus** (gallery `_apply_crew_focus`): with an active crew filter
+  each card's preview/status reflects the crew's ZIP variant — even when it
+  has no screenshot — and the lightbox opens on exactly that variant
+  (`focusVariant`). Grid cards show an `×N` chip for multi-ZIP folders and
+  (when `ShowCandidates` is true, single variant, no crew focus) a candidate
+  thumb strip; clicking a thumb opens the lightbox on that image.
 - **Left:** overlay folder tree per `SPEC.md` §7 with `Enter`/`Backspace` semantics,
   layer labels `BOTH`/`ROOT`/`PTCH`, virtual `Favorites` folder per `SPEC.md` §11
   (stored in `favorites.txt`, keyed by effective path).
@@ -162,9 +172,12 @@ Playnite-inspired master-detail layout, hybrid model:
   least one ZIP; `V` toggles (override resets on directory change). Grid
   shows folder tiles, ZIP cards with preview and catalog `GameCard`s.
 - **Lightbox (gallery-style):** Enter on a ZIP/card opens the lightbox —
-  header with layer/status badges, large preview, variant filmstrip,
-  candidate strip, 330px info panel; `←/→` item, `↑/↓` variant,
-  `PgUp/PgDn` image, Esc close.
+  header with layer/status badges, position + variant counter, main image
+  **integer-upscaled** (pixel-art stays crisp), variant filmstrip (short
+  labels, status underline, `+N` candidate badges, tooltip, auto-scroll),
+  candidate strip (fixed height, wraps images), info panel with release
+  variants table (open ZIP highlighted) + "This ZIP" table; `←/→` item,
+  `↑/↓` variant (wrap), `PgUp/PgDn` image (wrap), Esc close.
 - **Right:** detail panel — large preview screenshot, candidate gallery, metadata
   (title, publisher, crew, language, disks, release, flags, `matched_via`) for
   entries and catalog cards.

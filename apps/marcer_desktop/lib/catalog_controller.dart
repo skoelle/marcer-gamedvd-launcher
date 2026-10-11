@@ -20,7 +20,11 @@ const String kFavoritesRel = '\u0000favorites';
 ///
 /// Read-only towards all data roots; only `favorites.txt` is written.
 class CatalogController extends ChangeNotifier {
-  CatalogController(this.config);
+  CatalogController(this.config) {
+    // gallery `default_status` config: the factory state of the filter.
+    filter.factoryStatus = config.defaultStatus;
+    filter.status = config.defaultStatus;
+  }
 
   final DesktopConfig config;
 
@@ -117,7 +121,14 @@ class CatalogController extends ChangeNotifier {
   void setSection(String value) {
     if (filter.section == value) return;
     filter.section = value;
-    // Gallery: `cracker` sort is not meaningful for pd — fall back to name.
+    // Gallery section switch: reset incompatible filters.
+    filter.status = config.defaultStatus;
+    filter.raw = 'any';
+    filter.pasti = 'any';
+    filter.boxscan = 'any';
+    filter.tos = 'any';
+    filter.crew = 'any';
+    // `cracker` sort is not meaningful for pd — fall back to name.
     if (value == 'pd' && filter.sort == 'cracker') filter.sort = 'name';
     _filtersChanged();
   }

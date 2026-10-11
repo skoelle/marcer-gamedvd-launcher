@@ -2,6 +2,8 @@
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
 import 'dart:io' as io;
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,21 +11,43 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
 
-/// Gallery-style lightbox over the current center list: header with badges,
-/// large preview, variant filmstrip, candidate strip and a 330px info
-/// panel. `←/→` move through cards/entries, `↑/↓` through variants,
-/// `PgUp/PgDn` through the images of the active variant, `Esc` closes.
+/// Gallery-style lightbox over the current center list: header with badges
+/// and position, integer-scaled main image (pixel-art safe), variant
+/// filmstrip (short labels, status underline, `+N` candidate badges),
+/// candidate strip and a 330px info panel with the release-variants table
+/// (selected ZIP highlighted) and a "This ZIP" table.
+/// `←/→` move through cards/entries, `↑/↓` through variants, `PgUp/PgDn`
+/// through the images of the active variant, `Esc` closes.
 class GameLightbox extends StatefulWidget {
-  const GameLightbox({super.key, required this.controller});
+  const GameLightbox({
+    super.key,
+    required this.controller,
+    this.initialVariant = 0,
+    this.initialImage = 0,
+  });
 
   final CatalogController controller;
 
-  static Future<void> show(BuildContext context, CatalogController c) {
+  /// Initial variant index (crew focus) and image index (0 = preview,
+  /// gallery `openLightbox(idx, variant, img)` semantics).
+  final int initialVariant;
+  final int initialImage;
+
+  static Future<void> show(
+    BuildContext context,
+    CatalogController c, {
+    int variant = 0,
+    int image = 0,
+  }) {
     return showDialog<void>(
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black87,
-      builder: (_) => GameLightbox(controller: c),
+      builder: (_) => GameLightbox(
+        controller: c,
+        initialVariant: variant,
+        initialImage: image,
+      ),
     );
   }
 
@@ -32,12 +56,16 @@ class GameLightbox extends StatefulWidget {
 }
 
 class _GameLightboxState extends State<GameLightbox> {
+  static const double _filmWidth = 96;
+  static const double _filmGap = 6;
+
   final FocusNode _focus = FocusNode(debugLabel: 'lightbox');
+  final ScrollController _filmScroll = ScrollController();
 
   List<Object> _items = const [];
   int _itemIdx = 0;
   int _variantIdx = 0;
-  int _imageIdx = -1; // -1 = card/entry preview, else candidate index
+  int _imageIdx = 0; // index into images = [preview?, ...candidates]
 
   @override
   void initState() {
@@ -50,6 +78,7 @@ class _GameLightboxState extends State<GameLightbox> {
   @override
   void dispose() {
     _focus.dispose();
+    _filmScroll.dispose();
     super.dispose();
   }
 
@@ -57,7 +86,7 @@ class _GameLightboxState extends State<GameLightbox> {
     final c = widget.controller;
     if (c.catalogMode) {
       _items = List<Object>.of(c.catalogCards);
-      _itemIdx = c.selectedIndex.clamp(0, _items.length - 1);
+      _itemIdx = c.selectedIndex.clamp(0, math.max(0, _items.length - 1));
     } else {
       _items = c.visibleEntries
           .where((e) => e.kind == EntryKind.zip)
@@ -66,8 +95,12 @@ class _GameLightboxState extends State<GameLightbox> {
       final idx = sel == null ? -1 : _items.indexOf(sel);
       _itemIdx = idx >= 0 ? idx : 0;
     }
-    _variantIdx = 0;
-    _imageIdx = -1;
+    final item = _item;
+    final maxVariant =
+        item is GameCard ? item.variants.length - 1 : (item is Entry ? 0 : -1);
+    _variantIdx = widget.initialVariant.clamp(0, math.max(0, maxVariant));
+    if (maxVariant >= 0 && _variantIdx > maxVariant) _variantIdx = 0;
+    _imageIdx = math.max(0, widget.initialImage);
   }
 
   Object? get _item =>
@@ -84,6 +117,8 @@ class _GameLightboxState extends State<GameLightbox> {
             layer: v.layer,
             preview: v.previewPath,
             candidates: v.candidatePaths,
+            size: v.size,
+            rel: v.rel,
           ),
       ];
     }
@@ -97,6 +132,8 @@ class _GameLightboxState extends State<GameLightbox> {
           layer: item.layerStatus.name.toUpperCase(),
           preview: c.previewPathFor(item),
           candidates: c.candidatePathsFor(item),
+          size: shots?.size,
+          rel: c.relOf(item),
         ),
       ];
     }
@@ -143,6 +180,16 @@ class _GameLightboxState extends State<GameLightbox> {
     return '';
   }
 
+  /// Image list of the selected variant: preview first, then candidates
+  /// (gallery `lightboxImages`).
+  List<String> _imagesOf(_Variant? v) {
+    if (v == null) return const [];
+    return [
+      if (v.preview != null) v.preview!,
+      ...v.candidates,
+    ];
+  }
+
   void _goItem(int delta) {
     if (_items.isEmpty) return;
     final next = (_itemIdx + delta).clamp(0, _items.length - 1);
@@ -150,7 +197,7 @@ class _GameLightboxState extends State<GameLightbox> {
     setState(() {
       _itemIdx = next;
       _variantIdx = 0;
-      _imageIdx = -1;
+      _imageIdx = 0;
     });
     widget.controller.moveSelectionTo(next);
   }
@@ -160,28 +207,34 @@ class _GameLightboxState extends State<GameLightbox> {
     if (vs.length <= 1) return;
     setState(() {
       _variantIdx = (_variantIdx + delta) % vs.length;
-      _imageIdx = -1;
+      _imageIdx = 0;
     });
   }
 
   void _goImage(int delta) {
-    final vs = _variants;
-    if (_variantIdx >= vs.length) return;
-    final v = vs[_variantIdx];
-    // Image list: [-1 = preview, 0..candidates.length-1]
-    final max = v.candidates.length - 1;
+    final images = _imagesOf(
+        _variantIdx < _variants.length ? _variants[_variantIdx] : null);
+    if (images.isEmpty) return;
     setState(() {
-      var next = (_imageIdx + delta).clamp(-1, max < 0 ? -1 : max);
-      if (max < 0) next = -1;
-      _imageIdx = next;
+      // wraps like the gallery PageUp/PageDown handler
+      _imageIdx = (_imageIdx + delta + images.length) % images.length;
     });
   }
 
-  void _setImage(int idx) => setState(() => _imageIdx = idx);
+  /// Candidate strip click: map candidate index to the images array index
+  /// (preview shifts by one — gallery `data-img`).
+  void _setCandidate(int candIdx) {
+    final vs = _variants;
+    if (_variantIdx >= vs.length) return;
+    final hasPreview = vs[_variantIdx].preview != null;
+    setState(() {
+      _imageIdx = candIdx + (hasPreview ? 1 : 0);
+    });
+  }
 
   void _setVariant(int idx) => setState(() {
         _variantIdx = idx;
-        _imageIdx = -1;
+        _imageIdx = 0;
       });
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -218,17 +271,30 @@ class _GameLightboxState extends State<GameLightbox> {
     return KeyEventResult.ignored;
   }
 
+  void _scrollActiveFilmIntoView() {
+    if (!_filmScroll.hasClients) return;
+    final target = _variantIdx * (_filmWidth + _filmGap);
+    final pos = _filmScroll.position;
+    if (target < pos.pixels) {
+      _filmScroll.jumpTo(target);
+    } else if (target + _filmWidth + _filmGap > pos.pixels + pos.viewportDimension) {
+      _filmScroll.jumpTo(math.max(
+          0.0, target + _filmWidth + _filmGap - pos.viewportDimension));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final vs = _variants;
-    if (_variantIdx >= vs.length) _variantIdx = 0;
+    if (_variantIdx >= vs.length && vs.isNotEmpty) _variantIdx = 0;
     final v = vs.isEmpty ? null : vs[_variantIdx];
-    final images = <String?>[
-      if (v != null && v.preview != null) v.preview,
-      if (v != null) ...v.candidates,
-    ];
-    final imgIdx = _imageIdx.clamp(-1, images.isEmpty ? -1 : images.length - 1);
-    final imagePath = images.isEmpty || imgIdx < 0 ? null : images[imgIdx];
+    final images = _imagesOf(v);
+    if (_imageIdx >= images.length) _imageIdx = math.max(0, images.length - 1);
+    final imagePath = images.isEmpty ? null : images[_imageIdx];
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollActiveFilmIntoView();
+    });
 
     final height = MediaQuery.of(context).size.height * 0.86;
 
@@ -260,7 +326,7 @@ class _GameLightboxState extends State<GameLightbox> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _header(),
+                              _header(v, vs.length),
                               Expanded(
                                 child: Container(
                                   color: Colors.black,
@@ -269,20 +335,19 @@ class _GameLightboxState extends State<GameLightbox> {
                                           child: Text('No screenshot',
                                               style: TextStyle(
                                                   color: Colors.grey)))
-                                      : Image.file(
-                                          io.File(imagePath),
-                                          fit: BoxFit.contain,
-                                          errorBuilder: (_, _, _) =>
-                                              const Center(
-                                                  child: Text('Failed to load',
-                                                      style: TextStyle(
-                                                          color: Colors.grey))),
-                                        ),
+                                      : _IntegerScaledImage(path: imagePath),
                                 ),
                               ),
                               if (vs.length > 1) _filmstrip(vs),
-                              if (v != null && v.candidates.isNotEmpty)
-                                _candidateStrip(v),
+                              Container(
+                                height: 60,
+                                color: const Color(0xFF111111),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                child: v == null
+                                    ? const SizedBox.shrink()
+                                    : _candidateStrip(v),
+                              ),
                               _hints(),
                             ],
                           ),
@@ -290,7 +355,7 @@ class _GameLightboxState extends State<GameLightbox> {
                         Container(
                           width: 330,
                           color: const Color(0xFF161616),
-                          child: _infoPanel(),
+                          child: _infoPanel(v),
                         ),
                       ],
                     ),
@@ -301,10 +366,22 @@ class _GameLightboxState extends State<GameLightbox> {
     );
   }
 
-  Widget _header() {
-    final counts = _statusCounts.entries
-        .map((e) => '${e.value}× ${e.key}')
-        .join('  ');
+  Widget _header(_Variant? v, int totalVariants) {
+    final counts =
+        _statusCounts.entries.map((e) => '${e.value}× ${e.key}').join('  ');
+    final sub = v == null
+        ? 'no ZIP variants'
+        : [
+            if (v.status.isNotEmpty) v.status,
+            if (v.layer.isNotEmpty) v.layer,
+            if (v.size != null) '${(v.size! / 1024).round()} KB',
+          ].join('  ·  ');
+    // gallery `lb-pos`: `3 / 60 · variant 2 / 3` (variant part only when
+    // the folder has more than one ZIP).
+    var pos = '${_itemIdx + 1} / ${_items.length}';
+    if (totalVariants > 1) {
+      pos += '  ·  variant ${_variantIdx + 1} / $totalVariants';
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       color: const Color(0xFF141414),
@@ -323,6 +400,10 @@ class _GameLightboxState extends State<GameLightbox> {
                       color: Colors.white),
                 ),
               ),
+              Text(
+                pos,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
               IconButton(
                 tooltip: 'Close (Esc)',
                 onPressed: () => Navigator.of(context).pop(),
@@ -330,8 +411,11 @@ class _GameLightboxState extends State<GameLightbox> {
               ),
             ],
           ),
+          const SizedBox(height: 2),
+          Text(sub,
+              style: const TextStyle(fontSize: 11, color: Colors.grey)),
           const SizedBox(height: 4),
-            Wrap(
+          Wrap(
             spacing: 6,
             runSpacing: 4,
             children: [
@@ -357,56 +441,106 @@ class _GameLightboxState extends State<GameLightbox> {
             style: TextStyle(fontSize: 10, color: color.withValues(alpha: 1))),
       );
 
+  /// Short film label (gallery: strip `.zip`, then leading `…- ` prefix).
+  static String _shortName(String name) {
+    var s = name.replaceFirst(RegExp(r'\.zip$', caseSensitive: false), '');
+    s = s.replaceFirst(RegExp(r'^[^-]*-\s*'), '');
+    return s;
+  }
+
   Widget _filmstrip(List<_Variant> vs) {
     return Container(
-      height: 92,
+      height: 96,
       color: const Color(0xFF111111),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       child: ListView.builder(
+        controller: _filmScroll,
         scrollDirection: Axis.horizontal,
         itemCount: vs.length,
         itemBuilder: (context, i) {
           final v = vs[i];
           final active = i == _variantIdx;
-          return GestureDetector(
-            onTap: () => _setVariant(i),
-            child: Container(
-              width: 150,
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                border: Border.all(
-                    color: active ? Colors.cyan : const Color(0xFF2A2A2A),
-                    width: active ? 2 : 1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: Container(
-                      color: Colors.black,
-                      child: v.preview == null
-                          ? const Center(
-                              child: Icon(Icons.videogame_asset,
-                                  size: 20, color: Colors.white24))
-                          : Image.file(io.File(v.preview!),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  const SizedBox.shrink()),
+          final stColor = v.preview == null
+              ? const Color(0xFF444444)
+              : (v.status == 'done'
+                  ? const Color(0xFF11AA55)
+                  : const Color(0xFFAA8800));
+          final nCand = v.candidates.length;
+          return Tooltip(
+            message: '${v.title} (${v.status})',
+            child: GestureDetector(
+              onTap: () => _setVariant(i),
+              child: Container(
+                width: _filmWidth,
+                margin: const EdgeInsets.only(right: _filmGap),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0E1216),
+                  border: Border.all(
+                      color: active ? Colors.cyan : const Color(0xFF2A2A2A),
+                      width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          Container(
+                            color: Colors.black,
+                            child: v.preview == null
+                                ? const Center(
+                                    child: Text('–',
+                                        style: TextStyle(
+                                            fontSize: 14,
+                                            color: Color(0xFF556677))))
+                                : Image.file(io.File(v.preview!),
+                                    fit: BoxFit.cover,
+                                    filterQuality: FilterQuality.none,
+                                    errorBuilder: (_, _, _) =>
+                                        const SizedBox.shrink()),
+                          ),
+                          if (nCand > 1)
+                            Positioned(
+                              right: 3,
+                              bottom: 3,
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 3),
+                                constraints: const BoxConstraints(
+                                    minWidth: 14, minHeight: 14),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2456A0),
+                                  borderRadius: BorderRadius.circular(7),
+                                ),
+                                child: Text('+$nCand',
+                                    style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        height: 1.2)),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    color: const Color(0xFF1B1B1B),
-                    child: Text(
-                      v.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 9, color: active ? Colors.cyan : Colors.grey),
+                    Container(height: 2, color: stColor),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 3, vertical: 2),
+                      child: Text(
+                        _shortName(v.title),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 9,
+                            color: active ? Colors.cyan : const Color(0xFF99AABB)),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -415,35 +549,37 @@ class _GameLightboxState extends State<GameLightbox> {
     );
   }
 
+  /// Fixed-height strip (gallery: layout must not jump) — preview is not
+  /// repeated here, only the `_cNN` candidates of the selected variant.
   Widget _candidateStrip(_Variant v) {
-    return Container(
-      height: 60,
-      color: const Color(0xFF111111),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: v.candidates.length,
-        itemBuilder: (context, i) {
-          final active = i == _imageIdx;
-          return GestureDetector(
-            onTap: () => _setImage(i),
-            child: Container(
-              margin: const EdgeInsets.only(right: 6),
-              decoration: BoxDecoration(
-                border: Border.all(
-                    color: active ? Colors.cyan : const Color(0xFF2A2A2A)),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Image.file(
-                io.File(v.candidates[i]),
-                height: 48,
-                errorBuilder: (_, _, _) => const SizedBox(width: 48),
+    return Row(
+      children: [
+        for (var i = 0; i < v.candidates.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: GestureDetector(
+              onTap: () => _setCandidate(i),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                      color: i + (v.preview != null ? 1 : 0) == _imageIdx
+                          ? Colors.cyan
+                          : const Color(0xFF2A2A2A)),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Image.file(
+                  io.File(v.candidates[i]),
+                  height: 48,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.none,
+                  errorBuilder: (_, _, _) =>
+                      Container(width: 48, height: 48, color: Colors.black),
+                ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+      ],
     );
   }
 
@@ -458,26 +594,43 @@ class _GameLightboxState extends State<GameLightbox> {
     );
   }
 
-  Widget _infoPanel() {
+  Widget _infoPanel(_Variant? v) {
     final info = _info;
-    final vs = _variants;
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        Text(_title,
-            style:
-                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        if (info == null)
-          const Text('No metadata',
-              style: TextStyle(color: Colors.grey, fontSize: 12))
-        else
-          ..._infoRows(info, vs),
+        if (info == null) ...[
+          _heading('No game info'),
+          if (v != null) ..._zipTable(v),
+        ] else ...[
+          _heading('Game info'),
+          ..._infoRows(info),
+          if (info.variants.length > 1) ...[
+            const SizedBox(height: 8),
+            _heading('Release variants (${info.variants.length})'),
+            const SizedBox(height: 4),
+            _variantsTable(info, v),
+          ],
+          if (v != null) ...[
+            const SizedBox(height: 8),
+            _heading('This ZIP'),
+            ..._zipTable(v),
+          ],
+        ],
       ],
     );
   }
 
-  List<Widget> _infoRows(InfoSummary info, List<_Variant> vs) {
+  Widget _heading(String text) => Text(
+        text,
+        style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: Colors.white70,
+            decoration: TextDecoration.underline),
+      );
+
+  List<Widget> _infoRows(InfoSummary info) {
     final rows = <Widget>[];
     const fields = <String, String>{
       'publisher': 'Publisher',
@@ -496,22 +649,24 @@ class _GameLightboxState extends State<GameLightbox> {
       'tos_bad': 'TOS/BAD',
     };
     if (info.title.isNotEmpty) rows.add(_kv('Title', info.title));
+    final values = <String, String>{
+      'publisher': info.publisher,
+      'cracked_by': info.crackedBy,
+      'crew': info.crew,
+      'language': info.language,
+      'disks': info.disks?.toString() ?? '',
+      'release': info.release,
+      'version': info.version,
+      'licence': info.licence,
+      'screen_format': info.screenFormat,
+      'intro_code': info.introCode,
+      'cracktro': info.cracktro,
+      'add_info': info.addInfo,
+      'special_note': info.specialNote,
+      'tos_bad': info.tosBad,
+    };
     fields.forEach((key, label) {
-      String val = '';
-      if (key == 'publisher') val = info.publisher;
-      if (key == 'cracked_by') val = info.crackedBy;
-      if (key == 'crew') val = info.crew;
-      if (key == 'language') val = info.language;
-      if (key == 'disks') val = info.disks?.toString() ?? '';
-      if (key == 'release') val = info.release;
-      if (key == 'version') val = info.version;
-      if (key == 'licence') val = info.licence;
-      if (key == 'screen_format') val = info.screenFormat;
-      if (key == 'intro_code') val = info.introCode;
-      if (key == 'cracktro') val = info.cracktro;
-      if (key == 'add_info') val = info.addInfo;
-      if (key == 'special_note') val = info.specialNote;
-      if (key == 'tos_bad') val = info.tosBad;
+      final val = values[key] ?? '';
       if (val.isEmpty) return;
       rows.add(_kv(label, val));
     });
@@ -522,11 +677,124 @@ class _GameLightboxState extends State<GameLightbox> {
       if (info.specialFlag.isNotEmpty) 'Special',
     ];
     if (flags.isNotEmpty) rows.add(_kv('Flags', flags.join(', ')));
-    if (info.variants.length > 1) {
-      rows.add(_kv('Gameinfo variants', '${info.variants.length}'));
-    }
-    if (vs.isNotEmpty) rows.add(_kv('ZIP variants', '${vs.length}'));
     return rows;
+  }
+
+  /// Release-variants table; the row matching the selected ZIP (cracker or
+  /// crew name contained in the ZIP filename) is highlighted.
+  Widget _variantsTable(InfoSummary info, _Variant? v) {
+    var selIdx = -1;
+    if (v != null) {
+      final zl = v.title.toLowerCase();
+      for (var i = 0; i < info.variants.length; i++) {
+        final rv = info.variants[i];
+        final cr = ((rv['cracked_by'] ?? '') as String).trim().toLowerCase();
+        final crw = ((rv['crew'] ?? '') as String).trim().toLowerCase();
+        if ((cr.isNotEmpty && zl.contains(cr)) ||
+            (crw.isNotEmpty && zl.contains(crw))) {
+          selIdx = i;
+          break;
+        }
+      }
+    }
+    const header = TextStyle(
+        fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey);
+    const cell = TextStyle(fontSize: 10, color: Colors.white70);
+    return Container(
+      decoration:
+          BoxDecoration(border: Border.all(color: const Color(0xFF2A2A2A))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: const Color(0xFF202020),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: const Row(
+              children: [
+                Expanded(flex: 4, child: Text('Title', style: header)),
+                Expanded(flex: 3, child: Text('Cracker', style: header)),
+                Expanded(flex: 3, child: Text('Crew', style: header)),
+                SizedBox(
+                    width: 44,
+                    child: Text('Year',
+                        style: header, textAlign: TextAlign.right)),
+              ],
+            ),
+          ),
+          for (var ri = 0; ri < info.variants.length; ri++)
+            Container(
+              color: ri == selIdx
+                  ? Colors.cyan.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              child: Row(
+                children: [
+                  Expanded(
+                      flex: 4,
+                      child: Text(
+                        '${info.variants[ri]['title'] ?? ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: ri == selIdx
+                            ? cell.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600)
+                            : cell,
+                      )),
+                  Expanded(
+                      flex: 3,
+                      child: Text(
+                        '${info.variants[ri]['cracked_by'] ?? ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: ri == selIdx
+                            ? cell.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600)
+                            : cell,
+                      )),
+                  Expanded(
+                      flex: 3,
+                      child: Text(
+                        '${info.variants[ri]['crew'] ?? ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: ri == selIdx
+                            ? cell.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600)
+                            : cell,
+                      )),
+                  SizedBox(
+                    width: 44,
+                    child: Text(
+                      '${info.variants[ri]['release'] ?? ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      textAlign: TextAlign.right,
+                      style: ri == selIdx
+                          ? cell.copyWith(
+                              color: Colors.white, fontWeight: FontWeight.w600)
+                          : cell,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _zipTable(_Variant v) {
+    return [
+      _kv('File', v.title),
+      _kv('Status', v.status),
+      if (v.layer.isNotEmpty) _kv('Layer', v.layer),
+      if (v.size != null)
+        _kv('Size', '${(v.size! / 1024).toStringAsFixed(0)} KB'),
+      _kv('Path', v.rel),
+    ];
   }
 
   Widget _kv(String label, String value) {
@@ -536,7 +804,7 @@ class _GameLightboxState extends State<GameLightbox> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 110,
             child: Text(label,
                 style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ),
@@ -550,6 +818,102 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 }
 
+/// Main lightbox image: decoded once for its natural size, then shown at
+/// the largest **integer** scale that fits (gallery `fitIntegerScale` —
+/// pixel-art stays crisp, `image-rendering: pixelated` equivalent).
+class _IntegerScaledImage extends StatefulWidget {
+  const _IntegerScaledImage({required this.path});
+
+  final String path;
+
+  @override
+  State<_IntegerScaledImage> createState() => _IntegerScaledImageState();
+}
+
+class _IntegerScaledImageState extends State<_IntegerScaledImage> {
+  ui.Image? _decoded;
+  bool _failed = false;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _IntegerScaledImage old) {
+    super.didUpdateWidget(old);
+    if (old.path != widget.path) {
+      _decoded?.dispose();
+      _decoded = null;
+      _failed = false;
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _decoded?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    if (_loading) return;
+    _loading = true;
+    try {
+      final bytes = await io.File(widget.path).readAsBytes();
+      final img = await decodeImageFromList(bytes);
+      _loading = false;
+      if (!mounted) {
+        img.dispose();
+        return;
+      }
+      setState(() {
+        _decoded?.dispose();
+        _decoded = img;
+      });
+    } catch (_) {
+      _loading = false;
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final img = _decoded;
+    if (_failed || img == null) {
+      return Center(
+        child: Text(
+          _failed ? 'Failed to load ${widget.path}' : '…',
+          style: const TextStyle(color: Colors.grey, fontSize: 13),
+        ),
+      );
+    }
+    return LayoutBuilder(builder: (context, constraints) {
+      final scale = math.max(
+        1,
+        math.min(
+          (constraints.maxWidth / img.width).floor(),
+          (constraints.maxHeight / img.height).floor(),
+        ),
+      );
+      return Center(
+        child: SizedBox(
+          width: img.width * scale.toDouble(),
+          height: img.height * scale.toDouble(),
+          child: Image.file(
+            io.File(widget.path),
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.none,
+            gaplessPlayback: true,
+          ),
+        ),
+      );
+    });
+  }
+}
+
 class _Variant {
   const _Variant({
     required this.title,
@@ -557,6 +921,8 @@ class _Variant {
     required this.layer,
     required this.preview,
     required this.candidates,
+    required this.size,
+    required this.rel,
   });
 
   final String title;
@@ -564,4 +930,6 @@ class _Variant {
   final String layer;
   final String? preview;
   final List<String> candidates;
+  final int? size;
+  final String rel;
 }

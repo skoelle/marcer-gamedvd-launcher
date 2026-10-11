@@ -139,12 +139,23 @@ void main() {
         ..writeAsStringSync('''
         {"RootDirectory": "/r", "PatchDirectory": "/p",
          "OutDirectory": "/o", "DataDirectory": "/d",
+         "ShowCandidates": false, "DefaultStatus": "done",
          "Window": {"width": 1024, "height": 768}}''');
       final c = DesktopConfig.load(f.path);
       expect(c.rootDirectory, '/r');
       expect(c.outDirectory, '/o');
       expect(c.windowWidth, 1024);
       expect(c.hatariArgsTemplate, contains('{zip}'));
+      expect(c.showCandidates, isFalse);
+      expect(c.defaultStatus, 'done');
+    });
+
+    test('gallery config defaults when fields are absent', () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync('{"RootDirectory": "/r"}');
+      final c = DesktopConfig.load(f.path);
+      expect(c.showCandidates, isTrue);
+      expect(c.defaultStatus, 'with_screenshot');
     });
   });
 }
