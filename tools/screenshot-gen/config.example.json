@@ -1,0 +1,31 @@
+{
+  "scope_trees": [
+    "Title Sorted/Cracked Games - Title Sorted"
+  ],
+  "timepoints": [10, 25, 45],
+  "entry_timeout_s": 90,
+  "keep_candidates": true,
+  "disk_skip_regex": "(?i)(?:^|[\\s\\-_.])(?:disk|side|disc)[\\s\\-_.]*(?:[2-9]|b|ii|iii)(?:$|[\\s\\-_.])",
+  "filters": {
+    "black_mean_max": 0.02,
+    "black_std_max": 1.0,
+    "desktop_max_colors": 5,
+    "desktop_min_mean": 0.5,
+    "desktop_green_frac_min": 0.02,
+    "phash_max_distance": 6
+  },
+  "score_weights": {
+    "entropy": 0.4,
+    "colors": 0.3,
+    "edges": 0.3
+  },
+  "tmp_dir": "/tmp/marcer-shotgen",
+  "xvfb_screen": "1024x768x24",
+  "profile": {
+    "name": "st",
+    "machine": "st",
+    "memsize": "1",
+    "zoom": "1",
+    "extra_args": []
+  }
+}

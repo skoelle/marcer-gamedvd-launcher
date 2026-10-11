@@ -1,0 +1,774 @@
+# SPEC: Screenshot Generator (Marcer GameDVD)
+
+Behavioral specification for an offline screenshot generation tool for the Marcer
+GameDVD archive. The tool boots every selected ZIP in the Hatari emulator on a
+virtual display, captures screenshots at defined points in time, filters unusable
+images and stores one good preview image (plus optional candidates) per entry.
+
+This document is written in the style of the existing `SPEC.md` (numbered
+sections, technology-neutral where possible, conformance checklist at the end).
+Paths to real data are never written down literally. They come exclusively from
+the git-ignored local file `local/paths.env` (see section 11).
+
+**Status of verified facts:** everything marked *(verified)* was tested on the
+development machine against Hatari 2.4.1. Everything else is marked
+*(untested)* and must be confirmed during implementation.
+
+---
+
+## 1. Goal and Non-Goals
+
+### 1.1 Goal
+
+For every ZIP entry in scope (section 4.4):
+
+1. Boot the ZIP in Hatari on a fixed virtual X display.
+2. Capture screenshots at configurable time points.
+3. Filter out unusable images (black, empty, duplicates).
+4. Detect screenshots that only show the TOS desktop and flag them
+   (kind `desktop`, see section 8.4).
+5. Select the best remaining image as preview and store it, mirroring the
+   source tree, together with a metadata JSON file.
+6. Be resumable, log per entry, and never modify the NAS data.
+
+### 1.2 Non-goals
+
+- No modification, move or delete of anything under `MARCER_ROOT_DIR` or
+  `MARCER_PATCH_DIR`. Read access only.
+- No downloads of ROMs, disk images or anything else.
+- No parallel runs (explicit user decision, one Hatari instance at a time).
+- No in-launcher screenshot display in this stage (section 12 is a future stage).
+- No automatic key injection to start games that do not boot automatically
+  (explicit future stage, section 15 milestone M7, much later).
+- No screenshots for PD games, utilities, tools, Falcon titles, Bonus or
+  anything outside the scope trees (section 4.4).
+
+---
+
+## 2. Environment Check Results
+
+Checked on the development machine (read-only or with explicit approval):
+
+| Component | Status | Version / Detail | Action needed |
+|---|---|---|---|
+| OS | ok | Linux x86_64, kernel 7.0.0-38, 4 cores | none |
+| RAM | ok, tight | 9.5 GB total, about 2.7 GB available | run only one instance |
+| Free disk (local) | ok | about 10 GB on `/` | staging only, cleanup after each entry |
+| Desktop session | none | TTY only, no X11 or Wayland session | Xvfb is mandatory |
+| NAS | ok | mounted via NFS, both data paths reachable | keep timeouts, avoid volume-wide scans |
+| .NET SDK | ok | 10.0.112, `scripts/build.sh` verified working | none (not used by this tool) |
+| Hatari | ok | 2.4.1 from apt | none |
+| Hatari options | verified | `--screenshot-dir`, `--crop`, `--statusbar`, `--cmd-fifo`, `--run-vbls`, `--benchmark`, `--disk-a` (accepts ZIP), `--tos`, `--machine`, `--sound off`, `--fast-boot`, `--confirm-quit`, `--zoom`, `--protect-floppy` all exist in 2.4.1 | none |
+| Hatari `--screenshot-format` | missing | option does not exist in 2.4.1 (format comes from config, default PNG verified) | do not use this flag |
+| TOS ROM | ok | TOS 1.04 German image, 196607 bytes, provided in `local/` (git-ignored) | reference via `MARCER_TOS_IMG` |
+| Xvfb | ok | installed, fixed display `:99` verified working | none |
+| xdotool | ok | installed | fallback only |
+| ImageMagick | ok | `import` and `convert` available | fallback grabs and analysis |
+| ffmpeg | ok | available | not required for MVP |
+| Python | ok | 3.12.3, repo `.venv` already exists | install Pillow, imagehash, numpy into `.venv` |
+| unzip | ok | available | ZIP content listing |
+| Smoke test | verified | see below | none |
+
+### 2.1 Smoke test result (verified)
+
+Setup: one small real ZIP (single `.msa` inside) copied from
+`MARCER_ROOT_DIR` to a local temp directory, Xvfb on fixed display `:99`,
+Hatari started with TOS from `MARCER_TOS_IMG`, options
+`--statusbar off --crop on --sound off --confirm-quit off --zoom 1
+--machine st --fast-boot on`, `--screenshot-dir` pointing to a local output dir,
+`--cmd-fifo` for remote control.
+
+Results:
+
+- Hatari booted the ZIP from drive A directly. No unpacking needed for
+  single-image ZIPs.
+- Command `hatari-shortcut screenshot` written to the FIFO produced
+  `grab0001.png` in `--screenshot-dir`. Format PNG, size 832x552, about 4.5 KB.
+  Log line: `Screen dump saved to: ...` *(verified)*.
+- The captured image showed the TOS desktop (3 unique colors), because 14
+  seconds wall time were not enough for the game to load. This confirms:
+  time points must be configurable per profile and the desktop must be
+  detected (section 8.4).
+- Plain `screenshot` (without the `hatari-` prefix) is rejected by the FIFO in
+  2.4.1. Supported FIFO commands: `hatari-debug`, `hatari-event`,
+  `hatari-option`, `hatari-enable/disable/toggle`, `hatari-path`,
+  `hatari-shortcut`, `hatari-stop`, `hatari-cont` *(verified)*.
+
+### 2.1.1 Batch pilot (10 entries, verified)
+
+Ten random ZIPs from both scope trees were processed with the base profile and
+time points 10s, 25s, 45s (30 screenshots):
+
+- 10/10 entries booted Hatari and produced all three screenshots.
+- 4/10 showed game content (crack intros or loaders) within 45s:
+  one already at 10s, one between 10s and 25s, one between 25s and 45s,
+  one at 10s and staying.
+- 6/10 stayed on the TOS desktop for the full 45s. Visual check confirmed a
+  German TOS desktop with the drive A window open, showing the game PRGs
+  (for example `XEVIOUS.PRG`) without auto-start. More waiting does not help;
+  these entries need milestone M7 (key injection or `--auto`).
+- Desktop screenshots consistently had 3 unique colors, confirming the
+  classification heuristic of section 8.4 on real data.
+- Median runtime per entry was dominated by the fixed 45s schedule plus about
+  3s overhead (copy, start, kill).
+
+### 2.2 Missing packages (not yet installed, approval required)
+
+| Package | Purpose | Install command |
+|---|---|---|
+| Pillow | image analysis, cropping | `.venv/bin/pip install Pillow` |
+| imagehash | perceptual hash for duplicate detection | `.venv/bin/pip install imagehash` |
+| numpy | entropy and color statistics | `.venv/bin/pip install numpy` |
+
+All installs go into the repo virtual environment only, never global pip.
+
+---
+
+## 3. Repo Integration
+
+### 3.1 Decision
+
+**Recommendation: standalone Python 3 script** in a new directory
+`tools/screenshot-gen/` inside this repository, run via the repo `.venv`.
+
+Rationale:
+
+- The pipeline is image processing and process orchestration. Python has the
+  mature libraries for this (Pillow, imagehash, numpy).
+- The launcher is a released end-user application. Adding a batch tool to it
+  would couple release cycles, force a C# build for a server-side task, and
+  violate the launcher scope (SPEC.md section 1.3, out of scope).
+- The repo policy (build only via `scripts/build.sh`) applies to the C#
+  launcher. A Python tool does not conflict with it.
+- The merge logic from SPEC.md section 7 is small and fully specified. The
+  Python tool reimplements it 1:1 (same rules, same ordering) instead of
+  shelling out to the C# code. The spec is the contract.
+
+### 3.2 Alternatives considered
+
+| Option | Pros | Cons | Decision |
+|---|---|---|---|
+| Python script in `tools/` | best image libs, independent release, easy iteration | logic duplicated from C# | chosen |
+| Extend the C# launcher with a CLI mode | single code base | couples release, poor image tooling in .NET, harder headless operation | rejected |
+| C# standalone console tool | reuses merge code directly | image analysis libraries weaker, slower iteration | rejected |
+| Shell scripts | minimal deps | unmaintainable at this complexity | rejected |
+
+### 3.3 Layout
+
+```
+tools/screenshot-gen/
+  README.md            short usage, points to this spec
+  shotgen.py           entry point (CLI)
+  <modules>            index, hatari control, filters, profiles
+  config.example.json  tool settings template (no paths inside)
+  profiles/            Hatari profile definitions (section 6)
+```
+
+Output, index, state and logs go to `MARCER_OUT_DIR` (section 10), never into
+the repository working tree.
+
+---
+
+## 4. Input: Entry Resolution and Index
+
+### 4.1 Merge logic (same rules as the launcher)
+
+The tool presents root and patch layers as one overlay, exactly like the
+launcher (SPEC.md section 7):
+
+- Only files ending in `.zip` (case-insensitive) are entries.
+- Hidden entries are ignored. Additionally, any directory whose name starts
+  with `@` is ignored (Synology metadata folders such as `@eaDir` are not
+  hidden on NFS but must never be treated as content).
+- Name matching is case-insensitive. If the same relative path exists in both
+  layers, the patch copy wins for reading, and the entry source is `BOTH`.
+- Entries not in scope trees are skipped entirely (section 4.4).
+
+### 4.2 Index cache
+
+The NAS is slow. A full recursive walk over the whole volume must never happen
+blindly. Instead:
+
+- The tool maintains `index.json` in `MARCER_OUT_DIR`.
+- The index lists, per entry: relative path (from the layer root), name, layer
+  flags (ROOT, PATCH, BOTH), file size, and the last processing status.
+- A full index scan only walks the two scope trees (section 4.4), with a
+  configurable per-directory timeout and progress logging. Default full scan
+  timeout budget is generous (minutes are acceptable for a full scan, hours are
+  not).
+- Incremental mode (default): only scan scope trees, compare with the stored
+  index, report new or changed entries (size or mtime differs).
+
+### 4.3 Relative path
+
+The relative path of an entry (for example
+`Title Sorted/Cracked Games - Title Sorted/A/Arkanoid/Arkanoid - Skid 1.0.zip`)
+is the identity of the entry everywhere: index key, output mirror, metadata
+file, launcher integration later.
+
+### 4.4 Scope (user decision, fixed for now)
+
+Only one tree is in scope:
+
+- `<root>/Title Sorted/Cracked Games - Title Sorted` (also merged with its
+  patch counterpart)
+
+Explicitly out of scope for now:
+
+- All `PD Games` trees
+- All `Utilitys` trees
+- `Bonus`, `Tools`, `Falcon 030`
+- All `Crew Sorted` trees
+- Everything else
+
+Scope is defined in the tool config (section 11.2) as a list of relative tree
+paths, so extending later is a config change, not a code change.
+
+### 4.5 Multi-disk sets (user decision)
+
+- Only disk 1 of a multi-disk set is processed. ZIPs whose names match
+  configurable disk-2-plus patterns (default: case-insensitive regex covering
+  `disk 2`, `disk 3`, `disk b`, `side b`, and similar) are skipped and marked
+  `skipped_disk_n` in the index.
+- Crack-variants inside one game folder are **not** multi-disk sets. Every
+  crack ZIP gets its own screenshots, because crack intros differ
+  (user decision).
+
+---
+
+## 5. Pipeline
+
+```
+[1] load config + env (paths.env)
+        |
+[2] load or refresh index  (bounded scan of scope trees only)
+        |
+[3] select pending entries (status != done, or --force)
+        |
+[4] per entry:
+      a. copy ZIP from NAS to local staging dir     (NAS is read-only)
+      b. create entry work dir + cmd FIFO
+      c. start Xvfb (fixed display) if not running
+      d. start Hatari (profile args, staged ZIP, screenshot-dir, cmd-fifo)
+      e. wait configured time points, send screenshot command per point
+      f. stop Hatari via process group kill after last point or timeout
+      g. collect screenshots, compute metrics (section 8)
+      h. classify (black / desktop / game), detect duplicates (section 8)
+      i. select best preview image (section 8.5)
+      j. write preview PNG + metadata JSON to mirrored output path
+      k. update index entry, append log
+      l. clean staging dir for this entry
+        |
+[5] write run summary (counts, failures, durations)
+```
+
+Step [4] runs serially by default. With `run --jobs N` up to N entries are
+processed in parallel: every worker owns its staging dir, log file and
+Hatari process group, and they share one Xvfb display (screenshots are
+framebuffer-internal, so no per-worker display is needed). Entry mutation
+and every index save are serialized under a single lock, so parallel
+workers can never overwrite each other's updates. The output-dir lock
+still allows only one tool process per `MARCER_OUT_DIR`.
+
+---
+
+## 6. Hatari Configuration and Profiles
+
+### 6.1 Reuse of the launcher mechanism
+
+The launcher starts Hatari with an argument template containing `{zip}` and
+`{cfg}` (SPEC.md section 12). The generator uses the same two-placeholder
+concept:
+
+- `{zip}` is the staged local copy of the entry ZIP (never the NAS path).
+- `{cfg}` is the profile config file for the current profile (section 6.3).
+
+The launcher's bundled `MarcerGameDvd-Hatari.cfg` is the conceptual base for
+the `st` profile, but it is **not** used 1:1: it is an end-user config
+(statusbar on, sound on, crop off, confirm-quit on), which is wrong for
+screenshots. The generator ships its own profile files with screenshot-oriented
+settings.
+
+### 6.2 Base profile `st` (default)
+
+Command line (verified options, Hatari 2.4.1):
+
+```
+hatari
+  --tos <MARCER_TOS_IMG>
+  --machine st
+  --memsize 1
+  --sound off
+  --statusbar off
+  --crop on
+  --fast-boot on
+  --confirm-quit off
+  --zoom 1
+  --disk-a <staged zip>
+  --screenshot-dir <entry work dir>
+  --cmd-fifo <entry work dir>/hatari.fifo
+  --log-file <entry log>
+  --log-level info
+```
+
+Notes:
+
+- `--zoom 1` yields an 832x552 window in the smoke test *(verified)*. Larger
+  previews may use `--zoom 2` (untested with respect to timing impact).
+- `--crop on` removes the statusbar from captures *(verified option exists,
+  effect not yet visually confirmed)*.
+- `--sound off` speeds up emulation *(option verified, effect untested)*.
+- `--fast-boot on` speeds up boot. A fallback profile `st-nofastboot`
+  disables it for titles that break with it (untested whether any exist).
+- TOS is TOS 1.04 via `MARCER_TOS_IMG`. EmuTOS is not used.
+
+### 6.3 Profile mechanism
+
+- Profiles are files in `tools/screenshot-gen/profiles/`.
+- A profile defines: machine type, TOS source (env var), RAM, monitor,
+  borders, zoom, fast-boot, extra CLI args, time points list, and optional
+  per-entry key injection steps (future).
+- Profile selection: default `st`. A future config map can assign profiles by
+  path pattern (for example Falcon trees). No special profiles are needed for
+  the current scope.
+- The Falcon case (`Falcon 030` tree, Falcon machine, Falcon TOS) is out of
+  scope now. It is listed as a future extension because EmuTOS has weak Falcon
+  support and Falcon TOS is not available in this environment (risk R4).
+
+### 6.4 Screenshot timing configuration
+
+- Default time points (wall-clock seconds after Hatari start): `10, 25, 45`.
+  All configurable per profile.
+- Rationale: tuned in a 10-entry batch pilot (section 2.1) and confirmed by
+  the user. Fast titles (crack intros) already show content at 10s, slower
+  loaders appear between 25s and 45s. Titles that never auto-start stay on
+  the desktop regardless of waiting longer (user decision: accept and flag,
+  do not wait beyond 45s; auto-start handling is M7).
+- Alternative considered: `--run-vbls` (exists in 2.4.1, *(verified)*) gives
+  deterministic emulation-time exits, but only one end state per run and it is
+  tied to `--benchmark` fast-forward behavior, which changes what the screen
+  shows compared to real-time playback. Not used in the MVP *(untested)*.
+
+---
+
+## 7. Screenshot Strategy
+
+### 7.1 Capture method (priority order)
+
+1. **Primary (verified):** write `hatari-shortcut screenshot` to the cmd FIFO
+   at each time point. Hatari saves `grabNNNN.png` into `--screenshot-dir`.
+2. **Fallback 1 (untested):** `hatari-debug screenshot` via FIFO (debugger
+   command).
+3. **Fallback 2 (untested):** send the keyboard shortcut with xdotool to the
+   Hatari X window (AltGr+G, from the launcher config shortcut table).
+4. **Fallback 3 (untested):** grab the root window of the fixed Xvfb display
+   with ImageMagick `import`. Quality is worst (captures window decorations
+   and borders) and is only a last resort.
+
+The method is selectable in the tool config. The tool logs which method was
+used per screenshot.
+
+### 7.2 Window and display
+
+- Xvfb with a fixed display number (default `:99`, override via
+  `MARCER_DISPLAY`). Never `xvfb-run -a`, because a separate screenshot
+  process cannot know the auto-selected display.
+- Screen size 1024x768x24 *(verified sufficient for 832x552 output)*.
+- The tool starts Xvfb itself if the display is not alive, and stops it on
+  exit unless it was already running (external management).
+
+### 7.3 Key injection (future extension, not MVP)
+
+Some titles do not auto-boot and stay on the TOS desktop or a loader prompt
+(observed in the smoke test). Handling this is **much later** work (M7):
+
+- Possible approaches: inject START/Return/Space via `hatari-event` or
+  xdotool after a delay; parse the boot sector or AUTO folder of the staged
+  disk to autostart a known PRG name with `--auto`.
+- Both are marked *(untested)* and out of MVP scope. For now such entries end
+  up as kind `desktop` and are flagged (section 8.4), which preserves the
+  information for a later pass.
+
+---
+
+## 8. Image Filtering and Selection
+
+All thresholds are configurable in the tool config with these defaults.
+
+### 8.1 Reject: black or empty images
+
+- Mean luminance below threshold (default 0.02) or standard deviation below
+  threshold (default 1.0 on 0..255 scale) marks the shot as `black`.
+- Rationale: games that failed to boot, or shots taken before the first video
+  output.
+
+### 8.2 Reject: near-duplicates
+
+- Perceptual hash (pHash) over all surviving candidates of one entry.
+- If two candidates have Hamming distance below threshold (default 6), the
+  later one is dropped as duplicate.
+- Cross-entry duplicate detection is **not** performed in the MVP (many crack
+  intros legitimately share visuals).
+
+### 8.3 Score remaining candidates
+
+Score = weighted sum (weights configurable) of:
+
+- Shannon entropy of the luminance histogram (detail, default weight 0.4)
+- Unique color count, capped (colorfulness, default weight 0.3)
+- Edge density via simple gradient magnitude (structure, default weight 0.3)
+
+### 8.4 Detect and flag TOS desktop screenshots (user requirement)
+
+A screenshot that shows only the TOS desktop is not a useful preview, but the
+information matters (it means the title did not auto-start). Such shots are
+**kept and flagged**, never silently dropped.
+
+Heuristic (all thresholds configurable):
+
+- unique color count <= 4 (the smoke test desktop had 3 *(verified)*)
+- and dominant color is close to the TOS desktop green (hue match within
+  tolerance, or exact palette color match after quantization)
+- and at least 60 percent of pixels belong to the dominant color or the
+  uniform border color
+
+Classification result per shot: `game`, `desktop`, or `black`. An entry whose
+all shots are `desktop` gets entry kind `desktop` in metadata and index. An
+entry with at least one `game` shot gets kind `game` even if desktop shots
+also exist (desktop shots are then only candidates of last resort).
+
+### 8.5 Select preview
+
+- Prefer the highest-scoring `game` shot.
+- If none exists, fall back to the highest-scoring `desktop` shot, and set
+  `preview_is_desktop: true` in metadata.
+- If nothing exists (all black or Hatari produced no files), status is
+  `no_usable_shots`.
+
+### 8.6 Optional candidate retention
+
+Config flag `keep_candidates` (default true in the MVP, later false):
+store all non-duplicate candidates next to the preview with suffixes
+`_c01`, `_c02`, and so on.
+
+---
+
+## 9. Robustness
+
+- **One run, one instance:** the tool refuses to start a second concurrent
+  run (lock file in `MARCER_OUT_DIR`). Within a run, `run --jobs N`
+  processes up to N entries in parallel (default: 1 = serial); every
+  worker runs its own Hatari process group and staging dir, sharing one
+  Xvfb display. All index mutations and saves are serialized under a
+  single lock.
+- **Process groups:** Hatari and Xvfb are started with their own session
+  (`setsid` semantics, in Python `start_new_session=True`). Timeouts kill the
+  whole group (`killpg`). Never rely on terminating a single PID from a
+  shell-launched tree.
+- **Per-entry timeout:** default 90 seconds wall clock, configurable. On
+  timeout: kill group, mark entry `timeout`, continue with next entry.
+- **Xvfb lifecycle:** start if display not present, keep alive across entries
+  (restart per entry is too slow), stop on tool exit if the tool started it.
+- **Resume:** index plus per-entry metadata are the state. Entries with final
+  status (`done`, `desktop`, `no_usable_shots`) are skipped on rerun.
+  `--force` reprocesses. Interrupted entries without metadata are retried.
+- **Logging:** one log file per entry (Hatari stdout and tool events) plus a
+  run summary. Logs live under `MARCER_OUT_DIR/logs/`, mirrored by entry
+  relative path.
+- **NAS safety:** data paths are opened read-only. The ZIP is copied to a
+  local staging directory before emulation, and the staging copy is deleted
+  after the entry. Hatari never reads from the NAS directly
+  *(the smoke test used a local copy, this is the proven path)*.
+- **Write safety:** the tool only writes under `MARCER_OUT_DIR` and the local
+  staging directory. It never writes to `MARCER_ROOT_DIR`,
+  `MARCER_PATCH_DIR`, or the repository working tree.
+- **Graceful interrupt:** Ctrl+C finishes the current entry per worker,
+  writes the index, and exits non-zero.
+
+---
+
+## 10. Output
+
+### 10.1 Location and layout (user decision)
+
+Root: `MARCER_OUT_DIR` (on the NAS, next to the patch data, see section 11).
+
+The output mirrors the source tree of the entry relative to its layer root:
+
+```
+$MARCER_OUT_DIR/
+  index.json
+  logs/
+    Title Sorted/Cracked Games - Title Sorted/A/Arkanoid/<zip>.log
+  Title Sorted/Cracked Games - Title Sorted/A/Arkanoid/
+    Arkanoid - Skid 1.0.png
+    Arkanoid - Skid 1.0.json
+    Arkanoid - Other Crack.zip -> Arkanoid - Other Crack.png / .json
+```
+
+Rationale: a flat root would contain thousands of files (user feedback).
+Mirroring keeps paths short, groups by game, and matches how the launcher
+would look up a preview later (section 12).
+
+### 10.2 File naming
+
+- Preview: `<zip basename without .zip>.png`
+- Metadata: same base name with `.json`
+- Candidates (if kept): `<base>_c01.png` and so on
+- Characters that are unsafe on common file systems (`:`, `?`, `*`) are
+  replaced with `_`. The original name is preserved in metadata.
+
+### 10.3 Metadata JSON (per entry)
+
+```json
+{
+  "spec_version": "1",
+  "entry": "Title Sorted/Cracked Games - Title Sorted/0-9/10th Frame/10th Frame - Masters.zip",
+  "name": "10th Frame - Masters.zip",
+  "source_layer": "BOTH",
+  "source_size": 181107,
+  "profile": "st",
+  "machine": "st",
+  "tos": "TOS104GE.IMG",
+  "status": "done",
+  "kind": "game",
+  "preview_is_desktop": false,
+  "preview": "10th Frame - Masters.png",
+  "capture_method": "cmd-fifo",
+  "shots": [
+    {
+      "file": "10th Frame - Masters.png",
+      "t_seconds": 15,
+      "classification": "game",
+      "entropy": 4.12,
+      "unique_colors": 42,
+      "phash": "1a2b3c4d5e6f7a8b",
+      "score": 0.71
+    }
+  ],
+  "zip_contents": ["10th Frame - Masters.msa"],
+  "started_at": "2026-10-10T23:16:00Z",
+  "duration_s": 28.4,
+  "tool_version": "0.1.0"
+}
+```
+
+### 10.4 Index JSON
+
+Array or object map keyed by entry relative path with: `status`, `kind`,
+`size`, `mtime`, `profile`, `last_run`, `preview_path`. Updated after every
+entry so an interrupted run loses at most one entry of work.
+
+---
+
+## 11. Configuration and Secrets
+
+### 11.1 Environment variables (only source for paths)
+
+All from `local/paths.env` (git-ignored, never committed, never written into
+specs, logs or examples):
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `MARCER_ROOT_DIR` | yes | game root layer, read-only |
+| `MARCER_PATCH_DIR` | yes | patch layer, read-only (empty disables patch layer) |
+| `MARCER_OUT_DIR` | yes | output root for screenshots, index, logs |
+| `MARCER_TOS_IMG` | yes | TOS ROM image for Hatari |
+| `MARCER_HATARI_BIN` | no | Hatari executable, default `hatari` from PATH |
+| `MARCER_DISPLAY` | no | fixed X display number, default `:99` |
+
+The tool refuses to start if a required variable is missing or a path is not
+readable (output dir must be writable). Variable names only appear in this
+document, never their values.
+
+Proposed additions to `local/paths.env` (values supplied by the user, not by
+this spec):
+
+```
+MARCER_OUT_DIR=...
+MARCER_TOS_IMG=...
+MARCER_HATARI_BIN=...
+MARCER_DISPLAY=...
+```
+
+### 11.2 Tool config file
+
+`tools/screenshot-gen/config.example.json` (committed, contains no paths):
+scope trees, time points, timeouts, filter thresholds, profile map,
+disk-skip patterns, `keep_candidates`. A local override
+`config.local.json` (git-ignored) may exist for machine-specific tweaks.
+
+### 11.3 Secrets
+
+There are none. No credentials are used. NAS access is via existing mounts.
+
+---
+
+## 12. Launcher Integration (Future Stage)
+
+Not part of this stage. Recorded so later work has a direction:
+
+- The launcher could show a preview image for the selected entry, or generate
+  a static HTML gallery from `MARCER_OUT_DIR`.
+- Lookup key: the entry relative path equals the metadata `entry` field.
+- Required changes later (proposal only, not applied now):
+  - `SPEC.md`: extend rendering section with optional preview column or
+    external gallery reference.
+  - `README.md`: document preview feature and the generator tool.
+  - `AGENTS.md`: add module overview entry, note the `tools/` directory.
+  - Launcher config: optional `PreviewDirectory` field, resolved like other
+    paths.
+
+---
+
+## 13. Risks and Open Questions
+
+Risks:
+
+1. **Boot time variance.** Fixed wall-clock time points will miss the action
+   for slow titles and catch loaders for fast ones. Mitigation: configurable
+   time points, desktop detection, later per-entry tuning from metadata.
+   Pilot data: 4/10 titles showed content within 45s, 6/10 never auto-started.
+2. **Titles that never auto-start.** Known case, currently surfaced as kind
+   `desktop`. Real fix is M7 (key injection or `--auto`), far future.
+3. **Disk-2-plus skip patterns** may false-positive on game names that contain
+   the word `disk`. Patterns must stay conservative and configurable.
+4. **Falcon titles** need Falcon TOS, which is not available here. Falcon
+   stays out of scope until a legal Falcon TOS image is provided.
+5. **NFS latency** for output writes (thousands of small PNG and JSON files).
+   Mitigation: mirrored tree, per-entry writes, no global transactions needed.
+6. **Hatari version drift.** Verified against 2.4.1. Newer versions rename or
+   add FIFO commands. The tool must detect unknown FIFO responses (the help
+   text on unrecognized commands) and log them.
+7. **RAM pressure** (about 2.7 GB free). One instance only, no parallelism.
+8. **Zip internals.** Multi-image ZIPs: which image Hatari mounts is
+   *(untested)*. The tool records `zip_contents` in metadata so anomalies are
+   visible. Single-image ZIPs are the verified case.
+
+Open questions (for the user, answer when convenient):
+
+1. Should `keep_candidates` stay true for the first full run (more disk usage,
+   better later analysis), or false (minimal output)?
+2. Preview zoom: keep `--zoom 1` (832x552, small files) or `--zoom 2`
+   (larger, sharper previews, more disk)?
+3. Should the index and logs live inside `MARCER_OUT_DIR` (as specced), or in
+   a separate state directory to keep the screenshot tree clean for later
+   browsing?
+
+Resolved decisions:
+
+- Time points `10, 25, 45` confirmed by the user after the batch pilot.
+
+---
+
+## 14. Test Plan
+
+### 14.1 Pilot run (20 entries)
+
+- Sample 20 ZIPs across both scope trees, spread over several letters and
+  game folders, including at least one entry that exists only in patch, and
+  one that exists in both layers *(if such entries exist within scope; the
+  pilot scan will confirm)*.
+- Process the pilot with the default profile and time points.
+- Evaluate:
+  - boot success rate (at least one `game` shot)
+  - desktop detection correctness (manually inspect flags)
+  - duplicate filter sanity (no two identical previews)
+  - runtime per entry (median and worst case)
+  - output tree correctness (mirror structure, metadata completeness)
+
+### 14.2 Adjustment
+
+- Tune time points and thresholds based on pilot data.
+- Re-run the pilot with `--force` and compare success rate.
+
+### 14.3 Full run
+
+- Process all in-scope entries. Expected duration is unknown until the pilot
+  gives a median per-entry time; the run must be resumable at any point.
+- Final report: counts by status and kind, list of failures with reasons.
+
+---
+
+## 15. Milestones
+
+Each milestone is small, independently checkable, and ends with a working
+state.
+
+- **M0** Environment check and smoke test: done (sections 2.1, 2.2).
+- **M1** This spec, reviewed and approved by the user.
+- **M2** Install Python packages into `.venv`, create `tools/screenshot-gen/`
+  skeleton with config example and profile files.
+- **M3** Index builder: bounded scan of the two scope trees, writes
+  `index.json`, prints counts. Checkable against manual counts.
+- **M4** Single-entry pipeline: copy, run Hatari, capture via FIFO, classify,
+  write preview and metadata for one hard-coded entry.
+- **M5** Filters and selection: desktop detection, dedup, scoring, preview
+  choice. Checkable against the smoke test image and pilot entries.
+- **M6** Pilot run of 20 entries, evaluation, threshold tuning.
+- **M7** (much later) Auto-start handling for titles that stay on the desktop
+  (key injection or `--auto`). Depends on M6 data.
+- **M8** (later) Full run over the whole scope.
+- **M9** (later) Launcher or gallery integration (section 12).
+
+---
+
+## 16. Conformance Checklist
+
+A conforming implementation satisfies all of the following.
+
+**Safety**
+- [ ] S1 The tool never writes to `MARCER_ROOT_DIR` or `MARCER_PATCH_DIR`.
+- [ ] S2 No path value from `local/paths.env` appears in committed files,
+      logs committed anywhere, or documentation.
+- [ ] S3 The ZIP is staged locally before emulation and the staging copy is
+      removed after the entry.
+- [ ] S4 A lock file prevents a second tool run; within one run at most
+      `--jobs` Hatari instances run in parallel (default: 1).
+
+**Input**
+- [ ] I1 Merge rules match SPEC.md section 7 (case-insensitive, patch wins,
+      directories aside, only `.zip` entries).
+- [ ] I2 Directories starting with `@` and hidden entries are ignored.
+- [ ] I3 Only the scope trees of section 4.4 are processed.
+- [ ] I4 Disk-2-plus ZIPs are skipped and marked; crack variants are all
+      processed.
+- [ ] I5 The index is persistent, incremental, and bounded (no unbounded
+      volume-wide scans).
+
+**Pipeline**
+- [ ] P1 Each entry produces Hatari logs and per-shot metadata.
+- [ ] P2 Screenshots are captured via `hatari-shortcut screenshot` over the
+      cmd FIFO (verified method), with documented fallbacks.
+- [ ] P3 Xvfb uses a fixed display number, never auto-selection.
+- [ ] P4 Hatari and Xvfb are killed via process group on timeout or exit.
+- [ ] P5 Per-entry timeout is enforced and the run continues after it.
+
+**Filtering**
+- [ ] F1 Black or empty shots are rejected by configurable thresholds.
+- [ ] F2 Near-duplicate shots within one entry are dropped via perceptual
+      hash distance.
+- [ ] F3 TOS desktop shots are detected, flagged as kind `desktop`, and kept
+      (never silently dropped).
+- [ ] F4 The preview is the best `game` shot, or a `desktop` shot with
+      `preview_is_desktop: true` if no game shot exists.
+
+**Output**
+- [ ] O1 Output mirrors the source tree under `MARCER_OUT_DIR`.
+- [ ] O2 Every processed entry has a preview PNG and a metadata JSON with the
+      fields of section 10.3.
+- [ ] O3 The index is updated after every entry (crash loses at most one
+      entry of work); with parallel jobs all updates are serialized under
+      one lock.
+- [ ] O4 The run is resumable without `--force`, and `--force` reprocesses.
+
+**Process**
+- [ ] R1 Missing required environment variables abort with a clear message.
+- [ ] R2 Ctrl+C leaves a consistent index and exits non-zero.
+- [ ] R3 Python packages are installed only into the repo `.venv`.
+
+---
+
+## License
+
+Licensed under the [MIT License](LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
