@@ -8,8 +8,8 @@ Marcer GameDVD archive. Follows the style of `ANALYSIS-game-data.md` and
 - [`SPEC.md`](SPEC.md) — technology-neutral launcher spec (UI-agnostic core, R1)
 - [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md) — game metadata sources, desktop app idea (M4)
 - [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) — screenshot pipeline and `index.json` artifacts
-- [`tools/screenshot-gen/shotgen.py`](tools/screenshot-gen/shotgen.py) — former static HTML gallery (`html` command, removed; replaced by `tools/gallery`) — the speed problem this decision addresses
-- [`tools/gallery/`](tools/gallery/README.md) — implemented gallery webapp, see [`SPEC-gallery-webapp.md`](SPEC-gallery-webapp.md)
+- [`tools/screenshot-gen/shotgen.py`](../tools/screenshot-gen/shotgen.py) — former static HTML gallery (`html` command, removed; replaced by `tools/gallery`) — the speed problem this decision addresses
+- [`tools/gallery/`](../tools/gallery/README.md) — implemented gallery webapp, see [`SPEC-gallery-webapp.md`](SPEC-gallery-webapp.md)
 
 ---
 
@@ -160,4 +160,4 @@ Implementation strategy for the overlay merge and catalog joins:
 
 ## License
 
-Licensed under the [MIT License](LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+Licensed under the [MIT License](../LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

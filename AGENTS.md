@@ -19,17 +19,19 @@ The implementation is split into focused modules (files) under the `apps/marcer_
 - apps/marcer_console/UIErrorService.cs: Centralized UI error presentation using the console message helper.
 
 Tooling (Python, not part of the launcher build; paths via git-ignored `local/paths.env`, run via each tool's `run.sh` with the repo `.venv`):
-- tools/gameinfo-gen/: Extracts game metadata from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR` (see `ANALYSIS-game-data.md`).
-- tools/gallery/: Interactive gallery webapp over the screenshot archive joined with game metadata (see `SPEC-gallery-webapp.md`); replaces the former static `shotgen html` gallery.
-- tools/screenshot-gen/: Generates preview screenshots via Hatari on a virtual display (see `SPEC-screenshot-generator.md`).
+- tools/gameinfo-gen/: Extracts game metadata from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR` (see `docs/ANALYSIS-game-data.md`).
+- tools/gallery/: Interactive gallery webapp over the screenshot archive joined with game metadata (see `docs/SPEC-gallery-webapp.md`); replaces the former static `shotgen html` gallery.
+- tools/screenshot-gen/: Generates preview screenshots via Hatari on a virtual display (see `docs/SPEC-screenshot-generator.md`).
 
-Apps (Flutter desktop, not part of the C# launcher build; plan in `apps/marcer_desktop/PLAN.md`, decision in `DECISION-app-architecture.md`):
+Docs: `docs/` holds the specs, analysis and decision records (`SPEC.md`, `ANALYSIS-game-data.md`, `DECISION-app-architecture.md`, `SPEC-gallery-webapp.md`, `SPEC-screenshot-generator.md`, `BUGS.md`) plus `docs/images/` (screenshots linked from the README). `README.md` and `AGENTS.md` stay at the repo root.
+
+Apps (Flutter desktop, not part of the C# launcher build; plan in `apps/marcer_desktop/PLAN.md`, decision in `docs/DECISION-app-architecture.md`):
 - apps/marcer_desktop/: Flutter desktop app (Surface A inventory browser, later Surface B couch mode). Executable/app bundle `MarcerGameDVDLauncher` (Dart package name stays `marcer_desktop`); app icon generated from the gallery favicon via `tool/generate_icons.py`. Config via git-ignored `desktop.config.json`, searched in CWD → executable dir → (macOS) `.app` parent; release ZIPs ship `desktop.config.example.json`. Run via `apps/marcer_desktop/run.sh` (needs Flutter SDK in `~/flutter` and the Linux desktop toolchain). Default view is the gallery-style catalog grid with a gallery-style detail sidebar; optional overlay folder browser (`T`). Gallery-style global filters (facet dropdowns with type-to-filter) + card universe (`GameCard`/`CatalogFilter` in the catalog package), fuzzy crew/cracker focus, lightbox (integer scaling, filmstrip, variant table). **Not** built via the console build script (`apps/marcer_console/build.*`).
 - apps/marcer_desktop/packages/marcer_catalog/: Pure Dart data layer (overlay merge per SPEC §7, gameinfo join, screenshot index, gallery `GameCard` universe + facets + filter/sort engine, config). Read-only consumers; unit tests via `dart test`.
 
 Note: This overview is intentionally concise. For behavioral changes (navigation, color scheme, launch command or config schema), update this file (AGENTS.md) and README.md as required by project policy.
 
-**Specification:** [`SPEC.md`](SPEC.md) is the technology-neutral behavioral specification of the launcher (used as the basis for reimplementation in other languages or as a desktop app). Behavioral changes must be reflected in SPEC.md as well — keep sections 1–17 and the Conformance Checklist in sync with the implementation.
+**Specification:** [`docs/SPEC.md`](docs/SPEC.md) is the technology-neutral behavioral specification of the launcher (used as the basis for reimplementation in other languages or as a desktop app). Behavioral changes must be reflected in `docs/SPEC.md` as well — keep sections 1–17 and the Conformance Checklist in sync with the implementation.
 **Note for Automated Tests/CI:**
 The console launcher cannot be executed or tested via `apps/marcer_console/start.cmd` from this environment (build system, automation agent) since no Windows console environment is present. For release workflows and developer validation, it is ALWAYS required to do a manual test run via `apps/marcer_console/start.cmd` (Windows) or `apps/marcer_console/start.sh` (Linux/macOS) per documentation and policy before delivery.
 

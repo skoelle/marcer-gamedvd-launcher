@@ -8,8 +8,10 @@ variants + This ZIP); an optional overlay folder browser (`T` / Folders button)
 per `SPEC.md` §7, plus a gallery-style lightbox (filmstrip + info panel).
 **Read-only** consumer of all data roots.
 
+![Catalog grid](../../docs/images/catalog.png)
+
 Plan: [`PLAN.md`](PLAN.md). Architecture decision:
-[`DECISION-app-architecture.md`](../../DECISION-app-architecture.md).
+[`DECISION-app-architecture.md`](../../docs/DECISION-app-architecture.md).
 
 ## Structure
 

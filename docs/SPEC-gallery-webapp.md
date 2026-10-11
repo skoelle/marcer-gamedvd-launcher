@@ -20,7 +20,7 @@ Everything else is *(untested)* and must be confirmed during implementation.
 - [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) — screenshot pipeline, `index.json` schema
 - [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md) — game metadata sources and data model
 - [`DECISION-app-architecture.md`](DECISION-app-architecture.md) — why this app is Python + HTML (decision record)
-- [`tools/screenshot-gen/shotgen.py`](tools/screenshot-gen/shotgen.py) — former static gallery (`html` command, `GALLERY_TEMPLATE`) — the design reference this spec replaced; both removed in M6
+- [`tools/screenshot-gen/shotgen.py`](../tools/screenshot-gen/shotgen.py) — former static gallery (`html` command, `GALLERY_TEMPLATE`) — the design reference this spec replaced; both removed in M6
 
 ---
 
@@ -880,4 +880,4 @@ A conforming implementation satisfies all of the following.
 
 ## License
 
-Licensed under the [MIT License](LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+Licensed under the [MIT License](../LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

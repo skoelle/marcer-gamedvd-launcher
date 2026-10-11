@@ -2,7 +2,7 @@
 
 Extracts game metadata from the Marcer GameDVD XLS workbooks into JSON files
 for the launcher and future tools. See
-[`ANALYSIS-game-data.md`](../../ANALYSIS-game-data.md) for the full analysis
+[`ANALYSIS-game-data.md`](../../docs/ANALYSIS-game-data.md) for the full analysis
 and data model.
 
 ## Requirements

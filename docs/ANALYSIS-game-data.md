@@ -13,7 +13,7 @@ the git-ignored local file `local/paths.env` (see section 1.2).
 **Related documents:**
 - [`SPEC.md`](SPEC.md) — behavioral specification of the launcher
 - [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) — screenshot generation tool
-- [`local/paths.env`](local/paths.env) — local data path definitions (git-ignored)
+- [`local/paths.env`](../local/paths.env) — local data path definitions (git-ignored)
 
 ---
 

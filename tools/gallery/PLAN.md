@@ -1,7 +1,7 @@
 # PLAN: Gallery Webapp — Execution Checklist
 
 Purpose: track implementation progress only. The contract is
-[`SPEC-gallery-webapp.md`](../../SPEC-gallery-webapp.md) — behavior, API,
+[`SPEC-gallery-webapp.md`](../../docs/SPEC-gallery-webapp.md) — behavior, API,
 test plan and conformance checklist live there.
 
 Rules:

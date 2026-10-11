@@ -19,11 +19,54 @@ Both are strictly **read-only** consumers of the archive and its derived artifac
 
 ## 🖥️ Desktop App (Flutter)
 
-Windowed desktop app (Surface A: master-detail inventory browser, later Surface B: fullscreen couch mode) built with Flutter — see [`DECISION-app-architecture.md`](DECISION-app-architecture.md) for the technology decision and [`apps/marcer_desktop/PLAN.md`](apps/marcer_desktop/PLAN.md) for the phased plan.
+**Browse the whole GameDVD archive like a gallery — screenshots, metadata and a
+full-screen viewer, driven entirely by the keyboard.** It is a windowed
+master-detail browser (Surface A; a fullscreen couch mode, Surface B, is
+planned) built with Flutter, and a strictly **read-only** consumer of the
+archive and its derived artifacts.
 
-- **Layout:** `apps/marcer_desktop/` (Flutter app) with the pure-Dart data layer `apps/marcer_desktop/packages/marcer_catalog/` (overlay merge per [`SPEC.md`](SPEC.md) §7, gameinfo join, screenshot index, gallery-style `GameCard` universe with facets).
-- **UI:** gallery-style **catalog grid by default** with global filters (section tabs cracked/pd/utils, search, status/publisher/crew/cracker/language/year, tri-state raw/pasti/boxscan, TOS/Bad, sort + order, clear — gallery field order) and a right-hand gallery-style detail sidebar (Game info + Release variants + This ZIP); an optional overlay folder browser (`T` / Folders button) with tree + list/grid; gallery-style lightbox (integer-upscaled image, variant filmstrip with `+N` badges + scrollbar, candidate strip, release-variant table with the open ZIP highlighted); gallery-style status bar. Crew/cracker filter focuses each card on the group's ZIP (preview + lightbox variant) with fuzzy matching; grid cards show a 2×2 variant grid when a folder has multiple screenshots.
-- The app is a **read-only** consumer of all data roots and degrades gracefully when `index.json` or the gameinfo `Data/` directory are absent.
+![Catalog grid with filters and detail sidebar](docs/images/catalog.png)
+
+![Gallery lightbox with variant filmstrip](docs/images/lightbox.png)
+
+### ✨ Features
+
+- **Gallery-style catalog grid** as the default view — every game as a card
+  with its best screenshot, section tabs (`cracked` / `pd` / `utils`) and
+  global filters: search, status, publisher, crew, cracker, language, year,
+  tri-state `raw` / `pasti` / `boxscan`, `TOS/Bad`, and sort + order.
+- **Type-to-filter facet dropdowns** — start typing to jump to a publisher,
+  crew, cracker, language or year.
+- **Gallery-style detail sidebar** — Game info, the full Release-variants
+  table (the open ZIP highlighted) and a "This ZIP" table.
+- **Crew / cracker focus** — pick a crew or cracker and each card jumps to
+  *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
+  matching tolerates `&`/`and` and small typos).
+- **Full-screen lightbox** — integer-upscaled pixel-art-safe image, variant
+  filmstrip with `+N` candidate badges and a scrollbar, candidate strip and
+  the release-variant table; `←/→` cards, `↑/↓` variants, `PgUp/PgDn` images.
+- **Optional folder browser** (`T`) — the overlay tree (main + patch layer)
+  with layer labels and the virtual `Favorites` folder.
+- **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
+  several ZIPs.
+- **Gallery-style status bar** — with-screenshot ratio, status counts, matched
+  folder count, `index.json` mtime and gameinfo generation time.
+- **Favorites** (`*`) persisted to `favorites.txt`.
+- **Degrades gracefully** — missing `index.json` or gameinfo data simply shows
+  empty states instead of crashing.
+
+### 🚀 Quick start
+
+1. **Download** the ZIP for your platform from the
+   [Releases](https://github.com/skoelle/marcer-gamedvd-launcher/releases) page
+   and extract it.
+2. **Configure** — copy the shipped `desktop.config.example.json` next to the
+   executable (or the `.app`), rename it to `desktop.config.json`, and set your
+   absolute paths (at minimum `RootDirectory`). See *Configuration* below.
+3. **Run** `MarcerGameDVDLauncher` (`MarcerGameDVDLauncher.exe` /
+   `MarcerGameDVDLauncher.app`).
+
+Without a config the app opens a page listing the folders it searched.
 
 ### 📥 Download
 
@@ -56,7 +99,25 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `Hatari.*` | no (MVP) | launch config, used from Phase 5+ |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
-| `Window.width/height` | no | initial window size (default 1280×800) |
+| `Window.width/height` | no | reserved — parsed but **not applied** yet (the window uses the platform default) |
+
+### ⌨️ Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` | Move the selection (one row in grid view) |
+| `←` / `→` | Move the selection left / right (grid) |
+| `PgUp` / `PgDn` | Jump one page up / down |
+| `Enter` / `→` | Open the folder / show the lightbox |
+| `Backspace` | Parent directory (in catalog view: clear filters) |
+| `*` | Toggle favorite on the selected ZIP |
+| `/` | Focus the search field |
+| `T` | Toggle catalog grid / folder view |
+| `?` | Show the help overlay |
+| `ESC` / `q` | Exit |
+
+In the **lightbox**: `←`/`→` switch card, `↑`/`↓` switch variant, `PgUp`/`PgDn`
+switch image, `Esc` closes.
 
 ### 🛠️ Build & Run (developers)
 
@@ -102,9 +163,9 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 
 | Tool | Purpose | Docs |
 |---|---|---|
-| [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md) |
-| [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR`). | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](SPEC-gallery-webapp.md) |
-| [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`. | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) |
+| [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) |
+| [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR`). | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) |
+| [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`. | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
 
 ---
 
@@ -150,10 +211,25 @@ This command validates the version, checks for uncommitted changes, generates a 
 ## 📝 Notes
 
 - Full technical requirements and build rules are in [`AGENTS.md`](AGENTS.md).
-- Technology-neutral behavioral specification (for reimplementation in other languages or as a desktop app) is in [`SPEC.md`](SPEC.md).
-- Analysis of external game metadata sources (XLS workbooks, data model, roadmap) is in [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md).
 - After any functional change, both `README.md` and `AGENTS.md` must be updated.
 - Every release **must** include release notes listing all changes and bugfixes.
+
+---
+
+## 📚 Documentation
+
+The design and specification documents live in [`docs/`](docs/):
+
+| Document | Contents |
+|---|---|
+| [`docs/SPEC.md`](docs/SPEC.md) | Technology-neutral behavioral specification of the launcher (overlay rules, navigation, rendering, launch) — the basis for reimplementing it in any language. |
+| [`docs/ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) | Analysis of the external game metadata sources (XLS workbooks, data model, matching, roadmap). |
+| [`docs/DECISION-app-architecture.md`](docs/DECISION-app-architecture.md) | Why the desktop app is Flutter, the gallery webapp is Python + HTML, and the couch surface is planned. |
+| [`docs/SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) | Behavioral spec of the gallery webapp (`tools/gallery`) — the design reference for the desktop catalog. |
+| [`docs/SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) | Screenshot pipeline and the `index.json` artifact consumed by both UIs. |
+| [`docs/BUGS.md`](docs/BUGS.md) | Known issues and their resolution status. |
+
+Per-app/per-tool docs stay next to their code: [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md), [`apps/marcer_console/README.md`](apps/marcer_console/README.md), and each `tools/*/README.md`.
 
 ---
 

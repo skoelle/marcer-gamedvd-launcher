@@ -22,14 +22,14 @@ named `MarcerGameDVDLauncher`. `flutter test` (10) + `flutter analyze` clean;
 Linux debug build + xvfb smoke run OK. Next: deeper manual interaction test,
 then Phase 5 (launch).
 Written 2026-10-11.
-Governing decision: [`DECISION-app-architecture.md`](../../DECISION-app-architecture.md)
+Governing decision: [`DECISION-app-architecture.md`](../../docs/DECISION-app-architecture.md)
 (Desktop app = Flutter, one project, two surfaces; this file covers **Surface A**).
 
 **Related documents:**
-- [`SPEC.md`](../../SPEC.md) — technology-neutral launcher spec (overlay rules, navigation, launch)
-- [`ANALYSIS-game-data.md`](../../ANALYSIS-game-data.md) — gameinfo JSON schema and matching rules
-- [`SPEC-screenshot-generator.md`](../../SPEC-screenshot-generator.md) — `index.json` + PNG layout
-- [`SPEC-gallery-webapp.md`](../../SPEC-gallery-webapp.md) — reference for join rules and API payload shapes
+- [`SPEC.md`](../../docs/SPEC.md) — technology-neutral launcher spec (overlay rules, navigation, launch)
+- [`ANALYSIS-game-data.md`](../../docs/ANALYSIS-game-data.md) — gameinfo JSON schema and matching rules
+- [`SPEC-screenshot-generator.md`](../../docs/SPEC-screenshot-generator.md) — `index.json` + PNG layout
+- [`SPEC-gallery-webapp.md`](../../docs/SPEC-gallery-webapp.md) — reference for join rules and API payload shapes
 
 ---
 

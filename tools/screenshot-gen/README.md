@@ -2,7 +2,7 @@
 
 Generates preview screenshots for the Marcer GameDVD archive by booting each
 ZIP in Hatari on a virtual X display. See
-[`SPEC-screenshot-generator.md`](../../SPEC-screenshot-generator.md) for the
+[`SPEC-screenshot-generator.md`](../../docs/SPEC-screenshot-generator.md) for the
 full specification.
 
 ## Requirements

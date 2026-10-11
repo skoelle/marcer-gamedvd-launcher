@@ -247,7 +247,7 @@ The console launcher is released independently via the `vX.Y.Z` tag scheme (`.gi
 ## 📝 Notes
 
 - Full technical requirements and build rules are in [`AGENTS.md`](../../AGENTS.md).
-- Technology-neutral behavioral specification (for reimplementation in other languages or as a desktop app) is in [`SPEC.md`](../../SPEC.md).
+- Technology-neutral behavioral specification (for reimplementation in other languages or as a desktop app) is in [`SPEC.md`](../../docs/SPEC.md).
 - After any functional change, both `README.md` and `AGENTS.md` must be updated.
 - Every release **must** include release notes listing all changes and bugfixes.
 
