@@ -389,9 +389,16 @@ Semantics:
   card's `preview` and `display_status` then reflect that focused variant
   — **even if it has no screenshot** (empty preview → placeholder). This
   overrides `status=with_screenshot` for crew-matched cards: they always
-  appear. Matching: ZIP name contains the crew string (case-insensitive);
-  fallback: a gameinfo variant with that crew whose `cracked_by` appears
-  in a ZIP name.
+  appear. Matching is tried in increasing fuzziness: (1) the normalized
+  crew string (lowercased, `&`/`+` treated as `and`, whitespace collapsed)
+  is a substring of the normalized ZIP name; (2) a gameinfo variant with
+  that crew whose `cracked_by` appears in a ZIP name; (3) token subset —
+  all crew tokens (alphanumeric, stopwords like `and`/`the`/`co` removed)
+  appear in the ZIP name, tolerating typos or a missing connective such as
+  "Hotline & MCA" vs. "Hotline MCA". Among multiple matches the first with
+  a screenshot preview wins. When `focus_variant` is `-1` (crew known at
+  gameinfo level but no ZIP in the folder), the card stays visible and the
+  frontend presents a fallback (section 6.3).
 - Sorting is a **total order**: primary key per `sort`, ties always broken
   by lowercased name, then by `rel`. This guarantees stable pagination (no
   duplicates or gaps across pages) *(requirement, section 8.5)*.
@@ -518,6 +525,13 @@ Filter/search/sort state is reflected in the URL query string
 - Name: game folder name (`folder`), below the badge (as today).
 - Variant count chip when a folder has more than one ZIP (e.g. `×3`).
 - Preview image, or placeholder block when `screenshots` is false.
+- **Crew focus fallback** (`focus_variant === -1`): when a crew filter
+  matched the card via gameinfo but no ZIP in the folder could be
+  identified, the card is not blank. Instead it shows a short hint
+  (`no crew ZIP — other variants`) plus up to **four small thumbnails** of
+  the other variants that do have screenshots (2×2 grid); clicking a thumb
+  opens the lightbox on that ZIP. When no variant has any screenshot, the
+  plain placeholder is shown.
 - Candidate strip (48 px thumbs, as today) when `show_candidates` is
   enabled and candidates exist — clicking a candidate opens the lightbox on
   that image. The strip is only shown on **single-variant** cards and is
@@ -563,7 +577,10 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
   variant that matches the currently selected ZIP (by cracker or crew
   name contained in the ZIP filename) is **highlighted** with a subtle
   background and bold text so the user always sees which XLS row the
-  open ZIP corresponds to.
+  open ZIP corresponds to. With an active crew filter whose ZIP could not
+  be identified (`focus_variant === -1`), the subtitle is prefixed with
+  `crew ZIP not found — ` and the XLS row matching the crew (normalized
+  `&`/`and` comparison) is highlighted instead.
 - Navigation: `←`/`→` move to the previous/next **card of the current page**
   (v1 limit: within the loaded page), `↑`/`↓` switch variant, `PgUp`/`PgDn`
   switch image (preview/candidates), `Esc` closes, click on the backdrop
@@ -646,8 +663,10 @@ Shown in the header, sourced from `/api/meta`:
    facet; tri-state flags (`any|yes|no`).
 3. **Crew focus** (`crew=<value>`): the grid shows the screenshot of the
    ZIP belonging to that crew (`focus_variant`, section 5.3), even when
-   that variant has no screenshot (placeholder). Clicking the card opens
-   the lightbox on exactly that variant.
+   that variant has no screenshot (placeholder). When no ZIP can be
+   identified (`focus_variant === -1`) the card shows a hint plus up to
+   four screenshots of the folder's other variants (section 6.3). Clicking
+   the card opens the lightbox on that variant.
 4. **Status presets**: `with_screenshot` (default), `done`, `desktop`, … as
    listed in section 5.2; the statistics bar always shows global numbers.
 5. **Sorting**: `name` (default, case-insensitive), `year` (numeric, `unknown`

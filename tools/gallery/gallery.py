@@ -304,31 +304,78 @@ def kind_filters(kind):
     }[kind]
 
 
+_CREW_STOPWORDS = frozenset({"and", "the", "co", "crew", "inc", "ltd",
+                             "team", "software"})
+
+
+def _norm_crew(s):
+    """Normalize a crew string for fuzzy matching.
+
+    Lowercases, expands `&` / `+` to "and" and collapses whitespace so
+    that e.g. gameinfo "Equinox & MDK" matches ZIP "Equinox and MDK".
+    """
+    s = (s or "").strip().lower()
+    s = re.sub(r"\s*[&+]\s*", " and ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _crew_tokens(s):
+    """Tokenize a crew string: alphanumeric, no stopwords, length >= 2."""
+    raw = re.findall(r"[a-z0-9]+", (s or "").lower())
+    return [t for t in raw if t not in _CREW_STOPWORDS and len(t) >= 2]
+
+
 def _crew_focus_variant(card, crew):
     """Index of the ZIP variant that belongs to `crew`, or -1.
 
-    Matching: ZIP name contains the crew string (case-insensitive);
-    fallback: find a gameinfo variant with that crew and match its
-    cracker name against ZIP names.
+    Matching is tried in increasing fuzziness:
+      1) normalized crew string is a substring of the normalized ZIP name
+         (`&`/`+` == "and", e.g. "Equinox & MDK" -> "Equinox and MDK");
+      2) gameinfo variant with this crew -> its cracker name in ZIP names;
+      3) token subset: all crew tokens (ignoring stopwords) appear in the
+         ZIP name (typos / missing connective, e.g. "Hotline & MCA" ->
+         "Hotline MCA"), requiring at least one token with length >= 3.
+    Among multiple matches the first with a screenshot preview wins.
     """
-    crew_l = (crew or "").strip().lower()
-    if not crew_l:
+    crew_n = _norm_crew(crew)
+    if not crew_n:
         return -1
-    # 1) ZIP name contains the crew string
-    for i, v in enumerate(card["variants"]):
-        if crew_l in v["name"].lower():
-            return i
+    variants = card["variants"]
+    # 1) normalized substring match
+    subs = [i for i, v in enumerate(variants)
+            if crew_n in _norm_crew(v["name"])]
+    if subs:
+        return _first_with_preview(variants, subs)
     # 2) gameinfo variant with this crew → match its cracker in ZIP names
     for iv in (card.get("info") or {}).get("variants") or []:
-        if (iv.get("crew") or "").strip().lower() != crew_l:
+        if _norm_crew(iv.get("crew")) != crew_n:
             continue
         cracker = (iv.get("cracked_by") or "").strip().lower()
         if not cracker:
             continue
-        for i, v in enumerate(card["variants"]):
-            if cracker in v["name"].lower():
-                return i
+        hits = [i for i, v in enumerate(variants)
+                if cracker in v["name"].lower()]
+        if hits:
+            return _first_with_preview(variants, hits)
+    # 3) token subset match (typo / missing connective tolerant)
+    ct = _crew_tokens(crew)
+    if ct and any(len(t) >= 3 for t in ct):
+        hits = []
+        for i, v in enumerate(variants):
+            nt = set(re.findall(r"[a-z0-9]+", v["name"].lower()))
+            if all(t in nt for t in ct):
+                hits.append(i)
+        if hits:
+            return _first_with_preview(variants, hits)
     return -1
+
+
+def _first_with_preview(variants, indices):
+    """Return the first index with a preview, otherwise the first."""
+    for i in indices:
+        if variants[i].get("preview"):
+            return i
+    return indices[0]
 
 
 def _apply_crew_focus(card, crew):

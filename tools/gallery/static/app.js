@@ -60,6 +60,8 @@ const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;");
 const imgSrc = (p) => "/img/" + p.split("/").map(encodeURIComponent).join("/");
+const normCrew = (s) => String(s == null ? "" : s).trim().toLowerCase()
+  .replace(/\s*[&+]\s*/g, " and ").replace(/\s+/g, " ").trim();
 
 // ---------------------------------------------------------------- state <-> URL
 function readURL() {
@@ -283,6 +285,19 @@ function renderGrid(cards) {
             `</div>`;
         }
       }
+    } else if (c.focus_variant === -1) {
+      // crew focus with no matching ZIP: hint + up to 4 other screenshots
+      const thumbs = c.variants
+        .map((vv, vi) => ({ vv, vi }))
+        .filter((x) => x.vv.preview)
+        .slice(0, 4)
+        .map((x) => `<img loading="lazy" src="${imgSrc(x.vv.preview)}" alt="" ` +
+          `data-crewv="${x.vi}" title="${esc(x.vv.name)} (${esc(x.vv.status)})">`)
+        .join("");
+      body = thumbs
+        ? `<div class="crew-miss">no crew ZIP — other variants</div>` +
+          `<div class="crew-thumbs">${thumbs}</div>`
+        : `<div class="ph"></div>`;
     } else {
       body = `<div class="ph"></div>`;
     }
@@ -428,9 +443,11 @@ function renderLightbox() {
   $("lb-badge").innerHTML = badgeFor(card);
   $("lb-title").textContent = card.name;
   const v = card.variants[lb.variant];
+  const missPrefix = card.focus_variant === -1
+    ? "crew ZIP not found — " : "";
   $("lb-sub").textContent = v
-    ? `${v.status}${v.layer ? " · " + v.layer : ""}${v.size ? " · " + Math.round(v.size / 1024) + " KB" : ""}`
-    : "no ZIP variants";
+    ? `${missPrefix}${v.status}${v.layer ? " · " + v.layer : ""}${v.size ? " · " + Math.round(v.size / 1024) + " KB" : ""}`
+    : `${missPrefix}no ZIP variants`;
   const pos = `${lb.idx + 1} / ${pageCards.length}`;
   $("lb-pos").textContent = card.variants.length > 1
     ? `${pos}  ·  variant ${lb.variant + 1} / ${card.variants.length}`
@@ -511,6 +528,11 @@ function renderLightbox() {
           const crw = (rv.crew || "").trim().toLowerCase();
           return (cr && zl.includes(cr)) || (crw && zl.includes(crw));
         });
+      }
+      // no ZIP matched (crew focus): mark the variant belonging to the crew
+      if (selIdx === -1 && state.crew !== "any") {
+        selIdx = i.variants.findIndex((rv) =>
+          normCrew(rv.crew) === normCrew(state.crew));
       }
       html += `<h3>Release variants (${i.variants.length})</h3>` +
         `<table class="variants-table"><tr>` +
@@ -664,10 +686,15 @@ function wireEvents() {
   // grid: click, hover, candidate clicks
   $("grid").addEventListener("click", (e) => {
     const cand = e.target.closest("img[data-cand]");
+    const crewV = e.target.closest("img[data-crewv]");
     const cardEl = e.target.closest(".card");
     if (!cardEl) return;
     const idx = parseInt(cardEl.dataset.idx, 10);
     const fv = parseInt(cardEl.dataset.v || "0", 10);
+    if (crewV) {
+      openLightbox(idx, parseInt(crewV.dataset.crewv, 10) || 0);
+      return;
+    }
     if (cand) {
       const src = pageCards[idx].variants[fv] || pageCards[idx].variants[0] || {};
       const cands = src.candidates || [];

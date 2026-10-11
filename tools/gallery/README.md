@@ -39,7 +39,11 @@ results. There is no live refresh/polling in v1.
   year facets, RAW/PASTI/Boxscan/TOS tri-state flags, sort + order.
   The URL always reflects the current list state (shareable).
 - **Crew focus**: picking a crew shows each card's screenshot for that
-  crew's ZIP, even when the variant has no screenshot yet.
+  crew's ZIP, even when the variant has no screenshot yet. Matching is
+  fuzzy (`&`/`+` = `and`, and a token fallback for typos/missing
+  connectives like "Hotline & MCA" ↔ "Hotline MCA"); when no ZIP can be
+  identified the card shows a hint plus up to four screenshots of the
+  folder's other variants.
 - **Lightbox**: integer-upscaled screenshot, variant filmstrip (click or
   `↑`/`↓`), candidate images, metadata + release-variant table with the
   open ZIP highlighted, deep link `?entry=<rel>`.
