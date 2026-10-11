@@ -88,7 +88,7 @@ jobs:
         working-directory: apps/marcer_desktop
         run: |
           mkdir -p dist
-          cp -R "build/macos/Build/Products/Release/marcer_desktop.app" dist/
+          cp -R "build/macos/Build/Products/Release/MarcerGameDVDLauncher.app" dist/
           cp desktop.config.example.json dist/
           ditto -c -k --sequesterRsrc dist "$GITHUB_WORKSPACE/MarcerDesktop-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}.zip"
 

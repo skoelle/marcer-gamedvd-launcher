@@ -5,6 +5,9 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include <libgen.h>
+#include <unistd.h>
+
 #include "flutter/generated_plugin_registrant.h"
 
 struct _MyApplication {
@@ -17,6 +20,22 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+}
+
+// Loads the app icon shipped next to the executable and applies it to the
+// window (also used via the bundle's .desktop entry). Best effort.
+static void set_window_icon(GtkWindow* window) {
+  g_autofree gchar* exe_dir = nullptr;
+  g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe_path != nullptr) {
+    exe_dir = g_path_get_dirname(exe_path);
+  } else {
+    exe_dir = g_get_current_dir();
+  }
+  g_autofree gchar* icon_path =
+      g_build_filename(exe_dir, "app_icon.png", nullptr);
+  g_autoptr(GError) error = nullptr;
+  gtk_window_set_icon_from_file(window, icon_path, &error);
 }
 
 // Implements GApplication::activate.
@@ -45,14 +64,15 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "marcer_desktop");
+    gtk_header_bar_set_title(header_bar, "MarcerGameDVDLauncher");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "marcer_desktop");
+    gtk_window_set_title(window, "MarcerGameDVDLauncher");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  set_window_icon(window);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

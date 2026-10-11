@@ -16,12 +16,18 @@ Plan: [`PLAN.md`](PLAN.md). Architecture decision:
 - `packages/marcer_catalog/` — pure Dart data layer (overlay merge, gameinfo
   join, screenshot index, `GameCard` universe + facets + filter/sort engine,
   config). No Flutter dependency; unit-tested via `dart test`.
-- `lib/` — Flutter app (Phase 3 UI: folder browser, catalog filters,
+- `lib/` — Flutter app (gallery catalog grid, optional folder browser,
   list/grid views, lightbox).
+- `assets/icon/app_icon.png` — master app icon; `tool/generate_icons.py`
+  regenerates the platform icon sets from the gallery favicon.
 - `desktop.config.example.json` — config template (absolute paths).
   Real `desktop.config.json` is git-ignored.
 - `run.sh` — seeds `desktop.config.json` from `../../local/paths.env` on
   first run, then `flutter run -d linux`.
+
+The executable / app bundle is named **`MarcerGameDVDLauncher`**
+(`MarcerGameDVDLauncher.exe` on Windows, `MarcerGameDVDLauncher.app` on
+macOS); the Dart package name stays `marcer_desktop`.
 
 ## Prerequisites
 
@@ -39,6 +45,7 @@ export PATH="$HOME/flutter/bin:$PATH"
 cd packages/marcer_catalog && dart test   # data-layer unit tests
 flutter test                      # app unit tests
 flutter analyze                   # lint
+../../.venv/bin/python tool/generate_icons.py   # regenerate app icons
 ```
 
 ## Config (`desktop.config.json`)

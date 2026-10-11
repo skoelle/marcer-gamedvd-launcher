@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Marcer GameDVD Launcher
+Comment=Browse the Marcer GameDVD archive and launch games with Hatari
+Exec=MarcerGameDVDLauncher
+Icon=MarcerGameDVDLauncher
+Terminal=false
+Categories=Game;Emulator;

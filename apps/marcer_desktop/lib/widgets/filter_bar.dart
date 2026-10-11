@@ -136,7 +136,7 @@ class _FilterBarState extends State<FilterBar> {
                   ),
                   const SizedBox(width: 8),
                   if (fields.contains('publisher'))
-                    _facetDropdown(
+                    _facetMenu(
                       'Publisher: any',
                       f.publisher,
                       ['any', ...facets.publishers],
@@ -145,7 +145,7 @@ class _FilterBarState extends State<FilterBar> {
                     ),
                   if (fields.contains('crew')) ...[
                     const SizedBox(width: 8),
-                    _facetDropdown(
+                    _facetMenu(
                       'Crew: any',
                       f.crew,
                       ['any', ...facets.crews],
@@ -155,7 +155,7 @@ class _FilterBarState extends State<FilterBar> {
                   ],
                   if (fields.contains('cracker')) ...[
                     const SizedBox(width: 8),
-                    _facetDropdown(
+                    _facetMenu(
                       'Cracker: any',
                       f.cracker,
                       ['any', ...facets.crackers],
@@ -165,7 +165,7 @@ class _FilterBarState extends State<FilterBar> {
                   ],
                   if (fields.contains('language')) ...[
                     const SizedBox(width: 8),
-                    _facetDropdown(
+                    _facetMenu(
                       'Language: any',
                       f.language,
                       ['any', ...facets.languages],
@@ -175,7 +175,7 @@ class _FilterBarState extends State<FilterBar> {
                   ],
                   if (fields.contains('year')) ...[
                     const SizedBox(width: 8),
-                    _facetDropdown(
+                    _facetMenu(
                       'Year: any',
                       f.year,
                       ['any', ...facets.years],
@@ -261,6 +261,47 @@ class _FilterBarState extends State<FilterBar> {
           minimumSize: Size(width, 28),
         ),
         child: Text(text, style: const TextStyle(fontSize: 12)),
+      ),
+    );
+  }
+
+  /// Facet dropdown with type-to-filter: tapping opens an editable field,
+  /// typing narrows the list and Enter picks the match (`DropdownMenu`
+  /// `enableFilter`). Keeps the compact look of the other controls.
+  Widget _facetMenu(
+    String anyLabel,
+    String value,
+    List<String> items,
+    ValueChanged<String> onChanged, {
+    double width = 140,
+  }) {
+    String label(String v) => v == 'any' ? anyLabel : v;
+
+    return SizedBox(
+      width: width,
+      child: DropdownMenu<String>(
+        key: ValueKey('$anyLabel:$value'),
+        width: width,
+        initialSelection: items.contains(value) ? value : items.first,
+        enableFilter: true,
+        requestFocusOnTap: true,
+        menuHeight: 320,
+        textStyle: const TextStyle(fontSize: 12, color: Colors.white),
+        leadingIcon: null,
+        trailingIcon: const Icon(Icons.arrow_drop_down, size: 18),
+        inputDecorationTheme: const InputDecorationTheme(
+          isDense: true,
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(4))),
+          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        ),
+        dropdownMenuEntries: [
+          for (final v in items)
+            DropdownMenuEntry<String>(value: v, label: label(v)),
+        ],
+        onSelected: (v) {
+          if (v != null) onChanged(v);
+        },
       ),
     );
   }

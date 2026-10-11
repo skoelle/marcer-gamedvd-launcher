@@ -53,7 +53,7 @@ class MarcerDesktopApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Marcer GameDVD',
+      title: 'MarcerGameDVDLauncher',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       home: configError != null
