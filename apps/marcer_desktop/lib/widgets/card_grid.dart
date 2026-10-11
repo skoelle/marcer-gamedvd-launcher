@@ -238,15 +238,24 @@ class _CenterGridState extends State<CenterGrid> {
     );
   }
 
-  /// Gallery `openLightbox(idx, fv)`: start on the crew/cracker-focused
-  /// variant when a focus filter is active, otherwise on the first variant.
+  /// Opens the lightbox for the selection: the crew/cracker-focused variant
+  /// when a focus filter is active, otherwise the **best** variant (the one
+  /// whose screenshot is used as the card preview), falling back to the
+  /// first.
   void _openLightboxForSelection({int image = 0}) {
     final c = widget.controller;
     final card = c.selectedCard;
-    final fv = (card != null && (card.focusVariant ?? -1) >= 0)
-        ? card.focusVariant!
-        : 0;
-    widget.onOpenLightbox(fv, image);
+    widget.onOpenLightbox(card == null ? 0 : _bestVariant(card), image);
+  }
+
+  int _bestVariant(GameCard card) {
+    if ((card.focusVariant ?? -1) >= 0) return card.focusVariant!;
+    if (card.previewPath != null) {
+      final idx =
+          card.variants.indexWhere((v) => v.previewPath == card.previewPath);
+      if (idx >= 0) return idx;
+    }
+    return 0;
   }
 
   /// Number of variants that have a screenshot preview
@@ -277,19 +286,13 @@ class _CenterGridState extends State<CenterGrid> {
   Widget _thumbGrid(
       CatalogController c, GameCard card, int index,
       List<({int index, String path})> thumbs) {
-    return GridView.count(
-      crossAxisCount: 2,
-      padding: const EdgeInsets.all(4),
-      mainAxisSpacing: 4,
-      crossAxisSpacing: 4,
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        for (final t in thumbs)
-          GestureDetector(
-            onTap: () {
-              c.moveSelectionTo(index);
-              widget.onOpenLightbox(t.index, 0);
-            },
+    Widget cell(({int index, String path}) t) => GestureDetector(
+          onTap: () {
+            c.moveSelectionTo(index);
+            widget.onOpenLightbox(t.index, 0);
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(2),
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(color: const Color(0xFF2A2A2A)),
@@ -299,12 +302,31 @@ class _CenterGridState extends State<CenterGrid> {
               child: Image.file(
                 io.File(t.path),
                 fit: BoxFit.cover,
-                filterQuality: FilterQuality.none,
                 errorBuilder: (_, _, _) => Container(color: Colors.black),
               ),
             ),
           ),
-      ],
+        );
+
+    // Two columns, at most two rows, evenly split over the available area
+    // (so all four thumbnails fit without clipping).
+    final rows = <Widget>[];
+    for (var i = 0; i < thumbs.length && rows.length < 2; i += 2) {
+      rows.add(Expanded(
+        child: Row(
+          children: [
+            Expanded(child: cell(thumbs[i])),
+            if (i + 1 < thumbs.length)
+              Expanded(child: cell(thumbs[i + 1]))
+            else
+              const Expanded(child: SizedBox()),
+          ],
+        ),
+      ));
+    }
+    return Padding(
+      padding: const EdgeInsets.all(2),
+      child: Column(children: rows),
     );
   }
 
