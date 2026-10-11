@@ -31,11 +31,44 @@ The server revalidates `index.json` and the metadata files on each API
 request (mtime check), so a page reload shows the latest screenshot-run
 results. There is no live refresh/polling in v1.
 
+## Features & Keyboard
+
+- **Sections**: tabs for Cracked Games / PD Games / Utilities (when
+  `MARCER_DATA_DIR` is set).
+- **Filters**: status preset, search, letter nav, publisher/crew/language/
+  year facets, RAW/PASTI/Boxscan/TOS tri-state flags, sort + order.
+  The URL always reflects the current list state (shareable).
+- **Crew focus**: picking a crew shows each card's screenshot for that
+  crew's ZIP, even when the variant has no screenshot yet.
+- **Lightbox**: integer-upscaled screenshot, variant filmstrip (click or
+  `↑`/`↓`), candidate images, metadata + release-variant table with the
+  open ZIP highlighted, deep link `?entry=<rel>`.
+- **Deep links**: `?entry=…` jumps to the card's page and opens it;
+  closing the lightbox keeps the list state.
+
+| Context | Keys |
+|---|---|
+| Grid | `←` `→` `↑` `↓` move · `Enter`/`Space` open · `PgUp`/`PgDn` page · `Home`/`End` first/last · `/` search · `Esc` clear focus |
+| Lightbox | `←` `→` previous/next card · `↑` `↓` variant · `PgUp`/`PgDn` image · `Esc` close (also backdrop click) |
+
+## Troubleshooting
+
+- `MARCER_OUT_DIR missing` → set it in `local/paths.env`.
+- `index.json not found` → run the screenshot generator's `index` command.
+- `MARCER_DATA_DIR not a directory` → warning only; the app runs in
+  screenshots-only mode (no facets/hover metadata, PD/Utils tabs hidden).
+- Stale data → reload the page (mtime revalidation runs per request).
+
 ## Config
 
 Defaults live in `gallery.py`. Override via `config.example.json` (copy to
 `config.local.json` and adjust, git-ignored) or CLI flags. Data paths are
 never configured here — they come from `local/paths.env` via `run.sh`.
+
+Keys: `host`, `port`, `page_size`, `show_candidates` (grid candidate
+strip on/off), `default_status` (initial status preset), and
+`image_cache_seconds` (HTTP cache for PNGs). `show_candidates` and
+`default_status` are delivered to the frontend via `/api/meta`.
 
 ## License
 

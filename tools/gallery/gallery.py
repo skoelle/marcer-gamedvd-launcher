@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import sys
 import threading
 import time
@@ -482,9 +483,13 @@ class DataStore:
             "tool_version": TOOL_VERSION,
         }
 
-    def meta_payload(self):
+    def meta_payload(self, cfg=None):
         m = json.loads(json.dumps(self.meta))
         m["status_labels"] = STATUS_LABELS
+        if cfg:
+            m["show_candidates"] = bool(cfg.get("show_candidates", True))
+            m["default_status"] = cfg.get("default_status",
+                                          "with_screenshot")
         return m
 
 
@@ -630,7 +635,7 @@ class GalleryHandler(BaseHTTPRequestHandler):
                 return self._file(STATIC_DIR / name, ctype)
             if path == "/api/meta":
                 self.store.reload()
-                return self._json(self.store.meta_payload())
+                return self._json(self.store.meta_payload(self.cfg))
             if path == "/api/entries":
                 self.store.reload()
                 return self._entries()
@@ -691,8 +696,13 @@ class GalleryHandler(BaseHTTPRequestHandler):
                         None)
             if card is None:
                 return self._error(404, "entry not found")
+            entry_sort = params.get("sort", "name") or "name"
+            entry_order = params.get("order", "asc") or "asc"
+            if entry_order not in ("asc", "desc"):
+                entry_order = "asc"
             filtered = [c for c in store.cards["cracked"]
                         if _matches(c, params, "cracked")]
+            _sort_cards(filtered, entry_sort, entry_order)
             position = next(
                 (i for i, c in enumerate(filtered) if c is card), None)
             payload = _public_card(card, "cracked")
@@ -776,6 +786,11 @@ def main():
     if host not in ("127.0.0.1", "localhost", "::1"):
         log(f"[warn] binding to {host} — no authentication is configured, "
             f"anyone who can reach this address can browse the archive")
+
+    # SIGTERM behaves like Ctrl+C (SPEC 8.6)
+    def _sigterm(_sig, _frm):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, _sigterm)
 
     log("[data] loading …")
     store = DataStore(out_dir, data_dir)

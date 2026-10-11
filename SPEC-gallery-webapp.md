@@ -311,30 +311,44 @@ error body `{ "error": "<message>" }`.
   "gameinfo": true,
   "index": { "entries": 22938, "mtime": 1780000000 },
   "status_counts": { "done": 1467, "desktop": 2947, "pending": 14827, "...": 0 },
+  "status_labels": { "done": "done (game)", "with_screenshot": "with screenshot", "...": "..." },
   "sections": {
-    "cracked": { "games": 3108, "with_screenshot": 0, "no_info": 615 },
+    "cracked": { "games": 3108, "cards": 3108, "with_screenshot": 881, "no_info": 615 },
     "pd":      { "games": 1901 },
     "utils":   { "games": 3546 }
   },
   "coverage": { "matched_folders": 3108, "unmatched_folders": 181 },
   "facets": {
-    "publishers": ["Ocean", "..."],
-    "crews": ["Medway Boys", "..."],
-    "languages": ["English", "..."],
-    "years": ["1987", "..."],
-    "letters": ["0-9", "A", "..."]
+    "cracked": {
+      "publishers": ["Ocean", "..."],
+      "crews": ["Medway Boys", "..."],
+      "languages": ["English", "..."],
+      "years": ["1987", "..."],
+      "letters": ["0-9", "A", "..."]
+    },
+    "pd":   { "publishers": ["..."], "letters": ["..."] },
+    "utils":{ "publishers": ["..."], "crews": ["..."], "letters": ["..."] }
   },
+  "show_candidates": true,
+  "default_status": "with_screenshot",
   "generated_at": "…",
   "tool_version": "0.1.0"
 }
 ```
 
-- `facets` are computed once at startup from the metadata files (values
-  that can appear in the filter controls). `facets` is absent when
-  `gameinfo` is false.
+- `facets` are computed once at startup from the metadata files and are
+  **per section** (`facets[section]`, section 6.8) — the frontend reads
+  `facets[state.section]`. Absent values (e.g. `crews` for `pd`) are
+  omitted when the field does not apply to that section. `facets` is
+  absent when `gameinfo` is false.
 - `status_counts` always reflects the raw index (not the current filter) —
-  it feeds the statistics bar.
+  it feeds the statistics bar; `status_labels` maps status keys to the
+  human labels used in the status filter.
 - `coverage` comes from `manifest.json` if available.
+- `show_candidates` / `default_status` mirror the effective config
+  (section 9): the frontend disables the card candidate strip when
+  `show_candidates` is false and uses `default_status` as the initial
+  status preset (URL parameters always win).
 
 ### 5.3 `/api/entries`
 
@@ -366,8 +380,9 @@ Semantics:
   screenshot cards first; `status=any` shows the full archive (including
   `pending` placeholders) — the statistics bar always shows global counts.
 - `entry` returns exactly one card (regardless of filters/pagination) with
-  an additional `position` field: the card's `offset` it would have in the
-  current default ordering, or `null` if filtered out.
+  an additional `position` field: the card's index in the filtered list
+  under the requested `sort`/`order` (defaults `name`/`asc`), or `null`
+  if filtered out. The frontend uses it to jump to the card's real page.
 - **Crew focus:** when `crew=<value>` is active and the section supports the
   crew facet, each returned card carries `focus_variant` (index into
   `variants`, or `-1` when no ZIP could be identified for that crew). The
@@ -505,7 +520,9 @@ Filter/search/sort state is reflected in the URL query string
 - Preview image, or placeholder block when `screenshots` is false.
 - Candidate strip (48 px thumbs, as today) when `show_candidates` is
   enabled and candidates exist — clicking a candidate opens the lightbox on
-  that image.
+  that image. The strip is only shown on **single-variant** cards and is
+  suppressed while a crew filter focuses the card (multi-variant cards
+  carry the `×N` chip and use the lightbox filmstrip instead).
 - `layer` label per card when available (`ROOT`/`PATCH`/`BOTH`, same
   semantics as SPEC.md section 7).
 
@@ -533,8 +550,8 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
   tooltip) plus a short label under each thumb. Click switches the main
   image and metadata. Status underline: green = done, amber = desktop,
   gray = empty. When a variant has **more than one candidate** image
-  (`candidates.length > 1`), a small `(N)` count badge is shown at the
-  bottom-right of its filmstrip thumbnail.
+  (`candidates.length > 1`), a small blue `+N` count badge is shown at the
+  bottom-right of its filmstrip thumbnail (above the name label).
 - **Candidate strip**: preview + all `_cNN` images of the *selected*
   variant selectable. The strip always reserves a fixed height (~56 px)
   so the layout does not jump when candidates appear/disappear between
@@ -551,7 +568,8 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
   (v1 limit: within the loaded page), `↑`/`↓` switch variant, `PgUp`/`PgDn`
   switch image (preview/candidates), `Esc` closes, click on the backdrop
   closes.
-- Status/step indicator (e.g. `3 / 60`, variant `2 / 3`).
+- Status/step indicator (e.g. `3 / 60  ·  variant 2 / 3` — the variant
+  part only when the folder has more than one ZIP).
 
 ### 6.6 Keyboard model
 
@@ -560,7 +578,7 @@ parameter):
 
 | Key | Action |
 |---|---|
-| `←` `→` `↑` `↓` | move focus through the grid (row-wise with wrap at row ends) |
+| `←` `→` `↑` `↓` | move focus through the grid (one card / one row per press, clamped at the list edges) |
 | `Enter` / `Space` | open lightbox for the focused card |
 | `Esc` | close lightbox / clear focus |
 | `PageUp` / `PageDown` | previous / next page |
@@ -598,8 +616,12 @@ Shown in the header, sourced from `/api/meta`:
 ### 6.9 Deep links
 
 - `?entry=<rel>`: the app loads, fetches that single card via
-  `/api/entries?entry=…` and opens the lightbox. Closing keeps the user on
-  the default list state (filters are untouched).
+  `/api/entries?entry=…` (including the current sort/order/status so the
+  backend can report the card's `position` in the filtered list), jumps to
+  the page that contains the card and opens the lightbox at that variant.
+  Closing keeps the user on the default list state (filters are untouched).
+  If the card is not part of the current filter view, it is injected into
+  the grid as a fallback so the lightbox still opens.
 - `?q=…&status=…&section=…&letter=…&sort=…&order=…`: restored list state.
 - Every filter change updates the query string via `history.replaceState`;
   opening/closing the lightbox uses `pushState` so browser Back closes the
@@ -711,6 +733,11 @@ capped at 200.
 
 - Defaults live in `gallery.py`; override via `config.local.json`
   (git-ignored) or CLI flags (`--host`, `--port`).
+- `show_candidates`: enables/disables the candidate thumb strip on grid
+  cards (delivered to the frontend via `/api/meta`). The lightbox strips
+  are unaffected.
+- `default_status`: initial status preset of the status filter (delivered
+  via `/api/meta`; a `status` URL parameter always wins).
 - Data paths are **never** configured here — `local/paths.env` only
   (same rule as the sibling tools).
 

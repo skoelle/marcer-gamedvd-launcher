@@ -52,6 +52,8 @@ let pageCards = [];
 let focusIdx = -1;
 let lb = null;          // lightbox state {cards, idx, variant, img}
 let searchTimer = null;
+let showCands = true;       // from meta.show_candidates (config)
+let defaultStatus = "with_screenshot";  // from meta.default_status (config)
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s)
@@ -78,7 +80,7 @@ function writeURL(push) {
     if (v != null && v !== "" && v !== dflt) u.set(k, v);
   };
   keep("section", state.section, "cracked");
-  keep("status", state.status, "with_screenshot");
+  keep("status", state.status, defaultStatus);
   keep("q", state.q, "");
   keep("letter", state.letter, "any");
   for (const k of ["publisher", "crew", "language", "year",
@@ -262,7 +264,6 @@ function renderGrid(cards) {
     return;
   }
   $("empty").hidden = true;
-  const showCands = true;
   grid.innerHTML = cards.map((c, i) => {
     const nzip = c.variants.length;
     const chip = nzip > 1 ? `<span class="chip">×${nzip}</span>` : "";
@@ -430,7 +431,10 @@ function renderLightbox() {
   $("lb-sub").textContent = v
     ? `${v.status}${v.layer ? " · " + v.layer : ""}${v.size ? " · " + Math.round(v.size / 1024) + " KB" : ""}`
     : "no ZIP variants";
-  $("lb-pos").textContent = `${lb.idx + 1} / ${pageCards.length}`;
+  const pos = `${lb.idx + 1} / ${pageCards.length}`;
+  $("lb-pos").textContent = card.variants.length > 1
+    ? `${pos}  ·  variant ${lb.variant + 1} / ${card.variants.length}`
+    : pos;
 
   const imgs = lightboxImages(card);
   lb.img = Math.min(lb.img, Math.max(0, imgs.length - 1));
@@ -583,8 +587,7 @@ function gridKeydown(e) {
       break;
     case "PageDown": e.preventDefault(); changePage(1); break;
     case "PageUp": e.preventDefault(); changePage(-1); break;
-    default:
-      if (e.key === "/") { e.preventDefault(); $("search").focus(); }
+    // "/" falls through to globalKeydown (document-level handler)
   }
 }
 
@@ -716,7 +719,7 @@ function wireEvents() {
   });
   const clearAll = () => {
     Object.assign(state, {
-      status: "with_screenshot", q: "", letter: "any",
+      status: defaultStatus, q: "", letter: "any",
       publisher: "any", crew: "any", language: "any", year: "any",
       raw: "any", pasti: "any", boxscan: "any", tos: "any",
       sort: "name", order: "asc", offset: 0,
@@ -742,7 +745,7 @@ function wireEvents() {
     state.section = b.dataset.section;
     state.offset = 0;
     // reset incompatible filters
-    state.status = "with_screenshot";
+    state.status = defaultStatus;
     for (const k of ["raw", "pasti", "boxscan", "tos", "crew"]) state[k] = "any";
     if (state.sort === "cracker" && state.section === "pd") state.sort = "name";
     syncControls();
@@ -777,6 +780,7 @@ function syncControls() {
 
 // ---------------------------------------------------------------- boot
 async function boot() {
+  const urlStatus = new URLSearchParams(location.search).has("status");
   readURL();
   wireEvents();
   try {
@@ -786,6 +790,9 @@ async function boot() {
     showBanner("Cannot load metadata: " + err.message, () => location.reload());
     return;
   }
+  if (meta.show_candidates != null) showCands = !!meta.show_candidates;
+  if (meta.default_status) defaultStatus = meta.default_status;
+  if (!urlStatus) state.status = defaultStatus;
   $("tabs").hidden = !(meta.gameinfo && meta.sections &&
     (meta.sections.pd.games || meta.sections.utils.games));
   syncControls();
@@ -798,15 +805,28 @@ async function boot() {
     const rel = state.entry;
     state.entry = null;
     try {
-      const data = await api("/api/entries?entry=" + encodeURIComponent(rel));
+      const data = await api("/api/entries?entry=" + encodeURIComponent(rel) +
+        "&sort=" + encodeURIComponent(state.sort) +
+        "&order=" + encodeURIComponent(state.order) +
+        "&status=" + encodeURIComponent(state.status) +
+        "&section=" + encodeURIComponent(state.section));
       const card = data.cards && data.cards[0];
       if (card) {
         const vi = card.variants.findIndex((vv) => vv.rel === rel);
         const variant = vi >= 0 ? vi : 0;
-        // if the card is on the current page, open at that index; else inject
+        // jump to the page that really contains the card (SPEC 6.9)
+        if (card.position != null) {
+          const target = Math.floor(card.position / state.limit) * state.limit;
+          if (target !== state.offset) {
+            state.offset = target;
+            await loadEntries();
+          }
+        }
         const local = pageCards.findIndex((c) => c.id === card.id);
-        if (local >= 0) openLightbox(local, variant);
-        else {
+        if (local >= 0) {
+          openLightbox(local, variant);
+        } else {
+          // card filtered out of the current view — inject as a fallback
           pageCards.unshift(card);
           renderGrid(pageCards);
           openLightbox(0, variant);
