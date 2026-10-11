@@ -455,7 +455,7 @@ function renderLightbox() {
     const st = vv.preview ? `st-${vv.status === "done" ? "done" : "desktop"}` : "st-empty";
     const short = vv.name.replace(/\.zip$/i, "").replace(/^[^-]*-\s*/, "");
     const nCand = (vv.candidates || []).length;
-    const badge = nCand > 1 ? `<span class="cand-count">${nCand}</span>` : "";
+    const badge = nCand > 1 ? `<span class="cand-count">+${nCand}</span>` : "";
     return `<button type="button" class="lb-film-item ${st} ${i === lb.variant ? "active" : ""}" data-v="${i}" title="${esc(vv.name)} (${esc(vv.status)})">${thumb}${badge}<span class="film-name">${esc(short)}</span></button>`;
   }).join("");
   const activeFilm = $("lb-film").querySelector(".lb-film-item.active");

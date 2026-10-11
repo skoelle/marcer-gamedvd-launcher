@@ -430,16 +430,18 @@ footer {
 .lb-film-item .cand-count {
   position: absolute;
   bottom: 12px;
-  right: 0px;
+  right: 2px;
   background: #2456a0;
   color: #fff;
   font-size: 0.62em;
   font-weight: 700;
   line-height: 16px;
-  width: 14px;
+  min-width: 14px;
   height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
   text-align: center;
-  border-radius: 50%;
+  border-radius: 8px;
   pointer-events: none;
 }
 .lb-film-item .film-name {
