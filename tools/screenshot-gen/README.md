@@ -31,6 +31,11 @@ tools/screenshot-gen/run.sh run --retry-desktop   # click + capture (one attempt
 # Remove blank white previews that only show Hatari's drive-LED overlay:
 tools/screenshot-gen/run.sh cleanup-drive-led --dry-run   # report only
 tools/screenshot-gen/run.sh cleanup-drive-led             # delete + flag
+
+# Drop logs/empty output dirs of index entries that no longer exist
+# (e.g. after excluding directories):
+tools/screenshot-gen/run.sh prune --dry-run   # report only
+tools/screenshot-gen/run.sh prune             # delete
 ```
 
 Interrupt with Ctrl+C at any time. Progress is saved after every entry.
@@ -141,6 +146,19 @@ Nothing is ever deleted unless the detector identifies it as LED-white.
 `--dry-run` reports the counts without changing anything; `--only
 <substring>` limits the pass. The `drive_led_refetch` flag marks the entries
 that a later pass should re-capture with the LED disabled.
+
+### Excluded directories
+
+Some game folders contain sub-directories that never hold Hatari disk
+images: `Boxscan`/`Box Scan` (box scans), `Manual` (manuals) and `Kryoflux`
+(flux dumps, usually under `RAW`). These are listed in the config key
+`exclude_dirs` (default `kryoflux`, `boxscan`, `manual`) and are never
+entered during the index scan, so nothing inside them is indexed. Matching
+is case-insensitive and ignores spaces/underscores/dashes, at any depth.
+
+After changing `exclude_dirs`, run `index` to rebuild the index (removed
+entries are dropped automatically) and then `prune` to delete their
+leftover logs and empty output directories.
 
 ## Config
 

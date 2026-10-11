@@ -227,6 +227,14 @@ Explicitly out of scope for now:
 - All `Crew Sorted` trees
 - Everything else
 
+Within the scope tree, sub-directories that never hold Hatari disk images are
+excluded too (config `exclude_dirs`, section 11.2): `Boxscan`/`Box Scan` (box
+scans), `Manual` (manuals/PDFs) and `Kryoflux` (flux dumps, usually under
+`RAW`). The scanner never enters them, so their ZIPs never reach the index.
+Matching is case-insensitive, ignores spaces/underscores/dashes, and applies
+at any depth. After changing the list, run `index` (dropped entries are
+removed automatically) and `prune` (section 5) to clean leftovers.
+
 Scope is defined in the tool config (section 11.2) as a list of relative tree
 paths, so extending later is a config change, not a code change.
 
@@ -283,7 +291,10 @@ still allows only one tool process per `MARCER_OUT_DIR`.
 
 Besides `index`, `run` and `detect`, the tool has the `cleanup-drive-led`
 subcommand (section 8.7), a standalone offline pass that removes old
-drive-LED white screenshots and cleans the index.
+drive-LED white screenshots and cleans the index, and the `prune`
+subcommand, which deletes `logs/<rel>.log` files and empty mirror
+directories of index entries that no longer exist (used after directory
+exclusions, section 4.4).
 
 ---
 
@@ -765,7 +776,8 @@ MARCER_DISPLAY=...
 ### 11.2 Tool config file
 
 `tools/screenshot-gen/config.example.json` (committed, contains no paths):
-scope trees, time points, timeouts, filter thresholds, profile map,
+scope trees, `exclude_dirs` (sub-directory names never scanned, section
+4.4), time points, timeouts, filter thresholds, profile map,
 disk-skip patterns, `keep_candidates`. A local override
 `config.local.json` (git-ignored) may exist for machine-specific tweaks.
 
@@ -927,7 +939,9 @@ A conforming implementation satisfies all of the following.
 - [ ] I1 Merge rules match SPEC.md section 7 (case-insensitive, patch wins,
       directories aside, only `.zip` entries).
 - [ ] I2 Directories starting with `@` and hidden entries are ignored.
-- [ ] I3 Only the scope trees of section 4.4 are processed.
+- [ ] I3 Only the scope trees of section 4.4 are processed, and the
+      `exclude_dirs` sub-directories (Boxscan/Manual/Kryoflux) are never
+      scanned.
 - [ ] I4 Disk-2-plus ZIPs are skipped and marked; crack variants are all
       processed.
 - [ ] I5 The index is persistent, incremental, and bounded (no unbounded

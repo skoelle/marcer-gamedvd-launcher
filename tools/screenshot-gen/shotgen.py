@@ -41,6 +41,10 @@ DEFAULT_CONFIG = {
     "scope_trees": [
         "Title Sorted/Cracked Games - Title Sorted",
     ],
+    # Sub-directory names that never contain Hatari disk images (box scans,
+    # manuals, Kryoflux flux dumps). Matched case-insensitively, ignoring
+    # spaces/underscores/dashes, at any depth below the scope tree.
+    "exclude_dirs": ["kryoflux", "boxscan", "manual"],
     "timepoints": [10, 25, 45],
     "entry_timeout_s": 90,
     "keep_candidates": True,
@@ -155,8 +159,22 @@ def _is_ignored(name: str) -> bool:
     return name.startswith(".") or name.startswith("@")
 
 
-def scan_tree(layer_base: Path, scope: str, disk_re) -> dict:
-    """Return {relpath: {size, mtime}} for zips under layer_base/scope."""
+def _norm_dir(name: str) -> str:
+    """Lowercase a directory name without spaces/underscores/dashes."""
+    return re.sub(r"[\s_-]", "", name.lower())
+
+
+def _excluded_dirs(cfg: dict) -> set:
+    return {_norm_dir(n) for n in (cfg.get("exclude_dirs") or [])}
+
+
+def scan_tree(layer_base: Path, scope: str, disk_re, exclude=None) -> dict:
+    """Return {relpath: {size, mtime}} for zips under layer_base/scope.
+
+    Directories whose normalized name is in ``exclude`` are never entered,
+    so their contents never appear in the index.
+    """
+    exclude = exclude or set()
     found = {}
     base = layer_base / scope
     if not base.is_dir():
@@ -173,6 +191,8 @@ def scan_tree(layer_base: Path, scope: str, disk_re) -> dict:
                     if _is_ignored(e.name):
                         continue
                     if e.is_dir(follow_symlinks=False):
+                        if _norm_dir(e.name) in exclude:
+                            continue
                         stack.append(e.path)
                         n_dirs += 1
                         if n_dirs % 200 == 0:
@@ -193,6 +213,7 @@ def scan_tree(layer_base: Path, scope: str, disk_re) -> dict:
 
 def build_index(cfg: dict, P: dict, full: bool) -> dict:
     disk_re = re.compile(cfg["disk_skip_regex"])
+    exclude = _excluded_dirs(cfg)
     root, patch = Path(P["root"]), Path(P["patch"]) if P["patch"] else None
     out = Path(P["out"])
     idx = load_index(out)
@@ -202,8 +223,8 @@ def build_index(cfg: dict, P: dict, full: bool) -> dict:
 
     for scope in cfg["scope_trees"]:
         print(f"scan scope: {scope}", flush=True)
-        r_map = scan_tree(root, scope, disk_re)
-        p_map = scan_tree(patch, scope, disk_re) if patch else {}
+        r_map = scan_tree(root, scope, disk_re, exclude)
+        p_map = scan_tree(patch, scope, disk_re, exclude) if patch else {}
         names = set(r_map) | set(p_map)
         for rel in sorted(names):
             seen.add(rel)
@@ -1496,6 +1517,63 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
     return 0
 
 
+def cmd_prune(cfg: dict, P: dict, args) -> int:
+    """Remove output left behind by index entries that no longer exist.
+
+    Deletes per-entry ``logs/<rel>.log`` files whose index entry is gone and
+    any mirror directories that became empty (bottom-up, only truly empty
+    directories are removed, never ones that still hold files). Useful after
+    excluding directories (section 4.4) or rescoping.
+    """
+    out = Path(P["out"])
+    idx = load_index(out)
+    entries = idx["entries"]
+    lock = acquire_lock(out)
+    stats = {"logs": 0, "dirs": 0}
+    scope_roots = [out / s for s in cfg["scope_trees"]]
+
+    try:
+        # 1. logs/<rel>.log  ->  drop when <rel> is not in the index
+        logs_root = out / "logs"
+        if logs_root.is_dir():
+            expected = {
+                (Path(rel).parent / safe_filename(Path(rel).stem)).as_posix()
+                for rel in entries
+            }
+            for log in logs_root.rglob("*.log"):
+                rel = log.relative_to(logs_root).with_suffix("").as_posix()
+                if rel in expected:
+                    continue
+                stats["logs"] += 1
+                if not args.dry_run:
+                    log.unlink(missing_ok=True)
+
+        # 2. empty mirror directories under each scope root (bottom-up)
+        for root in scope_roots:
+            if not root.is_dir():
+                continue
+            dirs = sorted((p for p in root.rglob("*") if p.is_dir()),
+                          key=lambda p: len(p.parts), reverse=True)
+            for d in dirs:
+                try:
+                    if any(d.iterdir()):
+                        continue
+                except OSError:
+                    continue
+                stats["dirs"] += 1
+                if not args.dry_run:
+                    try:
+                        d.rmdir()
+                    except OSError:
+                        pass
+    finally:
+        release_lock(lock)
+
+    print(f"prune: logs {stats['logs']}, empty dirs {stats['dirs']}"
+          + (" [dry-run, nothing changed]" if args.dry_run else ""))
+    return 0
+
+
 def main() -> int:
     global STOP_EVENT
     STOP_EVENT = threading.Event()
@@ -1560,6 +1638,12 @@ def main() -> int:
     p_clean.add_argument("--only", type=str, default="",
                          help="only paths containing this substring")
 
+    p_prune = sub.add_parser(
+        "prune",
+        help="remove logs and empty output directories of removed entries")
+    p_prune.add_argument("--dry-run", action="store_true",
+                         help="report what would be removed, change nothing")
+
     args = ap.parse_args()
     if args.cmd == "run" and args.jobs < 1:
         ap.error("--jobs must be >= 1")
@@ -1574,6 +1658,8 @@ def main() -> int:
         return cmd_detect(cfg, P, args)
     if args.cmd == "cleanup-drive-led":
         return cmd_cleanup_drive_led(cfg, P, args)
+    if args.cmd == "prune":
+        return cmd_prune(cfg, P, args)
     return 2
 
 
