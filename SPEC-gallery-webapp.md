@@ -529,6 +529,12 @@ Filter/search/sort state is reflected in the URL query string
 - Name: game folder name (`folder`), below the badge (as today).
 - Variant count chip when a folder has more than one ZIP (e.g. `×3`).
 - Preview image, or placeholder block when `screenshots` is false.
+- **Multi-variant grid** (no focus): when no crew/cracker filter is active
+  and the folder has **≥ 2 variants with a screenshot**, the card shows up
+  to **four** variant screenshots in a 2×2 grid (best status first:
+  `done`, then `desktop`, then the rest). Clicking a thumb opens the
+  lightbox on that ZIP. Folders with a single screenshot keep the large
+  single preview (+ candidate strip).
 - **Crew/cracker focus fallback** (`focus_variant === -1`): when a
   crew/cracker filter matched the card via gameinfo but no ZIP in the
   folder could be identified, the card is not blank. Instead it shows a
@@ -540,8 +546,8 @@ Filter/search/sort state is reflected in the URL query string
 - Candidate strip (48 px thumbs, as today) when `show_candidates` is
   enabled and candidates exist — clicking a candidate opens the lightbox on
   that image. The strip is only shown on **single-variant** cards and is
-  suppressed while a crew filter focuses the card (multi-variant cards
-  carry the `×N` chip and use the lightbox filmstrip instead).
+  suppressed while a crew/cracker filter focuses the card (multi-variant
+  cards carry the `×N` chip and use the lightbox filmstrip instead).
 - `layer` label per card when available (`ROOT`/`PATCH`/`BOTH`, same
   semantics as SPEC.md section 7).
 

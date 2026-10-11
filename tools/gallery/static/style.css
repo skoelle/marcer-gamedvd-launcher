@@ -180,17 +180,17 @@ header { margin-bottom: 8px; }
   opacity: 0.85;
 }
 .card .cands img:hover { opacity: 1; outline: 1px solid var(--accent); }
-.crew-miss {
+.var-miss {
   font-size: 0.66em;
   color: #e6a23c;
   margin-bottom: 4px;
 }
-.card .crew-thumbs {
+.card .var-thumbs {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 4px;
 }
-.card .crew-thumbs img {
+.card .var-thumbs img {
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
@@ -198,7 +198,7 @@ header { margin-bottom: 8px; }
   border-radius: 2px;
   opacity: 0.85;
 }
-.card .crew-thumbs img:hover { opacity: 1; outline: 1px solid var(--accent); }
+.card .var-thumbs img:hover { opacity: 1; outline: 1px solid var(--accent); }
 .name {
   font-size: 0.8em;
   margin: 6px 0 2px;

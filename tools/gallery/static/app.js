@@ -275,34 +275,31 @@ function renderGrid(cards) {
     const layer = c.layer ? `<span class="layer">${esc(c.layer)}</span>` : "";
     const fv = (c.focus_variant != null && c.focus_variant >= 0)
       ? c.focus_variant : 0;
+    const focusActive = c.focus_variant != null;
     let body;
-    if (c.preview) {
+    if (c.focus_variant === -1) {
+      // crew/cracker focus with no matching ZIP: hint + up to 4 other shots
+      const missLabel = state.cracker !== "any"
+        ? "no cracker ZIP — other variants" : "no crew ZIP — other variants";
+      const thumbs = variantThumbs(c);
+      body = thumbs
+        ? `<div class="var-miss">${missLabel}</div>` +
+          `<div class="var-thumbs">${thumbs}</div>`
+        : `<div class="ph"></div>`;
+    } else if (!focusActive && countPreviews(c) >= 2) {
+      // no focus: show up to 4 variant screenshots (best first)
+      body = `<div class="var-thumbs">${variantThumbs(c)}</div>`;
+    } else if (c.preview) {
       body = `<img loading="lazy" src="${imgSrc(c.preview)}" alt="">`;
       if (showCands) {
         const src = c.variants[fv] || c.variants[0] || {};
         const cands = src.candidates || [];
-        if (cands.length && (c.focus_variant == null || c.focus_variant < 0)
-            && c.variants.length === 1) {
+        if (cands.length && !focusActive && c.variants.length === 1) {
           body += `<div class="cands">` +
             cands.map((p) => `<img loading="lazy" src="${imgSrc(p)}" alt="" data-cand="${i}">`).join("") +
             `</div>`;
         }
       }
-    } else if (c.focus_variant === -1) {
-      // crew/cracker focus with no matching ZIP: hint + up to 4 other shots
-      const missLabel = state.cracker !== "any"
-        ? "no cracker ZIP — other variants" : "no crew ZIP — other variants";
-      const thumbs = c.variants
-        .map((vv, vi) => ({ vv, vi }))
-        .filter((x) => x.vv.preview)
-        .slice(0, 4)
-        .map((x) => `<img loading="lazy" src="${imgSrc(x.vv.preview)}" alt="" ` +
-          `data-crewv="${x.vi}" title="${esc(x.vv.name)} (${esc(x.vv.status)})">`)
-        .join("");
-      body = thumbs
-        ? `<div class="crew-miss">${missLabel}</div>` +
-          `<div class="crew-thumbs">${thumbs}</div>`
-        : `<div class="ph"></div>`;
     } else {
       body = `<div class="ph"></div>`;
     }
@@ -311,6 +308,25 @@ function renderGrid(cards) {
       `<div class="name">${esc(c.name)}</div>${body}</div>`;
   }).join("");
   $("pager").hidden = false;
+}
+
+// count variants that have a screenshot
+function countPreviews(card) {
+  return card.variants.reduce((n, vv) => n + (vv.preview ? 1 : 0), 0);
+}
+
+// up to 4 clickable variant screenshots, "best" status first
+const STATUS_RANK = { done: 0, desktop: 1 };
+function variantThumbs(card) {
+  return card.variants
+    .map((vv, vi) => ({ vv, vi }))
+    .filter((x) => x.vv.preview)
+    .sort((a, b) => (STATUS_RANK[a.vv.status] ?? 2)
+      - (STATUS_RANK[b.vv.status] ?? 2) || a.vi - b.vi)
+    .slice(0, 4)
+    .map((x) => `<img loading="lazy" src="${imgSrc(x.vv.preview)}" alt="" ` +
+      `data-varv="${x.vi}" title="${esc(x.vv.name)} (${esc(x.vv.status)})">`)
+    .join("");
 }
 
 function renderPager(total) {
@@ -696,13 +712,13 @@ function wireEvents() {
   // grid: click, hover, candidate clicks
   $("grid").addEventListener("click", (e) => {
     const cand = e.target.closest("img[data-cand]");
-    const crewV = e.target.closest("img[data-crewv]");
+    const varV = e.target.closest("img[data-varv]");
     const cardEl = e.target.closest(".card");
     if (!cardEl) return;
     const idx = parseInt(cardEl.dataset.idx, 10);
     const fv = parseInt(cardEl.dataset.v || "0", 10);
-    if (crewV) {
-      openLightbox(idx, parseInt(crewV.dataset.crewv, 10) || 0);
+    if (varV) {
+      openLightbox(idx, parseInt(varV.dataset.varv, 10) || 0);
       return;
     }
     if (cand) {

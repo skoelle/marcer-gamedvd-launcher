@@ -38,6 +38,9 @@ results. There is no live refresh/polling in v1.
 - **Filters**: status preset, search, letter nav, publisher/crew/cracker/
   language/year facets, RAW/PASTI/Boxscan/TOS tri-state flags, sort + order.
   The URL always reflects the current list state (shareable).
+- **Multi-variant grid**: without an active crew/cracker filter, cards with
+  several screenshots show up to four variant thumbnails (best first);
+  clicking one opens that ZIP in the lightbox.
 - **Crew/cracker focus**: picking a crew or cracker shows each card's
   screenshot for that group's ZIP, even when the variant has no screenshot
   yet (cracker takes precedence when both are set). Matching is fuzzy
