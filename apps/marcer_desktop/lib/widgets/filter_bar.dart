@@ -130,7 +130,7 @@ class _FilterBarState extends State<FilterBar> {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 5),
+                                horizontal: 8, vertical: 10),
                           ),
                           style: const TextStyle(fontSize: 12),
                           onChanged: _onSearchChanged,
@@ -234,13 +234,13 @@ class _FilterBarState extends State<FilterBar> {
     );
   }
 
-  /// Fixed 30px height so every control in the wrapping filter row lines up.
-  Widget _fixed(Widget child) => SizedBox(height: 30, child: child);
+  /// Fixed 28px height so every control in the wrapping filter row lines up.
+  Widget _fixed(Widget child) => SizedBox(height: 28, child: child);
 
   Widget _labelButton(String text, VoidCallback onTap, {double width = 48}) {
     return SizedBox(
       width: width,
-      height: 30,
+      height: 28,
       child: TextButton(
         onPressed: onTap,
         style: TextButton.styleFrom(
@@ -266,7 +266,7 @@ class _FilterBarState extends State<FilterBar> {
 
     return SizedBox(
       width: width,
-      height: 30,
+      height: 28,
       child: DropdownMenu<String>(
         key: ValueKey('$anyLabel:$value'),
         width: width,
@@ -275,15 +275,19 @@ class _FilterBarState extends State<FilterBar> {
         requestFocusOnTap: true,
         menuHeight: 320,
         textStyle: const TextStyle(fontSize: 12, color: Colors.white),
-        leadingIcon: null,
-        trailingIcon: const Icon(Icons.arrow_drop_down, size: 18),
         inputDecorationTheme: const InputDecorationTheme(
           isDense: true,
           border: OutlineInputBorder(
               borderRadius: BorderRadius.all(Radius.circular(4))),
           contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        ),
+        // A plain centered arrow (the default suffix IconButton's 8px padding
+        // gets squeezed by the tight box and pushes the glyph to the corner).
+        // The whole field stays tappable and opens the menu.
+        decorationBuilder: (context, controller) => const InputDecoration(
+          suffixIcon: Icon(Icons.arrow_drop_down, size: 20),
           suffixIconConstraints: BoxConstraints(
-              minWidth: 24, maxWidth: 24, minHeight: 28, maxHeight: 28),
+              minWidth: 28, maxWidth: 28, minHeight: 28, maxHeight: 28),
         ),
         dropdownMenuEntries: [
           for (final v in items)
@@ -312,7 +316,7 @@ class _FilterBarState extends State<FilterBar> {
 
     return SizedBox(
       width: width,
-      height: 30,
+      height: 28,
       child: DropdownButtonFormField<String>(
         key: ValueKey('$anyLabel:$value'),
         initialValue: items.contains(value) ? value : items.first,
@@ -342,7 +346,7 @@ class _FilterBarState extends State<FilterBar> {
     final keys = ['with_screenshot', 'any', ...kStatusOrder];
     return SizedBox(
       width: 150,
-      height: 30,
+      height: 28,
       child: DropdownButtonFormField<String>(
         key: ValueKey('status:$value'),
         initialValue: keys.contains(value) ? value : 'with_screenshot',
@@ -373,7 +377,7 @@ class _FilterBarState extends State<FilterBar> {
       String flag, String value, ValueChanged<String> onChanged) {
     return SizedBox(
       width: 100,
-      height: 30,
+      height: 28,
       child: DropdownButtonFormField<String>(
         key: ValueKey('$flag:$value'),
         initialValue: value,
@@ -400,7 +404,7 @@ class _FilterBarState extends State<FilterBar> {
   Widget _tosDropdown(String value, ValueChanged<String> onChanged) {
     return SizedBox(
       width: 120,
-      height: 30,
+      height: 28,
       child: DropdownButtonFormField<String>(
         key: ValueKey('tos:$value'),
         initialValue: value,
