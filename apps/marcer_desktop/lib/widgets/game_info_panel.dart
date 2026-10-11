@@ -79,22 +79,49 @@ class GameInfoPanel extends StatelessWidget {
     );
   }
 
-  /// Heading with the optional "(P)lay" button on the right.
+  /// Heading with the optional blue-gradient "PLAY" button on the right.
   Widget _headingRow(String text) => Row(
         children: [
           Expanded(child: _heading(text)),
-          if (onPlay != null)
-            TextButton.icon(
-              onPressed: onPlay,
-              icon: const Icon(Icons.play_arrow, size: 18),
-              label: const Text('(P)lay', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 28),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          if (onPlay != null) _playButton(),
+        ],
+      );
+
+  Widget _playButton() => Material(
+        color: Colors.transparent,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: InkWell(
+            onTap: onPlay,
+            borderRadius: BorderRadius.circular(4),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.play_arrow, size: 16, color: Colors.white),
+                  SizedBox(width: 4),
+                  Text(
+                    'PLAY',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
               ),
             ),
-        ],
+          ),
+        ),
       );
 
   Widget _heading(String text) => Text(

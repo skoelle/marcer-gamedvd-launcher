@@ -96,11 +96,11 @@ class _GameLightboxState extends State<GameLightbox> {
       final idx = sel == null ? -1 : _items.indexOf(sel);
       _itemIdx = idx >= 0 ? idx : 0;
     }
-    final item = _item;
-    final maxVariant =
-        item is GameCard ? item.variants.length - 1 : (item is Entry ? 0 : -1);
-    _variantIdx = widget.initialVariant.clamp(0, math.max(0, maxVariant));
-    if (maxVariant >= 0 && _variantIdx > maxVariant) _variantIdx = 0;
+    final vs = _variants;
+    // `initialVariant` is an index into the card's original variant order;
+    // map it to the display order (see [_variants]).
+    final pos = vs.indexWhere((v) => v.origIndex == widget.initialVariant);
+    _variantIdx = pos >= 0 ? pos : 0;
     _imageIdx = math.max(0, widget.initialImage);
   }
 
@@ -110,18 +110,23 @@ class _GameLightboxState extends State<GameLightbox> {
   List<_Variant> get _variants {
     final item = _item;
     if (item is GameCard) {
-      return [
-        for (final v in item.variants)
+      final list = [
+        for (var i = 0; i < item.variants.length; i++)
           _Variant(
-            title: v.name,
-            status: v.status,
-            layer: v.layer,
-            preview: v.previewPath,
-            candidates: v.candidatePaths,
-            size: v.size,
-            rel: v.rel,
+            title: item.variants[i].name,
+            status: item.variants[i].status,
+            layer: item.variants[i].layer,
+            preview: item.variants[i].previewPath,
+            candidates: item.variants[i].candidatePaths,
+            size: item.variants[i].size,
+            rel: item.variants[i].rel,
+            origIndex: i,
           ),
       ];
+      // ZIPs without a screenshot sort to the very end (stable).
+      final withPreview = list.where((v) => v.preview != null).toList();
+      final without = list.where((v) => v.preview == null).toList();
+      return [...withPreview, ...without];
     }
     if (item is Entry) {
       final c = widget.controller;
@@ -135,6 +140,7 @@ class _GameLightboxState extends State<GameLightbox> {
           candidates: c.candidatePathsFor(item),
           size: shots?.size,
           rel: c.relOf(item),
+          origIndex: 0,
         ),
       ];
     }
@@ -309,10 +315,15 @@ class _GameLightboxState extends State<GameLightbox> {
       child: Focus(
         focusNode: _focus,
         onKeyEvent: _onKey,
+        // Backdrop: a tap outside the card closes the lightbox; taps on the
+        // card itself only (re)focus it.
         child: GestureDetector(
-          onTap: () => _focus.requestFocus(),
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(context).pop(),
           child: Center(
-            child: Container(
+            child: GestureDetector(
+              onTap: () => _focus.requestFocus(),
+              child: Container(
               width: 1200,
               height: height,
               decoration: BoxDecoration(
@@ -344,7 +355,7 @@ class _GameLightboxState extends State<GameLightbox> {
                                       : _IntegerScaledImage(path: imagePath),
                                 ),
                               ),
-                              if (vs.length > 1) _filmstrip(vs),
+                              if (vs.isNotEmpty) _filmstrip(vs),
                               Container(
                                 height: 60,
                                 color: const Color(0xFF111111),
@@ -365,6 +376,7 @@ class _GameLightboxState extends State<GameLightbox> {
                         ),
                       ],
                     ),
+              ),
             ),
           ),
         ),
@@ -637,7 +649,9 @@ class _GameLightboxState extends State<GameLightbox> {
   void _launchCurrent() {
     final item = _item;
     if (item is GameCard) {
-      widget.controller.launchCardVariant(item, _variantIdx);
+      final vs = _variants;
+      final orig = _variantIdx < vs.length ? vs[_variantIdx].origIndex : 0;
+      widget.controller.launchCardVariant(item, orig);
     } else if (item is Entry) {
       final path = item.effectivePath;
       if (path != null) widget.controller.launchZip(path);
@@ -750,6 +764,7 @@ class _Variant {
     required this.candidates,
     required this.size,
     required this.rel,
+    required this.origIndex,
   });
 
   final String title;
@@ -759,4 +774,8 @@ class _Variant {
   final List<String> candidates;
   final int? size;
   final String rel;
+
+  /// Index of this variant in the card's original `variants` order (used to
+  /// map back for launch / focus; the display order groups previews first).
+  final int origIndex;
 }
