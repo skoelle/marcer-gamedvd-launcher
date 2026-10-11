@@ -62,7 +62,11 @@ DEFAULT_CONFIG = {
         "timepoints_after_click": [10, 25, 45],
         "entry_timeout_s": 120,
         "icon_min_score": 0.5,
+        "window_icon_min_score": 0.85,
         "step_wait": 2.0,
+        "drive_max_depth": 2,
+        "drive_attempts": 3,
+        "prg_attempts": 3,
     },
     "tmp_dir": "/tmp/marcer-shotgen",
     "xvfb_screen": "1024x768x24",
@@ -391,13 +395,15 @@ def find_hatari_window(P: dict, grab_png: Path):
 
 
 def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
-                    icon_sx: int, icon_sy: int, log) -> None:
+                    icon_sx: int, icon_sy: int, log, fifo: Path = None) -> None:
     """Double-click a screenshot pixel on a known Hatari window.
 
-    Serialized under CLICK_LOCK (X pointers are global per display). The
-    30ms doubleclick delay is required so GEM opens the icon instead of
-    just selecting it (verified live; Hatari 2.4.1 has no mousemove
-    control command, so the real X pointer via XTest is used).
+    The real X pointer is positioned via XTest (xdotool mousemove), then
+    Hatari's own ``hatari-event doubleclick`` command is used for the
+    actual click: sending it through the emulator's input path is far more
+    reliable than XTest clicks, which GEM often only registers as a single
+    selection (verified live). The pointer is serialized under CLICK_LOCK
+    across parallel workers because it is global per display.
     """
     disp = P["display"]
     wx, wy = int(kv["X"]), int(kv["Y"])
@@ -408,14 +414,25 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
         # raise first: parallel workers share one display and their
         # windows overlap
         _xdotool(["windowraise", wid], disp)
-        _xdotool(["mousemove", "--sync", str(x), str(y)], disp)
-        _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
-    log(f"xdotool doubleclick window={wid} at ({x},{y}) "
+        # move with --sync so the pointer is guaranteed to be in place
+        # before the click, but fall back to a plain move: --sync can block
+        # indefinitely under Xvfb when the target equals the current pixel
+        try:
+            _xdotool(["mousemove", "--sync", str(x), str(y)], disp,
+                     timeout=5)
+        except subprocess.TimeoutExpired:
+            _xdotool(["mousemove", str(x), str(y)], disp)
+        time.sleep(0.4)
+        if fifo is not None:
+            fifo_write(fifo, "hatari-event doubleclick")
+        else:
+            _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
+    log(f"doubleclick window={wid} at ({x},{y}) "
         f"[icon ({icon_sx},{icon_sy}) in {shot_w}x{shot_h}]")
 
 
 def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
-               log) -> None:
+               log, fifo: Path = None) -> None:
     """Double-click the detected icon on Hatari's SDL window.
 
     The grab screenshot provides the window content size so that the
@@ -425,7 +442,8 @@ def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
     with Image.open(grab_png) as im:
         shot_w, shot_h = im.size
     wid, kv = find_hatari_window(P, grab_png)
-    click_window_xy(P, wid, kv, shot_w, shot_h, icon_sx, icon_sy, log)
+    click_window_xy(P, wid, kv, shot_w, shot_h, icon_sx, icon_sy, log,
+                    fifo=fifo)
 
 
 def find_template(img_path: Path, template, min_score: float):
@@ -470,8 +488,10 @@ def find_template(img_path: Path, template, min_score: float):
 
 
 ICON_TEMPLATE_FILES = {
-    "prg": "icon-prg.png",
-    "drive": "icon-drive.png",
+    "prg": "icon-prg.png",          # program icon on the green desktop
+    "prg_win": "icon-prg-win.png",  # program icon inside a (white) window
+    "drive": "icon-drive.png",      # DISKSTATION drive icon on the desktop
+    "folder": "icon-folder.png",    # folder icon inside a window
 }
 
 
@@ -509,7 +529,6 @@ def find_desktop_click(path: Path, cfg: dict):
 
     Returns {"strategy": "prg"|"drive", "sx", "sy", "score"} or None.
     """
-    min_score = cfg["click_retry"]["icon_min_score"]
     prg = find_icon(path, cfg, "prg")
     drv = find_icon(path, cfg, "drive")
     # a real program icon scores ~1.0 and always wins; a lone drive beats
@@ -533,14 +552,72 @@ def safe_filename(name: str) -> str:
     return re.sub(r'[:?*"\x00-\x1f]', "_", name)
 
 
+def find_window_target(path: Path, cfg: dict):
+    """Find the next double-click target inside an opened GEM window.
+
+    Compares the program icon (icon-prg-win) and the folder icon
+    (icon-folder). Both match similar white boxes; the program icon is
+    preferred within a small margin because running the program is always
+    the goal. Window icons match their templates near 1.0, so a dedicated
+    higher threshold rejects the flat-region false positives (~0.55) that
+    appear on a plain desktop. Returns ("prg"|"folder", {sx, sy, score})
+    or None.
+    """
+    min_score = cfg["click_retry"].get("window_icon_min_score", 0.85)
+    pw = find_icon(path, cfg, "prg_win")
+    fo = find_icon(path, cfg, "folder")
+    pw = pw if (pw and pw["score"] >= min_score) else None
+    fo = fo if (fo and fo["score"] >= min_score) else None
+    if pw and fo:
+        if pw["score"] >= fo["score"] - 0.1:
+            return "prg", pw
+        return "folder", fo
+    if pw:
+        return "prg", pw
+    if fo:
+        return "folder", fo
+    return None
+
+
+def _grab_now(fifo: Path, outdir: Path, wait: float = 2.0):
+    """Request a fresh Hatari screenshot and return its path (or None)."""
+    before = sorted(outdir.glob("*.png"))
+    try:
+        fifo_write(fifo, "hatari-shortcut screenshot")
+    except OSError:
+        return None
+    if not sleep_until(time.monotonic() + wait):
+        return None
+    after = sorted(outdir.glob("*.png"))
+    if len(after) > len(before):
+        return after[-1]
+    return after[-1] if after else None
+
+
+def _screen_changed(a: Path, b: Path, frac: float = 0.02) -> bool:
+    """True when two screenshots differ by more than ``frac`` of pixels."""
+    if a is None or b is None or a == b:
+        return False
+    import numpy as np
+    from PIL import Image
+    try:
+        ia = np.asarray(Image.open(a).convert("L"), dtype=np.int16)
+        ib = np.asarray(Image.open(b).convert("L"), dtype=np.int16)
+    except Exception:
+        return False
+    if ia.shape != ib.shape:
+        return True
+    return float((np.abs(ia - ib) > 30).mean()) > frac
+
+
 def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
                         grabs, log):
     """Execute the click sequence for a desktop retry.
 
     prg: one double click on the program icon (game starts directly).
-    drive: double click DISKSTATION A, wait for the window to open, take a
-           screenshot and double click the program icon that appeared in it
-           (depth 1; a later stage may recurse into subfolders).
+    drive: double click DISKSTATION A, verify the window opened, then
+           descend into the window: click the program icon if present, or
+           open a folder and look again (bounded by drive_max_depth).
 
     returns (clicked, last_grab): clicked is True when the final program
     double click was sent; last_grab is the most recent screenshot path
@@ -549,30 +626,65 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
     strategy = click_info.get("strategy", "prg")
 
     if strategy == "prg":
-        click_icon(P, grabs[-1], click_info["sx"], click_info["sy"], log)
+        click_icon(P, grabs[-1], click_info["sx"], click_info["sy"], log,
+                   fifo=fifo)
         return True, grabs[-1]
 
     # strategy == "drive": open DISKSTATION A first
-    click_icon(P, grabs[-1], click_info["sx"], click_info["sy"], log)
     step_wait = float(click_cfg.get("step_wait", 2.0))
-    log(f"drive click done, waiting {step_wait}s for the window")
-    if not sleep_until(time.monotonic() + step_wait):
-        return False, grabs[-1]
+    max_depth = int(click_cfg.get("drive_max_depth", 2))
 
-    # fresh screenshot of the opened window
-    fifo_write(fifo, "hatari-shortcut screenshot")
-    if not sleep_until(time.monotonic() + 2):
-        return False, grabs[-1]
-    all_grabs = sorted(outdir.glob("*.png"))
-    if not all_grabs:
-        return False, grabs[-1]
-    win_shot = all_grabs[-1]
-    win_icon = find_icon(win_shot, cfg, "prg")
-    if not win_icon:
-        log("drive opened but no program icon in the window")
+    win_shot = grabs[-1]
+    target = None
+    attempts = int(click_cfg.get("drive_attempts", 3))
+    for attempt in range(1, attempts + 1):
+        click_icon(P, grabs[-1], click_info["sx"], click_info["sy"], log,
+                   fifo=fifo)
+        log(f"drive click attempt {attempt}, waiting {step_wait}s")
+        if not sleep_until(time.monotonic() + step_wait):
+            return False, win_shot
+        win_shot = _grab_now(fifo, outdir, 2.0) or win_shot
+        # a program or folder icon only appears once the window is open;
+        # on the plain desktop neither template matches, so this is a
+        # reliable "window open" signal
+        target = find_window_target(win_shot, cfg)
+        if target is not None:
+            break
+        log("no window icon visible, retrying drive click")
+    if target is None:
+        log("drive window did not open with a usable icon")
         return False, win_shot
-    click_icon(P, win_shot, win_icon["sx"], win_icon["sy"], log)
-    return True, win_shot
+
+    for depth in range(1, max_depth + 1):
+        kind, hit = target
+        if kind == "prg":
+            # GEM occasionally registers the double click as a mere
+            # selection; verify that the screen changed and retry otherwise
+            before = win_shot
+            prg_attempts = int(click_cfg.get("prg_attempts", 3))
+            for pa in range(1, prg_attempts + 1):
+                click_icon(P, win_shot, hit["sx"], hit["sy"], log, fifo=fifo)
+                if not sleep_until(time.monotonic() + step_wait):
+                    return False, win_shot
+                new_shot = _grab_now(fifo, outdir, 2.0) or win_shot
+                if _screen_changed(before, new_shot):
+                    log(f"program started at depth {depth} "
+                        f"(attempt {pa})")
+                    return True, new_shot
+                log(f"program icon did not start (attempt {pa}), retrying")
+            log(f"program icon never started at depth {depth}")
+            return False, new_shot
+        click_icon(P, win_shot, hit["sx"], hit["sy"], log, fifo=fifo)
+        log(f"folder opened at depth {depth}, descending")
+        if not sleep_until(time.monotonic() + step_wait):
+            return False, win_shot
+        win_shot = _grab_now(fifo, outdir, 2.0) or win_shot
+        target = find_window_target(win_shot, cfg)
+        if target is None:
+            log(f"window depth {depth}: no further program or folder icon")
+            return False, win_shot
+    log(f"max depth {max_depth} reached without a program icon")
+    return False, win_shot
 
 
 def process_entry(cfg: dict, P: dict, entry: dict, log,
@@ -844,7 +956,10 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
         commit(_commit_error)
         log(f"ERROR: {ex}")
     finally:
-        shutil.rmtree(stage, ignore_errors=True)
+        if os.environ.get("SHOTGEN_KEEP_STAGE"):
+            log(f"stage kept at {stage}")
+        else:
+            shutil.rmtree(stage, ignore_errors=True)
 
 
 def acquire_lock(out: Path) -> Path:

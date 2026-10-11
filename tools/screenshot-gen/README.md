@@ -45,25 +45,45 @@ behavior.
 
 Some ZIPs boot to the GEM desktop because the program icon was never
 clicked. `detect` runs fully offline over all `desktop` entries: it
-matches a template of the standard GEM program icon
-(`assets/icon-prg.png`) against each existing preview PNG (FFT
-normalized cross correlation, also tries the inverted/selected icon).
-Hits are stored as `click` (screenshot pixel of the icon center plus
-score) in the index; misses are marked `icon_found: false` and are never
-booted again (`detect --force` redoes them).
+matches templates of the standard GEM icons (`assets/icon-prg.png` for a
+program icon, `assets/icon-drive.png` for a DISKSTATION drive icon)
+against each existing preview PNG (FFT normalized cross correlation, also
+tries the inverted/selected icon). Hits are stored as `click` (strategy,
+screenshot pixel of the icon center, score) in the index; misses are
+marked `icon_found: false` and are never booted again (`detect --force`
+redoes them).
 
 `run --retry-desktop` then selects only entries with `status: desktop`
 and a stored `click` that have not been clicked yet (`click_retried`).
 Per entry it boots Hatari, takes one probe screenshot at
 `click_retry.probe_time` (default 10 s) and:
 
-- if it shows the desktop: positions the X pointer on the icon via
-  `xdotool` (window geometry of the running Hatari instance) and sends a
-  fast double click (30 ms apart; slower clicks only select the icon in
-  GEM), then restarts the normal capture timepoints
-  (`click_retry.timepoints_after_click`) from that moment;
+- if it shows the desktop: runs the click strategy, then restarts the
+  normal capture timepoints (`click_retry.timepoints_after_click`) from
+  that moment;
 - if a game (or any non-desktop screen) is already running: no click,
   capture continues normally.
+
+**Click strategies.** The X pointer is positioned on the icon via
+`xdotool` (using the window geometry of the running Hatari instance); the
+double click itself is sent with Hatari's own
+`hatari-event doubleclick` command through the control FIFO, which GEM
+registers far more reliably than XTest clicks.
+
+- `prg` — the desktop already shows the program icon: one double click
+  starts the game.
+- `drive` — the desktop only shows drive icons: double click
+  `DISKSTATION A`, wait `click_retry.step_wait` for the window, then walk
+  into the window (bounded by `click_retry.drive_max_depth`, default 2):
+  double click a folder icon (`assets/icon-folder.png`) to descend, or the
+  program icon (`assets/icon-prg-win.png`) to start the game.
+
+Both strategies retry a click when it did not take effect
+(`click_retry.drive_attempts` / `click_retry.prg_attempts`): the drive
+click is repeated until a window icon appears, and the program click is
+repeated until the screen actually changes. Window icons match their
+templates near 1.0, so `click_retry.window_icon_min_score` (default 0.85)
+rejects the flat-region false positives that appear on a plain desktop.
 
 The attempt is recorded once per entry (`click_retried: true`,
 `clicked: true/false` in index and metadata JSON); `--retry-desktop
@@ -73,7 +93,7 @@ candidate (`_cNN`) instead of being overwritten. Parallel workers share
 one X display, so the click sequence itself is serialized with a global
 lock and raises its own Hatari window first. Hatari 2.4.1 has no
 `mousemove` control command, which is why the real X pointer (XTest via
-`xdotool`) is used.
+`xdotool`) is used for positioning.
 
 ## Config
 
