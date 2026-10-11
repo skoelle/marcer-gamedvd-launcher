@@ -5,12 +5,10 @@ on:
     branches: [main]
     paths:
       - 'apps/marcer_console/**'
-      - 'scripts/build.sh'
       - '.github/workflows/ci-launcher.yml'
   pull_request:
     paths:
       - 'apps/marcer_console/**'
-      - 'scripts/build.sh'
       - '.github/workflows/ci-launcher.yml'
 
 jobs:
@@ -25,4 +23,4 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Build
-        run: ./scripts/build.sh
+        run: ./apps/marcer_console/build.sh

@@ -10,9 +10,8 @@ if errorlevel 1 (
   exit /b 1
 )
 
-REM Im marcer_console-Ordner bauen (build.cmd liegt in scripts/)
+REM Im marcer_console-Ordner bauen (build.cmd liegt neben dem Code)
 cd /d %~dp0
-cd ..\apps\marcer_console
 
 dotnet build -c Release
 if errorlevel 1 (

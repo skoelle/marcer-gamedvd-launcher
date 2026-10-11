@@ -61,7 +61,7 @@ Checked on the development machine (read-only or with explicit approval):
 | Free disk (local) | ok | about 10 GB on `/` | staging only, cleanup after each entry |
 | Desktop session | none | TTY only, no X11 or Wayland session | Xvfb is mandatory |
 | NAS | ok | mounted via NFS, both data paths reachable | keep timeouts, avoid volume-wide scans |
-| .NET SDK | ok | 10.0.112, `scripts/build.sh` verified working | none (not used by this tool) |
+| .NET SDK | ok | 10.0.112, `apps/marcer_console/build.sh` verified working | none (not used by this tool) |
 | Hatari | ok | 2.4.1 from apt | none |
 | Hatari options | verified | `--screenshot-dir`, `--crop`, `--statusbar`, `--cmd-fifo`, `--run-vbls`, `--benchmark`, `--disk-a` (accepts ZIP), `--tos`, `--machine`, `--sound off`, `--fast-boot`, `--confirm-quit`, `--zoom`, `--protect-floppy` all exist in 2.4.1 | none |
 | Hatari `--screenshot-format` | missing | option does not exist in 2.4.1 (format comes from config, default PNG verified) | do not use this flag |
@@ -144,7 +144,7 @@ Rationale:
 - The launcher is a released end-user application. Adding a batch tool to it
   would couple release cycles, force a C# build for a server-side task, and
   violate the launcher scope (SPEC.md section 1.3, out of scope).
-- The repo policy (build only via `scripts/build.sh`) applies to the C#
+- The repo policy (build only via `apps/marcer_console/build.sh`) applies to the C#
   launcher. A Python tool does not conflict with it.
 - The merge logic from SPEC.md section 7 is small and fully specified. The
   Python tool reimplements it 1:1 (same rules, same ordering) instead of
@@ -401,15 +401,19 @@ phase workflow:
 **Phase 1: `detect` (offline, no Hatari).**
 
 - Runs over all index entries with `status: desktop` (takes the existing
-  preview PNG, falls back to candidates). No boot, CPU only.
+  preview PNG, falls back to candidates). No boot, CPU only. An optional
+  `--only <substring>` filter restricts the run (same semantics as `run`).
 - Matches `assets/icon-prg.png` (tight crop of the standard GEM program
-  icon, 60x54 px at the verified capture geometry) with zero-mean
+  icon) and `assets/icon-drive.png` (DISKSTATION drive icon) with zero-mean
   normalized cross correlation (FFT, numpy/scipy). The inverted template is
-  tried as well so inverted (selected) icons still match.
-- Hit: entry gets `click` = `{sx, sy, score, source}` (screenshot pixel of
-  the template center) and `icon_found: true`. Score threshold default 0.5
-  (config `click_retry.icon_min_score`); pilot scores for true positives
-  were 0.53 to 1.0 *(verified)*.
+  tried as well so inverted (selected) icons still match. Template geometry
+  is 60x54 px at the verified 832x552 capture size.
+- Strategy choice: a real program icon always wins; otherwise a drive icon
+  selects the drive strategy. Hit: entry gets
+  `click` = `{strategy, sx, sy, score, source}` and `icon_found: true`.
+  Score threshold default 0.5 (config `click_retry.icon_min_score`); true
+  positives scored 0.53 to 1.0 in the pilot *(verified)*, a drive icon
+  reaches 1.0.
 - Miss: entry gets `icon_found: false` and is never booted by the retry
   (catches crack intros and other non-GEM screens misclassified as
   desktop). `detect --force` redoes both cases.
@@ -426,13 +430,8 @@ Pending filter: `status == desktop` and a stored `click` and not
 2. Analyze the probe screenshot. If it is **not** desktop (game or black):
    no click, mark `click_retried`, and continue the normal capture
    timepoints (the probe shot already covers its timepoint).
-3. If it shows the desktop: find the running Hatari X window via xdotool
-   (`search --class hatari`, pick the window whose size matches the
-   screenshot), raise it, move the real X pointer (XTest) to window origin
-   + icon screenshot pixel (scaled by window/screenshot size ratio, both
-   are 832x552 in the base profile), and send a double click with 30 ms
-   between the clicks *(verified: 150 ms only selects the icon in GEM,
-   30 ms reliably opens it)*.
+3. If it shows the desktop, run the click strategy (below), then restart
+   the capture timepoints from the click moment.
 4. Record the attempt (`click_retried: true`, `clicked: true/false`) in
    index and metadata, restart the capture timepoints
    (`click_retry.timepoints_after_click`, default `10, 25, 45`) from the
@@ -442,11 +441,39 @@ Pending filter: `status == desktop` and a stored `click` and not
    `keep_candidates` it is renamed to the next free `_cNN` candidate name
    before the new preview is written.
 
+**Click mechanics (shared by all strategies).** Find the running Hatari X
+window via xdotool (`search --class hatari`, pick the window whose size
+matches the screenshot), raise it, move the real X pointer (XTest) to
+window origin + icon screenshot pixel (scaled by window/screenshot size
+ratio, both are 832x552 in the base profile), then send the double click
+through Hatari's own `hatari-event doubleclick` control command over the
+FIFO. Sending the click through the emulator input path is far more
+reliable than XTest clicks, which GEM often only registers as a single
+selection *(verified)*.
+
+**Strategy `prg`** (desktop shows the program icon): one double click on
+the icon. If the screen does not change, retry up to
+`click_retry.prg_attempts` (default 3) *(verified: Bank It)*.
+
+**Strategy `drive`** (desktop only shows drive icons, e.g. Bank It):
+double click `DISKSTATION A`, verify a window opened (a folder or program
+icon appears; the drive click is repeated up to `click_retry.drive_attempts`
+otherwise), then walk into the window up to `click_retry.drive_max_depth`
+levels (default 2, enough for the verified `DISKSTATION A` -> folder
+`BANK_IT` -> `BANKIT.PRG` case): double click `assets/icon-folder.png` to
+descend, or `assets/icon-prg-win.png` to start the game. Between the steps
+it waits `click_retry.step_wait`. Window icons match their templates near
+1.0, so `click_retry.window_icon_min_score` (default 0.85) rejects the
+flat-region false positives (~0.55) seen on a plain desktop; the program
+icon is preferred over a folder within a small score margin. *(verified:
+Bank It - Hotline starts via drive -> folder -> PRG.)*
+
 Notes:
 
 - Hatari 2.4.1 has no `mousemove` control command (section 2), therefore
-  the pointer is driven through XTest via `xdotool` and only the window
-  geometry mapping is needed; the FIFO keeps handling screenshots.
+  the pointer is positioned through XTest via `xdotool` and only the window
+  geometry mapping is needed; the FIFO handles both screenshots and the
+  `doubleclick` event.
 - Parallel workers share one X display and their windows overlap, so the
   whole click sequence (find window, raise, move, click) is serialized
   under a global lock and always raises its own window first.
@@ -629,10 +656,10 @@ would look up a preview later (section 12).
 
 Array or object map keyed by entry relative path with: `status`, `kind`,
 `size`, `mtime`, `profile`, `last_run`, `preview_path`, and for the click
-retry (section 7.4): `click` (icon hit object or absent),
-`icon_found` (true/false after `detect`), `click_retried` (true after an
-attempt). Updated after every entry so an interrupted run loses at most
-one entry of work.
+retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
+source}` or absent), `icon_found` (true/false after `detect`),
+`click_retried` (true after an attempt). Updated after every entry so an
+interrupted run loses at most one entry of work.
 
 ---
 
@@ -766,10 +793,18 @@ Resolved decisions:
   screens (e.g. crack intros) correctly marked `icon_found: false`
   *(verified)*.
 - `run --retry-desktop --only <1st Division Manager> --limit 1` on a
-  copied index: probe `desktop`, xdotool double click at the detected icon,
+  copied index: probe `desktop`, double click at the detected `prg` icon,
   after-click timepoints produced launch screen, black and game shots,
   entry graduated `desktop` -> `done`, old preview preserved as `_c01`,
   metadata contains `click`/`click_retried` *(verified)*.
+- `run --retry-desktop --only <Bank It - Hotline> --limit 1`: probe
+  `desktop` with only drive icons -> `drive` strategy. Double click
+  DISKSTATION A opened the `A:\BANK_IT.HAT\` window (folder `BANK_IT`),
+  descending one level revealed `BANKIT.PRG`; the program double click
+  started the game (BANK IT window) after the click retry kicked in. The
+  index stored `click.strategy: drive` at the DISKSTATION A centre and
+  `click_retried: true`; the newer screenshots were kept as preview and
+  candidates *(verified)*.
 
 ### 14.4 Full run
 
@@ -834,12 +869,16 @@ A conforming implementation satisfies all of the following.
 - [ ] P3 Xvfb uses a fixed display number, never auto-selection.
 - [ ] P4 Hatari and Xvfb are killed via process group on timeout or exit.
 - [ ] P5 Per-entry timeout is enforced and the run continues after it.
-- [ ] P6 `detect` finds the GEM program icon in existing desktop previews
-      offline and stores `click`/`icon_found`; misses are never booted.
+- [ ] P6 `detect` finds the GEM program or drive icon in existing desktop
+      previews offline, selects the `prg`/`drive` strategy, stores
+      `click`/`icon_found`; misses are never booted.
 - [ ] P7 `run --retry-desktop` boots only unclicked entries with a stored
-      icon hit, clicks the icon once via xdotool (30 ms double click,
-      window raised, global click lock), restarts the capture timepoints,
-      and records the attempt (`click_retried`, `clicked`).
+      hit and runs the strategy: `prg` double clicks the program icon,
+      `drive` opens DISKSTATION A and descends up to
+      `click_retry.drive_max_depth` levels (folder icons) to the program
+      icon. Clicks use `hatari-event doubleclick` over the FIFO, are
+      retried when they do not take effect, restart the capture timepoints,
+      and the attempt is recorded (`click_retried`, `clicked`).
 
 **Filtering**
 - [ ] F1 Black or empty shots are rejected by configurable thresholds.

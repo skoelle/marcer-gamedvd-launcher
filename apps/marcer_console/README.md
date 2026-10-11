@@ -206,20 +206,22 @@ The community uses [ftp-sync](https://github.com/slippyex/ftp-sync) to keep the 
 
 - [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Windows: `build.cmd` / `start.cmd`
-- Linux / macOS: `build.sh` / `start.sh` (run `chmod +x scripts/*.sh` first)
+- Linux / macOS: `build.sh` / `start.sh` (run `chmod +x *.sh` first)
 
 ### 🔨 Build & Run
 
+All scripts live in this folder (`apps/marcer_console/`).
+
 **Windows:**
 ```bat
-scripts\build.cmd
-scripts\start.cmd
+build.cmd
+start.cmd
 ```
 
 **Linux / macOS:**
 ```bash
-scripts/build.sh
-scripts/start.sh
+./build.sh
+./start.sh
 ```
 
 > ⚠️ Do **not** use `dotnet build` or `dotnet run` directly — always use the platform build script to ensure consistent output.
@@ -229,10 +231,10 @@ scripts/start.sh
 `demo.sh` creates a complete test environment with fake ZIPs and two layers (root + patch), then launches the launcher:
 
 ```bash
-scripts/demo.sh
+./demo.sh
 ```
 
-This builds the project, generates a structured `.demo/` directory with sample folders and ZIPs, writes a matching `launcher.config.json`, and starts the launcher. Useful for quickly testing overlay behavior and navigation without setting up real game files.
+This builds the project, generates a structured `.demo/` directory (inside this folder) with sample folders and ZIPs, writes a matching `launcher.config.json`, and starts the launcher. Useful for quickly testing overlay behavior and navigation without setting up real game files.
 
 > ⚠️ Windows is not supported for `demo.sh`. Use `start.cmd` with your own game files instead.
 

@@ -80,16 +80,16 @@ A fast, keyboard-driven terminal launcher for the Hatari emulator, still shipped
 
 **Full documentation, configuration and controls: [`apps/marcer_console/README.md`](apps/marcer_console/README.md).**
 
-Build & run via the platform scripts:
+Build & run via the platform scripts (only needed when changing `apps/marcer_console/`):
 
 ```bat
-scripts\build.cmd
-scripts\start.cmd
+apps\marcer_console\build.cmd
+apps\marcer_console\start.cmd
 ```
 
 ```bash
-scripts/build.sh
-scripts/start.sh
+apps/marcer_console/build.sh
+apps/marcer_console/start.sh
 ```
 
 > ⚠️ Do **not** use `dotnet build` or `dotnet run` directly — always use the platform build script.

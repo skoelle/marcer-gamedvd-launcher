@@ -215,7 +215,7 @@ Playnite-inspired master-detail layout, hybrid model:
 - `DECISION-app-architecture.md` §6: record the decided project layout
   (subdirectory `apps/marcer_desktop/`).
 - `AGENTS.md` + `README.md`: **done 2026-10-11** (Apps section added; build/run
-  via `apps/marcer_desktop/run.sh`; `scripts/build.sh` / `scripts/start.sh`
+  via `apps/marcer_desktop/run.sh`; `apps/marcer_console/build.sh` / `apps/marcer_console/start.sh`
   remain exclusive to the C# console launcher).
 - `.gitignore`: **done 2026-10-11** (`desktop.config.json`, Flutter artifacts
   `.dart_tool/`, `build/`). App `pubspec.lock` is committed (reproducible app

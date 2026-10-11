@@ -455,5 +455,5 @@ Open questions (deferred to the respective milestones):
 - [ ] Launcher never writes to `MARCER_DATA_DIR`. *(M2)*
 - [ ] `SPEC.md`, `AGENTS.md` and `README.md` updated with each behavioral
       change (M2, M3).
-- [ ] Manual test run via `scripts/start.cmd` (Windows) or `scripts/start.sh`
+- [ ] Manual test run via `apps/marcer_console/start.cmd` (Windows) or `apps/marcer_console/start.sh`
       (Linux/macOS) before delivery of any launcher change.

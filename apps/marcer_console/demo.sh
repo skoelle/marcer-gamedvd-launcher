@@ -17,7 +17,7 @@ CONFIG_FILE="$DEMO_DIR/launcher.config.json"
 
 # --- Step 1: Build ---
 echo "=== Building MarcerGameDvdConsole ==="
-cd "$SCRIPT_DIR/apps/marcer_console"
+cd "$SCRIPT_DIR"
 dotnet build -c Release --verbosity quiet
 echo "[OK] Build successful."
 
@@ -184,7 +184,7 @@ EOF
 echo "[OK] Config written to $CONFIG_FILE"
 
 # Copy config to EXE output directory (app looks for it there)
-EXE_DIR="$SCRIPT_DIR/apps/marcer_console/bin/Release/net10.0"
+EXE_DIR="$SCRIPT_DIR/bin/Release/net10.0"
 cp "$CONFIG_FILE" "$EXE_DIR/launcher.config.json"
 echo "[OK] Config copied to $EXE_DIR"
 
@@ -194,5 +194,5 @@ echo "=== Launching MarcerGameDvdConsole ==="
 echo "Controls: Arrow keys, Enter, Backspace, ESC to exit"
 echo ""
 
-cd "$SCRIPT_DIR/apps/marcer_console"
+cd "$SCRIPT_DIR"
 dotnet run -c Release

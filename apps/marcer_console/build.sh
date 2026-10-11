@@ -11,9 +11,8 @@ if ! command -v dotnet &> /dev/null; then
     exit 1
 fi
 
-# Build in MarcerGameDvdConsole subdirectory (script is in scripts/, code in apps/marcer_console/)
+# Build in the marcer_console app directory (this script lives next to the code)
 cd "$(dirname "$0")"
-cd "../apps/marcer_console"
 
 dotnet build -c Release
 if [ $? -ne 0 ]; then
