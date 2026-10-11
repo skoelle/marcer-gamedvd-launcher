@@ -428,10 +428,17 @@ function renderLightbox() {
     $("lb-ph").hidden = false;
   }
 
-  // variant tabs (ZIPs)
-  $("lb-variants").innerHTML = card.variants.map((vv, i) =>
-    `<button type="button" data-v="${i}" class="${i === lb.variant ? "active" : ""}">${esc(vv.name)} (${esc(vv.status)})</button>`
-  ).join("");
+  // filmstrip: one thumb per variant (hover shows full ZIP name via title)
+  $("lb-film").innerHTML = card.variants.map((vv, i) => {
+    const thumb = vv.preview
+      ? `<img src="${imgSrc(vv.preview)}" alt="" loading="lazy">`
+      : `<div class="ph-thumb">–</div>`;
+    const st = vv.preview ? `st-${vv.status === "done" ? "done" : "desktop"}` : "st-empty";
+    const short = vv.name.replace(/\.zip$/i, "").replace(/^[^-]*-\s*/, "");
+    return `<button type="button" class="lb-film-item ${st} ${i === lb.variant ? "active" : ""}" data-v="${i}" title="${esc(vv.name)} (${esc(vv.status)})">${thumb}<span class="film-name">${esc(short)}</span></button>`;
+  }).join("");
+  const activeFilm = $("lb-film").querySelector(".lb-film-item.active");
+  if (activeFilm) activeFilm.scrollIntoView({ block: "nearest", inline: "nearest" });
 
   // candidate strip
   const cands = v ? (v.candidates || []) : [];
@@ -720,8 +727,8 @@ function wireEvents() {
   $("lb-next").addEventListener("click", lbNext);
   $("lightbox").addEventListener("click", (e) => {
     if (e.target === $("lightbox")) closeLightbox();
-    const vb = e.target.closest("#lb-variants button");
-    if (vb) { lb.variant = parseInt(vb.dataset.v, 10); lb.img = 0; renderLightbox(); writeURL(false); }
+    const fi = e.target.closest(".lb-film-item");
+    if (fi) { lb.variant = parseInt(fi.dataset.v, 10); lb.img = 0; renderLightbox(); writeURL(false); }
     const ci = e.target.closest("#lb-cands img");
     if (ci) { lb.img = parseInt(ci.dataset.img, 10); renderLightbox(); }
   });

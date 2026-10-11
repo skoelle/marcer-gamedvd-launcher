@@ -524,10 +524,16 @@ Filter/search/sort state is reflected in the URL query string
 Opened by clicking a card or pressing Enter/Space on the focused card:
 
 - Large original screenshot (first preview or selected candidate), letterbox
-  on dark background.
-- **Variant switcher**: tabs/prev-next over the folder's ZIPs (name + status
-  + layer); switching swaps image and metadata row.
-- **Candidate strip**: preview + all `_cNN` images selectable.
+  on dark background, aspect ratio preserved (`object-fit: contain`, main
+  image capped ~55vh to leave room for the filmstrip).
+- **Variant filmstrip** (sole variant switcher): one thumbnail per ZIP of
+  the folder (preview or empty placeholder), horizontal scroll, active
+  variant highlighted; hover shows the full ZIP name (native `title`
+  tooltip) plus a short label under each thumb. Click switches the main
+  image and metadata. Status underline: green = done, amber = desktop,
+  gray = empty.
+- **Candidate strip**: preview + all `_cNN` images of the *selected*
+  variant selectable.
 - **Metadata table**: all fields of the selected variant's gameinfo entry,
   plus all XLS variants of the folder in a compact table (title, cracker,
   crew, publisher, language, year, flags).

@@ -334,10 +334,14 @@ footer {
   background: #0a0d10;
   border-radius: 6px;
   min-width: 0;
+  min-height: 0;
 }
 .lb-image-wrap img {
   max-width: 100%;
-  max-height: 100%;
+  max-height: 55vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 .lb-ph {
@@ -371,18 +375,67 @@ footer {
   border-bottom: 1px solid var(--border);
 }
 .lb-footer { padding: 10px 2px 2px; }
-.lb-variants { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.lb-variants button {
-  background: var(--btn);
-  color: var(--fg);
-  border: 1px solid var(--border-hi);
-  border-radius: 4px;
-  padding: 4px 10px;
-  cursor: pointer;
-  font-size: 0.75em;
+
+/* filmstrip: one thumb per variant, horizontal scroll */
+.lb-film {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: thin;
 }
-.lb-variants button.active { background: var(--btn-active); border-color: var(--accent); }
+.lb-film:empty { display: none; }
+.lb-film-item {
+  flex: 0 0 auto;
+  width: 96px;
+  cursor: pointer;
+  text-align: center;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  padding: 2px;
+  background: #0e1216;
+}
+.lb-film-item:hover { border-color: var(--border-hi); }
+.lb-film-item.active { border-color: var(--accent); }
+.lb-film-item img {
+  width: 100%;
+  height: 60px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  display: block;
+  background: #000;
+  border-radius: 2px;
+}
+.lb-film-item .ph-thumb {
+  width: 100%;
+  height: 60px;
+  background: #101418;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #556;
+  font-size: 0.65em;
+}
+.lb-film-item .film-name {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.62em;
+  color: #9ab;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lb-film-item.active .film-name { color: var(--accent); }
+.lb-film-item.st-done { box-shadow: inset 0 -2px 0 #1a5; }
+.lb-film-item.st-desktop { box-shadow: inset 0 -2px 0 #a80; }
+.lb-film-item.st-empty { box-shadow: inset 0 -2px 0 #444; }
+
 .lb-cands { display: flex; gap: 6px; flex-wrap: wrap; }
+.lb-cands:empty { display: none; }
 .lb-cands img {
   height: 52px;
   image-rendering: pixelated;
