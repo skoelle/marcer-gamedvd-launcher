@@ -368,6 +368,15 @@ Semantics:
 - `entry` returns exactly one card (regardless of filters/pagination) with
   an additional `position` field: the card's `offset` it would have in the
   current default ordering, or `null` if filtered out.
+- **Crew focus:** when `crew=<value>` is active and the section supports the
+  crew facet, each returned card carries `focus_variant` (index into
+  `variants`, or `-1` when no ZIP could be identified for that crew). The
+  card's `preview` and `display_status` then reflect that focused variant
+  — **even if it has no screenshot** (empty preview → placeholder). This
+  overrides `status=with_screenshot` for crew-matched cards: they always
+  appear. Matching: ZIP name contains the crew string (case-insensitive);
+  fallback: a gameinfo variant with that crew whose `cracked_by` appears
+  in a ZIP name.
 - Sorting is a **total order**: primary key per `sort`, ties always broken
   by lowercased name, then by `rel`. This guarantees stable pagination (no
   duplicates or gaps across pages) *(requirement, section 8.5)*.
@@ -392,6 +401,7 @@ Response:
       "layer": "BOTH",
       "year": "1987",
       "preview": "Title Sorted/Cracked Games - Title Sorted/0-9/10th Frame/10th Frame - Pedro.png",
+      "focus_variant": null,
       "variants": [
         {
           "rel": "Title Sorted/…/10th Frame/10th Frame - Pedro.zip",
@@ -596,13 +606,17 @@ Shown in the header, sourced from `/api/meta`:
    if any variant or the folder/path matches.
 2. **Filters**: AND across different facets, OR (any-variant) within one
    facet; tri-state flags (`any|yes|no`).
-3. **Status presets**: `with_screenshot` (default), `done`, `desktop`, … as
+3. **Crew focus** (`crew=<value>`): the grid shows the screenshot of the
+   ZIP belonging to that crew (`focus_variant`, section 5.3), even when
+   that variant has no screenshot (placeholder). Clicking the card opens
+   the lightbox on exactly that variant.
+4. **Status presets**: `with_screenshot` (default), `done`, `desktop`, … as
    listed in section 5.2; the statistics bar always shows global numbers.
-4. **Sorting**: `name` (default, case-insensitive), `year` (numeric, `unknown`
+5. **Sorting**: `name` (default, case-insensitive), `year` (numeric, `unknown`
    last), `publisher`, `cracker` (=`cracked_by`), `crew` (alphabetical,
    empty values last), `order` `asc|desc`; ties broken by name then `rel`
    (stable pagination).
-5. **Letter navigation**: exact match on the card's `letter` facet value
+6. **Letter navigation**: exact match on the card's `letter` facet value
    (`0-9` for the first bucket, `Any` disables the filter).
 
 ---
