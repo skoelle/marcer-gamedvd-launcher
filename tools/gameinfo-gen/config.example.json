@@ -1,0 +1,16 @@
+{
+  "xls": {
+    "cracked": "Games.xls",
+    "pd": "PD Games.xls",
+    "utils": "Utils_.xls"
+  },
+  "trees": {
+    "cracked": "Cracked Games - Title Sorted",
+    "pd": "PD Games - Title Sorted",
+    "utils": "Utilitys - Title Sorted"
+  },
+  "title_sorted_dir": "Title Sorted",
+  "out_subdir": "Data",
+  "fuzzy_cutoff": 0.92,
+  "prefer_patch_xls": true
+}
