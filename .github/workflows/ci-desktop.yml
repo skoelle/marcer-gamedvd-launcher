@@ -33,6 +33,10 @@ jobs:
         working-directory: apps/marcer_desktop
         run: flutter pub get
 
+      - name: Install dependencies (catalog package)
+        working-directory: apps/marcer_desktop/packages/marcer_catalog
+        run: dart pub get
+
       - name: Analyze (app)
         working-directory: apps/marcer_desktop
         run: flutter analyze
