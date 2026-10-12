@@ -66,11 +66,12 @@ DEFAULT_CONFIG = {
         "timepoints_after_click": [10, 25, 45],
         "entry_timeout_s": 120,
         "icon_min_score": 0.5,
-        "window_icon_min_score": 0.85,
-        "step_wait": 2.0,
+        "window_icon_min_score": 0.80,
+        "step_wait": 5.0,
         "drive_max_depth": 2,
         "drive_attempts": 3,
         "prg_attempts": 3,
+        "folder_attempts": 3,
     },
     "tmp_dir": "/tmp/marcer-shotgen",
     "xvfb_screen": "1024x768x24",
@@ -515,6 +516,25 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
             fifo_write(fifo, "hatari-event doubleclick")
         else:
             _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
+        # GEM draws its mouse arrow into the framebuffer and it stays
+        # where the click happened. Park the pointer on the empty part of
+        # the window title bar before the next screenshot: otherwise the
+        # arrow sits on the icon of the following window (the same grid
+        # cell, e.g. the program icon below a folder icon) and destroys
+        # the template match. The title bar row (screenshot y 182) is
+        # outside every icon grid, so the arrow cannot cover an icon there.
+        # Do NOT park near the screen/window edge: a warp to the border
+        # (e.g. the bottom-right corner) makes Hatari's relative mouse
+        # handling drift, after which every later click misses its icon
+        # (verified live: tens of pixels of drift after such a warp).
+        time.sleep(0.5)
+        try:
+            park_x = wx + round(400 * ww / shot_w)
+            park_y = wy + round(182 * wh / shot_h)
+            _xdotool(["mousemove", str(park_x), str(park_y)], disp,
+                     timeout=5)
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+            pass
     log(f"doubleclick window={wid} at ({x},{y}) "
         f"[icon ({icon_sx},{icon_sy}) in {shot_w}x{shot_h}]")
 
@@ -576,8 +596,7 @@ def find_template(img_path: Path, template, min_score: float):
 
 
 ICON_TEMPLATE_FILES = {
-    "prg": "icon-prg.png",          # program icon on the green desktop
-    "prg_win": "icon-prg-win.png",  # program icon inside a (white) window
+    "prg": "icon-prg.png",          # program icon (desktop and in a window)
     "drive": "icon-drive.png",      # DISKSTATION drive icon on the desktop
     "folder": "icon-folder.png",    # folder icon inside a window
 }
@@ -643,26 +662,21 @@ def safe_filename(name: str) -> str:
 def find_window_target(path: Path, cfg: dict):
     """Find the next double-click target inside an opened GEM window.
 
-    Compares the program icon (icon-prg-win) and the folder icon
-    (icon-folder). Both match similar white boxes; the program icon is
-    preferred within a small margin because running the program is always
-    the goal. Window icons match their templates near 1.0, so a dedicated
-    higher threshold rejects the flat-region false positives (~0.55) that
-    appear on a plain desktop. Returns ("prg"|"folder", {sx, sy, score})
-    or None.
+    The program icon (icon-prg, the same icon as on the desktop) is
+    searched first and double clicked right away when it is present. Only
+    when no program icon is found is the folder icon (icon-folder) looked
+    up; after descending into the folder the window is scanned again for
+    a program icon. Window icons match their templates near 1.0, so a
+    dedicated higher threshold rejects the flat-region false positives
+    (~0.55) that appear on white window areas. Returns
+    ("prg"|"folder", {sx, sy, score}) or None.
     """
-    min_score = cfg["click_retry"].get("window_icon_min_score", 0.85)
-    pw = find_icon(path, cfg, "prg_win")
+    min_score = cfg["click_retry"].get("window_icon_min_score", 0.80)
+    prg = find_icon(path, cfg, "prg")
+    if prg and prg["score"] >= min_score:
+        return "prg", prg
     fo = find_icon(path, cfg, "folder")
-    pw = pw if (pw and pw["score"] >= min_score) else None
-    fo = fo if (fo and fo["score"] >= min_score) else None
-    if pw and fo:
-        if pw["score"] >= fo["score"] - 0.1:
-            return "prg", pw
-        return "folder", fo
-    if pw:
-        return "prg", pw
-    if fo:
+    if fo and fo["score"] >= min_score:
         return "folder", fo
     return None
 
@@ -696,6 +710,46 @@ def _screen_changed(a: Path, b: Path, frac: float = 0.02) -> bool:
     if ia.shape != ib.shape:
         return True
     return float((np.abs(ia - ib) > 30).mean()) > frac
+
+
+def _folder_click_state(before: Path, after: Path, cfg: dict,
+                        clicked_sx: int, clicked_sy: int) -> str:
+    """Classify what a folder double click did.
+
+    GEM sometimes registers the double click only as a selection (the
+    folder icon inverts, the window content stays the same) and a second
+    double click is needed to actually open it. A plain global pixel diff
+    is not enough to tell the two apart: opening a folder changes only a
+    few percent of the screen when the folder window looks similar to its
+    parent (both are white GEM windows), which is the same order as a mere
+    selection. The icon templates do distinguish them though: after a real
+    open a genuine program icon (~1.0) appears at the clicked spot, while
+    a selection leaves the (inverted) folder there, which only scores as a
+    weak program match (~0.86).
+
+    Returns "program" (the game started directly, no GEM icon is left),
+    "opened" (the window descended) or "not-opened" (only a selection).
+    """
+    if _screen_changed(before, after):
+        # the whole window changed: either the folder opened (a program or
+        # folder icon is visible) or the game started (no GEM icon left)
+        return ("program" if find_window_target(after, cfg) is None
+                else "opened")
+    target = find_window_target(after, cfg)
+    if target is None:
+        return "not-opened"
+    kind, hit = target
+    same_spot = (abs(hit["sx"] - clicked_sx) <= 8
+                 and abs(hit["sy"] - clicked_sy) <= 8)
+    if kind == "prg" and hit["score"] >= 0.95:
+        # a genuine program icon appeared where the folder was
+        return "opened"
+    if same_spot:
+        # only a selection: the folder icon is still at the clicked spot
+        # (inverted, so it may score as a weak program match)
+        return "not-opened"
+    # an icon at a different position: the window content changed
+    return "opened"
 
 
 def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
@@ -741,11 +795,12 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
     step_wait = float(click_cfg.get("step_wait", 2.0))
     max_depth = int(click_cfg.get("drive_max_depth", 2))
 
-    win_shot = grabs[-1]
+    probe = grabs[-1]
+    win_shot = probe
     target = None
     attempts = int(click_cfg.get("drive_attempts", 3))
     for attempt in range(1, attempts + 1):
-        click_icon(P, grabs[-1], click_info["sx"], click_info["sy"], log,
+        click_icon(P, win_shot, click_info["sx"], click_info["sy"], log,
                    fifo=fifo, pid=pid)
         log(f"drive click attempt {attempt}, waiting {step_wait}s")
         if not sleep_until(time.monotonic() + step_wait):
@@ -758,7 +813,13 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         target = find_window_target(win_shot, cfg)
         if target is not None:
             break
-        log("no window icon visible, retrying drive click")
+        # double clicking DISKSTATION while its window is already open
+        # just brings up the same window again, so only retry when the
+        # click had no visible effect at all (screen unchanged)
+        if _screen_changed(probe, win_shot):
+            log("window opened but no program or folder icon matched")
+            break
+        log("drive click had no effect, retrying")
     if target is None:
         log("drive window did not open with a usable icon")
         return False, win_shot, chain_shots, "click-failed"
@@ -784,12 +845,37 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
                 log(f"program icon did not start (attempt {pa}), retrying")
             log(f"program icon never started at depth {depth}")
             return False, new_shot, chain_shots, "click-failed"
-        click_icon(P, win_shot, hit["sx"], hit["sy"], log, fifo=fifo, pid=pid)
-        log(f"folder opened at depth {depth}, descending")
-        if not sleep_until(time.monotonic() + step_wait):
+        # GEM occasionally registers the double click as a mere selection
+        # (verified live); verify that the folder actually opened and retry
+        # the click otherwise
+        folder_attempts = int(click_cfg.get("folder_attempts", 3))
+        opened = False
+        new_shot = win_shot
+        for fa in range(1, folder_attempts + 1):
+            click_icon(P, win_shot, hit["sx"], hit["sy"], log,
+                       fifo=fifo, pid=pid)
+            if not sleep_until(time.monotonic() + step_wait):
+                return False, win_shot, chain_shots, "click-failed"
+            new_shot = _grab_now(fifo, outdir, 2.0) or win_shot
+            chain_shots.append(new_shot)
+            state = _folder_click_state(win_shot, new_shot, cfg,
+                                        hit["sx"], hit["sy"])
+            if state == "program":
+                # the game started directly from the double click (the
+                # folder icon was already the program, or the click landed
+                # on the program icon of the newly opened window)
+                log(f"program started at depth {depth} (attempt {fa})")
+                return True, new_shot, chain_shots, "click-icon-drive"
+            if state == "opened":
+                opened = True
+                log(f"folder opened at depth {depth} (attempt {fa}), "
+                    f"descending")
+                break
+            log(f"folder icon did not open (attempt {fa}), retrying")
+        if not opened:
+            log(f"folder icon never opened at depth {depth}")
             return False, win_shot, chain_shots, "click-failed"
-        win_shot = _grab_now(fifo, outdir, 2.0) or win_shot
-        chain_shots.append(win_shot)
+        win_shot = new_shot
         target = find_window_target(win_shot, cfg)
         if target is None:
             log(f"window depth {depth}: no further program or folder icon")
@@ -1359,8 +1445,13 @@ def cmd_detect(cfg: dict, P: dict, args) -> int:
                 break
             e = entries[rel]
             if e.get("click") and not args.force:
-                stats["skipped"] += 1
-                continue
+                # current entries carry a strategy; legacy entries store
+                # only coordinates and cannot be executed (the run would
+                # fall back to the prg strategy), so re-detect those even
+                # without --force
+                if e["click"].get("strategy"):
+                    stats["skipped"] += 1
+                    continue
             if e.get("icon_found") is False and not args.force:
                 stats["skipped"] += 1
                 continue

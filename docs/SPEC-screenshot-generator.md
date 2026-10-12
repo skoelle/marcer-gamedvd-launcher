@@ -432,7 +432,8 @@ phase workflow:
   icon) and `assets/icon-drive.png` (DISKSTATION drive icon) with zero-mean
   normalized cross correlation (FFT, numpy/scipy). The inverted template is
   tried as well so inverted (selected) icons still match. Template geometry
-  is 60x54 px at the verified 832x552 capture size.
+  is 60x54 px (program icon) and 64x60 px (drive icon) at the verified
+  832x552 capture size.
 - Strategy choice: a real program icon always wins; otherwise a drive icon
   selects the drive strategy. Hit: entry gets
   `click` = `{strategy, sx, sy, score, source}` and `icon_found: true`.
@@ -488,24 +489,62 @@ pixel (scaled by window/screenshot size ratio, both are 832x552 in the base
 profile), and sends the double click through Hatari's own
 `hatari-event doubleclick` control command over the FIFO. Sending the click
 through the emulator input path is far more reliable than XTest clicks,
-which GEM often only registers as a single selection *(verified)*.
+which GEM often only registers as a single selection *(verified)*. After
+the double click the pointer is parked on the empty part of the window
+title bar (screenshot row y=182, well away from the icon grid) before the
+next screenshot is taken: GEM draws its mouse arrow into the framebuffer,
+and an arrow left on the clicked icon would cover the icon of the
+following window (the same grid cell, e.g. the program icon directly
+below a folder icon) and destroy the template match. The park must not be
+near the window/screen edge: a warp to the border (e.g. the bottom-right
+corner) makes Hatari's relative mouse handling drift — the GEM cursor no
+longer matches the X pointer and every later click misses the icon
+*(verified live: tens of pixels of drift after such a warp, while a
+park inside the window keeps the cursor aligned)*. The arrow overlap
+threshold `click_retry.window_icon_min_score` (default 0.80) additionally
+tolerates the cursor when it does end up on an icon.
 
 **Strategy `prg`** (desktop shows the program icon): one double click on
 the icon. If the screen does not change, retry up to
 `click_retry.prg_attempts` (default 3) *(verified: Bank It)*.
 
 **Strategy `drive`** (desktop only shows drive icons, e.g. Bank It):
-double click `DISKSTATION A`, verify a window opened (a folder or program
-icon appears; the drive click is repeated up to `click_retry.drive_attempts`
-otherwise), then walk into the window up to `click_retry.drive_max_depth`
-levels (default 2, enough for the verified `DISKSTATION A` -> folder
-`BANK_IT` -> `BANKIT.PRG` case): double click `assets/icon-folder.png` to
-descend, or `assets/icon-prg-win.png` to start the game. Between the steps
-it waits `click_retry.step_wait`. Window icons match their templates near
-1.0, so `click_retry.window_icon_min_score` (default 0.85) rejects the
-flat-region false positives (~0.55) seen on a plain desktop; the program
-icon is preferred over a folder within a small score margin. *(verified:
-Bank It - Hotline starts via drive -> folder -> PRG.)*
+double click `DISKSTATION A`, wait `click_retry.step_wait` for the window,
+then walk into the window up to `click_retry.drive_max_depth` levels
+(default 2, enough for the verified `DISKSTATION A` -> folder `BANK_IT`
+-> `BANKIT.PRG` case): every window is scanned for the program icon first
+(`assets/icon-prg.png`, the same icon as on the desktop) and double
+clicked as soon as it is found; only when no program icon is present is
+the folder icon (`assets/icon-folder.png`, 59x52 px) double clicked to
+descend, after which the window is scanned for a program icon again. The
+folder click is verified and retried up to
+`click_retry.folder_attempts` (default 3), because GEM sometimes only
+registers the first press as a selection *(verified live)*. A plain
+global pixel diff cannot tell a selection from an open here: opening a
+folder changes only a few percent of the screen when the folder window
+looks similar to its parent (both are white GEM windows, ~1.2%), the same
+order as a selection. The folder click is therefore classified with the
+icon templates: a genuine program icon (score ~1.0) appearing at the
+clicked spot means the folder opened, while the still-selected (inverted)
+folder at the same spot only scores as a weak program match (~0.86) and
+counts as not opened. When the whole window changes and no GEM icon is
+left afterwards, the game started directly from the click and the chain
+reports success (this covers folders whose content is a single program
+that starts on the same double click). The
+drive click is only repeated while the screen does not change at all
+(`click_retry.drive_attempts`, the click never opened the window); once
+its window is open, DISKSTATION is never clicked again, because a second
+double click would only bring up the same window. Between the steps it
+waits `click_retry.step_wait` (default 5 s: opening a folder window and
+reading the disk takes longer than the drive window, and a grab taken too
+early shows a half-drawn window with no recognizable icon). Window icons
+match their templates near 1.0, so `click_retry.window_icon_min_score`
+(default 0.80) rejects the flat-region false positives (~0.55) seen on
+white window areas while still accepting the program icon with the GEM
+arrow on it (~0.84).
+*(verified: Bank It - Hotline starts via drive -> folder -> PRG; 10th
+Frame - Tsunoo Rhilty v2 and 10th Frame - Elsi via drive -> folder ->
+PRG.)*
 
 Notes:
 
@@ -564,11 +603,10 @@ information matters (it means the title did not auto-start). Such shots are
 
 Heuristic (all thresholds configurable):
 
-- unique color count <= 4 (the smoke test desktop had 3 *(verified)*)
-- and dominant color is close to the TOS desktop green (hue match within
-  tolerance, or exact palette color match after quantization)
-- and at least 60 percent of pixels belong to the dominant color or the
-  uniform border color
+- unique color count <= `desktop_max_colors` (default 5)
+- and either the mean brightness is at least `desktop_min_mean` (default
+  0.5) or the desktop green fraction is at least `desktop_green_frac_min`
+  (default 0.02)
 
 Classification result per shot: `game`, `desktop`, or `black`. An entry whose
 all shots are `desktop` gets entry kind `desktop` in metadata and index. An

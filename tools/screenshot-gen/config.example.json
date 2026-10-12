@@ -25,11 +25,12 @@
     "timepoints_after_click": [10, 25, 45],
     "entry_timeout_s": 120,
     "icon_min_score": 0.5,
-    "window_icon_min_score": 0.85,
-    "step_wait": 2.0,
+    "window_icon_min_score": 0.80,
+    "step_wait": 5.0,
     "drive_max_depth": 2,
     "drive_attempts": 3,
-    "prg_attempts": 3
+    "prg_attempts": 3,
+    "folder_attempts": 3
   },
   "tmp_dir": "/tmp/marcer-shotgen",
   "xvfb_screen": "1024x768x24",

@@ -83,22 +83,45 @@ Per entry it boots Hatari, takes one probe screenshot at
 `xdotool` (using the window geometry of the running Hatari instance); the
 double click itself is sent with Hatari's own
 `hatari-event doubleclick` command through the control FIFO, which GEM
-registers far more reliably than XTest clicks.
+registers far more reliably than XTest clicks. After each click the
+pointer is parked on the empty part of the window title bar (row y=182),
+because GEM's arrow stays where it was clicked and would otherwise cover
+the icon of the following window (same grid cell) during template
+matching. The park deliberately stays inside the window: a warp to the
+window/screen edge (e.g. the bottom-right corner) makes Hatari's relative
+mouse handling drift, after which every later click misses its icon.
+`click_retry.window_icon_min_score` (0.80) tolerates the arrow if it does
+end up on an icon.
 
 - `prg` — the desktop already shows the program icon: one double click
   starts the game.
 - `drive` — the desktop only shows drive icons: double click
   `DISKSTATION A`, wait `click_retry.step_wait` for the window, then walk
   into the window (bounded by `click_retry.drive_max_depth`, default 2):
-  double click a folder icon (`assets/icon-folder.png`) to descend, or the
-  program icon (`assets/icon-prg-win.png`) to start the game.
+  the window is scanned for the program icon first
+  (`assets/icon-prg.png`, the same icon as on the desktop) and double
+  clicked right away when it is present; only when no program icon is
+  found is the folder icon (`assets/icon-folder.png`) double clicked to
+  descend, and the window is scanned for a program icon again.
 
-Both strategies retry a click when it did not take effect
-(`click_retry.drive_attempts` / `click_retry.prg_attempts`): the drive
-click is repeated until a window icon appears, and the program click is
-repeated until the screen actually changes. Window icons match their
-templates near 1.0, so `click_retry.window_icon_min_score` (default 0.85)
-rejects the flat-region false positives that appear on a plain desktop.
+Both strategies verify their clicks (`click_retry.drive_attempts` /
+`click_retry.prg_attempts` / `click_retry.folder_attempts`, default 3
+each). The folder click is classified with the icon templates rather than
+a global pixel diff, because opening a folder window changes only a few
+percent of the screen when it looks similar to its parent (both are white
+GEM windows) — the same order as a plain selection. A genuine program
+icon (~1.0) at the clicked spot means the folder opened; the selected
+(inverted) folder at the same spot only scores ~0.86 and counts as not
+opened, so the click is retried. If the whole window changes and no GEM
+icon is left, the game started directly from that click and the chain
+reports success. The drive click is only repeated while the screen does
+not change at all (the click never opened the window) — once its window
+is open, clicking DISKSTATION again is pointless and is skipped. Between
+the steps it waits `click_retry.step_wait` (default 5 s). Window icons
+match their templates near 1.0, so `click_retry.window_icon_min_score`
+(default 0.80) rejects the flat-region false positives that appear on
+white window areas while still accepting the program icon with the GEM
+arrow on it (~0.84).
 
 The attempt is recorded once per entry. `click_retried: true` marks that a
 retry ran, and a new `click_result` field records how it ended:
