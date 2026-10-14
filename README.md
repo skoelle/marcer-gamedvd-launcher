@@ -72,6 +72,13 @@ archive and its derived artifacts.
   favorites are shared as long as both apps see the same absolute paths).
 - **Degrades gracefully** — missing `index.json` or gameinfo data simply shows
   empty states instead of crashing.
+- **Self-update** (release builds) — silent check against the GitHub
+  `desktop-v*` releases after startup; when a newer version exists, an amber
+  `⬆ <version>` button appears left of the Folders button. Click to download
+  the platform ZIP, swap it in place (user config, favorites and `TOS.IMG`
+  are never touched) and restart the app automatically. Failures show a
+  dialog; leftover `*.old` files are cleaned up on the next start. Dev runs
+  (`run.sh`) never check.
 
 ### 🚀 Quick start
 

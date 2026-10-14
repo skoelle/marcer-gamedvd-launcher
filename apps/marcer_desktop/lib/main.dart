@@ -1,13 +1,16 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'catalog_controller.dart';
 import 'config_locator.dart';
+import 'self_updater.dart';
 import 'theme.dart';
 import 'widgets/card_grid.dart';
 import 'widgets/detail_panel.dart';
@@ -45,6 +48,12 @@ void main() {
         'Copy desktop.config.example.json there and rename it to '
         'desktop.config.json.';
   }
+  // Remove *.old leftovers from the previous self-update (best effort;
+  // runs in every build so a dev build can also clean a release install).
+  unawaited(cleanupOldFiles(installTargetDir(
+    resolvedExecutable: Platform.resolvedExecutable,
+    isMacOS: Platform.isMacOS,
+  )));
   runApp(MarcerDesktopApp(config: config, configError: configError));
 }
 
@@ -104,8 +113,10 @@ class _HomePageState extends State<HomePage> {
   /// Shared by the grid/list so Escape in the search field can hand focus
   /// back to the center panel.
   final FocusNode _centerFocus = FocusNode(debugLabel: 'center');
+  final SelfUpdateController _updater = SelfUpdateController();
   bool _showHelp = false;
   bool _showingLaunchError = false;
+  bool _showingUpdateError = false;
 
   @override
   void initState() {
@@ -113,15 +124,64 @@ class _HomePageState extends State<HomePage> {
     _controller = CatalogController(widget.config);
     _controller.addListener(_onControllerChanged);
     _controller.init();
+    _updater.addListener(_onUpdateChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initSelfUpdate());
   }
 
   @override
   void dispose() {
     _controller.removeListener(_onControllerChanged);
+    _updater.removeListener(_onUpdateChanged);
     _searchFocus.dispose();
     _centerFocus.dispose();
+    _updater.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Silent update check after startup (release builds only; the version
+  /// is stamped from the git tag via `--build-name` in the workflow).
+  Future<void> _initSelfUpdate() async {
+    if (!SelfUpdateController.enabled) return;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _updater.currentVersion = info.version;
+    } catch (_) {
+      return;
+    }
+    await _updater.check();
+  }
+
+  /// Surfaces failed update installs as a modal, once per error.
+  void _onUpdateChanged() {
+    if (_updater.phase != UpdatePhase.failed ||
+        _updater.error == null ||
+        _showingUpdateError ||
+        !mounted) {
+      return;
+    }
+    _showingUpdateError = true;
+    final err = _updater.error!;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Update failed'),
+          content: Text(err),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _updater.clearError();
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      _showingUpdateError = false;
+    });
   }
 
   /// Surfaces launch errors (SPEC.md E3/E4/E7) as a modal, once per error.
@@ -199,6 +259,7 @@ class _HomePageState extends State<HomePage> {
                 controller: c,
                 searchFocus: _searchFocus,
                 onExitSearch: () => _centerFocus.requestFocus(),
+                updater: _updater,
               ),
               const Divider(height: 1),
               Expanded(

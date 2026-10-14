@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   path: ^1.9.1
+  package_info_plus: ^9.0.0
+  archive: ^3.6.1
   marcer_catalog:
     path: packages/marcer_catalog
 

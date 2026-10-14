@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
+import '../self_updater.dart';
 
 /// Global filter bar in two rows plus section tabs and letter row, matching
 /// the gallery webapp layout (`SPEC-gallery-webapp.md` §5): tabs + clear +
@@ -19,6 +20,7 @@ class FilterBar extends StatefulWidget {
     required this.controller,
     required this.searchFocus,
     this.onExitSearch,
+    this.updater,
   });
 
   final CatalogController controller;
@@ -30,6 +32,10 @@ class FilterBar extends StatefulWidget {
   /// Called when Escape leaves an empty search field (focus goes back to
   /// the grid/list).
   final VoidCallback? onExitSearch;
+
+  /// Self-update state; when a release build found a newer version, the
+  /// first row shows an amber update badge left of the Folders button.
+  final SelfUpdateController? updater;
 
   @override
   State<FilterBar> createState() => _FilterBarState();
@@ -99,6 +105,10 @@ class _FilterBarState extends State<FilterBar> {
                   ],
                 ],
                 const Spacer(),
+                if (widget.updater != null) ...[
+                  _updateBadge(widget.updater!),
+                  const SizedBox(width: 6),
+                ],
                 _labelButton(c.catalogMode ? 'Folders (T)' : 'Catalog (T)',
                     c.toggleView, width: 92),
               ],
@@ -232,6 +242,57 @@ class _FilterBarState extends State<FilterBar> {
 
   /// Fixed 28px height so every control in the wrapping filter row lines up.
   Widget _fixed(Widget child) => SizedBox(height: 28, child: child);
+
+  /// Amber update badge left of the Folders button: shows the newer
+  /// version and, on click, downloads + installs it and relaunches the
+  /// app. Hidden when no newer release was found (or in dev builds).
+  Widget _updateBadge(SelfUpdateController u) {
+    return ListenableBuilder(
+      listenable: u,
+      builder: (context, _) {
+        final info = u.available;
+        final phase = u.phase;
+        final busy = phase == UpdatePhase.downloading ||
+            phase == UpdatePhase.installing ||
+            phase == UpdatePhase.restarting;
+        if (info == null && !busy) return const SizedBox.shrink();
+        final String label;
+        if (phase == UpdatePhase.downloading) {
+          final pct =
+              u.progress == null ? '' : ' ${(u.progress! * 100).round()}%';
+          label = '⬇ updating$pct';
+        } else if (phase == UpdatePhase.installing) {
+          label = 'installing…';
+        } else if (phase == UpdatePhase.restarting) {
+          label = 'restarting…';
+        } else {
+          label = '⬆ ${info!.version}';
+        }
+        return SizedBox(
+          height: 28,
+          child: Tooltip(
+            message: busy
+                ? 'Installing update ${info?.version}…'
+                : 'Update ${u.currentVersion} → ${info!.version}\n'
+                    'Download, install and restart the app',
+            child: TextButton(
+              onPressed: busy ? null : () => u.install(),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFFFD54A),
+                disabledForegroundColor:
+                    const Color(0xFFFFD54A).withValues(alpha: 0.6),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 28),
+                textStyle: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              child: Text(label),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Widget _labelButton(String text, VoidCallback onTap,
       {double width = 48, bool active = false}) {

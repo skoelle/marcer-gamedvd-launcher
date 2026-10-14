@@ -168,7 +168,8 @@ Playnite-inspired master-detail layout, hybrid model:
   `boxscan` (`any`/`yes`/`no`); `TOS/Bad`; combined sort dropdown
   (`name`/`year`/`publisher`/`cracker`/`crew` × `asc`/`desc`, replaces the
   sort facet + asc/desc button); `★ Favorites` toggle (catalog-only favorites
-  filter);
+  filter); amber `⬆ <version>` self-update badge left of the Folders button
+  (release builds only, see below);
   `clear`; letter row (`any`, `0-9`, `A`–`Z`, dimmed when
   absent from facets). Field order matches the gallery webapp. Facet values
   come from `CatalogUniverse` (index.json + gameinfo, **no FS scan**).
@@ -230,6 +231,19 @@ Playnite-inspired master-detail layout, hybrid model:
   view toggle), `*` additionally in the detail panel (shown "This ZIP") and
   in the lightbox (shown variant); mouse input additionally allowed (R8). Full keyboard control
   is a hard requirement for this surface.
+- **Self-update (release builds only, 2026-10-15):** `lib/self_updater.dart`
+  checks the GitHub `desktop-v*` releases after startup (silent when offline
+  or in dev builds); a newer version shows the amber `⬆ <version>` badge
+  left of the Folders button. Click downloads the platform ZIP
+  (`MarcerDesktop-v…-{win-x64,linux-x64,osx-arm64}.zip`), extracts it,
+  renames every replaced top-level entry to `*.old` first (rename is safe
+  for running executables/loaded libraries on all platforms), copies the
+  new files in and relaunches — user files (`desktop.config.json`,
+  `favorites.txt`, `TOS.IMG`) are never touched; `*.old` leftovers are
+  removed on the next start. Gated via `--dart-define=RELEASE_BUILD=true`
+  (release workflow); the current version comes from `--build-name` (the
+  git tag) via `package_info_plus`. Install failures surface as a dialog
+  and the badge click retries.
 - **Colors/rendering:** dark Playnite-like theme, but layer/selection colors follow the
   `SPEC.md` §9.3 mapping as the configurable baseline.
 - **No launching in the MVP.**

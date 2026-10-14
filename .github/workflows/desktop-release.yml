@@ -56,17 +56,17 @@ jobs:
       - name: Build (Linux)
         if: matrix.os == 'ubuntu-latest'
         working-directory: apps/marcer_desktop
-        run: flutter build linux --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ github.run_number }}
+        run: flutter build linux --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ github.run_number }} --dart-define=RELEASE_BUILD=true
 
       - name: Build (macOS)
         if: matrix.os == 'macos-latest'
         working-directory: apps/marcer_desktop
-        run: flutter build macos --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ github.run_number }}
+        run: flutter build macos --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ github.run_number }} --dart-define=RELEASE_BUILD=true
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
         working-directory: apps/marcer_desktop
-        run: flutter build windows --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ github.run_number }}
+        run: flutter build windows --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ github.run_number }} --dart-define=RELEASE_BUILD=true
 
       - name: Create ZIP (Windows)
         if: matrix.os == 'windows-latest'
