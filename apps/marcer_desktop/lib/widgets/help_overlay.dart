@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme.dart';
 
@@ -12,8 +13,8 @@ class HelpOverlay extends StatefulWidget {
 
   final VoidCallback onClose;
 
-  static void show(BuildContext context, VoidCallback onClose) {
-    showDialog<void>(
+  static Future<void> show(BuildContext context, VoidCallback onClose) {
+    return showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (_) => HelpOverlay(onClose: onClose),
@@ -47,6 +48,10 @@ class _HelpOverlayState extends State<HelpOverlay> {
       child: Focus(
         focusNode: _focus,
         onKeyEvent: (node, event) {
+          // Only a real key press dismisses — ignoring KeyUp/KeyRepeat
+          // keeps the overlay open while the `?` that opened it is still
+          // held down.
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
           widget.onClose();
           return KeyEventResult.handled;
         },

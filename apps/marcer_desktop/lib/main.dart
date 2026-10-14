@@ -150,15 +150,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _toggleHelp() {
-    if (_showHelp) {
-      setState(() => _showHelp = false);
-    } else {
-      HelpOverlay.show(context, () {
-        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-        setState(() => _showHelp = false);
-      });
-      setState(() => _showHelp = true);
-    }
+    if (_showHelp) return; // modal; any key or a barrier tap closes it
+    setState(() => _showHelp = true);
+    HelpOverlay.show(context, () {
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+    }).whenComplete(() {
+      // Resets on every dismissal path (key, barrier tap), so `?` works
+      // again after either one.
+      if (mounted) setState(() => _showHelp = false);
+    });
   }
 
   void _openLightbox(int variant, int image) {
