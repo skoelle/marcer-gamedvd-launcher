@@ -154,23 +154,104 @@ directly at archive root. A robust rule: recursively collect all image
 files inside the ZIP, ignore everything else, and do not assume any
 container depth.
 
-### 3.4 Manual folders
+### 3.4 Manual folders — shape distribution
 
-| Layer | Shape |
+| Layer | Game folders | `Manual/` | Loose files outside ZIPs |
+|---|---|---|---|
+| Main (`<ROOT>/Title Sorted/`) | ~9,994 | ~547 | **none** — everything is wrapped in ZIPs |
+| Patch (`<PATCH>/Title Sorted/`) | ~5,299 | ~18 | PDFs, one GIF, one RAR |
+
+Main layer, ZIP count per folder (n=547, 1,125 ZIPs total):
+
+| ZIPs per folder | Folders |
 |---|---|
-| Patch (n=18) | 14 folders with 1–3 ZIPs (each ZIP holds one PDF), 4 folders with only loose files (2× PDF, 1× PDF+GIF, 1× RAR) |
-| Main (sample n=40) | ~30 folders with 2 ZIPs, 6 with 1 ZIP, 4 with 3–4 ZIPs |
+| 1 | 98 |
+| 2 | 370 (the dominant shape — a scan/text pair) |
+| 3 | 43 |
+| 4 | 28 |
+| 5–8 | 8 |
 
-Inside the Manual ZIPs: almost always exactly **one PDF**. Verified outliers:
+### 3.5 The scan/text pair (main layer, the dominant pattern)
 
-- `Manual/Atari-Steinberg-Avalon-2.0-Manual.rar` — a **RAR**, not a ZIP (1 case)
-- `Manual/Atari_MM_KeyMap.gif` — a loose **GIF** next to PDFs (1 case)
-- Some Manual folders also carry a `*_text.zip` sibling (text-layer PDF next
-  to the scan PDF, e.g. `Conflict Europe.zip` + `Conflict Europe_text.zip`)
+438 of 547 main-layer `Manual/` folders follow one pattern: **two ZIPs with
+the same stem, one holding the image scan, one holding a text-layer PDF of
+the same manual**:
 
-**Rule:** a Manual consumer must handle ZIP-with-PDF, loose PDF, and at
-least tolerate RAR (or skip it gracefully). A text variant of a manual is
-recognised by the `_text` suffix in the ZIP/PDF stem.
+```
+Alien Syndrome/Manual/
+  Alien Syndrome.zip       → Alien Syndrome.pdf         (image scan)
+  Alien Syndrome_text.zip  → Alien Syndrome_text.pdf    (text-layer variant)
+```
+
+Verified counts across all 547 main-layer folders:
+
+| Category | Count |
+|---|---|
+| ZIPs whose name does **not** end in `_text` (scan side) | 661 |
+| ZIPs ending in `_text` / `_TEXT` / `_Text` (text side) | 464 |
+| Orphan `_text` ZIPs with no matching scan ZIP | 5 (Epic, Gunship, Legend, Utopia, Warhead) |
+| Folders with a pair | 438 |
+| Folders with scan-only ZIPs (no text variant) | 109 |
+
+**Size relation:** the scan PDF is usually larger than the text PDF
+(`Elite.zip` 5.6 MB vs `Elite_text.zip` 2.1 MB), but not always
+(`Chaos Strikes Back` — both ~1.38 MB). Do not use size to detect the
+variant; use the `_text` stem suffix.
+
+**Patch layer:** only 3 of 18 folders use the pair (`Beach Volley`,
+`Conflict Europe`, `Little Puff in Dragonland`) — the patch layer is
+younger and does not systematically carry text variants.
+
+### 3.6 Inside the Manual ZIPs
+
+**Almost always exactly one file per ZIP.** Content types, main layer
+(sample of 200 folders / ~300 ZIPs, central directory only):
+
+| Extension | Count | Meaning |
+|---|---|---|
+| `.pdf` | 378 | The manual (scan or text-layer) — the normal case |
+| `.doc` | 35 | Original Atari ST document files (1980s/90s DTP format) |
+| `.jpg` | 21 | Manual pages stored as images instead of PDF (rare) |
+| `.txt` | 14 | Plain text |
+
+Patch layer, the less uniform one:
+
+| Extension / shape | Where |
+|---|---|
+| `.pdf` inside ZIP | most folders |
+| loose `.pdf` | Daata Sound, Music Mouse, Tiger Cub |
+| `.TXT` inside ZIP | `AIRBUS_E.zip` → `AIRBUS_E.TXT` |
+| `.DOC` inside ZIP | `BEACHVOL.zip`, `GFATHER.zip`, `mtp_doc.zip` → `MTPRO.DOC` |
+| `.msa` inside ZIP | **floppy disk images**, not documents: BBS Express ST, Crack Art, LDW Power, MidiTrack Platinum, Regent Base 2 |
+| `.CDK` inside ZIP | `Midiman…/DOC/TMCHAP1.CDK` … `TMCHAP9.CDK` (one chapter per file) |
+| `.hyp` / `.ref` / `.stg` inside ZIP | `Boxkite/bkit233_.zip` — ST SuperCard/Hi-Pascal online-help format |
+| `.htm` + `.pdf` + `.DOC/` | `Master Tracks Pro 3.6 User Manual.zip` — a mixed archive |
+| loose `.gif` | `Music Mouse/Atari_MM_KeyMap.gif` — a keymap image |
+| loose `.rar` | `Avalon - Steinberg/Atari-Steinberg-Avalon-2.0-Manual.rar` — not a ZIP at all |
+
+**Rule:** a Manual consumer must (a) open ZIPs and pick PDFs, (b) tolerate
+loose PDFs, (c) treat `.msa` as a *disk image* (not a document — it belongs
+to the game-data side, not the manual viewer), (d) skip RAR and unknown
+formats gracefully with a note. A `_text` ZIP stem identifies the
+text-layer variant of a paired manual (section 3.5).
+
+### 3.7 Manual outlier: image-based manuals
+
+Two main-layer folders hold **JPG page scans** instead of a PDF, using the
+same `_d7` / `_i` naming as box scans (section 4.3):
+
+```
+Aaargh/Manual/aaargh_melbourne_house.zip
+  aaargh_melbourne_house_d7.jpg, _d7_2.jpg, _d7_3.jpg
+  aaargh_melbourne_house_i.jpg,  _i_2.jpg … _i_10.jpg     (13 files total)
+Bad Cat/Manual/bad_cat_highlights (2).zip
+  bad_cat_highlights_i.jpg, _d7.jpg, _d7_2.jpg, _d7_3.jpg  (4 files)
+```
+
+These are inlay/multi-page scans: the `_d7*` group is the box-style pages,
+the `_i*` group the inlay pages. A manual viewer that only renders PDFs
+would show nothing here — the consumer must fall back to the image gallery
+path (section 8, requirement 4) for these.
 
 ---
 
@@ -330,9 +411,23 @@ and 3 images — a manual misfiled as Boxscan. A box-scan consumer showing
 - `Dragonflight/Boxscan/` was present in one directory listing and gone on
   the next (live Dropbox sync on the NAS). Consumers must treat a vanished
   folder between scan and read as empty, not as a fatal error.
-- Some `Manual/` folders contain only a non-ZIP file (the `.rar` in 3.4).
+- Some `Manual/` folders contain only a non-ZIP file (the `.rar` in 3.6).
+- Five `_text` scan pairs are broken: `Epic`, `Gunship`, `Legend`,
+  `Utopia`, `Warhead` have an `_text.zip` but no matching scan ZIP
+  (section 3.5). A consumer pairing by stem must not assume the other half
+  exists.
 
-### 6.4 Name collisions and odd characters
+### 6.4 Disk images inside `Manual/` (patch layer)
+
+Five patch-layer `Manual/` ZIPs contain `.msa` **floppy disk images**
+(BBS Express ST, Crack Art, LDW Power, MidiTrack Platinum, Regent Base 2).
+These are not documents — they are the original manual *disks*. A consumer
+must never hand them to a PDF viewer, and (per `SPEC.md`) never offer them
+as launchable game archives either. The same applies to the four `.MSA`
+files inside `Replay16-Box&Contents.zip` (6.1). Recommended handling: skip
+with an "original disk" note, or route to the dump side of the app later.
+
+### 6.5 Name collisions and odd characters
 
 - File names with **spaces** (`captain blood_pocketsoft_front.png`), `&`
   (`Replay16-Box&Contents.zip`), parentheses, hyphens, commas.
@@ -341,8 +436,12 @@ and 3 images — a manual misfiled as Boxscan. A box-scan consumer showing
   case-sensitive filesystem.
 - One `Manual/` folder is spelled `Manuals/` (3.2) — case-insensitive
   matching alone does not cover it; accept both singular and plural.
+- ZIP stems with commas or 8.3-style names: `Addams Family, The.zip`,
+  `AMBER.ZIP` → `AMBER.DOC`, `CAPTIVE.DOC.zip` → `CAPTIVE.DOC`
+  (an archive named after its content's extension — do not parse the
+  extension from the ZIP name, read the central directory).
 
-### 6.5 Hidden files and NAS metadata
+### 6.6 Hidden files and NAS metadata
 
 `@eaDir` (Synology) folders exist next to the game trees. They are hidden
 and must be skipped, matching the launcher's existing hidden-file filter.
@@ -393,13 +492,18 @@ Derived directly from sections 2–6:
    archived sets.
 4. **Display** — thumbnails with bounded decode, aspect-preserving fit,
    no fixed aspect assumption (section 5); an ordered gallery per edition
-   (front-first where inferable, otherwise name order).
-5. **Manuals** — for `Manual/`: collect loose PDFs plus PDFs inside ZIPs;
-   show as documents (open externally / built-in viewer), not as images.
-   Tolerate RAR and other formats by skipping with a note.
+   (front-first where inferable, otherwise name order). The same image
+   path must also serve the image-based manuals of section 3.7.
+5. **Manuals** — for `Manual/`: pair `<stem>.zip` with `<stem>_text.zip`
+   by stem (3.5) and expose both variants to the user (scan = visual,
+   `_text` = selectable text); inside each ZIP take the PDF (or the JPGs,
+   3.7). Loose PDFs count too. `.msa`/`.MSA` entries are **disk images**,
+   not documents (6.4) — never show them in a PDF viewer. Tolerate RAR and
+   unknown formats by skipping with a note.
 6. **Robustness** — case-insensitive matching everywhere; paths with spaces,
-   `&`, parentheses; tolerate folders vanishing mid-scan (6.3); skip hidden
-   entries (`@eaDir`); never assume names carry front/back semantics.
+   `&`, commas, parentheses; tolerate folders vanishing mid-scan (6.3);
+   tolerate half-broken scan/text pairs (6.3); skip hidden entries
+   (`@eaDir`); never assume names carry front/back semantics.
 7. **Scope control** — the assets are large (10s of MB per game). Index
    paths lazily; do not pre-extract or pre-decode archives at startup.
 8. **Independence from the XLS flag** — decide explicitly whether the
@@ -426,6 +530,11 @@ spec + README update.
       spellings forever?
 - [ ] The ~7 % ZIP-only and ~1 % mixed Boxscan folders in the patch layer:
       are more ZIPs planned, or is loose-image the long-term convention?
+- [ ] Manuals: expose the `_text` variant as a first-class "searchable text"
+      option, or only offer the scan (3.5)? And what to do with the 5
+      half-broken pairs?
+- [ ] Manuals: the five `.msa` manual disks (6.4) — park them as info-only,
+      or route them into the RAW/STX dump handling later?
 - [ ] Console launcher: exclude companion folders (8.1) — yes/no?
 
 ---
@@ -441,6 +550,9 @@ on 2026-10-14:
 - Per-folder classification (loose images vs. ZIPs vs. subfolders).
 - Central directory listing of **all 29** patch-layer Boxscan ZIPs
   (`unzip -Z1`) — no archives were extracted or modified.
+- Central directory listing of **all 18** patch-layer Manual folders and a
+  sample of **200** main-layer Manual folders; full stem-pairing check over
+  all 547 main-layer Manual folders (scan vs `_text`).
 
 Re-verification: re-run the same listings; counts are expected to grow, the
 *structural variants* (sections 3–6) should not.
@@ -456,7 +568,10 @@ Re-verification: re-run the same listings; counts are expected to grow, the
 - [ ] Handles flat ZIPs, container-folder ZIPs, and multi-level ZIPs
 - [ ] Handles one optional edition-directory level with label inheritance
 - [ ] Shows images aspect-preserving with bounded decode; no fixed aspect ratio
-- [ ] Shows manuals as documents; tolerates RAR by skipping
-- [ ] Survives paths with spaces / `&` / parentheses and vanishing folders
+- [ ] Pairs manual `<stem>.zip` with `<stem>_text.zip`; tolerates missing halves
+- [ ] Renders manual PDFs **and** image-page manuals (JPG-in-ZIP, 3.7)
+- [ ] Never treats `.msa`/`.MSA` as documents or launchable archives (6.4)
+- [ ] Tolerates RAR / unknown formats in `Manual/` by skipping with a note
+- [ ] Survives paths with spaces / `&` / commas / parentheses and vanishing folders
 - [ ] Skips hidden entries (`@eaDir`)
 - [ ] Does not conflate the XLS `Boxscan` flag with on-disk availability
