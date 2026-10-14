@@ -191,7 +191,9 @@ Playnite-inspired master-detail layout, hybrid model:
   identified the card shows a hint plus up to four other variant
   screenshots. Grid cards show an `×N` chip for multi-ZIP folders, a 2×2
   grid of up to four variant screenshots when no focus is active and ≥2
-  variants have a screenshot, and (when `ShowCandidates` is true, single
+  variants have a screenshot — unless exactly one of those thumbs is a
+  `done` game shot, in which case the large game preview is shown — and
+  (when `ShowCandidates` is true, single
   variant, no focus) a candidate thumb strip; clicking a thumb opens the
   lightbox on that image.
 - **Left:** overlay folder tree per `SPEC.md` §7 with `Enter`/`Backspace` semantics,

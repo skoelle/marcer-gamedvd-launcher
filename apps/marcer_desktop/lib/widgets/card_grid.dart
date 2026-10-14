@@ -263,6 +263,19 @@ class _CenterGridState extends State<CenterGrid> {
   int _countPreviews(GameCard card) =>
       card.variants.where((v) => v.previewPath != null).length;
 
+  /// Number of shown variant thumbs that are real game screenshots
+  /// (status `done` / "done (game)"); the rest are e.g. `desktop` shots.
+  int _doneThumbCount(GameCard card) =>
+      _variantThumbs(card).where((t) => card.variants[t.index].status == 'done').length;
+
+  /// True when the no-focus 2×2 variant grid applies (≥2 previews, but not
+  /// the single-game-shot exception: exactly one `done` thumb → the large
+  /// game preview instead of the grid).
+  bool _multiThumbBody(GameCard card) =>
+      !card.focusActive &&
+      _countPreviews(card) >= 2 &&
+      _doneThumbCount(card) != 1;
+
   static const Map<String, int> _statusRank = {'done': 0, 'desktop': 1};
 
   /// Up to 4 clickable variant screenshots, best status first
@@ -331,8 +344,9 @@ class _CenterGridState extends State<CenterGrid> {
   }
 
   /// Grid card body (gallery `renderGrid` branch order):
-  /// focus miss → hint + 4 other shots; no focus + ≥2 previews → 2×2;
-  /// preview → single image (+ candidate strip); else placeholder.
+  /// focus miss → hint + 4 other shots; no focus + ≥2 previews (unless only
+  /// one of them is a `done` game shot) → 2×2; preview → single image
+  /// (+ candidate strip); else placeholder.
   Widget _cardBody(CatalogController c, GameCard card, int index) {
     if (card.focusVariant == -1) {
       final thumbs = _variantThumbs(card);
@@ -352,7 +366,7 @@ class _CenterGridState extends State<CenterGrid> {
         ],
       );
     }
-    if (!card.focusActive && _countPreviews(card) >= 2) {
+    if (_multiThumbBody(card)) {
       return _thumbGrid(c, card, index, _variantThumbs(card));
     }
     if (card.previewPath != null) {
@@ -381,7 +395,7 @@ class _CenterGridState extends State<CenterGrid> {
     ];
     final thumbsBody = card.focusVariant == -1
         ? _variantThumbs(card).isNotEmpty
-        : (!card.focusActive && _countPreviews(card) >= 2);
+        : _multiThumbBody(card);
     return _tileFrame(
       selected: selected,
       index: index,

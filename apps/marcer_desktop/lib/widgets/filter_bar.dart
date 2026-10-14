@@ -267,7 +267,20 @@ class _FilterBarState extends State<FilterBar> {
         initialSelection: items.contains(value) ? value : items.first,
         enableFilter: true,
         requestFocusOnTap: true,
-        menuHeight: 320,
+        // Open menu ≈ 3/4 of the screen height (shrinks for short lists).
+        menuHeight: MediaQuery.sizeOf(context).height * 0.75,
+        // Exact label match wins (reopening after a selection jumps to that
+        // entry); while typing the partial substring match keeps the
+        // highlight + Enter selection. Empty query → no highlight.
+        searchCallback: (entries, query) {
+          if (query.isEmpty) return null;
+          final exact =
+              entries.indexWhere((e) => e.label.toLowerCase() == query.toLowerCase());
+          if (exact != -1) return exact;
+          final q = query.toLowerCase();
+          return entries
+              .indexWhere((e) => e.label.toLowerCase().contains(q));
+        },
         textStyle: const TextStyle(fontSize: 12, color: Colors.white),
         inputDecorationTheme: const InputDecorationTheme(
           isDense: true,

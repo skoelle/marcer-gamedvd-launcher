@@ -36,7 +36,9 @@ archive and its derived artifacts.
   global filters: search, status, publisher, crew, cracker, language, year,
   tri-state `raw` / `pasti` / `boxscan`, `TOS/Bad`, and sort + order.
 - **Type-to-filter facet dropdowns** — start typing to jump to a publisher,
-  crew, cracker, language or year.
+  crew, cracker, language or year. The open menu spans ¾ of the screen
+  height; reopening a facet after picking an entry jumps to exactly that
+  entry (while typing, the partial match filter works as before).
 - **Gallery-style detail sidebar** — Game info, the full Release-variants
   table (the open ZIP highlighted) and a "This ZIP" table.
 - **Crew / cracker focus** — pick a crew or cracker and each card jumps to
@@ -48,7 +50,8 @@ archive and its derived artifacts.
 - **Optional folder browser** (`T`) — the overlay tree (main + patch layer)
   with layer labels and the virtual `Favorites` folder.
 - **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
-  several ZIPs.
+  several ZIPs; if exactly one of them is a game screenshot (`done`), the
+  large game preview is shown instead.
 - **Gallery-style status bar** — with-screenshot ratio, status counts, matched
   folder count, `index.json` mtime and gameinfo generation time.
 - **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
