@@ -1662,7 +1662,7 @@ def cmd_reclassify(cfg: dict, P: dict, args) -> int:
     """Offline pass: split coarse ``desktop`` kinds into finer categories.
 
     Walks index entries with ``status == "desktop"``, re-analyzes their
-    preview and refines the entry ``kind`` (SPEC section 8.4):
+    preview and refines the entry ``kind`` (SPEC section 8.4.1):
 
     - ``desktop``   - real TOS desktop (green work surface)
     - ``textscreen``- crack intro / text screen on a light background
@@ -1677,7 +1677,7 @@ def cmd_reclassify(cfg: dict, P: dict, args) -> int:
     idx = load_index(out)
     entries = idx["entries"]
     lock = acquire_lock(out)
-    stats = {"scanned": 0, "updated": 0, "skipped": 0, "no_preview": 0,
+    stats = {"scanned": 0, "updated": 0, "no_preview": 0,
              "errors": 0, "kinds": {}}
     try:
         targets = [rel for rel in sorted(entries)
