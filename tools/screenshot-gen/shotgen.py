@@ -58,6 +58,8 @@ DEFAULT_CONFIG = {
         "desktop_max_colors": 5,
         "desktop_min_mean": 0.5,
         "desktop_green_frac_min": 0.02,
+        "textscreen_min_white": 0.5,
+        "white_pixel_min": 230,
         "phash_max_distance": 6,
     },
     "score_weights": {"entropy": 0.4, "colors": 0.3, "edges": 0.3},
@@ -366,6 +368,16 @@ def analyze_image(path: Path, cfg: dict) -> dict:
     drive_led = has_drive_led(rgb)
 
     f = cfg["filters"]
+    # fraction of fully bright pixels (near-white background). Only the
+    # desktop sub-classification (refine_desktop_kind) uses it; a
+    # multi-color image (colors_raw is None) can never be textscreen.
+    white_min = int(f.get("white_pixel_min", 230))
+    if colors_raw is None:
+        white_frac = 0.0
+    else:
+        white_px = sum(cnt for cnt, (r, g, b) in colors_raw
+                       if r >= white_min and g >= white_min and b >= white_min)
+        white_frac = white_px / (rgb.width * rgb.height)
     if mean <= f["black_mean_max"] or std <= f["black_std_max"]:
         kind = "black"
     elif (n_colors <= f["desktop_max_colors"]
@@ -382,8 +394,29 @@ def analyze_image(path: Path, cfg: dict) -> dict:
     return {"kind": kind, "mean": round(mean, 4), "std": round(std, 2),
             "entropy": round(entropy, 3), "unique_colors": n_colors,
             "edges": round(edges, 2), "green_frac": round(green / n, 4),
+            "white_frac": round(white_frac, 4),
             "phash": phash, "score": round(score, 4),
             "drive_led": drive_led}
+
+
+def refine_desktop_kind(kind: str, metrics: dict, cfg: dict) -> str:
+    """Split the coarse ``desktop`` kind into finer entry categories.
+
+    A shot classified ``desktop`` by analyze_image is either a real TOS
+    desktop (green work surface), a crack intro / text screen on a light
+    background, or one on a darker/colored background. Thresholds verified
+    against the live index (SPEC section 8.4).
+
+    Other kinds (``game``, ``black``) are returned unchanged.
+    """
+    if kind != "desktop":
+        return kind
+    f = cfg["filters"]
+    if metrics.get("green_frac", 0.0) >= f["desktop_green_frac_min"]:
+        return "desktop"
+    if metrics.get("white_frac", 0.0) >= f["textscreen_min_white"]:
+        return "textscreen"
+    return "darkscreen"
 
 
 def phash_distance(a: str, b: str) -> int:
@@ -1092,8 +1125,9 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             if pick is None:
                 status = "no_usable_shots"
             else:
-                status = "desktop" if pick["kind"] == "desktop" else "done"
-                kind = pick["kind"]
+                kind = refine_desktop_kind(pick["kind"], pick, cfg)
+                status = ("desktop" if kind in
+                          ("desktop", "textscreen", "darkscreen") else "done")
                 # copy files to mirror
                 preview = preview_name
                 target = mirror_dir / preview_name
@@ -1155,7 +1189,8 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "machine": prof["machine"],
             "status": status,
             "kind": kind,
-            "preview_is_desktop": bool(kind == "desktop"),
+            "preview_is_desktop": bool(kind in
+                                       ("desktop", "textscreen", "darkscreen")),
             "preview": preview,
             "candidates": candidates,
             "click": entry.get("click"),
@@ -1421,6 +1456,17 @@ def cmd_index(cfg: dict, P: dict, args) -> int:
           f"gone {stats['gone']})")
     for k in sorted(by_status):
         print(f"  {k}: {by_status[k]}")
+
+    # kind breakdown (game/desktop/textscreen/darkscreen); counts only the
+    # entries that have a kind at all
+    by_kind = {}
+    for e in entries.values():
+        k = e.get("kind")
+        if k:
+            by_kind[k] = by_kind.get(k, 0) + 1
+    if by_kind:
+        kinds = ", ".join(f"{k} {by_kind[k]}" for k in sorted(by_kind))
+        print(f"  kinds: {kinds}")
     return 0
 
 
@@ -1612,6 +1658,99 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
     return 0
 
 
+def cmd_reclassify(cfg: dict, P: dict, args) -> int:
+    """Offline pass: split coarse ``desktop`` kinds into finer categories.
+
+    Walks index entries with ``status == "desktop"``, re-analyzes their
+    preview and refines the entry ``kind`` (SPEC section 8.4):
+
+    - ``desktop``   - real TOS desktop (green work surface)
+    - ``textscreen``- crack intro / text screen on a light background
+    - ``darkscreen``- text screen on a darker/colored background
+
+    The ``status`` stays ``desktop``, so detect/retry/desktop-app/gallery
+    behavior is unchanged. Only the index ``kind`` and the per-entry
+    metadata JSON are updated. Entries without a preview PNG (e.g. the
+    drive-LED resets) are skipped and reported.
+    """
+    out = Path(P["out"])
+    idx = load_index(out)
+    entries = idx["entries"]
+    lock = acquire_lock(out)
+    stats = {"scanned": 0, "updated": 0, "skipped": 0, "no_preview": 0,
+             "errors": 0, "kinds": {}}
+    try:
+        targets = [rel for rel in sorted(entries)
+                   if entries[rel].get("status") == "desktop"
+                   and (not args.only
+                        or args.only.lower() in rel.lower())]
+        print(f"desktop entries: {len(targets)}", flush=True)
+        for i, rel in enumerate(targets, 1):
+            if STOP_EVENT.is_set():
+                print("interrupted", flush=True)
+                break
+            e = entries[rel]
+            stats["scanned"] += 1
+            prev = e.get("preview")
+            mirror = out / Path(rel).parent
+            if not prev or not (mirror / prev).is_file():
+                stats["no_preview"] += 1
+                continue
+            try:
+                metrics = analyze_image(mirror / prev, cfg)
+            except Exception as ex:
+                stats["errors"] += 1
+                print(f"  analyze error {rel}: {ex}",
+                      file=sys.stderr, flush=True)
+                continue
+            new_kind = refine_desktop_kind(metrics["kind"], metrics, cfg)
+            stats["kinds"][new_kind] = stats["kinds"].get(new_kind, 0) + 1
+            if new_kind == e.get("kind"):
+                continue
+            if args.dry_run:
+                stats["updated"] += 1
+                continue
+            e["kind"] = new_kind
+            meta = mirror / f"{safe_filename(Path(rel).stem)}.json"
+            if meta.is_file():
+                try:
+                    with open(meta, "r", encoding="utf-8") as fh:
+                        md = json.load(fh)
+                    md["kind"] = new_kind
+                    md["preview_is_desktop"] = True
+                    with open(meta, "w", encoding="utf-8") as fh:
+                        json.dump(md, fh, indent=1)
+                except Exception as ex:
+                    print(f"  metadata error {rel}: {ex}",
+                          file=sys.stderr, flush=True)
+            stats["updated"] += 1
+            if i % 500 == 0:
+                print(f"  ... {i}/{len(targets)}", flush=True)
+                save_index(out, idx)
+        if not args.dry_run:
+            save_index(out, idx)
+    finally:
+        release_lock(lock)
+
+    kinds = ", ".join(f"{k} {v}" for k, v in sorted(stats["kinds"].items()))
+    listed = ""
+    if getattr(args, "list", ""):
+        listed = f" [list '{args.list}']"
+    print(f"reclassify: scanned {stats['scanned']}, updated "
+          f"{stats['updated']}, kinds ({kinds or '-'}), "
+          f"no preview {stats['no_preview']}, errors {stats['errors']}"
+          + (" [dry-run, nothing changed]" if args.dry_run else "")
+          + listed)
+    if args.list:
+        sel = [rel for rel in sorted(entries)
+               if entries[rel].get("kind") == args.list
+               and (not args.only or args.only.lower() in rel.lower())]
+        print(f"\nkind '{args.list}': {len(sel)}")
+        for rel in sel:
+            print(f"  {rel}")
+    return 0
+
+
 def cmd_prune(cfg: dict, P: dict, args) -> int:
     """Remove output left behind by index entries that no longer exist.
 
@@ -1736,6 +1875,18 @@ def main() -> int:
     p_clean.add_argument("--only", type=str, default="",
                          help="only paths containing this substring")
 
+    p_recl = sub.add_parser(
+        "reclassify",
+        help="offline: split coarse desktop kinds into desktop/textscreen/"
+             "darkscreen (no Hatari)")
+    p_recl.add_argument("--dry-run", action="store_true",
+                        help="report the kind counts, change nothing")
+    p_recl.add_argument("--only", type=str, default="",
+                        help="only paths containing this substring")
+    p_recl.add_argument("--list", type=str, default="",
+                        help="print the paths of this kind after the pass "
+                             "(desktop|textscreen|darkscreen)")
+
     p_prune = sub.add_parser(
         "prune",
         help="remove logs and empty output directories of removed entries")
@@ -1760,6 +1911,8 @@ def main() -> int:
         return cmd_detect(cfg, P, args)
     if args.cmd == "cleanup-drive-led":
         return cmd_cleanup_drive_led(cfg, P, args)
+    if args.cmd == "reclassify":
+        return cmd_reclassify(cfg, P, args)
     if args.cmd == "prune":
         return cmd_prune(cfg, P, args)
     return 2

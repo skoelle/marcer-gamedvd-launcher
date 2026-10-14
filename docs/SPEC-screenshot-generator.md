@@ -26,7 +26,8 @@ For every ZIP entry in scope (section 4.4):
 2. Capture screenshots at configurable time points.
 3. Filter out unusable images (black, empty, duplicates).
 4. Detect screenshots that only show the TOS desktop and flag them
-   (kind `desktop`, see section 8.4).
+   (kind `desktop`, see section 8.4), refined into the sub-kinds
+   `textscreen` and `darkscreen` (section 8.4.1).
 5. For `desktop` entries: optionally locate the GEM program icon in the
    existing preview offline (`detect`), boot once more and click the icon
    once to start the program (`run --retry-desktop`, section 7.4).
@@ -271,7 +272,8 @@ paths, so extending later is a config change, not a code change.
       f. stop Hatari via process group kill after last point or timeout
       g. collect screenshots, compute metrics (section 8)
       h. classify (black / desktop / game, drive_led), detect duplicates
-         (section 8)
+         (section 8), then split the entry kind `desktop` into the
+         sub-kinds `desktop` / `textscreen` / `darkscreen` (section 8.4.1)
       i. select best preview image (section 8.5)
       j. write preview PNG + metadata JSON to mirrored output path
       k. update index entry, append log
@@ -292,7 +294,9 @@ still allows only one tool process per `MARCER_OUT_DIR`.
 
 Besides `index`, `run` and `detect`, the tool has the `cleanup-drive-led`
 subcommand (section 8.7), a standalone offline pass that removes old
-drive-LED white screenshots and cleans the index, and the `prune`
+drive-LED white screenshots and cleans the index, the `reclassify`
+subcommand (section 8.4.1), an offline pass that refines the entry kind of
+`desktop` entries, and the `prune`
 subcommand, which deletes `logs/<rel>.log` files and empty mirror
 directories of index entries that no longer exist (used after directory
 exclusions, section 4.4).
@@ -613,11 +617,58 @@ all shots are `desktop` gets entry kind `desktop` in metadata and index. An
 entry with at least one `game` shot gets kind `game` even if desktop shots
 also exist (desktop shots are then only candidates of last resort).
 
+### 8.4.1 Desktop sub-kinds: `textscreen` and `darkscreen` (user requirement)
+
+The coarse entry kind `desktop` mixes three visually very different
+situations, which must be distinguishable in the index:
+
+| kind | meaning |
+|---|---|
+| `desktop` | a real TOS desktop (green work surface, windows, icons) |
+| `textscreen` | a crack intro / text screen on a **light** background (near-white, i.e. the TOS 238 grey) |
+| `darkscreen` | a text screen on a **darker or colored** background (grey 136/204, blue, pink, split screens) |
+
+Refinement of the chosen entry kind (applied to `pick` after selection,
+section 8.5, and only when that kind is `desktop`):
+
+- `green_frac >= desktop_green_frac_min` (default 0.02) → `desktop`
+- else `white_frac >= textscreen_min_white` (default 0.5) → `textscreen`
+- else → `darkscreen`
+
+`white_frac` is the share of pixels whose red, green and blue components
+are all at least `white_pixel_min` (default 230); it is measured on the
+full-resolution preview, `green_frac` on the 64x64 sample as in section 8.4.
+Both thresholds are configurable.
+
+Verified on the live index: the 40 real TOS desktops start at
+`green_frac` 0.0242, the non-GEM screens end at 0.0017; the light-background
+screens start at `white_frac` 0.7600, the dark/colored ones end at 0.0350
+(0.5 therefore sits in a wide, unambiguous gap).
+
+**Status is not affected.** All three sub-kinds keep entry `status:
+desktop`, so `detect` (section 7.4), `run --retry-desktop`, resume/skip
+behavior and every consumer of the index status (desktop app, gallery) are
+unchanged. Only `kind` (index and metadata JSON) changes, plus
+`preview_is_desktop`, which is `true` for all three (the shot never shows
+a game).
+
+Entries without a preview PNG (the drive-LED resets of section 8.7 and
+entries whose preview file is missing) cannot be classified and keep their
+current `kind`.
+
+**Offline pass `reclassify`.** Refines the `kind` of all existing
+`status: desktop` entries by re-analyzing their preview. Options:
+`--dry-run` (report only), `--only <substring>`, `--list <kind>` (print the
+matching entry paths, restricted by `--only`). It takes the output-dir lock,
+writes the index after every 500 entries, and updates the per-entry
+metadata JSON (`kind`, `preview_is_desktop`) when it exists.
+
 ### 8.5 Select preview
 
 - Prefer the highest-scoring `game` shot.
 - If none exists, fall back to the highest-scoring `desktop` shot, and set
-  `preview_is_desktop: true` in metadata.
+  `preview_is_desktop: true` in metadata (also for the refined kinds
+  `textscreen` and `darkscreen`, section 8.4.1).
 - If nothing exists (all black or Hatari produced no files), status is
   `no_usable_shots`.
 
@@ -768,9 +819,15 @@ would look up a preview later (section 12).
 }
 ```
 
+Allowed values for `kind` (section 8): `game`, `desktop`, `textscreen`,
+`darkscreen` (and `null` for an entry that has no preview, e.g. after a
+drive-LED reset). `status` stays `desktop` for all three desktop sub-kinds.
+
 ### 10.4 Index JSON
 
-Array or object map keyed by entry relative path with: `status`, `kind`,
+Array or object map keyed by entry relative path with: `status`, `kind`
+(`game` | `desktop` | `textscreen` | `darkscreen` | null, sections 8 and
+8.4.1),
 `size`, `mtime`, `profile`, `last_run`, `preview_path`, and for the click
 retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
 source}` or absent), `icon_found` (true/false after `detect`),
@@ -818,8 +875,9 @@ MARCER_DISPLAY=...
 
 `tools/screenshot-gen/config.example.json` (committed, contains no paths):
 scope trees, `exclude_dirs` (sub-directory names never scanned, section
-4.4), time points, timeouts, filter thresholds, profile map,
-disk-skip patterns, `keep_candidates`. A local override
+4.4), time points, timeouts, filter thresholds (including the desktop
+sub-kind thresholds `textscreen_min_white` and `white_pixel_min`, section
+8.4.1), profile map, disk-skip patterns, `keep_candidates`. A local override
 `config.local.json` (git-ignored) may exist for machine-specific tweaks.
 
 ### 11.3 Secrets
@@ -1021,6 +1079,10 @@ A conforming implementation satisfies all of the following.
 - [ ] F5 Drive-LED white screens are detected (`drive_led`) and removed by
       `cleanup-drive-led`, which deletes only detector-confirmed LED-white
       files and flags the affected entries (section 8.7).
+- [ ] F6 The entry kind `desktop` is refined into `desktop` / `textscreen` /
+      `darkscreen` (section 8.4.1) both in the pipeline and by the offline
+      `reclassify` pass, while `status` stays `desktop`; entries without a
+      preview are skipped and reported.
 
 **Output**
 - [ ] O1 Output mirrors the source tree under `MARCER_OUT_DIR`.

@@ -33,6 +33,11 @@ tools/screenshot-gen/run.sh run --retry-desktop   # click + capture (one attempt
 tools/screenshot-gen/run.sh cleanup-drive-led --dry-run   # report only
 tools/screenshot-gen/run.sh cleanup-drive-led             # delete + flag
 
+# Refine the entry kind of "desktop" entries (offline, no Hatari):
+tools/screenshot-gen/run.sh reclassify --dry-run          # kind counts only
+tools/screenshot-gen/run.sh reclassify                    # write index + JSON
+tools/screenshot-gen/run.sh reclassify --list textscreen  # print matching paths
+
 # Drop logs/empty output dirs of index entries that no longer exist
 # (e.g. after excluding directories):
 tools/screenshot-gen/run.sh prune --dry-run   # report only
@@ -173,6 +178,41 @@ Nothing is ever deleted unless the detector identifies it as LED-white.
 `--dry-run` reports the counts without changing anything; `--only
 <substring>` limits the pass. The `drive_led_refetch` flag marks the entries
 that a later pass should re-capture with the LED disabled.
+
+### Entry kinds (`game`, `desktop`, `textscreen`, `darkscreen`)
+
+Every processed entry carries a `kind` in the index and in its metadata
+JSON:
+
+- `game` — a real game screenshot was captured (status `done`).
+- `desktop` — a genuine TOS desktop: the title never auto-started (status
+  `desktop`).
+- `textscreen` — a crack intro / text screen on a light background
+  (`white_frac >= filters.textscreen_min_white`), i.e. a screen that only
+  *looks* like a desktop to the coarse classifier (status `desktop`).
+- `darkscreen` — the same on a darker or colored background (grey, blue,
+  pink, split screens), everything that is neither green desktop nor
+  light-background text (status `desktop`).
+
+The three desktop sub-kinds keep `status: desktop`, so `detect`,
+`run --retry-desktop`, resume behavior and all index consumers behave
+exactly as before — only `kind` tells them apart.
+
+New captures are classified directly by `run`. Existing entries are
+refined by the offline pass:
+
+```bash
+tools/screenshot-gen/run.sh reclassify --dry-run          # counts only
+tools/screenshot-gen/run.sh reclassify                    # update index + JSON
+tools/screenshot-gen/run.sh reclassify --list darkscreen  # print those paths
+tools/screenshot-gen/run.sh reclassify --only Arkanoid    # restrict the pass
+```
+
+`--list` prints the entry paths of the given kind (honors `--only`), so the
+categories can be reviewed directly. Entries without a preview PNG (the
+drive-LED resets) cannot be classified, are skipped and reported as
+`no preview`. Thresholds: `filters.desktop_green_frac_min` (0.02),
+`filters.textscreen_min_white` (0.5) and `filters.white_pixel_min` (230).
 
 ### Excluded directories
 
