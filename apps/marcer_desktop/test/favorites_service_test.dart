@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_desktop/favorites_service.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   late Directory tmp;
@@ -49,5 +50,63 @@ void main() {
     expect(f.contains('/g/Game.zip'), isTrue);
     expect(f.lastSaveError, isNotNull);
     expect(await dir.exists(), isFalse);
+  });
+
+  group('resolveFavoritesPath', () {
+    bool Function(String) existsIn(Set<String> existing) =>
+        (path) => existing.contains(path);
+
+    test('prefers an existing PatchDirectory file (console interop)', () {
+      final file = p.join('/patch', 'favorites.txt');
+      final path = resolveFavoritesPath(
+        patchDir: '/patch',
+        appDir: '/app',
+        cwd: '/cwd',
+        exists: existsIn({file, p.join('/app', 'favorites.txt')}),
+      );
+      expect(path, file);
+    });
+
+    test('falls back to an existing application-directory file', () {
+      final file = p.join('/app', 'favorites.txt');
+      final path = resolveFavoritesPath(
+        patchDir: '/patch',
+        appDir: '/app',
+        cwd: '/cwd',
+        exists: existsIn({file}),
+      );
+      expect(path, file);
+    });
+
+    test('falls back to an existing CWD file', () {
+      final file = p.join('/cwd', 'favorites.txt');
+      final path = resolveFavoritesPath(
+        patchDir: '/patch',
+        appDir: '/app',
+        cwd: '/cwd',
+        exists: existsIn({file}),
+      );
+      expect(path, file);
+    });
+
+    test('no file anywhere → save target is PatchDirectory when set', () {
+      final path = resolveFavoritesPath(
+        patchDir: '/patch',
+        appDir: '/app',
+        cwd: '/cwd',
+        exists: existsIn(const {}),
+      );
+      expect(path, p.join('/patch', 'favorites.txt'));
+    });
+
+    test('no file anywhere, no PatchDirectory → app dir (never CWD)', () {
+      final path = resolveFavoritesPath(
+        patchDir: null,
+        appDir: '/app',
+        cwd: '/cwd',
+        exists: existsIn(const {}),
+      );
+      expect(path, p.join('/app', 'favorites.txt'));
+    });
   });
 }

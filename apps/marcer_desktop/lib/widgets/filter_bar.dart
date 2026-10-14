@@ -12,18 +12,24 @@ import '../catalog_controller.dart';
 /// Global filter bar in two rows plus section tabs and letter row, matching
 /// the gallery webapp layout (`SPEC-gallery-webapp.md` §5): tabs + clear +
 /// view toggle, then search / status / facet dropdowns / tri-state flags /
-/// sort + order, and the letter row below.
+/// combined sort+order dropdown, and the letter row below.
 class FilterBar extends StatefulWidget {
   const FilterBar({
     super.key,
     required this.controller,
     required this.searchFocus,
+    this.onExitSearch,
   });
 
   final CatalogController controller;
 
   /// Owned by the home page so the list/grid can hand focus over on `/`.
+  /// Attached directly to the search `TextField` so typing works.
   final FocusNode searchFocus;
+
+  /// Called when Escape leaves an empty search field (focus goes back to
+  /// the grid/list).
+  final VoidCallback? onExitSearch;
 
   @override
   State<FilterBar> createState() => _FilterBarState();
@@ -62,6 +68,7 @@ class _FilterBarState extends State<FilterBar> {
         return KeyEventResult.handled;
       }
       widget.searchFocus.unfocus();
+      widget.onExitSearch?.call();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -86,7 +93,8 @@ class _FilterBarState extends State<FilterBar> {
               children: [
                 if (c.catalogMode) ...[
                   for (final s in kSections) ...[
-                    _tabButton(s, f.section == s, () => c.setSection(s)),
+                    _tabButton(_sectionLabel(s), f.section == s,
+                        () => c.setSection(s)),
                     const SizedBox(width: 6),
                   ],
                 ],
@@ -105,10 +113,12 @@ class _FilterBarState extends State<FilterBar> {
                   _fixed(
                     SizedBox(
                       width: 240,
+                      // Escape handling on the wrapper: key events bubble up
+                      // from the TextField's own focus node below.
                       child: Focus(
-                        focusNode: widget.searchFocus,
                         onKeyEvent: _searchKeys,
                         child: TextField(
+                          focusNode: widget.searchFocus,
                           controller: _search,
                           decoration: InputDecoration(
                             isDense: true,
@@ -176,16 +186,9 @@ class _FilterBarState extends State<FilterBar> {
                         'boxscan', f.boxscan, (v) => c.setFlag('boxscan', v)),
                   if (fields.contains('tos'))
                     _tosDropdown(f.tos, c.setTos),
-                  _facetMenu(
-                    'Sort: ',
-                    f.sort,
-                    [for (final k in kSortKeys) k],
-                    c.setSort,
-                    width: 120,
-                    labelOf: (v) => 'Sort: $v',
-                  ),
-                  _labelButton(f.order == 'asc' ? 'asc' : 'desc',
-                      c.toggleOrder, width: 44),
+                  _sortDropdown(f.sort, f.order, c.setSortOrder),
+                  _labelButton('★ Favorites', c.toggleFavoritesOnly,
+                      width: 96, active: c.favoritesOnly),
                   _labelButton('clear', c.resetFilters, width: 52),
                 ],
               ),
@@ -197,6 +200,11 @@ class _FilterBarState extends State<FilterBar> {
       ),
     );
   }
+
+  /// Display label for a section tab: the `cracked` section shows as
+  /// `games` (the filter value / section key itself stays unchanged).
+  String _sectionLabel(String section) =>
+      section == 'cracked' ? 'games' : section;
 
   Widget _tabButton(String label, bool active, VoidCallback onTap) {
     return InkWell(
@@ -225,19 +233,25 @@ class _FilterBarState extends State<FilterBar> {
   /// Fixed 28px height so every control in the wrapping filter row lines up.
   Widget _fixed(Widget child) => SizedBox(height: 28, child: child);
 
-  Widget _labelButton(String text, VoidCallback onTap, {double width = 48}) {
+  Widget _labelButton(String text, VoidCallback onTap,
+      {double width = 48, bool active = false}) {
     return SizedBox(
       width: width,
       height: 28,
       child: TextButton(
         onPressed: onTap,
         style: TextButton.styleFrom(
+          foregroundColor: active ? const Color(0xFFFFD54A) : null,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           minimumSize: Size(width, 28),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           alignment: Alignment.center,
         ),
-        child: Text(text, style: const TextStyle(fontSize: 12)),
+        child: Text(text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+            )),
       ),
     );
   }
@@ -333,6 +347,47 @@ class _FilterBarState extends State<FilterBar> {
         ],
         onChanged: (v) {
           if (v != null) onChanged(v);
+        },
+      ),
+    );
+  }
+
+  /// Combined sort + order dropdown in the style of the other dropdowns,
+  /// entries `<key> asc` / `<key> desc` (e.g. `year desc`). Same width as
+  /// the TOS/Bad dropdown. Replaces the former sort facet menu plus the
+  /// separate asc/desc button.
+  Widget _sortDropdown(
+      String sort, String order, void Function(String, String) onChanged) {
+    const orders = ['asc', 'desc'];
+    final value = kSortKeys.contains(sort)
+        ? '$sort:$order'
+        : '${kSortKeys.first}:$order';
+    return SizedBox(
+      width: 120,
+      height: 28,
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('sort:$value'),
+        initialValue: value,
+        isExpanded: true,
+        isDense: true,
+        decoration: InputDecoration(
+          isDense: true,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        ),
+        style: const TextStyle(fontSize: 12, color: Colors.white),
+        items: [
+          for (final k in kSortKeys)
+            for (final o in orders)
+              DropdownMenuItem(
+                value: '$k:$o',
+                child: Text('$k $o', overflow: TextOverflow.ellipsis),
+              ),
+        ],
+        onChanged: (v) {
+          if (v == null) return;
+          final i = v.lastIndexOf(':');
+          onChanged(v.substring(0, i), v.substring(i + 1));
         },
       ),
     );

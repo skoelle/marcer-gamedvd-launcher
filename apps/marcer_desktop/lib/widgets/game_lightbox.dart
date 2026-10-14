@@ -280,7 +280,47 @@ class _GameLightboxState extends State<GameLightbox> {
       _launchCurrent();
       return KeyEventResult.handled;
     }
+    if (event.character == '*' ||
+        key == LogicalKeyboardKey.asterisk) {
+      _toggleFavoriteCurrent();
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
+  }
+
+  /// `*`: favorite the currently shown variant's ZIP (not the card default).
+  void _toggleFavoriteCurrent() {
+    final c = widget.controller;
+    final item = _item;
+    if (item is GameCard) {
+      final vs = _variants;
+      final orig = _variantIdx < vs.length ? vs[_variantIdx].origIndex : 0;
+      final path = c.zipPathForCardVariant(item, orig);
+      if (path != null) c.toggleFavoritePath(path);
+    } else if (item is Entry) {
+      final path = item.effectivePath;
+      if (path != null) c.toggleFavoritePath(path);
+    }
+    setState(() {}); // refresh the star badge (the lightbox is modal)
+  }
+
+  /// True when the currently shown variant's ZIP is a favorite.
+  bool _currentVariantIsFavorite() {
+    final c = widget.controller;
+    final fav = c.favorites;
+    if (fav == null) return false;
+    final item = _item;
+    if (item is GameCard) {
+      final vs = _variants;
+      final orig = _variantIdx < vs.length ? vs[_variantIdx].origIndex : 0;
+      final path = c.zipPathForCardVariant(item, orig);
+      return path != null && fav.contains(path);
+    }
+    if (item is Entry) {
+      final path = item.effectivePath;
+      return path != null && fav.contains(path);
+    }
+    return false;
   }
 
   void _scrollActiveFilmIntoView() {
@@ -355,7 +395,7 @@ class _GameLightboxState extends State<GameLightbox> {
                                       : _IntegerScaledImage(path: imagePath),
                                 ),
                               ),
-                              if (vs.isNotEmpty) _filmstrip(vs),
+                              if (vs.isNotEmpty) _filmstripWithStar(vs),
                               Container(
                                 height: 60,
                                 color: const Color(0xFF111111),
@@ -475,6 +515,50 @@ class _GameLightboxState extends State<GameLightbox> {
     return s;
   }
 
+  /// Filmstrip with the favorite star badge (top-right): shows whether the
+  /// currently shown variant's ZIP is a favorite; click (or `*`) toggles.
+  Widget _filmstripWithStar(List<_Variant> vs) {
+    final fav = _currentVariantIsFavorite();
+    return Stack(
+      children: [
+        _filmstrip(vs),
+        Positioned(
+          top: 4,
+          right: 14,
+          child: GestureDetector(
+            onTap: () {
+              _focus.requestFocus();
+              _toggleFavoriteCurrent();
+            },
+            child: Tooltip(
+              message: fav
+                  ? 'Favorite — click (or *) to remove'
+                  : 'Not a favorite — click (or *) to add',
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A),
+                  border: Border.all(
+                      color: fav ? Colors.amber : const Color(0xFF3A3A3A)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  fav ? '★ FAVORITE' : '☆  *',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: fav ? Colors.amber : Colors.grey,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _filmstrip(List<_Variant> vs) {
     return Container(
       height: 96,
@@ -501,7 +585,12 @@ class _GameLightboxState extends State<GameLightbox> {
           return Tooltip(
             message: '${v.title} (${v.status})',
             child: GestureDetector(
-              onTap: () => _setVariant(i),
+              onTap: () {
+                // Keep keyboard focus on the lightbox so `*` works after
+                // clicking a filmstrip entry.
+                _focus.requestFocus();
+                _setVariant(i);
+              },
               child: Container(
                 width: _filmWidth,
                 margin: const EdgeInsets.only(right: _filmGap),
@@ -621,7 +710,7 @@ class _GameLightboxState extends State<GameLightbox> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       color: const Color(0xFF141414),
       child: const Text(
-        '←/→ card   ↑/↓ variant   PgUp/PgDn image   Esc close',
+        '←/→ card   ↑/↓ variant   PgUp/PgDn image   * favorite   Esc close',
         style: TextStyle(fontSize: 10, color: Colors.grey),
       ),
     );
@@ -641,6 +730,18 @@ class _GameLightboxState extends State<GameLightbox> {
             ),
       filter: widget.controller.filter,
       onPlay: v == null ? null : _launchCurrent,
+      // Group click: switch to that crew's/cracker's variant; no matching
+      // ZIP ("not found") jumps to variant 0 (the header shows the
+      // "… ZIP not found —" prefix when a focus filter missed).
+      onSelectGroup: (value, kind) {
+        final item = _item;
+        if (item is! GameCard) return;
+        final orig = focusVariant(item, value, kind);
+        final target = orig >= 0 ? orig : 0;
+        final vs = _variants;
+        final pos = vs.indexWhere((x) => x.origIndex == target);
+        _setVariant(pos >= 0 ? pos : 0);
+      },
     );
   }
 

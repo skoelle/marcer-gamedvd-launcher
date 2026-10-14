@@ -64,6 +64,9 @@ class CatalogController extends ChangeNotifier {
   List<GameCard>? _catalogCache;
   bool _catalogDirty = true;
 
+  /// Catalog-only "★ Favorites" filter (not part of [CatalogFilter]).
+  bool favoritesOnly = false;
+
   final Map<String, List<Entry>> _entryCache = {};
   final Map<String, List<Entry>> _dirCache = {};
 
@@ -88,10 +91,15 @@ class CatalogController extends ChangeNotifier {
       notices.add('RootDirectory missing: ${config.rootDirectory}');
     }
 
-    final favDir = config.patchDirectory.isNotEmpty
-        ? config.patchDirectory
-        : Directory.current.path;
-    favorites = FavoritesService.load(p.join(favDir, 'favorites.txt'));
+    // SPEC §11.1: PatchDirectory → application directory → CWD; the console
+    // launcher writes to PatchDirectory or next to its EXE with the same
+    // format (one absolute effective path per line).
+    favorites = FavoritesService.load(resolveFavoritesPath(
+      patchDir: config.patchDirectory.isEmpty ? null : config.patchDirectory,
+      appDir: File(Platform.resolvedExecutable).parent.path,
+      cwd: Directory.current.path,
+      exists: (path) => File(path).existsSync(),
+    ));
 
     browser = OverlayBrowser(
       rootDir: config.rootDirectory,
@@ -127,10 +135,14 @@ class CatalogController extends ChangeNotifier {
   bool get focusActive => crackerFocusActive || crewFocusActive;
 
   /// Filtered + sorted cards of the active section (memoized until the next
-  /// filter change).
+  /// filter change); narrowed to favorites while [favoritesOnly] is on.
   List<GameCard> get catalogCards {
     if (!_catalogDirty && _catalogCache != null) return _catalogCache!;
-    _catalogCache = queryCards(universe.cardsFor(filter.section), filter);
+    var cards = queryCards(universe.cardsFor(filter.section), filter);
+    if (favoritesOnly) {
+      cards = [for (final card in cards) if (isFavoriteCard(card)) card];
+    }
+    _catalogCache = cards;
     _catalogDirty = false;
     return _catalogCache!;
   }
@@ -219,13 +231,11 @@ class CatalogController extends ChangeNotifier {
     _filtersChanged();
   }
 
-  void setSort(String value) {
-    filter.sort = value;
-    _filtersChanged();
-  }
-
-  void toggleOrder() {
-    filter.order = filter.order == 'asc' ? 'desc' : 'asc';
+  /// Combined sort dropdown: sort key and direction in one step
+  /// (replaces the former `setSort` + `toggleOrder` pair).
+  void setSortOrder(String sort, String order) {
+    filter.sort = sort;
+    filter.order = order;
     _filtersChanged();
   }
 
@@ -238,6 +248,7 @@ class CatalogController extends ChangeNotifier {
   /// Gallery `clear`: keep the section, reset everything else.
   void resetFilters() {
     filter.reset();
+    favoritesOnly = false;
     _catalogDirty = true;
     selectedIndex = 0;
     notifyListeners();
@@ -613,21 +624,63 @@ class CatalogController extends ChangeNotifier {
 
   // -------------------------------------------------------------- favorites
 
+  /// Effective favorite key of a catalog card: the launch variant's ZIP path
+  /// (patch wins), matching what the console launcher would key.
+  String? favoriteKeyOfCard(GameCard card) {
+    final v = launchVariantForCard(card);
+    return v == null ? null : zipPathForVariant(v);
+  }
+
+  /// ZIP path of a card's variant [index] (patch wins); null when the index
+  /// is out of range.
+  String? zipPathForCardVariant(GameCard card, int index) {
+    if (index < 0 || index >= card.variants.length) return null;
+    return zipPathForVariant(card.variants[index]);
+  }
+
   bool isFavorite(Entry e) {
     final eff = e.effectivePath;
     if (eff == null) return false;
     return favorites?.contains(eff) ?? false;
   }
 
+  bool isFavoriteCard(GameCard card) {
+    final key = favoriteKeyOfCard(card);
+    if (key == null) return false;
+    return favorites?.contains(key) ?? false;
+  }
+
   /// R26: toggle keyed by the effective path (patch path when present).
+  /// Works in both views: on the selected ZIP entry (browse) or on the
+  /// selected card's launch ZIP (catalog).
   void toggleFavoriteSelected() {
-    final e = selectedEntry;
-    if (e == null || e.kind != EntryKind.zip) return;
-    final eff = e.effectivePath;
-    if (eff == null) return;
-    favorites?.toggle(eff);
+    String? key;
+    if (catalogMode) {
+      final card = selectedCard;
+      if (card == null) return;
+      key = favoriteKeyOfCard(card);
+    } else {
+      final e = selectedEntry;
+      if (e == null || e.kind != EntryKind.zip) return;
+      key = e.effectivePath;
+    }
+    if (key == null) return;
+    toggleFavoritePath(key);
+  }
+
+  /// Toggles the favorite for an absolute ZIP path and refreshes all views
+  /// (grid badges, ★ filter, virtual Favorites folder).
+  void toggleFavoritePath(String path) {
+    favorites?.toggle(path);
     _entryCache.remove(kFavoritesRel);
+    _catalogDirty = true;
     notifyListeners();
+  }
+
+  /// "★ Favorites" catalog filter toggle.
+  void toggleFavoritesOnly() {
+    favoritesOnly = !favoritesOnly;
+    _filtersChanged();
   }
 
   // -------------------------------------------------------------- statusbar

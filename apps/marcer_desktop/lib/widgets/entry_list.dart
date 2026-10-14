@@ -22,6 +22,7 @@ class EntryList extends StatefulWidget {
     required this.onToggleHelp,
     required this.onOpenLightbox,
     required this.onFocusSearch,
+    this.focusNode,
   });
 
   final CatalogController controller;
@@ -32,12 +33,16 @@ class EntryList extends StatefulWidget {
   final void Function(int variant, int image) onOpenLightbox;
   final VoidCallback onFocusSearch;
 
+  /// Optional externally-owned focus node (see `CenterGrid.focusNode`).
+  final FocusNode? focusNode;
+
   @override
   State<EntryList> createState() => _EntryListState();
 }
 
 class _EntryListState extends State<EntryList> {
-  final FocusNode _focusNode = FocusNode(debugLabel: 'entry-list');
+  final FocusNode _internalFocusNode = FocusNode(debugLabel: 'entry-list');
+  FocusNode get _focusNode => widget.focusNode ?? _internalFocusNode;
   final ScrollController _scroll = ScrollController();
   int _lastLength = 0;
   int _lastSelected = 0;
@@ -52,7 +57,7 @@ class _EntryListState extends State<EntryList> {
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
-    _focusNode.dispose();
+    if (widget.focusNode == null) _internalFocusNode.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -130,7 +135,7 @@ class _EntryListState extends State<EntryList> {
       io.exit(0);
     }
     final char = event.character;
-    if (char == '*') {
+    if (char == '*' || key == LogicalKeyboardKey.asterisk) {
       c.toggleFavoriteSelected();
       return KeyEventResult.handled;
     }
@@ -138,7 +143,7 @@ class _EntryListState extends State<EntryList> {
       widget.onToggleHelp();
       return KeyEventResult.handled;
     }
-    if (char == '/') {
+    if (char == '/' || key == LogicalKeyboardKey.slash) {
       widget.onFocusSearch();
       return KeyEventResult.handled;
     }

@@ -5,6 +5,38 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+/// Default favorites file name (SPEC.md §11.1; same as the console
+/// launcher's `FavoritesService.DefaultFileName`).
+const String kFavoritesFileName = 'favorites.txt';
+
+/// Resolves the single `favorites.txt` location used for both loading and
+/// saving (SPEC.md §11.1): the first existing file in
+/// `[patchDir, appDir, cwd]` — so a `favorites.txt` written by the console
+/// launcher next to its EXE or inside `PatchDirectory` is picked up. When no
+/// file exists yet, the save target is `patchDir` (when configured) else the
+/// application directory (never the CWD).
+String resolveFavoritesPath({
+  String? patchDir,
+  required String appDir,
+  required String cwd,
+  required bool Function(String path) exists,
+}) {
+  final dirs = <String>[
+    if (patchDir != null && patchDir.isNotEmpty) patchDir,
+    appDir,
+    cwd,
+  ];
+  final seen = <String>{};
+  for (final dir in dirs) {
+    if (!seen.add(dir)) continue;
+    final candidate = p.join(dir, kFavoritesFileName);
+    if (exists(candidate)) return candidate;
+  }
+  return p.join(
+      (patchDir != null && patchDir.isNotEmpty) ? patchDir : appDir,
+      kFavoritesFileName);
+}
+
 /// Favorites persistence per `SPEC.md` §11.1/§11.2.
 ///
 /// UTF-8 file `favorites.txt`, one absolute path per line, sorted

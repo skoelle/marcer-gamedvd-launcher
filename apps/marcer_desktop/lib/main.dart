@@ -100,6 +100,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late final CatalogController _controller;
   final FocusNode _searchFocus = FocusNode(debugLabel: 'search');
+
+  /// Shared by the grid/list so Escape in the search field can hand focus
+  /// back to the center panel.
+  final FocusNode _centerFocus = FocusNode(debugLabel: 'center');
   bool _showHelp = false;
   bool _showingLaunchError = false;
 
@@ -115,6 +119,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _controller.removeListener(_onControllerChanged);
     _searchFocus.dispose();
+    _centerFocus.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -190,7 +195,11 @@ class _HomePageState extends State<HomePage> {
         return Scaffold(
           body: Column(
             children: [
-              FilterBar(controller: c, searchFocus: _searchFocus),
+              FilterBar(
+                controller: c,
+                searchFocus: _searchFocus,
+                onExitSearch: () => _centerFocus.requestFocus(),
+              ),
               const Divider(height: 1),
               Expanded(
                 child: Row(
@@ -207,16 +216,23 @@ class _HomePageState extends State<HomePage> {
                               onToggleHelp: _toggleHelp,
                               onOpenLightbox: _openLightbox,
                               onFocusSearch: () => _searchFocus.requestFocus(),
+                              focusNode: _centerFocus,
                             )
                           : EntryList(
                               controller: c,
                               onToggleHelp: _toggleHelp,
                               onOpenLightbox: _openLightbox,
                               onFocusSearch: () => _searchFocus.requestFocus(),
+                              focusNode: _centerFocus,
                             ),
                     ),
                     const VerticalDivider(width: 1),
-                    SizedBox(width: 420, child: DetailPanel(controller: c)),
+                    SizedBox(
+                        width: 420,
+                        child: DetailPanel(
+                          controller: c,
+                          onOpenLightbox: _openLightbox,
+                        )),
                   ],
                 ),
               ),

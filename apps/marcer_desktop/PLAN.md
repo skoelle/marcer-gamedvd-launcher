@@ -8,9 +8,10 @@ index, `GameCard` build, facets, `CatalogFilter`/`matchesCard`/`sortCards`,
 fuzzy crew/cracker focus, config incl. `ShowCandidates`/`DefaultStatus`,
 Hatari launch command building).
 Master-detail UI: **gallery-style catalog grid is the default view** (section
-tabs cracked/pd/utils, search, status/publisher/crew/cracker/language/year
-dropdowns — the facet dropdowns support **type-to-filter/jump**, tri-state
-raw/pasti/boxscan, TOS/Bad, sort+order, letter row, clear), right-hand
+tabs games (`cracked`) / pd / utils, search, status/publisher/crew/cracker/
+language/year dropdowns — the facet dropdowns support **type-to-filter/jump**,
+tri-state raw/pasti/boxscan, TOS/Bad, combined sort+order dropdown (key ×
+asc/desc), letter row, clear), right-hand
 **gallery-style detail sidebar** (Game info + Release variants table + This
 ZIP + **(P)lay**), **optional overlay folder browser** (`T` / Folders button:
 folder tree with lazy expansion + virtual Favorites folder + list or grid entry
@@ -33,6 +34,7 @@ Governing decision: [`DECISION-app-architecture.md`](../../docs/DECISION-app-arc
 **Related documents:**
 - [`SPEC.md`](../../docs/SPEC.md) — technology-neutral launcher spec (overlay rules, navigation, launch)
 - [`ANALYSIS-game-data.md`](../../docs/ANALYSIS-game-data.md) — gameinfo JSON schema and matching rules
+- [`ANALYSIS-boxscan-manual-structure.md`](../../docs/ANALYSIS-boxscan-manual-structure.md) — `Boxscan/` + `Manual/` folder structure and consumer requirements (basis for the boxscan display feature)
 - [`SPEC-screenshot-generator.md`](../../docs/SPEC-screenshot-generator.md) — `index.json` + PNG layout
 - [`SPEC-gallery-webapp.md`](../../docs/SPEC-gallery-webapp.md) — reference for join rules and API payload shapes
 
@@ -159,12 +161,15 @@ git-ignored (same policy as `launcher.config.json`).
 
 Playnite-inspired master-detail layout, hybrid model:
 
-- **Top bar (gallery-style, 2026-10-11):** section tabs `cracked` / `pd` /
-  `utils`; search field (`/` focuses, Esc clears) with 250ms debounce;
-  status / publisher / crew / cracker / language / year dropdowns (facet
-  dropdowns type-to-filter/jump); tri-state `raw` / `pasti` / `boxscan`
-  (`any`/`yes`/`no`); `TOS/Bad`; sort (`name`/`year`/`publisher`/`cracker`/
-  `crew`) + asc/desc; `clear`; letter row (`any`, `0-9`, `A`–`Z`, dimmed when
+- **Top bar (gallery-style, 2026-10-11):** section tabs `games` (section key
+  `cracked`) / `pd` / `utils`; search field (`/` focuses, Esc clears) with
+  250ms debounce; status / publisher / crew / cracker / language / year
+  dropdowns (facet dropdowns type-to-filter/jump); tri-state `raw` / `pasti` /
+  `boxscan` (`any`/`yes`/`no`); `TOS/Bad`; combined sort dropdown
+  (`name`/`year`/`publisher`/`cracker`/`crew` × `asc`/`desc`, replaces the
+  sort facet + asc/desc button); `★ Favorites` toggle (catalog-only favorites
+  filter);
+  `clear`; letter row (`any`, `0-9`, `A`–`Z`, dimmed when
   absent from facets). Field order matches the gallery webapp. Facet values
   come from `CatalogUniverse` (index.json + gameinfo, **no FS scan**).
   Section switches reset the incompatible filters (status → `DefaultStatus`,
@@ -198,7 +203,10 @@ Playnite-inspired master-detail layout, hybrid model:
   lightbox on that image.
 - **Left:** overlay folder tree per `SPEC.md` §7 with `Enter`/`Backspace` semantics,
   layer labels `BOTH`/`ROOT`/`PTCH`, virtual `Favorites` folder per `SPEC.md` §11
-  (stored in `favorites.txt`, keyed by effective path).
+  (stored in `favorites.txt`, keyed by effective path; location per §11.1:
+  `PatchDirectory` → application directory → CWD — shared with the console
+  launcher. `*` toggles the selected card's/ZIP's favorite in both views;
+  catalog cards and the detail panel show a `FAVORITE` badge).
 - **Center:** list view (SPEC §9.1 line format, §10 keys, §9.3 colors) **or**
   grid/icon view — auto: grid in catalog mode or when the folder contains at
   least one ZIP. Grid shows folder tiles, ZIP cards with preview and catalog
@@ -209,12 +217,18 @@ Playnite-inspired master-detail layout, hybrid model:
   labels, status underline, `+N` candidate badges, tooltip, auto-scroll),
   candidate strip (fixed height, wraps images), info panel with release
   variants table (open ZIP highlighted) + "This ZIP" table; `←/→` item,
-  `↑/↓` variant (wrap), `PgUp/PgDn` image (wrap), Esc close.
+  `↑/↓` variant (wrap), `PgUp/PgDn` image (wrap), `*` favorite the shown
+  variant, Esc close.
+  **Clickable groups:** in the detail sidebar and the lightbox info panel,
+  clicking a crew/cracker (release-variant row or Game info value) opens
+  that group's ZIP via `focusVariant` matching — no match ("not found")
+  jumps to variant 0, which shows the "… ZIP not found —" header prefix.
 - **Right:** detail panel — large preview screenshot, candidate gallery, metadata
   (title, publisher, crew, language, disks, release, flags, `matched_via`) for
   entries and catalog cards.
 - **Keyboard:** `SPEC.md` §10 bindings plus `/` (search), `T` (catalog/folder
-  view toggle); mouse input additionally allowed (R8). Full keyboard control
+  view toggle), `*` additionally in the detail panel (shown "This ZIP") and
+  in the lightbox (shown variant); mouse input additionally allowed (R8). Full keyboard control
   is a hard requirement for this surface.
 - **Colors/rendering:** dark Playnite-like theme, but layer/selection colors follow the
   `SPEC.md` §9.3 mapping as the configurable baseline.

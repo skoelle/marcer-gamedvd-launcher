@@ -4,6 +4,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
@@ -11,12 +12,38 @@ import 'game_info_panel.dart';
 
 /// Right panel: preview screenshot + game metadata (Playnite-style detail).
 class DetailPanel extends StatelessWidget {
-  const DetailPanel({super.key, required this.controller});
+  const DetailPanel({
+    super.key,
+    required this.controller,
+    this.onOpenLightbox,
+  });
 
   final CatalogController controller;
 
+  /// Opens the lightbox on a catalog card's variant index (same contract as
+  /// `CenterGrid.onOpenLightbox`); used by crew/cracker group clicks.
+  final void Function(int variant, int image)? onOpenLightbox;
+
   @override
   Widget build(BuildContext context) {
+    // `*` here toggles the favorite of the shown ZIP (card "This ZIP"
+    // variant / browse entry) — also after clicks inside the panel moved
+    // the keyboard focus away from the grid.
+    return Focus(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.character == '*' ||
+                event.logicalKey == LogicalKeyboardKey.asterisk)) {
+          controller.toggleFavoriteSelected();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: _content(),
+    );
+  }
+
+  Widget _content() {
     final c = controller;
     if (c.catalogMode) {
       final card = c.selectedCard;
@@ -60,6 +87,8 @@ class DetailPanel extends StatelessWidget {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
+                  if (c.isFavoriteCard(card))
+                    _badge('FAVORITE', Colors.amber),
                   if (card.layer.isNotEmpty)
                     _badge(card.layer, _layerColorName(card.layer)),
                   if (card.displayStatus.isNotEmpty)
@@ -79,6 +108,15 @@ class DetailPanel extends StatelessWidget {
             variant: _primaryVariant(card),
             filter: c.filter,
             onPlay: () => c.launchSelected(),
+            // Group click: open the lightbox on that crew's/cracker's ZIP;
+            // no matching ZIP ("not found") opens variant 0, which shows the
+            // "… ZIP not found —" prefix in the lightbox header.
+            onSelectGroup: (value, kind) {
+              final open = onOpenLightbox;
+              if (open == null) return;
+              final idx = focusVariant(card, value, kind);
+              open(idx >= 0 ? idx : 0, 0);
+            },
           ),
         ),
       ],

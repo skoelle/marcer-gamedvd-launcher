@@ -20,6 +20,7 @@ class CenterGrid extends StatefulWidget {
     required this.onToggleHelp,
     required this.onOpenLightbox,
     required this.onFocusSearch,
+    this.focusNode,
   });
 
   final CatalogController controller;
@@ -30,6 +31,11 @@ class CenterGrid extends StatefulWidget {
   final void Function(int variant, int image) onOpenLightbox;
   final VoidCallback onFocusSearch;
 
+  /// Optional externally-owned focus node (the home page can hand focus
+  /// back here after leaving the search field); otherwise one is created
+  /// internally.
+  final FocusNode? focusNode;
+
   @override
   State<CenterGrid> createState() => _CenterGridState();
 }
@@ -39,7 +45,8 @@ class _CenterGridState extends State<CenterGrid> {
   static const double _cardWidth = 220;
   static const double _footerHeight = 52;
 
-  final FocusNode _focusNode = FocusNode(debugLabel: 'card-grid');
+  final FocusNode _internalFocusNode = FocusNode(debugLabel: 'card-grid');
+  FocusNode get _focusNode => widget.focusNode ?? _internalFocusNode;
   final ScrollController _scroll = ScrollController();
   int _lastSelected = 0;
   int _lastCount = 0;
@@ -54,7 +61,7 @@ class _CenterGridState extends State<CenterGrid> {
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
-    _focusNode.dispose();
+    if (widget.focusNode == null) _internalFocusNode.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -160,7 +167,7 @@ class _CenterGridState extends State<CenterGrid> {
       io.exit(0);
     }
     final char = event.character;
-    if (char == '*') {
+    if (char == '*' || key == LogicalKeyboardKey.asterisk) {
       c.toggleFavoriteSelected();
       return KeyEventResult.handled;
     }
@@ -168,7 +175,7 @@ class _CenterGridState extends State<CenterGrid> {
       widget.onToggleHelp();
       return KeyEventResult.handled;
     }
-    if (char == '/') {
+    if (char == '/' || key == LogicalKeyboardKey.slash) {
       widget.onFocusSearch();
       return KeyEventResult.handled;
     }
@@ -388,6 +395,7 @@ class _CenterGridState extends State<CenterGrid> {
   Widget _cardTile(
       CatalogController c, GameCard card, bool selected, int index) {
     final chips = <String>[
+      if (c.isFavoriteCard(card)) 'FAVORITE',
       if (card.variants.length > 1) '×${card.variants.length}',
       if (card.layer.isNotEmpty) card.layer,
       if (card.displayStatus.isNotEmpty) card.displayStatus,

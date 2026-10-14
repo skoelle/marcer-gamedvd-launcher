@@ -32,6 +32,7 @@ class GameInfoPanel extends StatelessWidget {
     this.variant,
     this.filter,
     this.onPlay,
+    this.onSelectGroup,
   });
 
   final InfoSummary? info;
@@ -48,6 +49,11 @@ class GameInfoPanel extends StatelessWidget {
   /// null.
   final VoidCallback? onPlay;
 
+  /// Click on a crew/cracker group (release-variant row or the Game info
+  /// Crew/Cracked-by values): selects that group's image. [kind] is
+  /// `'crew'` or `'cracker'`; hidden/no-op when null.
+  final void Function(String value, String kind)? onSelectGroup;
+
   @override
   Widget build(BuildContext context) {
     final info = this.info;
@@ -62,12 +68,12 @@ class GameInfoPanel extends StatelessWidget {
           ],
         ] else ...[
           _heading('Game info'),
-          ..._infoRows(info),
+          ..._infoRows(info, onSelectGroup),
           if (info.variants.length > 1) ...[
             const SizedBox(height: 8),
             _heading('Release variants (${info.variants.length})'),
             const SizedBox(height: 4),
-            _variantsTable(info, variant, filter),
+            _variantsTable(info, variant, filter, onSelectGroup),
           ],
           if (variant != null) ...[
             const SizedBox(height: 8),
@@ -133,7 +139,8 @@ class GameInfoPanel extends StatelessWidget {
             decoration: TextDecoration.underline),
       );
 
-  List<Widget> _infoRows(InfoSummary info) {
+  List<Widget> _infoRows(
+      InfoSummary info, void Function(String value, String kind)? onSelectGroup) {
     final rows = <Widget>[];
     const fields = <String, String>{
       'publisher': 'Publisher',
@@ -171,7 +178,12 @@ class GameInfoPanel extends StatelessWidget {
     fields.forEach((key, label) {
       final val = values[key] ?? '';
       if (val.isEmpty) return;
-      rows.add(_kv(label, val));
+      final groupKind =
+          key == 'crew' ? 'crew' : (key == 'cracked_by' ? 'cracker' : null);
+      rows.add(_kv(label, val,
+          onTap: (groupKind != null && onSelectGroup != null)
+              ? () => onSelectGroup(val, groupKind)
+              : null));
     });
     final flags = <String>[
       if (info.rawDump) 'RAW dump',
@@ -186,9 +198,10 @@ class GameInfoPanel extends StatelessWidget {
   /// Release-variants table; the row matching the selected ZIP (cracker or
   /// crew name contained in the ZIP filename) is highlighted. With an active
   /// crew/cracker filter whose ZIP could not be identified, the group's row
-  /// is highlighted instead (cracker first).
-  Widget _variantsTable(
-      InfoSummary info, ZipVariantView? v, CatalogFilter? filter) {
+  /// is highlighted instead (cracker first). Rows are clickable when
+  /// [onSelectGroup] is set (crew first, else cracker).
+  Widget _variantsTable(InfoSummary info, ZipVariantView? v, CatalogFilter? filter,
+      void Function(String value, String kind)? onSelectGroup) {
     final f = filter;
     var selIdx = -1;
     if (v != null) {
@@ -241,68 +254,73 @@ class GameInfoPanel extends StatelessWidget {
             ),
           ),
           for (var ri = 0; ri < info.variants.length; ri++)
-            Container(
-              color: ri == selIdx
-                  ? Colors.cyan.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              child: Row(
-                children: [
-                  Expanded(
-                      flex: 4,
-                      child: Text(
-                        '${info.variants[ri]['title'] ?? ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ri == selIdx
-                            ? cell.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600)
-                            : cell,
-                      )),
-                  Expanded(
-                      flex: 3,
-                      child: Text(
-                        '${info.variants[ri]['cracked_by'] ?? ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ri == selIdx
-                            ? cell.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600)
-                            : cell,
-                      )),
-                  Expanded(
-                      flex: 3,
-                      child: Text(
-                        '${info.variants[ri]['crew'] ?? ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ri == selIdx
-                            ? cell.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600)
-                            : cell,
-                      )),
-                  SizedBox(
-                    width: 44,
-                    child: Text(
-                      '${info.variants[ri]['release'] ?? ''}',
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      textAlign: TextAlign.right,
-                      style: ri == selIdx
-                          ? cell.copyWith(
-                              color: Colors.white, fontWeight: FontWeight.w600)
-                          : cell,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _variantRow(info.variants[ri], ri == selIdx, cell, onSelectGroup),
         ],
       ),
     );
+  }
+
+  Widget _variantRow(Map<String, dynamic> rv, bool selected,
+      TextStyle cell, void Function(String value, String kind)? onSelectGroup) {
+    final crew = (rv['crew'] ?? '').toString().trim();
+    final cracker = (rv['cracked_by'] ?? '').toString().trim();
+    VoidCallback? onTap;
+    if (onSelectGroup != null) {
+      if (crew.isNotEmpty) {
+        onTap = () => onSelectGroup(crew, 'crew');
+      } else if (cracker.isNotEmpty) {
+        onTap = () => onSelectGroup(cracker, 'cracker');
+      }
+    }
+    final rowStyle = selected
+        ? cell.copyWith(color: Colors.white, fontWeight: FontWeight.w600)
+        : cell;
+    final row = Container(
+      color: selected
+          ? Colors.cyan.withValues(alpha: 0.15)
+          : Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+              flex: 4,
+              child: Text(
+                '${rv['title'] ?? ''}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: rowStyle,
+              )),
+          Expanded(
+              flex: 3,
+              child: Text(
+                cracker,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: rowStyle,
+              )),
+          Expanded(
+              flex: 3,
+              child: Text(
+                crew,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: rowStyle,
+              )),
+          SizedBox(
+            width: 44,
+            child: Text(
+              '${rv['release'] ?? ''}',
+              maxLines: 1,
+              overflow: TextOverflow.clip,
+              textAlign: TextAlign.right,
+              style: rowStyle,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (onTap == null) return row;
+    return InkWell(onTap: onTap, child: row);
   }
 
   List<Widget> _zipTable(ZipVariantView v) {
@@ -315,23 +333,27 @@ class GameInfoPanel extends StatelessWidget {
     ];
   }
 
-  Widget _kv(String label, String value) {
+  Widget _kv(String label, String value, {VoidCallback? onTap}) {
+    final row = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(label,
+              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        ),
+        Expanded(
+          child: Text(value,
+              style: const TextStyle(fontSize: 12, color: Colors.white70)),
+        ),
+      ],
+    );
+    if (onTap == null) {
+      return Padding(padding: const EdgeInsets.only(bottom: 6), child: row);
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(label,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(fontSize: 12, color: Colors.white70)),
-          ),
-        ],
-      ),
+      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(3), child: row),
     );
   }
 }

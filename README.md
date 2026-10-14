@@ -32,9 +32,11 @@ archive and its derived artifacts.
 ### ✨ Features
 
 - **Gallery-style catalog grid** as the default view — every game as a card
-  with its best screenshot, section tabs (`cracked` / `pd` / `utils`) and
+  with its best screenshot, section tabs (`games` / `pd` / `utils`; `games`
+  is the former `cracked` section) and
   global filters: search, status, publisher, crew, cracker, language, year,
-  tri-state `raw` / `pasti` / `boxscan`, `TOS/Bad`, and sort + order.
+  tri-state `raw` / `pasti` / `boxscan`, `TOS/Bad`, and a combined sort
+  dropdown (`name asc` … `crew desc`, same width as `TOS/Bad`).
 - **Type-to-filter facet dropdowns** — start typing to jump to a publisher,
   crew, cracker, language or year. The open menu spans ¾ of the screen
   height; reopening a facet after picking an entry jumps to exactly that
@@ -44,8 +46,12 @@ archive and its derived artifacts.
 - **Crew / cracker focus** — pick a crew or cracker and each card jumps to
   *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
   matching tolerates `&`/`and` and small typos).
+- **Clickable groups** — clicking a crew/cracker in the detail sidebar (or
+  the lightbox info panel) opens that group's ZIP in the lightbox; when no
+  ZIP matches, the lightbox opens with a "… ZIP not found —" hint.
 - **Full-screen lightbox** — integer-upscaled pixel-art-safe image, variant
-  filmstrip with `+N` candidate badges and a scrollbar, candidate strip and
+  filmstrip with `+N` candidate badges, a scrollbar and a clickable favorite
+  star (top-right, toggled with `*`), candidate strip and
   the release-variant table; `←/→` cards, `↑/↓` variants, `PgUp/PgDn` images.
 - **Optional folder browser** (`T`) — the overlay tree (main + patch layer)
   with layer labels and the virtual `Favorites` folder.
@@ -58,7 +64,12 @@ archive and its derived artifacts.
   list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
   detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
   bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking.
-- **Favorites** (`*`) persisted to `favorites.txt`.
+- **Favorites** (`*` on the selected ZIP/card) with `FAVORITE` badges, a
+  **★ Favorites** filter toggle in the filter bar and the virtual `Favorites`
+  folder in the browser view. Persisted to `favorites.txt` (one absolute path
+  per line — same format and search order as the console launcher:
+  `PatchDirectory` → application directory → CWD, so existing console
+  favorites are shared as long as both apps see the same absolute paths).
 - **Degrades gracefully** — missing `index.json` or gameinfo data simply shows
   empty states instead of crashing.
 
@@ -123,7 +134,7 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `PgUp` / `PgDn` | Jump one page up / down |
 | `Enter` / `→` | Open the folder / show the lightbox |
 | `Backspace` | Parent directory (in catalog view: clear filters) |
-| `*` | Toggle favorite on the selected ZIP |
+| `*` | Toggle favorite on the selected ZIP / catalog card (also in the detail panel and, in the lightbox, on the shown variant) |
 | `P` | Launch the selected ZIP with Hatari |
 | `/` | Focus the search field |
 | `T` | Toggle catalog grid / folder view |
@@ -131,7 +142,7 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `ESC` / `q` | Exit |
 
 In the **lightbox**: `←`/`→` switch card, `↑`/`↓` switch variant, `PgUp`/`PgDn`
-switch image, `Space`/`P` launch the shown ZIP, `Esc` closes.
+switch image, `Space`/`P` launch the shown ZIP, `*` favorite it, `Esc` closes.
 
 > **Launching** needs `Hatari.Executable` in `desktop.config.json` and a TOS ROM
 > (`TOS.IMG`) next to the app — same convention as the console launcher; the
@@ -183,7 +194,7 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 |---|---|---|
 | [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) |
 | [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR`). | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) |
-| [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`. | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
+| [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`; entry kinds are `game`, `desktop`, `textscreen`, `darkscreen` (offline `reclassify` pass). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
 
 ---
 
@@ -242,6 +253,7 @@ The design and specification documents live in [`docs/`](docs/README.md):
 |---|---|
 | [`docs/SPEC.md`](docs/SPEC.md) | Technology-neutral behavioral specification of the launcher (overlay rules, navigation, rendering, launch) — the basis for reimplementing it in any language. |
 | [`docs/ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) | Analysis of the external game metadata sources (XLS workbooks, data model, matching, roadmap). |
+| [`docs/ANALYSIS-boxscan-manual-structure.md`](docs/ANALYSIS-boxscan-manual-structure.md) | Analysis of the `Boxscan/` and `Manual/` companion folders (location, naming, ZIP/loose-file structure, edge cases, consumer requirements). |
 | [`docs/DECISION-app-architecture.md`](docs/DECISION-app-architecture.md) | Why the desktop app is Flutter, the gallery webapp is Python + HTML, and the couch surface is planned. |
 | [`docs/SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) | Behavioral spec of the gallery webapp (`tools/gallery`) — the design reference for the desktop catalog. |
 | [`docs/SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) | Screenshot pipeline and the `index.json` artifact consumed by both UIs. |
