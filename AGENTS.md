@@ -21,7 +21,7 @@ The implementation is split into focused modules (files) under the `apps/marcer_
 Tooling (Python, not part of the launcher build; paths via git-ignored `local/paths.env`, run via each tool's `run.sh` with the repo `.venv`):
 - tools/gameinfo-gen/: Extracts game metadata from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR` (see `docs/ANALYSIS-game-data.md`).
 - tools/gallery/: Interactive gallery webapp over the screenshot archive joined with game metadata (see `docs/SPEC-gallery-webapp.md`); replaces the former static `shotgen html` gallery.
-- tools/screenshot-gen/: Generates preview screenshots via Hatari on a virtual display and classifies them (entry `kind`: `game`, `desktop`, `textscreen`, `darkscreen`; offline `reclassify` pass) (see `docs/SPEC-screenshot-generator.md`).
+- tools/screenshot-gen/: Generates preview screenshots via Hatari on a virtual display and classifies them (entry `kind`: `game`, `desktop`, `textscreen`, `darkscreen`, `no_game_image`; offline `reclassify` pass; drive-LED resets re-captured via `run --retry-drive-led`) (see `docs/SPEC-screenshot-generator.md`).
 
 Docs: `docs/` holds the specs, analysis and decision records (`SPEC.md`, `ANALYSIS-game-data.md`, `ANALYSIS-boxscan-manual-structure.md`, `DECISION-app-architecture.md`, `SPEC-gallery-webapp.md`, `SPEC-screenshot-generator.md`, `BUGS.md`; indexed by `docs/README.md`) plus `docs/images/` (screenshots linked from the README). `README.md` and `AGENTS.md` stay at the repo root.
 

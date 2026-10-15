@@ -261,7 +261,9 @@ paths, so extending later is a config change, not a code change.
 [3] select pending entries (status != done, or --force;
          with --retry-desktop: only status == desktop with a stored
          icon hit that has not been clicked yet, section 7.4;
-         with --retry-no-usable: only status == no_usable_shots)
+         with --retry-no-usable: only status == no_usable_shots;
+         with --retry-drive-led: only status == desktop with the
+         drive_led_refetch flag set and kind != no_game_image, section 8.7)
         |
 [4] per entry:
       a. copy ZIP from NAS to local staging dir     (NAS is read-only)
@@ -628,6 +630,12 @@ situations, which must be distinguishable in the index:
 | `textscreen` | a crack intro / text screen on a **light** background (near-white, i.e. the TOS 238 grey) |
 | `darkscreen` | a text screen on a **darker or colored** background (grey 136/204, blue, pink, split screens) |
 
+A fifth kind, `no_game_image`, is not derived from pixels: it marks a
+drive-LED reset entry (section 8.7) whose ZIP contains no bootable
+disk/program image. `run` and `reclassify` never assign it (they cannot
+produce a preview for such an entry); it is set by the offline marking
+pass and skipped by `run --retry-drive-led`.
+
 Refinement of the chosen entry kind (applied to `pick` after selection,
 section 8.5, and only when that kind is `desktop`):
 
@@ -712,6 +720,24 @@ limits the pass. Live run *(verified)*: 1787 entries touched, 1150
 preview-white (163 bootable -> `drive_led_refetch`), 639 candidate-only;
 0 LED-white previews/candidates remained afterwards.
 
+`run --retry-drive-led` (section 5) re-captures exactly those reset
+entries with `--drive-led false`. When such an entry finally yields a
+usable preview, `process_entry` clears `drive_led` and
+`drive_led_refetch` again — the flag is a one-shot marker, not a
+permanent label. A refetch that still shows nothing (uniform black *or*
+uniform white; both are classified `black` in section 8.4 because of
+their near-zero pixel standard deviation) ends as `no_usable_shots` with
+no preview — the old blank LED-white placeholder is gone, and the entry
+remains reachable via `run --retry-no-usable`.
+
+Reset entries whose ZIP contains **no** bootable disk/program image
+(manuals, box scans, raw dumps, data-only ZIPs) can never produce a game
+screenshot. They stay `status: desktop` with `kind: no_game_image`
+instead of being re-captured endlessly, and are skipped by
+`run --retry-drive-led`. Bootability uses the same extension set as
+`cleanup-drive-led` (`.stx`, `.msa`, `.st`, `.dim`, `.ipf`, `.prg`,
+`.stt`, `.pckd`, `.pkd`).
+
 ---
 
 ## 9. Robustness
@@ -781,6 +807,19 @@ would look up a preview later (section 12).
 - Characters that are unsafe on common file systems (`:`, `?`, `*`) are
   replaced with `_`. The original name is preserved in metadata.
 
+**Case-insensitive mirrors (Synology SMB).** The output mirror may live on a
+case-insensitive share. When two entries differ only in the case of their
+name (e.g. `Crossbow - Medway Boys.zip` and `Crossbow - Medway boys.zip`),
+the canonical `<base>.png` / `<base>.json` cannot exist for the second one:
+the NAS accepts the write but silently renames the file to
+`<base>_DiskStation_<date>_Upload…CaseConflict.png`. The affected files
+still form a valid preview/metadata pair. The tool therefore reads metadata
+via a fallback (`metadata_path`): canonical name first, otherwise the single
+`<base>*CaseConflict.json` in that directory; a re-run writes back to the
+found conflict file instead of creating a second one. The index `preview`
+field points at the conflict-renamed PNG, so consumers never need to know
+the rule.
+
 ### 10.3 Metadata JSON (per entry)
 
 ```json
@@ -820,14 +859,15 @@ would look up a preview later (section 12).
 ```
 
 Allowed values for `kind` (section 8): `game`, `desktop`, `textscreen`,
-`darkscreen` (and `null` for an entry that has no preview, e.g. after a
-drive-LED reset). `status` stays `desktop` for all three desktop sub-kinds.
+`darkscreen`, `no_game_image` (and `null` for an entry that has no preview,
+e.g. after a drive-LED reset). `status` stays `desktop` for all three
+desktop sub-kinds.
 
 ### 10.4 Index JSON
 
 Array or object map keyed by entry relative path with: `status`, `kind`
-(`game` | `desktop` | `textscreen` | `darkscreen` | null, sections 8 and
-8.4.1),
+(`game` | `desktop` | `textscreen` | `darkscreen` | `no_game_image` | null,
+sections 8 and 8.4.1),
 `size`, `mtime`, `profile`, `last_run`, `preview_path`, and for the click
 retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
 source}` or absent), `icon_found` (true/false after `detect`),
@@ -836,7 +876,8 @@ source}` or absent), `icon_found` (true/false after `detect`),
 `click-not-needed` | null). For drive-LED cleanup (section 8.7): `drive_led`
 (true when a blank LED-white preview/candidate was found and removed) and
 `drive_led_refetch` (true when a bootable `drive_led` entry should be
-re-captured later). Updated after every entry so an
+re-captured later; cleared again by `run --retry-drive-led` once that entry
+produces a usable preview). Updated after every entry so an
 interrupted run loses at most one entry of work.
 
 ---
@@ -1078,7 +1119,10 @@ A conforming implementation satisfies all of the following.
       `preview_is_desktop: true` if no game shot exists.
 - [ ] F5 Drive-LED white screens are detected (`drive_led`) and removed by
       `cleanup-drive-led`, which deletes only detector-confirmed LED-white
-      files and flags the affected entries (section 8.7).
+      files and flags the affected entries (section 8.7); the flagged
+      bootable ones are re-captured by `run --retry-drive-led`, which clears
+      the flags on success, and the non-bootable ones are marked
+      `kind: no_game_image`.
 - [ ] F6 The entry kind `desktop` is refined into `desktop` / `textscreen` /
       `darkscreen` (section 8.4.1) both in the pipeline and by the offline
       `reclassify` pass, while `status` stays `desktop`; entries without a

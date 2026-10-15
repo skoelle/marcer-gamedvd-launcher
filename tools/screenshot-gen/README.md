@@ -32,6 +32,7 @@ tools/screenshot-gen/run.sh run --retry-desktop   # click + capture (one attempt
 # Remove blank white previews that only show Hatari's drive-LED overlay:
 tools/screenshot-gen/run.sh cleanup-drive-led --dry-run   # report only
 tools/screenshot-gen/run.sh cleanup-drive-led             # delete + flag
+tools/screenshot-gen/run.sh run --retry-drive-led         # refetch the flagged bootable ones
 
 # Refine the entry kind of "desktop" entries (offline, no Hatari):
 tools/screenshot-gen/run.sh reclassify --dry-run          # kind counts only
@@ -177,7 +178,29 @@ affected images:
 Nothing is ever deleted unless the detector identifies it as LED-white.
 `--dry-run` reports the counts without changing anything; `--only
 <substring>` limits the pass. The `drive_led_refetch` flag marks the entries
-that a later pass should re-capture with the LED disabled.
+that a later pass should re-capture with the LED disabled:
+
+```bash
+tools/screenshot-gen/run.sh run --retry-drive-led   # re-capture with --drive-led false
+```
+
+`run --retry-drive-led` selects exactly the `status: desktop` entries that
+carry `drive_led_refetch` and ignores the other desktop entries, so a plain
+`run` never touches them by accident. When such an entry finally yields a
+usable preview, `process_entry` clears `drive_led` and `drive_led_refetch`
+again — the flag is a one-shot marker, not a permanent label.
+
+A refetch that still shows nothing (uniform black **or** uniform white —
+both have a near-zero pixel standard deviation and are classified `black`)
+ends as `no_usable_shots` with no preview. That is expected for titles whose
+disk really produces no output: the blank LED-white placeholder of the old
+runs is gone, the entry can still be picked up later with
+`run --retry-no-usable` (e.g. with longer timepoints).
+
+Entries that were reset this way but contain **no** bootable disk/program
+image (manuals, box scans, raw dumps, data-only ZIPs) can never produce a
+game screenshot. They stay `status: desktop` with `kind: no_game_image`
+instead of being re-captured endlessly.
 
 ### Entry kinds (`game`, `desktop`, `textscreen`, `darkscreen`)
 
@@ -193,6 +216,10 @@ JSON:
 - `darkscreen` — the same on a darker or colored background (grey, blue,
   pink, split screens), everything that is neither green desktop nor
   light-background text (status `desktop`).
+- `no_game_image` — the ZIP contains no bootable disk/program image, so no
+  game screenshot is possible at all (status `desktop`, no preview). These
+  entries are only produced by the `cleanup-drive-led` reset and are skipped
+  by `run --retry-drive-led`.
 
 The three desktop sub-kinds keep `status: desktop`, so `detect`,
 `run --retry-desktop`, resume behavior and all index consumers behave

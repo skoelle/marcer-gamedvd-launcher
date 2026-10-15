@@ -692,6 +692,24 @@ def safe_filename(name: str) -> str:
     return re.sub(r'[:?*"\x00-\x1f]', "_", name)
 
 
+def metadata_path(mirror: Path, base: str):
+    """Locate the per-entry metadata JSON for a mirror directory.
+
+    The canonical name is ``<base>.json``. On a case-insensitive mirror
+    (e.g. a Synology SMB share) that name is impossible when a sibling
+    entry differs only in case: the NAS silently renames the written file
+    to ``<base>_DiskStation_…CaseConflict.json``. Those conflict files
+    carry the same metadata, so fall back to the single one of them.
+    """
+    canonical = mirror / f"{base}.json"
+    if canonical.is_file():
+        return canonical
+    conflicts = sorted(mirror.glob(f"{base}*CaseConflict.json"))
+    if len(conflicts) == 1:
+        return conflicts[0]
+    return None
+
+
 def find_window_target(path: Path, cfg: dict):
     """Find the next double-click target inside an opened GEM window.
 
@@ -942,7 +960,10 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     mirror_dir = out / rel_path.parent
     base = safe_filename(rel_path.stem)
     preview_name = f"{base}.png"
-    meta_path = mirror_dir / f"{base}.json"
+    # keep writing to an existing case-conflict metadata file instead of
+    # triggering a second NAS rename
+    meta_path = metadata_path(mirror_dir, base) \
+        or (mirror_dir / f"{base}.json")
     mirror_dir.mkdir(parents=True, exist_ok=True)
 
     tmp_root = Path(cfg["tmp_dir"])
@@ -1175,6 +1196,10 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             entry["duration_s"] = round(time.time() - t_start, 1)
             entry["zip_contents"] = zip_contents
             entry["capture_method"] = "cmd-fifo"
+            if preview:
+                # a fresh preview supersedes the drive-LED reset state
+                entry.pop("drive_led", None)
+                entry.pop("drive_led_refetch", None)
 
         commit(_commit)
 
@@ -1369,6 +1394,16 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
                 continue
         elif args.retry_no_usable:
             if e["status"] != "no_usable_shots":
+                continue
+        elif args.retry_drive_led:
+            # drive-LED resets (section 8.7): re-capture the bootable ones
+            # with --drive-led false; the non-bootable ones are marked
+            # kind=no_game_image and skipped here too
+            if e["status"] != "desktop":
+                continue
+            if not e.get("drive_led_refetch"):
+                continue
+            if e.get("kind") == "no_game_image":
                 continue
         elif e["status"] in ("done", "desktop", "no_usable_shots") \
                 and not args.force:
@@ -1595,7 +1630,7 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
             if not preview_led and not led_cands:
                 continue
             base = safe_filename(Path(rel).stem)
-            meta = mirror / f"{base}.json"
+            meta = metadata_path(mirror, base)
 
             if not preview_led:
                 # the preview is fine; only drop the LED-white candidates
@@ -1711,8 +1746,8 @@ def cmd_reclassify(cfg: dict, P: dict, args) -> int:
                 stats["updated"] += 1
                 continue
             e["kind"] = new_kind
-            meta = mirror / f"{safe_filename(Path(rel).stem)}.json"
-            if meta.is_file():
+            meta = metadata_path(mirror, safe_filename(Path(rel).stem))
+            if meta is not None:
                 try:
                     with open(meta, "r", encoding="utf-8") as fh:
                         md = json.load(fh)
@@ -1856,6 +1891,10 @@ def main() -> int:
     p_run.add_argument("--retry-no-usable", action="store_true",
                        help="retry only entries that ended as no_usable_shots "
                             "(not reprocessed by a normal run)")
+    p_run.add_argument("--retry-drive-led", action="store_true",
+                       help="retry the bootable drive-LED resets "
+                            "(status desktop + drive_led_refetch): capture "
+                            "them again with --drive-led false")
 
     p_detect = sub.add_parser(
         "detect",
@@ -1896,10 +1935,11 @@ def main() -> int:
     args = ap.parse_args()
     if args.cmd == "run" and args.jobs < 1:
         ap.error("--jobs must be >= 1")
-    if getattr(args, "retry_desktop", False) \
-            and getattr(args, "retry_no_usable", False):
-        ap.error("--retry-desktop and --retry-no-usable are mutually "
-                 "exclusive")
+    retry_flags = [getattr(args, f, False) for f in
+                   ("retry_desktop", "retry_no_usable", "retry_drive_led")]
+    if sum(1 for v in retry_flags if v) > 1:
+        ap.error("--retry-desktop, --retry-no-usable and --retry-drive-led "
+                 "are mutually exclusive")
     cfg = load_config()
     P = paths()
 

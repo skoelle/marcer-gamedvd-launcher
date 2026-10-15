@@ -201,7 +201,9 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 |---|---|---|
 | [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) |
 | [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR`). | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) |
-| [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`; entry kinds are `game`, `desktop`, `textscreen`, `darkscreen` (offline `reclassify` pass). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
+| [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`; entry kinds are `game`, `desktop`, `textscreen`, `darkscreen`,
+`no_game_image` (offline `reclassify` pass; drive-LED resets re-captured via
+`run --retry-drive-led`). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
 
 ---
 
