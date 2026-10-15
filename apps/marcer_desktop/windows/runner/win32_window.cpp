@@ -150,7 +150,12 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // SW_SHOW (current size/position), NOT SW_SHOWNORMAL: this runs from the
+  // first-frame callback in FlutterWindow::OnCreate and SW_SHOWNORMAL would
+  // restore a window that Dart already maximized (waitUntilReadyToShow
+  // callback) back to its normal size — Windows-only startup flicker
+  // "maximized, then small again".
+  return ShowWindow(window_handle_, SW_SHOW);
 }
 
 // static

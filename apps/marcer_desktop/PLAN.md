@@ -189,6 +189,12 @@ git-ignored (same policy as `launcher.config.json`).
   (`Window.maximized`, default `true`); `false` applies `Window.width/height`
   as the startup and restore size, centered. Before that the size fields were
   parsed but unused — the runners' hardcoded 1280×720 default looked small.
+  **Windows gotcha (2026-10-15):** the Flutter template runner reveals the
+  window on the first frame via `Win32Window::Show()`; with the template's
+  `SW_SHOWNORMAL` that *restored* an already-maximized window to normal size
+  ("maximized, then small again"). The runner now uses `SW_SHOW` (current
+  state), plus a post-first-frame `isMaximized()` safeguard in `main.dart`
+  (`maximize()` is a no-op when the state already holds).
 
 ---
 

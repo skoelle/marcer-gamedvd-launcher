@@ -77,6 +77,23 @@ Future<void> main() async {
     },
   );
   runApp(MarcerDesktopApp(config: config, configError: configError));
+  if (maximized) {
+    // Windows safeguard: the runner reveals the window on the first frame
+    // (win32_window.cpp Show() uses SW_SHOW since the SW_SHOWNORMAL fix) —
+    // re-assert the maximize state once after that, just in case a late
+    // size event still dropped it. No-op when already maximized (the
+    // native Maximize checks the window state first).
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      try {
+        if (!await windowManager.isMaximized()) {
+          await windowManager.maximize();
+        }
+      } catch (_) {
+        // Best effort — never block startup on window state.
+      }
+    });
+  }
 }
 
 class MarcerDesktopApp extends StatelessWidget {
