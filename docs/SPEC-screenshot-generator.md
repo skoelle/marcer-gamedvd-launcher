@@ -658,7 +658,9 @@ desktop`, so `detect` (section 7.4), `run --retry-desktop`, resume/skip
 behavior and every consumer of the index status (desktop app, gallery) are
 unchanged. Only `kind` (index and metadata JSON) changes, plus
 `preview_is_desktop`, which is `true` for all three (the shot never shows
-a game).
+a game). Manual curation may later move such an entry to `status: done`
+while keeping `kind: textscreen` / `darkscreen` — a legal combination that
+no pass of this tool rewrites (section 10.5).
 
 Entries without a preview PNG (the drive-LED resets of section 8.7 and
 entries whose preview file is missing) cannot be classified and keep their
@@ -713,6 +715,9 @@ scales). It carries no game content.
 - only some candidates are LED-white: only those candidate PNGs are
   deleted; the preview, metadata JSON and status are left untouched and no
   flag is set.
+- entries with `status: done` are **never touched**: `done` is final
+  (section 10.5) — a real game shot or a manual curation decision must not
+  be reset, even if its preview were ever classified as LED-white.
 
 Only files the detector identifies as LED-white are ever deleted. A
 `--dry-run` reports the counts and changes nothing; `--only <substring>`
@@ -879,6 +884,49 @@ source}` or absent), `icon_found` (true/false after `detect`),
 re-captured later; cleared again by `run --retry-drive-led` once that entry
 produces a usable preview). Updated after every entry so an
 interrupted run loses at most one entry of work.
+
+### 10.5 Status × kind combinations
+
+Not every pairing of `status` and `kind` occurs; consumers must not infer
+one field from the other.
+
+**Pipeline-generated (fixed by construction):**
+
+| status | kind values it can ever have |
+|---|---|
+| `done` | `game` |
+| `desktop` | `desktop`, `textscreen`, `darkscreen`, `null` (no preview: drive-LED reset, missing preview file) |
+| `no_usable_shots` | `null` |
+| `skipped_disk_n` | `null` |
+| `error` | `null` |
+| `pending`, `interrupted`, `timeout` | `null` (transient states; a completed run leaves none behind) |
+
+**Manually curated (desktop app `C` dialog, written to index + metadata
+JSON under the `shotgen.lock`):**
+
+| status | kind values offered |
+|---|---|
+| `done` | `game`, `textscreen`, `darkscreen` |
+| `desktop` | `desktop`, `textscreen`, `darkscreen` |
+| `no_usable_shots`, `interrupted`, `pending`, `skipped_disk_n` | `null` |
+
+Rules:
+
+- **Never assume `done ⇒ kind game`.** `done` with `textscreen` /
+  `darkscreen` is a legal state created only by manual curation (it is
+  currently empty, but must be treated as valid). `done` with
+  `no_game_image` is not offered by the dialog and must not be written.
+- **`status: done` is final for this tool.** `run`, `detect`, `reclassify`
+  and all `--retry-*` selections key on `status == desktop`, and
+  `cleanup-drive-led` skips `done` entries explicitly (section 8.7), so a
+  curated kind survives every later pass. `status: desktop` stays
+  re-classifiable by `run` and `reclassify`.
+- The desktop app's `desktop text` / `desktop black` status filters are
+  deliberately **strict `status: desktop`**: an entry curated to `done`
+  leaves those filters and appears as a regular `done` card/variant whose
+  kind is shown as text (variant table / detail view).
+- Display order (`kStatusOrder` in the desktop app, `STATUS_ORDER` in the
+  gallery) depends on `status` only; `kind` is always an independent label.
 
 ---
 
@@ -1119,8 +1167,9 @@ A conforming implementation satisfies all of the following.
       `preview_is_desktop: true` if no game shot exists.
 - [ ] F5 Drive-LED white screens are detected (`drive_led`) and removed by
       `cleanup-drive-led`, which deletes only detector-confirmed LED-white
-      files and flags the affected entries (section 8.7); the flagged
-      bootable ones are re-captured by `run --retry-drive-led`, which clears
+      files, never touches entries with `status: done` and flags the
+      affected entries (section 8.7); the flagged bootable ones are
+      re-captured by `run --retry-drive-led`, which clears
       the flags on success, and the non-bootable ones are marked
       `kind: no_game_image`.
 - [ ] F6 The entry kind `desktop` is refined into `desktop` / `textscreen` /

@@ -1598,6 +1598,9 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
     ``drive_led: true``. Bootable entries additionally get
     ``drive_led_refetch: true`` so a later pass can re-capture them with
     ``--drive-led false``.
+
+    Entries whose status is ``done`` are skipped entirely: those are final
+    (manual curation or a real game shot) and must not be reset.
     """
     out = Path(P["out"])
     idx = load_index(out)
@@ -1620,6 +1623,10 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
                        or args.only.lower() in rel.lower())]
         for rel in targets:
             e = entries[rel]
+            # manual curation: an entry the desktop app marked as `done`
+            # is final (SPEC 10.5) and is never reset or stripped here
+            if e.get("status") == "done":
+                continue
             prev = e.get("preview")
             cands = list(e.get("candidates") or [])
             if not prev and not cands:
@@ -1653,7 +1660,7 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
                 stats["refetch"] += 1
             stats["previews"] += 1
             stats["candidates"] += len(led_cands)
-            if meta.is_file():
+            if meta is not None:
                 stats["jsons"] += 1
 
             if not args.dry_run:
@@ -1661,7 +1668,7 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
                     (mirror / prev).unlink(missing_ok=True)
                 for c in led_cands:
                     (mirror / c).unlink(missing_ok=True)
-                if meta.is_file():
+                if meta is not None:
                     meta.unlink()
 
                 # reset the index entry to a clean, re-fetchable state

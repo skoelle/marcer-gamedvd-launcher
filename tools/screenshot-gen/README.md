@@ -175,8 +175,11 @@ affected images:
 - only some candidates are LED-white: just those candidate PNGs are deleted,
   the preview, JSON and status stay untouched.
 
-Nothing is ever deleted unless the detector identifies it as LED-white.
-`--dry-run` reports the counts without changing anything; `--only
+Nothing is ever deleted unless the detector identifies it as LED-white,
+and entries with `status: done` are never touched at all: `done` is final
+(see "Entry kinds" below), so a real game shot or a manual curation
+decision can never be reset by this pass. `--dry-run` reports the counts
+without changing anything; `--only
 <substring>` limits the pass. The `drive_led_refetch` flag marks the entries
 that a later pass should re-capture with the LED disabled:
 
@@ -240,6 +243,23 @@ categories can be reviewed directly. Entries without a preview PNG (the
 drive-LED resets) cannot be classified, are skipped and reported as
 `no preview`. Thresholds: `filters.desktop_green_frac_min` (0.02),
 `filters.textscreen_min_white` (0.5) and `filters.white_pixel_min` (230).
+
+### Status × kind combinations
+
+The pipeline only ever writes these pairs: `done` + `game`, `desktop` +
+`desktop` / `textscreen` / `darkscreen` / `null`, and `null` for every
+other status (`no_usable_shots`, `skipped_disk_n`, `error`, `pending`,
+`interrupted`, `timeout`).
+
+The desktop app's manual curation (`C`) additionally writes `done` +
+`textscreen` / `darkscreen` (and `desktop` + a sub-kind). **Never assume
+`done` means `game`.** Such a pair is stable by design: every selector in
+this tool (`run`, `detect`, `reclassify`, all `--retry-*`) works on
+`status == desktop`, and `cleanup-drive-led` skips `done` explicitly.
+Reversely, the app's `desktop text` / `desktop black` status filters are
+strictly `status: desktop`, so a curated entry that moves to `done` leaves
+those filters and shows up as a normal `done` card with its kind as text.
+The full matrix is in `docs/SPEC-screenshot-generator.md` §10.5.
 
 ### Excluded directories
 
