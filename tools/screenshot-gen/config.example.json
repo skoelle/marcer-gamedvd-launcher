@@ -10,6 +10,7 @@
   "filters": {
     "black_mean_max": 0.02,
     "black_std_max": 1.0,
+    "black_std_content_min": 6.0,
     "desktop_max_colors": 5,
     "desktop_min_mean": 0.5,
     "desktop_green_frac_min": 0.02,

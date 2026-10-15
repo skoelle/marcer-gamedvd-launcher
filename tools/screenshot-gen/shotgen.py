@@ -55,6 +55,7 @@ DEFAULT_CONFIG = {
     "filters": {
         "black_mean_max": 0.02,
         "black_std_max": 1.0,
+        "black_std_content_min": 6.0,
         "desktop_max_colors": 5,
         "desktop_min_mean": 0.5,
         "desktop_green_frac_min": 0.02,
@@ -399,7 +400,14 @@ def analyze_image(path: Path, cfg: dict) -> dict:
         white_px = sum(cnt for cnt, (r, g, b) in colors_raw
                        if r >= white_min and g >= white_min and b >= white_min)
         white_frac = white_px / (rgb.width * rgb.height)
-    if mean <= f["black_mean_max"] or std <= f["black_std_max"]:
+    # A uniform image (any brightness: black boot screen, blank white
+    # screen) is empty. A very dark shot only counts as empty while it
+    # also lacks contrast — dark cracktros/intros with visible structure
+    # (mean <= 0.02 but std well above the content threshold) must
+    # survive as `game` shots (SPEC 8.1).
+    if (std <= f["black_std_max"]
+            or (mean <= f["black_mean_max"]
+                and std <= f["black_std_content_min"])):
         kind = "black"
     elif (n_colors <= f["desktop_max_colors"]
           and (mean >= f["desktop_min_mean"]
@@ -1163,7 +1171,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                 m["file"] = g.name
                 shots_meta.append(m)
                 log(f"{g.name}: kind={m['kind']} colors={m['unique_colors']} "
-                    f"score={m['score']}")
+                    f"score={m['score']} mean={m['mean']} std={m['std']}")
 
             # drop black
             survivors = [m for m in shots_meta if m["kind"] != "black"]
@@ -1189,28 +1197,43 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                 # Keep every captured shot for manual review: nothing was
                 # usable, so the raw grabs (black screens included — they
                 # are exactly what needs checking) stay visible as `_cNN`
-                # candidates; preview stays null (SPEC 8.5/8.6).
-                if cfg["keep_candidates"]:
-                    ci = 0
-                    for g in grabs:
-                        ci += 1
-                        cname = f"{base}_c{ci:02d}.png"
-                        drop_case_variants(mirror_dir, (cname,))
-                        shutil.copy2(g, mirror_dir / cname)
-                        candidates.append(cname)
-                    old_preview = mirror_dir / preview_name
-                    if old_preview.exists():
-                        # a previous run's preview (e.g. a forced rerun of
-                        # a done entry) becomes a candidate instead of an
-                        # unreferenced orphan file
-                        ci += 1
-                        old = f"{base}_c{ci:02d}.png"
-                        drop_case_variants(mirror_dir, (old,))
-                        os.replace(old_preview, mirror_dir / old)
-                        candidates.append(old)
-                # none is written for no_usable_shots (SPEC 10.3), so a
-                # metadata JSON from an earlier done/desktop run would keep
-                # a stale status/preview reference — drop it
+                # candidates (SPEC 8.5/8.6). The last capture in time
+                # order also becomes the preview, copied to the canonical
+                # `<base>.png`, so the entry shows an image instead of an
+                # empty placeholder; the chosen grab is not duplicated as
+                # a candidate (preview and candidates stay disjoint, as in
+                # the success branch).
+                if grabs:
+                    if cfg["keep_candidates"]:
+                        ci = 0
+                        for g in grabs[:-1]:
+                            ci += 1
+                            cname = f"{base}_c{ci:02d}.png"
+                            drop_case_variants(mirror_dir, (cname,))
+                            shutil.copy2(g, mirror_dir / cname)
+                            candidates.append(cname)
+                        old_preview = mirror_dir / preview_name
+                        if old_preview.exists():
+                            # a previous run's preview (e.g. a forced
+                            # rerun of a done entry) becomes a candidate
+                            # instead of an unreferenced orphan file
+                            ci += 1
+                            old = f"{base}_c{ci:02d}.png"
+                            drop_case_variants(mirror_dir, (old,))
+                            os.replace(old_preview, mirror_dir / old)
+                            candidates.append(old)
+                    # the preview gate is independent of keep_candidates
+                    # (the success branch writes a preview either way)
+                    drop_case_variants(mirror_dir, (preview_name,))
+                    shutil.copy2(grabs[-1], mirror_dir / preview_name)
+                    preview = preview_name
+                elif (mirror_dir / preview_name).exists():
+                    # no capture at all: keep the existing preview rather
+                    # than leaving the entry without an image
+                    preview = preview_name
+                # no metadata JSON is written for no_usable_shots (SPEC
+                # 10.3), so a JSON from an earlier done/desktop run would
+                # keep a stale status/preview reference — drop it
                 meta_path.unlink(missing_ok=True)
             else:
                 kind = refine_desktop_kind(pick["kind"], pick, cfg)

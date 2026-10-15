@@ -115,6 +115,10 @@ Rules:
 - `kind` maps to status for display purposes: `game` ⇔ `done`,
   `desktop` ⇔ `desktop` (same mapping as `shotgen html`).
 - 1,164 entries carry `candidates` *(verified)* — the lightbox must show them.
+- `no_usable_shots` entries produced from now on also carry a preview (the
+  last capture) plus the earlier ones as `_cNN` candidates
+  (SPEC-screenshot-generator 8.5/8.6); older ones may still have neither —
+  consumers must handle both shapes.
 - Entry `rel` shape *(verified)*: `Title Sorted/<tree>/<Letter>/<Folder>[/<VariantDir>]/<file>.zip`.
   Variant ZIPs may live in a subfolder of the game folder.
 

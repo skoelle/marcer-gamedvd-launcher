@@ -164,21 +164,27 @@ When a previous preview is replaced, it is kept as an additional candidate
 screenshot (drive window, folder window, program window) is kept as a
 candidate too, so the path to a successful click stays traceable.
 
-Entries that end as **`no_usable_shots`** keep *all* their captured shots
-the same way — the `black` shots the classifier rejected and the
-near-duplicates the pHash pass would drop included, because nothing was
-usable and the raw grabs are exactly what needs manual review. The index
-entry has `status: no_usable_shots`, `preview: null` and
-a `candidates` list (`_c01`, `_c02`, ... in capture order); no metadata
-JSON is written for it. A preview left over from an earlier `done`/`desktop`
-run of the same entry is renamed to the next `_cNN` instead of becoming an
-unreferenced file, and that run's stale metadata JSON is deleted. Review
-these entries in the desktop app or the gallery: status filter
-**no usable shots**, then open the lightbox (`Enter` / click) to step
-through the candidates.
+Entries that end as **`no_usable_shots`** keep their captures the same
+way — the `black` shots the classifier rejected and the near-duplicates
+the pHash pass would drop included, because nothing was usable and the
+raw grabs are exactly what needs manual review. The **last** capture in
+time order becomes the preview (copied to the canonical `<base>.png`, and
+this happens even when `keep_candidates` is off); the earlier ones stay as
+the `candidates` list (`_c01`, `_c02`, ... in capture order) and are
+disjoint from the preview. No metadata JSON is written for such an entry.
+A preview left over from an earlier `done`/`desktop` run of the same entry
+is renamed to the next `_cNN` (the new last capture takes the
+`<base>.png` slot) and that run's stale metadata JSON is deleted. Review
+these entries in the desktop app or the gallery: status filter **no
+usable shots**, then open the lightbox (`Enter` / click) to step through
+the candidates; `M` swaps the shown candidate into the preview slot.
 
-All of this is gated on `keep_candidates` (default `true`); with `false`
-such an entry keeps `candidates: []`.
+Candidate retention itself is gated on `keep_candidates` (default
+`true`); with `false` such an entry keeps `candidates: []` but still gets
+its preview. Note that dark shots are only classified `black` when they
+are *also* structureless (`black_std_content_min` in `analyze_image`,
+SPEC §8.1) — a dark crack intro on black survives and makes the entry
+`done`.
 
 ### Drive-LED white screens (`--drive-led false`, `cleanup-drive-led`)
 
@@ -218,13 +224,12 @@ usable preview, `process_entry` clears `drive_led` and `drive_led_refetch`
 again — the flag is a one-shot marker, not a permanent label.
 
 A refetch that still shows nothing (uniform black **or** uniform white —
-both have a near-zero pixel standard deviation and are classified `black`)
-ends as `no_usable_shots` with no preview. That is expected for titles whose
-disk really produces no output: the blank LED-white placeholder of the old
-runs is gone, the entry can still be picked up later with
-`run --retry-no-usable` (e.g. with longer timepoints), and with
-`keep_candidates` the shots of the refetch are kept as `_cNN` candidates
-for review (see "Candidate retention").
+both are classified `black`) ends as `no_usable_shots`; its last shot
+becomes the preview and the earlier ones are kept as `_cNN` candidates
+(see "Candidate retention"). That is expected for titles whose disk really
+produces no output: the blank LED-white placeholder of the old runs is
+gone (fresh shots never carry an LED), and the entry can still be picked
+up later with `run --retry-no-usable` (e.g. with longer timepoints).
 
 Entries that were reset this way but contain **no** bootable disk/program
 image (manuals, box scans, raw dumps, data-only ZIPs) can never produce a
