@@ -51,6 +51,12 @@ and retries unfinished or failed ones (`pending`, `interrupted`, `timeout`,
 `error`). The `no_usable_shots` entries are not retried by a normal run;
 repeat them explicitly with `run --retry-no-usable`.
 
+Root and patch layers are merged case-insensitively, like in the console
+launcher: if the two layers hold the same ZIP under names that differ only
+in case (e.g. `Crossbow - Medway boys.zip` vs. `Crossbow - Medway Boys.zip`),
+they are **one** entry — the patch spelling wins, including for the preview
+file name (see SPEC-screenshot-generator §4.1 and §10.2).
+
 By default entries are processed one at a time. `--jobs N` runs N workers
 in parallel; each worker boots its own Hatari instance on its **own Xvfb
 display** (`:99`, `:100`, ...) and needs roughly 220 MB RAM and ~35% of one

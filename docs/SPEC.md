@@ -293,7 +293,11 @@ startup, on `Activate` into a directory, and on `Parent`. **Not** on every loop 
 
 - **R11** — The merge is applied at **every level**, recursively: the same relative
   path resolves against both layers, so navigation is symmetric in both directions.
-- **R12** — Each name appears **exactly once** per listing.
+- **R12** — Each name appears **exactly once** per listing. Name equality is
+  case-insensitive: a root file `Foo.zip` and a patch file `FOO.zip` are the
+  same entry (both layer flags set), not two. Which of the two spellings is
+  displayed is implementation-defined; launching still resolves the patch
+  location per R14.
 - **R13** — No patch layer configured ⇒ every entry is `ROOT` and patch paths are empty.
 - **R14** — A directory or ZIP present in both layers is opened/launched from the
   **patch** location.

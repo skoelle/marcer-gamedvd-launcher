@@ -188,7 +188,14 @@ launcher (SPEC.md section 7):
   with `@` is ignored (Synology metadata folders such as `@eaDir` are not
   hidden on NFS but must never be treated as content).
 - Name matching is case-insensitive. If the same relative path exists in both
-  layers, the patch copy wins for reading, and the entry source is `BOTH`.
+  layers — including spellings that differ only in case (e.g. root
+  `Crossbow - Medway boys.zip` vs. patch `Crossbow - Medway Boys.zip`) — the
+  patch copy wins, the entry source is `BOTH`, and the **patch spelling is the
+  canonical entry identity**: index key, relative path and all output file
+  names use it. A root-only spelling that differs only in case never becomes a
+  second index entry (it would only produce a duplicate capture whose second
+  write is renamed by a case-insensitive NAS, section 10.2). Curated state of
+  the overridden spelling is carried over when file size and mtime match.
 - Entries not in scope trees are skipped entirely (section 4.4).
 
 ### 4.2 Index cache
@@ -813,17 +820,26 @@ would look up a preview later (section 12).
   replaced with `_`. The original name is preserved in metadata.
 
 **Case-insensitive mirrors (Synology SMB).** The output mirror may live on a
-case-insensitive share. When two entries differ only in the case of their
-name (e.g. `Crossbow - Medway Boys.zip` and `Crossbow - Medway boys.zip`),
-the canonical `<base>.png` / `<base>.json` cannot exist for the second one:
-the NAS accepts the write but silently renames the file to
-`<base>_DiskStation_<date>_Upload…CaseConflict.png`. The affected files
-still form a valid preview/metadata pair. The tool therefore reads metadata
-via a fallback (`metadata_path`): canonical name first, otherwise the single
-`<base>*CaseConflict.json` in that directory; a re-run writes back to the
-found conflict file instead of creating a second one. The index `preview`
-field points at the conflict-renamed PNG, so consumers never need to know
-the rule.
+case-insensitive share. Two rules keep it conflict-free:
+
+1. The overlay merge (section 4.1) gives every game exactly one canonical
+   spelling (the patch one), so the mirror never holds a `<base>.png` /
+   `<base>.json` pair for two entries whose names differ only in case.
+2. Before writing a preview, candidate or metadata file, the tool deletes
+   stale files in the same mirror directory whose names match the target
+   **only** by case (`drop_case_variants`). They belong to a merged-away
+   spelling; writing over them would make the NAS silently rename the new
+   file to `<base>_DiskStation_<date>_Upload…CaseConflict.png`.
+
+Legacy `…CaseConflict.png` / `…CaseConflict.json` files from the time when
+case-differing spellings were indexed twice are still read correctly:
+metadata is loaded via a fallback (`metadata_path`): canonical name first,
+otherwise the single `<base>*CaseConflict.json` in that directory. The index
+`preview` field points at the actual file name, so consumers never need to
+know the rule. After such duplicates have been merged (section 4.1), their
+old files are orphans: nothing in the index references them, and they are
+deleted by the one-off data repair that accompanies the merge change
+(`prune` only removes orphaned logs and now-empty directories).
 
 ### 10.3 Metadata JSON (per entry)
 

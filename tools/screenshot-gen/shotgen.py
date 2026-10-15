@@ -228,17 +228,38 @@ def build_index(cfg: dict, P: dict, full: bool) -> dict:
         print(f"scan scope: {scope}", flush=True)
         r_map = scan_tree(root, scope, disk_re, exclude)
         p_map = scan_tree(patch, scope, disk_re, exclude) if patch else {}
-        names = set(r_map) | set(p_map)
-        for rel in sorted(names):
+        # Overlay merge case-insensitively (SPEC §7): a patch file whose
+        # name differs only in case from a root file overrides it, and the
+        # patch spelling becomes the canonical rel — the same rule as the
+        # console launcher's OrdinalIgnoreCase merge. Case-sensitive
+        # merging created duplicate entries per game whose second capture
+        # was then renamed by a case-insensitive NAS (…CaseConflict).
+        merged = {}  # rel.lower() -> [rel, src, layer]
+        for rel, info in r_map.items():
+            merged[rel.lower()] = [rel, info, "ROOT"]
+        for rel, info in p_map.items():
+            key = rel.lower()
+            if key in merged:
+                merged[key] = [rel, info, "BOTH"]
+            else:
+                merged[key] = [rel, info, "PATCH"]
+        low_entries = {k.lower(): k for k in entries}
+        for key in sorted(merged):
+            rel, src, layer = merged[key]
             seen.add(rel)
             name = Path(rel).name
-            layer = ("BOTH" if rel in r_map and rel in p_map
-                     else "PATCH" if rel in p_map else "ROOT")
-            src = p_map.get(rel) or r_map.get(rel)
-            old = entries.get(rel)
+            old_key = rel if rel in entries else low_entries.get(key)
+            old = entries.get(old_key) if old_key else None
             if (old and not full
                     and old.get("size") == src["size"]
                     and old.get("mtime") == src["mtime"]):
+                if old_key != rel:
+                    # entry found under the losing spelling only: keep its
+                    # curated state, re-keyed to the winning (patch) name
+                    del entries[old_key]
+                    entries[rel] = old
+                # refresh canonical fields (e.g. layer PATCH -> BOTH)
+                old.update({"rel": rel, "name": name, "layer": layer})
                 stats["kept"] += 1
                 continue
             if disk_re.search(name):
@@ -710,6 +731,26 @@ def metadata_path(mirror: Path, base: str):
     return None
 
 
+def drop_case_variants(mirror_dir: Path, names) -> None:
+    """Delete mirror files that differ from ``names`` only in case.
+
+    After the case-insensitive overlay merge (SPEC §7) every entry owns
+    exactly one spelling; a file under the other spelling belongs to a
+    merged-away entry. Writing a differently-cased sibling would make a
+    case-insensitive NAS rename the new file (…CaseConflict), so remove
+    the stale one first. Exact-name files are left to the caller (they
+    are handled by the keep-candidates logic).
+    """
+    wanted = {n.lower() for n in names}
+    exact = set(names)
+    try:
+        for f in mirror_dir.iterdir():
+            if f.name.lower() in wanted and f.name not in exact:
+                f.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def find_window_target(path: Path, cfg: dict):
     """Find the next double-click target inside an opened GEM window.
 
@@ -1152,6 +1193,9 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                 # copy files to mirror
                 preview = preview_name
                 target = mirror_dir / preview_name
+                # a stale sibling under the merged-away spelling would
+                # trigger a NAS case-conflict rename of the new file
+                drop_case_variants(mirror_dir, (preview_name, f"{base}.json"))
                 others = [m for m in deduped if m is not pick]
                 if cfg["keep_candidates"]:
                     added = {pick["file"]}
@@ -1164,6 +1208,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                         added.add(src_file)
                         ci += 1
                         cname = f"{base}_c{ci:02d}.png"
+                        drop_case_variants(mirror_dir, (cname,))
                         shutil.copy2(src_dir / src_file, mirror_dir / cname)
                         candidates.append(cname)
 
@@ -1181,6 +1226,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                         # silently overwriting it
                         ci += 1
                         old = f"{base}_c{ci:02d}.png"
+                        drop_case_variants(mirror_dir, (old,))
                         os.replace(target, mirror_dir / old)
                         candidates.append(old)
                 shutil.copy2(outdir / pick["file"], target)
