@@ -10,7 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
+import '../index_editor.dart';
 import 'game_info_panel.dart';
+import 'status_kind_dialog.dart';
 
 /// Gallery-style lightbox over the current center list: header with badges
 /// and position, integer-scaled main image (pixel-art safe), variant
@@ -18,7 +20,9 @@ import 'game_info_panel.dart';
 /// candidate strip and a 330px info panel with the release-variants table
 /// (selected ZIP highlighted) and a "This ZIP" table.
 /// `←/→` move through cards/entries, `↑/↓` through variants, `PgUp/PgDn`
-/// through the images of the active variant, `Esc` closes.
+/// through the images of the active variant, `M` swaps the shown candidate
+/// into the main image, `C` edits the variant's status/kind (pending until
+/// Save), `Esc` closes.
 class GameLightbox extends StatefulWidget {
   const GameLightbox({
     super.key,
@@ -115,6 +119,7 @@ class _GameLightboxState extends State<GameLightbox> {
           _Variant(
             title: item.variants[i].name,
             status: item.variants[i].status,
+            kind: item.variants[i].kind,
             layer: item.variants[i].layer,
             preview: item.variants[i].previewPath,
             candidates: item.variants[i].candidatePaths,
@@ -131,10 +136,12 @@ class _GameLightboxState extends State<GameLightbox> {
     if (item is Entry) {
       final c = widget.controller;
       final shots = c.screenshotFor(item);
+      final kind = shots?.kind;
       return [
         _Variant(
           title: item.name,
           status: shots?.status ?? '',
+          kind: (kind == null || kind.isEmpty) ? null : kind,
           layer: item.layerStatus.name.toUpperCase(),
           preview: c.previewPathFor(item),
           candidates: c.candidatePathsFor(item),
@@ -285,6 +292,14 @@ class _GameLightboxState extends State<GameLightbox> {
       _toggleFavoriteCurrent();
       return KeyEventResult.handled;
     }
+    if (key == LogicalKeyboardKey.keyM) {
+      _makeMainCurrent();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.keyC) {
+      _changeStatusCurrent();
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
   }
 
@@ -331,8 +346,75 @@ class _GameLightboxState extends State<GameLightbox> {
       _filmScroll.jumpTo(target);
     } else if (target + _filmWidth + _filmGap > pos.pixels + pos.viewportDimension) {
       _filmScroll.jumpTo(math.max(
-          0.0, target + _filmWidth + _filmGap - pos.viewportDimension));
+          0.0, target + _filmWidth + _filmGap - pos.pixels - pos.viewportDimension));
     }
+  }
+
+  /// `M`: swap the currently viewed candidate PNG with the variant's main
+  /// image (fixed names on disk — only the contents trade places, manual
+  /// curation). Only meaningful while a candidate is displayed
+  /// (`_imageIdx > 0`); the shotgen lock is respected.
+  void _makeMainCurrent() {
+    final c = widget.controller;
+    final vs = _variants;
+    if (_variantIdx >= vs.length) return;
+    final v = vs[_variantIdx];
+    final images = _imagesOf(v);
+    if (_imageIdx <= 0 || _imageIdx >= images.length || v.preview == null) {
+      return;
+    }
+    try {
+      if (isShotgenActive(c.config.outDirectory)) {
+        throw ShotgenLockedException(
+            readShotgenLockPid(c.config.outDirectory));
+      }
+      swapPreviewCandidate(
+          previewPath: v.preview!, candidatePath: images[_imageIdx]);
+      // Same file names, new contents: drop the decoded caches so the grid,
+      // detail strip and lightbox show the swapped images immediately.
+      PaintingBinding.instance.imageCache.clear();
+      setState(() => _imageIdx = 0); // the new main image
+    } on ShotgenLockedException catch (e) {
+      _showCurationMessage(e.toString());
+    } catch (e) {
+      _showCurationMessage('Swap failed: $e');
+    }
+  }
+
+  /// `C`: status/kind dialog for the filmstrip-selected variant; the change
+  /// is applied in memory (controller pending map) until Save (n) writes it.
+  Future<void> _changeStatusCurrent() async {
+    final c = widget.controller;
+    final vs = _variants;
+    if (_variantIdx >= vs.length) return;
+    final v = vs[_variantIdx];
+    final entry = c.screenshots[v.rel];
+    final choice = await showStatusKindDialog(
+      context,
+      title: v.title,
+      currentStatus: entry?.status ?? v.status,
+      currentKind: entry?.kind ?? v.kind,
+    );
+    if (choice == null || !mounted) return;
+    final keepItem = _itemIdx;
+    final keepVariant = _variantIdx;
+    final keepImage = _imageIdx;
+    c.applyStatusChange(v.rel, choice.status, choice.kind);
+    // The controller rebuilt its cards — re-read the item list but keep the
+    // current position (the lightbox does not listen to the controller).
+    _rebuildItems();
+    setState(() {
+      _itemIdx = keepItem.clamp(0, math.max(0, _items.length - 1));
+      _variantIdx = keepVariant;
+      _imageIdx = keepImage;
+    });
+  }
+
+  void _showCurationMessage(String message) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+      content: Text(message),
+      duration: const Duration(seconds: 3),
+    ));
   }
 
   @override
@@ -710,7 +792,8 @@ class _GameLightboxState extends State<GameLightbox> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       color: const Color(0xFF141414),
       child: const Text(
-        '←/→ card   ↑/↓ variant   PgUp/PgDn image   * favorite   Esc close',
+        '←/→ card   ↑/↓ variant   PgUp/PgDn image   * favorite   '
+        'M make main   C change status   Esc close',
         style: TextStyle(fontSize: 10, color: Colors.grey),
       ),
     );
@@ -724,6 +807,7 @@ class _GameLightboxState extends State<GameLightbox> {
           : ZipVariantView(
               name: v.title,
               status: v.status,
+              kind: v.kind,
               layer: v.layer,
               rel: v.rel,
               size: v.size,
@@ -866,6 +950,7 @@ class _Variant {
     required this.size,
     required this.rel,
     required this.origIndex,
+    this.kind,
   });
 
   final String title;
@@ -875,6 +960,10 @@ class _Variant {
   final List<String> candidates;
   final int? size;
   final String rel;
+
+  /// Preview classification (`game`/`desktop`/`textscreen`/`darkscreen`);
+  /// feeds the "This ZIP" Kind row and the `C` dialog's current mark.
+  final String? kind;
 
   /// Index of this variant in the card's original `variants` order (used to
   /// map back for launch / focus; the display order groups previews first).

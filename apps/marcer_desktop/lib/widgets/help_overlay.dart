@@ -78,6 +78,8 @@ class _HelpOverlayState extends State<HelpOverlay> {
    Enter / →      Open folder / show gallery lightbox
    Backspace      Parent directory (clears filters in catalog view)
    *              Toggle favorite (selected ZIP / shown lightbox variant)
+   M              Make shown candidate the main image (lightbox)
+   C              Change status/kind of the shown ZIP (lightbox/detail)
    P              Launch the selected ZIP with Hatari
    /              Focus the search field
    T              Toggle catalog grid / folder view
@@ -88,6 +90,8 @@ class _HelpOverlayState extends State<HelpOverlay> {
   search, dropdowns). Press T (or the Folders button) for the optional
   overlay folder browser. Navigation is strictly limited to RootDirectory.
   In the lightbox Space/P launches the shown ZIP and * favorites it.
+  M swaps the shown candidate into the main image; C edits a ZIP's
+  status/kind (pending until the Save (n) button in the filter bar).
 
   Press any key to continue...''',
                       style: TextStyle(color: Colors.white, fontSize: 14)),

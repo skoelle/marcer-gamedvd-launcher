@@ -11,11 +11,17 @@ class ZipVariantView {
     required this.status,
     required this.layer,
     required this.rel,
+    this.kind,
     this.size,
   });
 
   final String name;
   final String status;
+
+  /// Preview classification (`game`/`desktop`/`textscreen`/`darkscreen`),
+  /// shown as the "Kind" row directly under Status; null/empty → em dash.
+  final String? kind;
+
   final String layer;
   final String rel;
   final int? size;
@@ -324,9 +330,12 @@ class GameInfoPanel extends StatelessWidget {
   }
 
   List<Widget> _zipTable(ZipVariantView v) {
+    final kind =
+        (v.kind == null || v.kind!.isEmpty) ? '—' : v.kind!;
     return [
       _kv('File', v.name),
       _kv('Status', v.status),
+      _kv('Kind', kind),
       if (v.layer.isNotEmpty) _kv('Layer', v.layer),
       if (v.size != null) _kv('Size', '${(v.size! / 1024).toStringAsFixed(0)} KB'),
       _kv('Path', v.rel),

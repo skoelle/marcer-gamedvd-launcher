@@ -15,11 +15,14 @@ const List<String> kStatusOrder = [
   'skipped_disk_n',
 ];
 
-/// Filter/status labels exactly as in the gallery UI (`gallery.py`
-/// `STATUS_LABELS`).
+/// Filter/status labels as shown in the desktop app (the two manual
+/// curation filters `desktop_text`/`desktop_black` are app-only; the
+/// gallery keeps its own `STATUS_LABELS`).
 const Map<String, String> kStatusLabels = {
-  'done': 'done (game)',
+  'done': 'done',
   'desktop': 'desktop',
+  'desktop_text': 'desktop text',
+  'desktop_black': 'desktop black',
   'no_usable_shots': 'no usable shots',
   'interrupted': 'interrupted',
   'pending': 'pending',
@@ -27,6 +30,19 @@ const Map<String, String> kStatusLabels = {
   'any': 'any status',
   'with_screenshot': 'with screenshot',
 };
+
+/// Status dropdown keys of the desktop app: the aggregation order plus the
+/// two kind-based filters (strictly `status: desktop` + kind).
+const List<String> kStatusFilterKeys = [
+  'done',
+  'desktop',
+  'desktop_text',
+  'desktop_black',
+  'no_usable_shots',
+  'interrupted',
+  'pending',
+  'skipped_disk_n',
+];
 
 const List<String> kSortKeys = ['name', 'year', 'publisher', 'cracker', 'crew'];
 
@@ -45,6 +61,7 @@ class CardVariant {
     required this.name,
     required this.status,
     required this.layer,
+    this.kind,
     this.previewPath,
     this.candidatePaths = const [],
     this.size,
@@ -54,6 +71,11 @@ class CardVariant {
   final String name;
   final String status;
   final String layer;
+
+  /// Preview classification of the variant's main image (`game`/`desktop`/
+  /// `textscreen`/`darkscreen`), null when the index has none — feeds the
+  /// `desktop text`/`desktop black` filters and the "This ZIP" info row.
+  final String? kind;
 
   /// Absolute PNG path (gallery `_full_png`: `dirname(rel)/basename`),
   /// no existence check — the widget errorBuilder shows a placeholder.
@@ -261,6 +283,7 @@ GameCard buildCrackedCard({
       name: e.name.isEmpty ? rel.split('/').last : e.name,
       status: st,
       layer: e.layer,
+      kind: (e.kind == null || e.kind!.isEmpty) ? null : e.kind,
       previewPath: fullPng(rel, e.preview),
       candidatePaths:
           e.candidates.map((c) => fullPng(rel, c)).whereType<String>().toList(),

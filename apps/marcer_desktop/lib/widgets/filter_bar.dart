@@ -105,6 +105,10 @@ class _FilterBarState extends State<FilterBar> {
                   ],
                 ],
                 const Spacer(),
+                if (c.hasPendingStatusChanges) ...[
+                  _saveBadge(c),
+                  const SizedBox(width: 6),
+                ],
                 if (widget.updater != null) ...[
                   _updateBadge(widget.updater!),
                   const SizedBox(width: 6),
@@ -242,6 +246,62 @@ class _FilterBarState extends State<FilterBar> {
 
   /// Fixed 28px height so every control in the wrapping filter row lines up.
   Widget _fixed(Widget child) => SizedBox(height: 28, child: child);
+
+  /// Cyan save button (with discard ✕) left of the update badge: appears
+  /// while manual curation changes (`C` in the lightbox/detail view) are
+  /// pending and writes them to `index.json` + mirror meta under the
+  /// shotgen lock.
+  Widget _saveBadge(CatalogController c) {
+    final n = c.pendingStatusCount;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 28,
+          child: Tooltip(
+            message: 'Save $n manual status/kind change(s)\n'
+                'to index.json (shotgen lock)',
+            child: TextButton(
+              onPressed: _savePending,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.cyan,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 28),
+                textStyle:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              child: Text('Save ($n)'),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 28,
+          child: Tooltip(
+            message: 'Discard the pending changes',
+            child: TextButton(
+              onPressed: c.discardPendingStatusChanges,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: const Size(0, 28),
+              ),
+              child: const Text('✕', style: TextStyle(fontSize: 12)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Persists the pending curation changes; errors (e.g. a live shotgen
+  /// run holding the lock) surface as a snackbar and keep the pending list.
+  Future<void> _savePending() async {
+    final err = await widget.controller.savePendingStatusChanges();
+    if (err == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(err), duration: const Duration(seconds: 4)),
+    );
+  }
 
   /// Amber update badge left of the Folders button: shows the newer
   /// version and, on click, downloads + installs it and relaunches the
@@ -383,7 +443,7 @@ class _FilterBarState extends State<FilterBar> {
   }
 
   Widget _statusDropdown(String value, ValueChanged<String> onChanged) {
-    final keys = ['with_screenshot', 'any', ...kStatusOrder];
+    final keys = ['with_screenshot', 'any', ...kStatusFilterKeys];
     return SizedBox(
       width: 150,
       height: 28,

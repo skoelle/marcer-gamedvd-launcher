@@ -23,7 +23,8 @@ Both are strictly **read-only** consumers of the archive and its derived artifac
 full-screen viewer, driven entirely by the keyboard.** It is a windowed
 master-detail browser (Surface A; a fullscreen couch mode, Surface B, is
 planned) built with Flutter, and a strictly **read-only** consumer of the
-archive and its derived artifacts.
+archive and its derived artifacts — except `favorites.txt` and, on explicit
+Save, the manual screenshot curation described below.
 
 ![Catalog grid with filters and detail sidebar](docs/images/catalog.png)
 
@@ -42,7 +43,8 @@ archive and its derived artifacts.
   height; reopening a facet after picking an entry jumps to exactly that
   entry (while typing, the partial match filter works as before).
 - **Gallery-style detail sidebar** — Game info, the full Release-variants
-  table (the open ZIP highlighted) and a "This ZIP" table.
+  table (the open ZIP highlighted) and a "This ZIP" table (File, Status,
+  **Kind**, Layer, Size, Path).
 - **Crew / cracker focus** — pick a crew or cracker and each card jumps to
   *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
   matching tolerates `&`/`and` and small typos).
@@ -52,7 +54,9 @@ archive and its derived artifacts.
 - **Full-screen lightbox** — integer-upscaled pixel-art-safe image, variant
   filmstrip with `+N` candidate badges, a scrollbar and a clickable favorite
   star (top-right, toggled with `*`), candidate strip and
-  the release-variant table; `←/→` cards, `↑/↓` variants, `PgUp/PgDn` images.
+  the release-variant table; `←/→` cards, `↑/↓` variants, `PgUp/PgDn` images,
+  `M` promote the shown candidate to the main image, `C` edit the shown
+  variant's status/kind.
 - **Optional folder browser** (`T`) — the overlay tree (main + patch layer)
   with layer labels and the virtual `Favorites` folder.
 - **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
@@ -70,6 +74,16 @@ archive and its derived artifacts.
   per line — same format and search order as the console launcher:
   `PatchDirectory` → application directory → CWD, so existing console
   favorites are shared as long as both apps see the same absolute paths).
+- **Manual screenshot curation** — `M` in the lightbox swaps the currently
+  viewed candidate with the variant's main image (fixed file names, only the
+  PNG contents trade places); `C` (lightbox/detail view) changes a ZIP's
+  `status`/`kind` in memory. Changes accumulate in a pending list; a cyan
+  **Save (n)** button (left of the update badge) writes them to `index.json`
+  and the per-entry meta under the screenshot-gen lock (a running
+  `shotgen.py` blocks the write). The status filter gains **`desktop text`**
+  and **`desktop black`** — strictly `status: desktop` entries whose kind is
+  `textscreen`/`darkscreen` (the plain `desktop` entry keeps showing every
+  kind).
 - **Degrades gracefully** — missing `index.json` or gameinfo data simply shows
   empty states instead of crashing.
 - **Self-update** (release builds) — silent check against the GitHub
@@ -142,6 +156,8 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `Enter` / `→` | Open the folder / show the lightbox |
 | `Backspace` | Parent directory (in catalog view: clear filters) |
 | `*` | Toggle favorite on the selected ZIP / catalog card (also in the detail panel and, in the lightbox, on the shown variant) |
+| `M` | Lightbox only, on a candidate image: swap it with the variant's main image (`<base>.png`) |
+| `C` | Lightbox/detail view: change the shown ZIP's status/kind (pending until **Save (n)**) |
 | `P` | Launch the selected ZIP with Hatari |
 | `/` | Focus the search field |
 | `T` | Toggle catalog grid / folder view |
@@ -149,7 +165,16 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `ESC` / `q` | Exit |
 
 In the **lightbox**: `←`/`→` switch card, `↑`/`↓` switch variant, `PgUp`/`PgDn`
-switch image, `Space`/`P` launch the shown ZIP, `*` favorite it, `Esc` closes.
+switch image, `Space`/`P` launch the shown ZIP, `*` favorite it, `M` make the
+shown candidate the main image, `C` edit status/kind, `Esc` closes.
+
+> **Manual curation & shotgen compatibility** — `M` is an immediate file swap
+> (no index write; names never change). `C` changes stay in memory until the
+> **Save (n)** button writes them atomically (tmp + rename) while holding the
+> `shotgen.lock` PID lock; a live screenshot-gen run blocks the save. Entries
+> saved as `done` are never touched by later shotgen passes; `desktop`
+> entries can still be re-classified by `shotgen reclassify` (which re-reads
+> the preview image) — pick `done` when a manual kind should stick.
 
 > **Launching** needs `Hatari.Executable` in `desktop.config.json` and a TOS ROM
 > (`TOS.IMG`) next to the app — same convention as the console launcher; the

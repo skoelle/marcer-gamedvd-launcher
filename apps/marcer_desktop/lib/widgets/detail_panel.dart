@@ -9,6 +9,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
 import 'game_info_panel.dart';
+import 'status_kind_dialog.dart';
 
 /// Right panel: preview screenshot + game metadata (Playnite-style detail).
 class DetailPanel extends StatelessWidget {
@@ -26,21 +27,59 @@ class DetailPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // `*` here toggles the favorite of the shown ZIP (card "This ZIP"
-    // variant / browse entry) — also after clicks inside the panel moved
-    // the keyboard focus away from the grid.
+    // `*` toggles the favorite of the shown ZIP (card "This ZIP" variant /
+    // browse entry), `C` opens the status/kind dialog for the same ZIP —
+    // also after clicks inside the panel moved the keyboard focus away
+    // from the grid.
     return Focus(
       onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            (event.character == '*' ||
-                event.logicalKey == LogicalKeyboardKey.asterisk)) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event.character == '*' ||
+            event.logicalKey == LogicalKeyboardKey.asterisk) {
           controller.toggleFavoriteSelected();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.keyC) {
+          _changeStatusShown(context);
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
       child: _content(),
     );
+  }
+
+  /// `C`: status/kind dialog for the ZIP shown in "This ZIP" (the focused /
+  /// primary card variant or the browse-mode entry). The change stays
+  /// in-memory in the controller's pending map until the filter bar's
+  /// Save (n) button writes it.
+  Future<void> _changeStatusShown(BuildContext context) async {
+    final c = controller;
+    final String rel;
+    final String title;
+    final String? status;
+    final String? kind;
+    if (c.catalogMode) {
+      final card = c.selectedCard;
+      if (card == null || card.variants.isEmpty) return;
+      final view = _primaryVariant(card);
+      if (view == null) return;
+      rel = view.rel;
+      title = view.name;
+      status = view.status;
+      kind = view.kind;
+    } else {
+      final e = c.selectedEntry;
+      if (e == null || e.kind != EntryKind.zip) return;
+      rel = c.relOf(e);
+      title = e.name;
+      status = c.screenshotFor(e)?.status;
+      kind = c.screenshotFor(e)?.kind;
+    }
+    final choice = await showStatusKindDialog(context,
+        title: title, currentStatus: status, currentKind: kind);
+    if (choice == null) return;
+    c.applyStatusChange(rel, choice.status, choice.kind);
   }
 
   Widget _content() {
@@ -139,6 +178,7 @@ class DetailPanel extends StatelessWidget {
     return ZipVariantView(
       name: v.name,
       status: v.status,
+      kind: v.kind,
       layer: v.layer,
       rel: v.rel,
       size: v.size,

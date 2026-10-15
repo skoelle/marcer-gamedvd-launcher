@@ -135,6 +135,17 @@ bool matchesCard(GameCard c, CatalogFilter f) {
     if (f.status == 'with_screenshot') {
       // crew/cracker focus always shows the focused variant, even empty
       if (!focusActive && !c.screenshots) return false;
+    } else if (f.status == 'desktop_text') {
+      // strict: only a status-desktop variant whose kind is textscreen
+      if (!c.variants
+          .any((v) => v.status == 'desktop' && v.kind == 'textscreen')) {
+        return false;
+      }
+    } else if (f.status == 'desktop_black') {
+      if (!c.variants
+          .any((v) => v.status == 'desktop' && v.kind == 'darkscreen')) {
+        return false;
+      }
     } else if (f.status != 'any' && c.displayStatus != f.status) {
       return false;
     }

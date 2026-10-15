@@ -123,11 +123,26 @@ class ScreenshotEntry {
 
   final String rel;
   final String name;
-  final String status;
-  final String? kind;
+
+  /// Pipeline status; mutable for the desktop app's manual curation
+  /// (`C` + Save in the lightbox/detail view writes it back via the
+  /// screenshot-gen lock, see `index_editor.dart`).
+  String status;
+
+  /// Preview classification (`game`/`desktop`/`textscreen`/`darkscreen`);
+  /// mutable like [status] for manual curation.
+  String? kind;
+
   final String layer;
   final String? preview;
   final List<String> candidates;
   final int? size;
   final List<String> zipContents;
+
+  /// Manual curation: set a new status/kind pair in memory (the pending
+  /// map in the controller keeps the original values for discard/save).
+  void applyStatusKind(String newStatus, String? newKind) {
+    status = newStatus;
+    kind = newKind;
+  }
 }

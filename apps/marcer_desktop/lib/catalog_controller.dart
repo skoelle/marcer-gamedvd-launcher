@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 
 import 'favorites_service.dart';
 import 'hatari_launcher.dart';
+import 'index_editor.dart';
 
 /// Sentinel rel-path for the virtual `Favorites` view (`SPEC.md` §11.3);
 /// cannot collide with a real directory name (NUL is invalid in paths).
@@ -23,7 +24,9 @@ enum AppView { catalog, folders }
 /// the gallery-style global filters (catalog mode) and the joins into
 /// gameinfo + screenshot index.
 ///
-/// Read-only towards all data roots; only `favorites.txt` is written.
+/// Read-only towards all data roots except `favorites.txt`; manual status/
+/// kind curation (`C` + Save) additionally writes `index.json` and the
+/// mirror meta under the screenshot-gen lock (see `index_editor.dart`).
 class CatalogController extends ChangeNotifier {
   CatalogController(this.config) {
     // gallery `default_status` config: the factory state of the filter.
@@ -681,6 +684,84 @@ class CatalogController extends ChangeNotifier {
   void toggleFavoritesOnly() {
     favoritesOnly = !favoritesOnly;
     _filtersChanged();
+  }
+
+  // -------------------------------------------------------------- curation
+
+  /// Pending manual status/kind changes (`C` in the lightbox/detail view):
+  /// rel ZIP path → original pair (for discard). Applied to the in-memory
+  /// [ScreenshotEntry] objects immediately; written to `index.json` + mirror
+  /// meta only by [savePendingStatusChanges] under the shotgen lock.
+  final Map<String, StatusKindChange> _pendingStatus = {};
+
+  bool get hasPendingStatusChanges => _pendingStatus.isNotEmpty;
+  int get pendingStatusCount => _pendingStatus.length;
+
+  /// Applies a status/kind pair in memory and remembers the original values
+  /// for discard. The universe bakes cards at build time, so it is rebuilt
+  /// from the mutated index entries; cards/badges/status histogram refresh
+  /// via the dirty rebuild. The disk files change only on Save.
+  void applyStatusChange(String rel, String status, String? kind) {
+    final entry = screenshots[rel];
+    if (entry == null) return;
+    _pendingStatus.putIfAbsent(
+        rel, () => (status: entry.status, kind: entry.kind));
+    final normKind = (kind == null || kind.isEmpty) ? null : kind;
+    entry.applyStatusKind(status, normKind);
+    _rebuildUniverse();
+    _catalogDirty = true;
+    notifyListeners();
+  }
+
+  /// Reverts all pending changes to their original values.
+  void discardPendingStatusChanges() {
+    _pendingStatus.forEach((rel, orig) {
+      screenshots[rel]?.applyStatusKind(orig.status, orig.kind);
+    });
+    _pendingStatus.clear();
+    _rebuildUniverse();
+    _catalogDirty = true;
+    notifyListeners();
+  }
+
+  /// Rebuilds the card universe from the (possibly mutated) in-memory index
+  /// entries plus the loaded gameinfo; the entry objects themselves stay
+  /// identical, so the pending map keeps working.
+  void _rebuildUniverse() {
+    universe = CatalogUniverse.build(
+      index: screenshots,
+      info: gameinfo,
+      outDir: config.outDirectory,
+    );
+  }
+
+  /// Persists the pending changes (shotgen lock, atomic `index.json` +
+  /// mirror meta); returns null on success or an error message on failure
+  /// (the pending list stays intact then).
+  Future<String?> savePendingStatusChanges() async {
+    if (_pendingStatus.isEmpty) return null;
+    try {
+      await applyStatusChanges(
+        outDir: config.outDirectory,
+        changes: {
+          for (final e in _pendingStatus.entries)
+            e.key: (
+              status: screenshots[e.key]?.status ?? e.value.status,
+              kind: screenshots[e.key]?.kind,
+            ),
+        },
+      );
+      _pendingStatus.clear();
+      notifyListeners();
+      return null;
+    } on ShotgenLockedException catch (e) {
+      return e.toString();
+    } on FileSystemException catch (e) {
+      return 'Save failed: ${e.message}'
+          '${e.path == null || e.path!.isEmpty ? '' : ' (${e.path})'}';
+    } catch (e) {
+      return 'Save failed: $e';
+    }
   }
 
   // -------------------------------------------------------------- statusbar

@@ -18,12 +18,15 @@ void main() {
   const relB9 = 'Title Sorted/Cracked Games - Title Sorted/0-9/999/999.zip';
 
   String entryJson(String rel, String status, String layer,
-          {String? preview, List<String> candidates = const [], int? size}) =>
+          {String? preview,
+          List<String> candidates = const [],
+          int? size,
+          String? kindOverride}) =>
       jsonEncode({
         'rel': rel,
         'name': rel.split('/').last,
         'status': status,
-        'kind': status == 'done' ? 'game' : null,
+        'kind': kindOverride ?? (status == 'done' ? 'game' : null),
         'layer': layer,
         'preview': preview,
         'candidates': candidates,
@@ -118,6 +121,18 @@ void main() {
             '$outDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a_c01.png'
           ]);
     });
+
+    test('CardVariant.kind comes from the index entry', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'desktop', 'ROOT', preview: 'a.png',
+            kindOverride: 'textscreen'),
+        relB: entryJson(relB, 'done', 'ROOT', preview: 'beta.png'),
+      });
+      final alpha = u.cracked.firstWhere((c) => c.folder == 'Alpha');
+      final beta = u.cracked.firstWhere((c) => c.folder == 'Beta');
+      expect(alpha.variants.single.kind, 'textscreen');
+      expect(beta.variants.single.kind, 'game');
+    });
   });
 
   group('CatalogUniverse facets + simple cards', () {
@@ -188,6 +203,57 @@ void main() {
       f.status = 'pending';
       expect(matchesCard(noShot, f), isTrue);
       expect(matchesCard(alpha, f), isFalse);
+    });
+
+    test('desktop umbrella keeps all kinds; text/black are strict', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'desktop', 'ROOT', preview: 'a.png',
+            kindOverride: 'textscreen'),
+        relB: entryJson(relB, 'desktop', 'ROOT', preview: 'beta.png',
+            kindOverride: 'darkscreen'),
+      });
+      final text = u.cracked.firstWhere((c) => c.folder == 'Alpha');
+      final black = u.cracked.firstWhere((c) => c.folder == 'Beta');
+      // desktop = any kind (umbrella)
+      expect(matchesCard(text, CatalogFilter()..status = 'desktop'), isTrue);
+      expect(matchesCard(black, CatalogFilter()..status = 'desktop'), isTrue);
+      // strict kind filters
+      expect(
+          matchesCard(text, CatalogFilter()..status = 'desktop_text'), isTrue);
+      expect(
+          matchesCard(black, CatalogFilter()..status = 'desktop_text'),
+          isFalse);
+      expect(
+          matchesCard(text, CatalogFilter()..status = 'desktop_black'),
+          isFalse);
+      expect(
+          matchesCard(black, CatalogFilter()..status = 'desktop_black'),
+          isTrue);
+    });
+
+    test('desktop_text stays strict for manually done textscreen entries',
+        () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png',
+            kindOverride: 'textscreen'),
+      });
+      final card = u.cracked.first;
+      expect(card.displayStatus, 'done');
+      expect(
+          matchesCard(card, CatalogFilter()..status = 'desktop_text'), isFalse);
+      expect(matchesCard(card, CatalogFilter()..status = 'done'), isTrue);
+      expect(
+          matchesCard(card, CatalogFilter()..status = 'desktop'), isFalse);
+    });
+
+    test('kStatusFilterKeys and kStatusLabels cover the kind filters', () {
+      expect(
+          kStatusFilterKeys,
+          containsAllInOrder(
+              ['done', 'desktop', 'desktop_text', 'desktop_black']));
+      expect(kStatusLabels['done'], 'done');
+      expect(kStatusLabels['desktop_text'], 'desktop text');
+      expect(kStatusLabels['desktop_black'], 'desktop black');
     });
 
     test('letter and search query', () {
