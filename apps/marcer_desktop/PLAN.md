@@ -224,7 +224,9 @@ Playnite-inspired master-detail layout, hybrid model:
   (ZIP-entry level: `done`/`desktop`/`pending`/… — the `pending` *filter*
   counts games instead, so bar and filter numbers use different units),
   `info N folders`, `index.json: <mtime>`,
-  `gameinfo: <generated_at>`, plus degradation notices.
+  `gameinfo: <generated_at>`, plus degradation notices; the app version
+  (from `package_info_plus`, always read — not only in release builds)
+  is right-aligned at the end.
   **Crew/cracker focus** (gallery `_apply_focus`): with an active crew or
   cracker filter (cracker takes precedence) each card's preview/status
   reflects that group's ZIP variant — even when it has no screenshot — and

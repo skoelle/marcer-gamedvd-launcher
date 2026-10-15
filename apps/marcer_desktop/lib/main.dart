@@ -140,6 +140,11 @@ class _HomePageState extends State<HomePage> {
   bool _showingLaunchError = false;
   bool _showingUpdateError = false;
 
+  /// Running app version (release builds: stamped from the git tag via
+  /// `--build-name`; dev builds: the pubspec version). Shown right-aligned
+  /// in the status bar.
+  String? _appVersion;
+
   @override
   void initState() {
     super.initState();
@@ -147,7 +152,19 @@ class _HomePageState extends State<HomePage> {
     _controller.addListener(_onControllerChanged);
     _controller.init();
     _updater.addListener(_onUpdateChanged);
+    _loadAppVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initSelfUpdate());
+  }
+
+  /// Reads the version for the status bar (always — unlike the self-update
+  /// check, which only runs in release builds).
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _appVersion = info.version);
+    } catch (_) {
+      // No version shown — never block the UI on package info.
+    }
   }
 
   @override
@@ -330,7 +347,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const Divider(height: 1),
-              _StatusBar(controller: c),
+              _StatusBar(controller: c, version: _appVersion),
             ],
           ),
         );
@@ -340,9 +357,13 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _StatusBar extends StatelessWidget {
-  const _StatusBar({required this.controller});
+  const _StatusBar({required this.controller, this.version});
 
   final CatalogController controller;
+
+  /// Running app version, right-aligned in the bar (`null` while the
+  /// async `PackageInfo` read has not finished / failed).
+  final String? version;
 
   @override
   Widget build(BuildContext context) {
@@ -384,6 +405,14 @@ class _StatusBar extends StatelessWidget {
             ),
           ] else
             const Spacer(),
+          if (version != null) ...[
+            const SizedBox(width: 16),
+            Text(
+              'v$version',
+              style: TextStyle(
+                  fontSize: 11, color: Colors.grey.withValues(alpha: 0.7)),
+            ),
+          ],
         ],
       ),
     );

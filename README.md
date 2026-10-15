@@ -66,7 +66,7 @@ Save, the manual screenshot curation described below.
   divergence: the gallery still takes the first `done` variant by path).
 - **Gallery-style status bar** — with-screenshot ratio, status counts (ZIP
   entries of `index.json`), matched folder count, `index.json` mtime and
-  gameinfo generation time.
+  gameinfo generation time; the running app version (right-aligned).
 - **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
   `desktop text` / `desktop black` / `pending` / … . `pending` is
   **app-specific**: it matches a game when **at least one** of its ZIPs is

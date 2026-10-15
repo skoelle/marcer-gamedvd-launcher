@@ -130,6 +130,14 @@ The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
 Note the units: the status bar counts **ZIP entries**, the filter counts
 **games** — `pending 5` in the bar can therefore mean fewer games.
 
+## Status bar
+
+The gray bar at the bottom shows the current view path (folder browser),
+result/entry counts, the gallery-style status info (above) and — right
+aligned — the **running app version** (`v…`; release builds: stamped from
+the `desktop-v*` git tag via `--build-name`, dev builds: the pubspec
+version).
+
 ## License
 
 MIT License — Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
