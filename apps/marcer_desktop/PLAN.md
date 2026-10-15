@@ -164,7 +164,7 @@ git-ignored (same policy as `launcher.config.json`).
     "ConfigFile": "",
     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
   },
-  "Window": { "width": 1280, "height": 800 }
+  "Window": { "width": 1280, "height": 800, "maximized": true }
 }
 ```
 
@@ -182,6 +182,10 @@ git-ignored (same policy as `launcher.config.json`).
   (1) current working directory, (2) the executable's directory (portable ZIP
   release), (3) macOS: the folder containing the `.app` bundle. Release ZIPs ship
   `desktop.config.example.json`.
+- **Window (2026-10-15):** the app starts **maximized** via `window_manager`
+  (`Window.maximized`, default `true`); `false` applies `Window.width/height`
+  as the startup and restore size, centered. Before that the size fields were
+  parsed but unused — the runners' hardcoded 1280×720 default looked small.
 
 ---
 

@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'catalog_controller.dart';
 import 'config_locator.dart';
@@ -20,7 +21,7 @@ import 'widgets/folder_tree.dart';
 import 'widgets/game_lightbox.dart';
 import 'widgets/help_overlay.dart';
 
-void main() {
+Future<void> main() async {
   final searchDirs = configSearchDirs(
     cwd: Directory.current.path,
     exeDir: File(Platform.resolvedExecutable).parent.path,
@@ -54,6 +55,27 @@ void main() {
     resolvedExecutable: Platform.resolvedExecutable,
     isMacOS: Platform.isMacOS,
   )));
+  // Window: start maximized (`Window.maximized`, default true — user
+  // decision 2026-10-15); otherwise the configured size, centered. The
+  // configured size is also the restore size under a maximized start.
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+  final maximized = config?.windowMaximized ?? true;
+  await windowManager.waitUntilReadyToShow(
+    WindowOptions(
+      size: Size(
+        (config?.windowWidth ?? 1280).toDouble(),
+        (config?.windowHeight ?? 800).toDouble(),
+      ),
+      center: !maximized,
+      title: 'MarcerGameDVDLauncher',
+    ),
+    () async {
+      if (maximized) await windowManager.maximize();
+      await windowManager.show();
+      await windowManager.focus();
+    },
+  );
   runApp(MarcerDesktopApp(config: config, configError: configError));
 }
 

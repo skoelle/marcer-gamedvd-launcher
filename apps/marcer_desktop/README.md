@@ -77,7 +77,8 @@ locations.
 | `Hatari.ArgsTemplate` | no | must contain `{cfg}` and `{zip}` |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
-| `Window.width/height` | no | reserved — parsed but not applied yet |
+| `Window.width/height` | no | initial/restore window size (default 1280×800) |
+| `Window.maximized` | no | start maximized (default `true`; `false` ⇒ `width`×`height`, centered) |
 
 ## Launch (Hatari)
 

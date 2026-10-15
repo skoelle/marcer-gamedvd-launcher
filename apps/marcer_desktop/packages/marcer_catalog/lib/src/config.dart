@@ -24,6 +24,7 @@ class DesktopConfig {
     this.searchDirs = const [],
     this.windowWidth = 1280,
     this.windowHeight = 800,
+    this.windowMaximized = true,
   });
 
   final String rootDirectory;
@@ -50,8 +51,14 @@ class DesktopConfig {
   /// filter (used for the factory state, `clear` and section switches).
   final String defaultStatus;
 
+  /// Initial window size (`Window.width`/`Window.height`) — used as the
+  /// startup size and as the restore size under [windowMaximized].
   final int windowWidth;
   final int windowHeight;
+
+  /// `Window.maximized` (default true): start the window maximized;
+  /// `false` starts it at [windowWidth]×[windowHeight], centered.
+  final bool windowMaximized;
 
   /// Loads and parses `desktop.config.json` from [configPath].
   ///
@@ -85,6 +92,7 @@ class DesktopConfig {
       searchDirs: searchDirs,
       windowWidth: (window['width'] as int?) ?? 1280,
       windowHeight: (window['height'] as int?) ?? 800,
+      windowMaximized: (window['maximized'] as bool?) ?? true,
     );
   }
 

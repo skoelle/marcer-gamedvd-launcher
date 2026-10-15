@@ -168,7 +168,8 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
-| `Window.width/height` | no | reserved — parsed but **not applied** yet (the window uses the platform default) |
+| `Window.width/height` | no | initial window size and restore size (default 1280×800) |
+| `Window.maximized` | no | start the window maximized (default `true`; `false` ⇒ `width`×`height`, centered) |
 
 ### ⌨️ Keyboard shortcuts
 

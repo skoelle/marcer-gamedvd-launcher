@@ -140,11 +140,12 @@ void main() {
         {"RootDirectory": "/r", "PatchDirectory": "/p",
          "OutDirectory": "/o", "DataDirectory": "/d",
          "ShowCandidates": false, "DefaultStatus": "done",
-         "Window": {"width": 1024, "height": 768}}''');
+         "Window": {"width": 1024, "height": 768, "maximized": false}}''');
       final c = DesktopConfig.load(f.path);
       expect(c.rootDirectory, '/r');
       expect(c.outDirectory, '/o');
       expect(c.windowWidth, 1024);
+      expect(c.windowMaximized, isFalse);
       expect(c.hatariArgsTemplate, contains('{zip}'));
       expect(c.showCandidates, isFalse);
       expect(c.defaultStatus, 'done');
@@ -156,6 +157,9 @@ void main() {
       final c = DesktopConfig.load(f.path);
       expect(c.showCandidates, isTrue);
       expect(c.defaultStatus, 'with_screenshot');
+      expect(c.windowMaximized, isTrue, reason: 'start maximized by default');
+      expect(c.windowWidth, 1280);
+      expect(c.windowHeight, 800);
     });
   });
 }
