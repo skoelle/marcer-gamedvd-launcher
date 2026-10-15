@@ -55,6 +55,8 @@ Future<void> main() async {
     resolvedExecutable: Platform.resolvedExecutable,
     isMacOS: Platform.isMacOS,
   )));
+  // Drop a one-shot update task left behind by an aborted update.
+  cleanupUpdateTask();
   // Window: start maximized (`Window.maximized`, default true — user
   // decision 2026-10-15); otherwise the configured size, centered. The
   // configured size is also the restore size under a maximized start.

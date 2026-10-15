@@ -48,10 +48,10 @@ snackbar). Status filter: `kStatusFilterKeys` adds strict `desktop_text` /
 Status. `pending` is app-specific too (2026-10-15): it matches a card when
 **any** of its ZIPs is pending (the gallery aggregate hides pending ZIPs in
 done folders; error-only cards no longer count as pending). Tests: package
-69 `dart test`, app 62 `flutter test` (index editor,
+73 `dart test`, app 71 `flutter test` (index editor,
 controller curation + preview swap incl. the live-cache refresh regression
 test `image_swap_refresh_test.dart`, self-updater helper script/args +
-`UpdateLog`), `flutter analyze` clean.
+Task Scheduler args/launcher + `UpdateLog`), `flutter analyze` clean.
 Linux debug build + xvfb smoke run OK; launch verified end-to-end with a fake
 emulator. Next: Surface B (couch mode).
 Written 2026-10-11.
@@ -309,17 +309,29 @@ Playnite-inspired master-detail layout, hybrid model:
   first, the new files copied in, the app relaunched. **Windows is
   two-phase:** the running app maps `data\app.so` and `flutter_windows.dll`
   into its address space and Windows refuses to rename loaded libraries
-  (ERROR_ACCESS_DENIED — in-process swap impossible), so a hidden detached
-  PowerShell helper (`windowsUpdateHelperScript`/`Args`, no UI) waits for
-  the app PID to exit, performs the same `.old` backup + swap + relaunch,
-  cleans up and logs each step to `MarcerUpdater.log` next to the app
-  (restoring the `*.old` exe if the swap died halfway). The **app itself
-  also logs** to `MarcerUpdater.log` (`UpdateLog`): update start, install
-  dir/exe/PID, `currentProcessInJob()` (FFI `IsProcessInJob` — a job with
-  `JOB_OBJECT_KILL_ON_JOB_CLOSE` kills the detached helper), download/extract
-  sizes, the exact helper spawn command line, and — via
-  `ProcessStartMode.detachedWithStdio` plus a 700 ms stdout/stderr drain —
-  any PowerShell start error; the log path is shown in the failure dialog.
+  (ERROR_ACCESS_DENIED — in-process swap impossible), so a hidden PowerShell
+  helper (`windowsUpdateHelperScript`, no UI) waits for the app PID to exit,
+  performs the same `.old` backup + swap + relaunch, cleans up and logs each
+  step to `MarcerUpdater.log` next to the app (restoring the `*.old` exe if
+  the swap died halfway). The helper is launched through a **one-shot Task
+  Scheduler task** (`schtasksCreateArgs`/`schtasksRunArgs`, `/SC ONCE /IT`,
+  `kUpdateTaskName`): the app runs inside a job object
+  (`currentProcessInJob() == true` in the log, `JOB_OBJECT_LIMIT_KILL_ON_
+  JOB_CLOSE`) and a plain child — even `ProcessStartMode.detached`, which
+  never sets `CREATE_BREAKAWAY_FROM_JOB` — is killed when the app exits; the
+  task is created/run by the service outside the job, and the helper deletes
+  it again (`Remove-UpdateTask`, plus `cleanupUpdateTask` on every start).
+  The task command is a short `powershell -File <launcher>` call (NOT
+  `-EncodedCommand`: `schtasks /TR` is capped at ~261 chars and the encoded
+  invocation would exceed it) over a tiny launcher script
+  (`windowsUpdateLauncherScript`) that single-quotes every path. A leftover
+  task from an aborted run is deleted on startup. Fallback when create/run
+  fails: the previous direct
+  `ProcessStartMode.detachedWithStdio` spawn with a 700 ms stdout/stderr
+  drain. The **app itself also logs** to `MarcerUpdater.log` (`UpdateLog`):
+  update start, install dir/exe/PID, `currentProcessInJob()` (FFI
+  `IsProcessInJob`), download/extract sizes, which route was taken and the
+  exact helper command line; the log path is shown in the failure dialog.
   Gated via
   `--dart-define=RELEASE_BUILD=true` (release workflow); the current
   version comes from `--build-name` (the git tag) via `package_info_plus`.

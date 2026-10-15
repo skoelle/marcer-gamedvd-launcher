@@ -119,10 +119,12 @@ Save, the manual screenshot curation described below.
   are never touched) and restart the app automatically. Failures show a
   dialog; leftover `*.old` files are cleaned up on the next start. On
   Windows the swap runs in a hidden helper after the app exits (the running
-  app locks its mapped libraries `data\app.so` / `flutter_windows.dll`;
-  both the app and the helper log their steps to `MarcerUpdater.log` next to
-  the app — a failed update always leaves that log, whose path is also shown
-  in the error dialog).
+  app locks its mapped libraries `data\app.so` / `flutter_windows.dll`). The
+  app runs inside a job object, so the helper is started through a one-shot
+  **Task Scheduler** task (a plain child process would be killed with the
+  app); both the app and the helper log their steps to `MarcerUpdater.log`
+  next to the app — a failed update always leaves that log, whose path is
+  also shown in the error dialog).
   Dev runs (`run.sh`) never check.
 
 ### 🚀 Quick start

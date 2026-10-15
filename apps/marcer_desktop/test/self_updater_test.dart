@@ -1,12 +1,22 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_desktop/self_updater.dart';
 import 'package:path/path.dart' as p;
+
+/// Decodes UTF-16LE (as produced by `-EncodedCommand`) back to a string.
+String _decodeUtf16le(List<int> bytes) {
+  final units = <int>[];
+  for (var i = 0; i + 1 < bytes.length; i += 2) {
+    units.add(bytes[i] | (bytes[i + 1] << 8));
+  }
+  return String.fromCharCodes(units);
+}
 
 Map<String, dynamic> _release(String tag,
     {List<Map<String, dynamic>> assets = const [],
@@ -298,6 +308,96 @@ void main() {
       // values arrive via -File arguments; the script must be identical on
       // every call so quoting/escaping bugs cannot come from Dart.
       expect(windowsUpdateHelperScript(), windowsUpdateHelperScript());
+    });
+
+    test('script accepts -TaskName and deletes the one-shot task', () {
+      final s = windowsUpdateHelperScript();
+      expect(s, contains(r'[string]$TaskName'));
+      expect(s, contains('Remove-UpdateTask'));
+      expect(s, contains("'/Delete', '/TN', \$TaskName, '/F'"));
+    });
+  });
+
+  group('Task Scheduler launch', () {
+    test('encodes ASCII as UTF-16LE base64 (no BOM)', () {
+      // "A" -> 0x41 0x00 -> base64 "QQA="
+      expect(powershellEncodedCommand('A'), 'QQA=');
+      // newlines are normalised to CRLF before encoding ("A\nB")
+      final enc = powershellEncodedCommand('A\nB');
+      expect(enc, base64.encode(utf16LeNoBom('A\r\nB')));
+      expect(_decodeUtf16le(base64.decode(enc)), 'A\r\nB');
+    });
+
+    test('utf16LeNoBom emits little-endian code units without a BOM', () {
+      expect(utf16LeNoBom('A'), [0x41, 0x00]);
+      expect(utf16LeNoBom('\u00e4'), [0xe4, 0x00]);
+    });
+
+    test('schtasks create args run as the interactive user, one-shot', () {
+      final args = schtasksCreateArgs(
+          taskName: kUpdateTaskName, command: 'powershell.exe -Foo');
+      expect(args, [
+        '/Create',
+        '/TN',
+        kUpdateTaskName,
+        '/TR',
+        'powershell.exe -Foo',
+        '/SC',
+        'ONCE',
+        '/ST',
+        '00:00',
+        '/IT',
+        '/F',
+      ]);
+    });
+
+    test('schtasks run/delete args are minimal', () {
+      expect(schtasksRunArgs(kUpdateTaskName),
+          ['/Run', '/TN', kUpdateTaskName]);
+      expect(schtasksDeleteArgs(kUpdateTaskName),
+          ['/Delete', '/TN', kUpdateTaskName, '/F']);
+    });
+
+    test('launcher script single-quotes paths and passes every parameter',
+        () {
+      final body = windowsUpdateLauncherScript(
+        scriptPath: r"C:\Temp\marcer update\u.ps1",
+        appDir: r'C:\Repos\tools\MarcerDesktop-win-x64',
+        exeName: 'MarcerGameDVDLauncher.exe',
+        stageDir: r'C:\Temp\marcer update\extract',
+        waitPid: 54256,
+        logPath: r'C:\Repos\tools\MarcerDesktop-win-x64\MarcerUpdater.log',
+        taskName: kUpdateTaskName,
+      );
+      expect(body, contains("& 'C:\\Temp\\marcer update\\u.ps1'"));
+      expect(body, contains("-AppDir 'C:\\Repos\\tools\\MarcerDesktop-win-x64'"));
+      expect(body, contains("-ExeName 'MarcerGameDVDLauncher.exe'"));
+      expect(body, contains('-WaitPid 54256'));
+      expect(body, contains("-TaskName '$kUpdateTaskName'"));
+      // a literal quote inside a path is doubled (PS escaping)
+      expect(
+          windowsUpdateLauncherScript(
+            scriptPath: "C:\\a'b\\u.ps1",
+            appDir: 'a',
+            exeName: 'b',
+            stageDir: 'c',
+            waitPid: 1,
+            logPath: 'd',
+            taskName: 'e',
+          ),
+          contains("C:\\a''b\\u.ps1"));
+    });
+
+    test('task command stays short: -File <launcher>, never -EncodedCommand',
+        () {
+      final cmd =
+          windowsUpdateTaskCommand(launcherPath: r'C:\Temp\marcer_update_x\updater_launch.ps1');
+      expect(cmd, startsWith('powershell.exe -NoProfile -NonInteractive '
+          '-WindowStyle Hidden -ExecutionPolicy Bypass -File '));
+      expect(cmd, endsWith(r'C:\Temp\marcer_update_x\updater_launch.ps1'));
+      expect(cmd, isNot(contains('-EncodedCommand')));
+      // schtasks /TR is capped at ~261 chars — stay well under it
+      expect(cmd.length, lessThan(261));
     });
   });
 

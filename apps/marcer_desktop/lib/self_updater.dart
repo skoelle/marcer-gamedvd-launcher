@@ -138,6 +138,18 @@ void _copyDir(Directory src, String destPath) {
   }
 }
 
+/// Best-effort removal of the one-shot update task in case an aborted update
+/// left it behind (the helper normally deletes it itself). Runs on every
+/// start; ignored on non-Windows or failure.
+void cleanupUpdateTask() {
+  if (!Platform.isWindows) return;
+  try {
+    Process.runSync('schtasks.exe', schtasksDeleteArgs(kUpdateTaskName));
+  } catch (_) {
+    // best effort
+  }
+}
+
 /// Name of the tiny update log written next to the app by the Windows
 /// helper (the only diagnostic channel — the helper runs without UI).
 const String kUpdateLogName = 'MarcerUpdater.log';
@@ -226,6 +238,16 @@ DynamicLibrary _openCrt() {
   throw StateError('no C runtime found');
 }
 
+/// Outcome of a `schtasks.exe` invocation (see [CatalogController] updates).
+class _SchtasksResult {
+  const _SchtasksResult(
+      {required this.ok, required this.code, required this.output});
+
+  final bool ok;
+  final int code;
+  final String output;
+}
+
 /// PowerShell script performed by a detached hidden helper AFTER this
 /// process has exited (two-phase update, Windows only).
 ///
@@ -242,7 +264,8 @@ String windowsUpdateHelperScript() => r'''param(
   [Parameter(Mandatory = $true)][string]$ExeName,
   [Parameter(Mandatory = $true)][string]$StageDir,
   [Parameter(Mandatory = $true)][int]$WaitPid,
-  [string]$LogPath = ''
+  [string]$LogPath = '',
+  [string]$TaskName = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -254,6 +277,19 @@ function Write-Log([string]$msg) {
   } catch { }
 }
 
+# The helper is normally launched through the Task Scheduler (it runs
+# outside the app's job object, which would otherwise kill it on exit);
+# remove that one-shot task again in every outcome.
+function Remove-UpdateTask {
+  if ([string]::IsNullOrEmpty($TaskName)) { return }
+  try {
+    Start-Process -FilePath 'schtasks.exe' -ArgumentList @('/Delete', '/TN', $TaskName, '/F') -WindowStyle Hidden -Wait | Out-Null
+    Write-Log ('update task {0} deleted' -f $TaskName)
+  } catch {
+    Write-Log ('update task delete failed: {0}' -f $_.Exception.Message)
+  }
+}
+
 try {
   Write-Log ('start: app={0} pid={1}' -f $AppDir, $WaitPid)
 
@@ -262,6 +298,7 @@ try {
   while ($null -ne (Get-Process -Id $WaitPid -ErrorAction SilentlyContinue)) {
     if ((Get-Date) -gt $deadline) {
       Write-Log ('timeout waiting for pid {0}' -f $WaitPid)
+      Remove-UpdateTask
       exit 1
     }
     Start-Sleep -Milliseconds 200
@@ -302,6 +339,7 @@ try {
       Write-Log 'restored previous exe after failed swap'
     } else {
       Write-Log 'no executable to launch'
+      Remove-UpdateTask
       exit 1
     }
   }
@@ -316,9 +354,11 @@ try {
     }
   try { Remove-Item -LiteralPath $StageDir -Recurse -Force -ErrorAction Stop } catch { }
   Write-Log 'done'
+  Remove-UpdateTask
   exit 0
 } catch {
   Write-Log ('error: {0}' -f $_.Exception.Message)
+  Remove-UpdateTask
   exit 1
 }
 ''';
@@ -334,6 +374,7 @@ List<String> windowsUpdateHelperArgs({
   required String stageDir,
   required int waitPid,
   required String logPath,
+  String taskName = '',
 }) =>
     [
       '-NoProfile',
@@ -354,7 +395,84 @@ List<String> windowsUpdateHelperArgs({
       '$waitPid',
       '-LogPath',
       logPath,
+      if (taskName.isNotEmpty) ...['-TaskName', taskName],
     ];
+
+/// Name of the one-shot scheduled task used to launch the helper outside the
+/// app's job object (see [schtasksCreateArgs]).
+const String kUpdateTaskName = 'MarcerGameDVDLauncherUpdate';
+
+/// Base64 UTF-16LE representation for `powershell.exe -EncodedCommand`.
+/// (Kept as a small tested primitive; the scheduled task itself uses a
+/// launcher file instead, see [windowsUpdateTaskCommand].)
+String powershellEncodedCommand(String script) =>
+    base64.encode(utf16LeNoBom(script.replaceAll('\n', '\r\n')));
+
+/// UTF-16 little-endian bytes without a BOM — the exact encoding
+/// `-EncodedCommand` expects.
+List<int> utf16LeNoBom(String s) {
+  final out = <int>[];
+  for (final unit in s.codeUnits) {
+    out.add(unit & 0xff);
+    out.add((unit >> 8) & 0xff);
+  }
+  return out;
+}
+
+/// `schtasks /Create` args for the one-shot helper task: runs as the current
+/// interactive user (`/IT`) so it gets a desktop, and is deleted by the
+/// helper itself once done (`/F` overwrites a stale leftover).
+List<String> schtasksCreateArgs({
+  required String taskName,
+  required String command,
+}) =>
+    [
+      '/Create',
+      '/TN',
+      taskName,
+      '/TR',
+      command,
+      '/SC',
+      'ONCE',
+      '/ST',
+      '00:00',
+      '/IT',
+      '/F',
+    ];
+
+/// `schtasks /Run` args to start the task immediately.
+List<String> schtasksRunArgs(String taskName) => ['/Run', '/TN', taskName];
+
+/// `schtasks /Delete` args (stale-task cleanup on startup).
+List<String> schtasksDeleteArgs(String taskName) =>
+    ['/Delete', '/TN', taskName, '/F'];
+
+/// Body of the tiny launcher script written next to the helper and invoked
+/// by the scheduled task. Single-quoted paths (a literal `'` is doubled) —
+/// a script file needs no command-line escaping at all.
+String windowsUpdateLauncherScript({
+  required String scriptPath,
+  required String appDir,
+  required String exeName,
+  required String stageDir,
+  required int waitPid,
+  required String logPath,
+  required String taskName,
+}) {
+  String q(String v) => "'${v.replaceAll("'", "''")}'";
+  return '& ${q(scriptPath)} -AppDir ${q(appDir)} -ExeName ${q(exeName)} '
+      '-StageDir ${q(stageDir)} -WaitPid $waitPid -LogPath ${q(logPath)} '
+      '-TaskName ${q(taskName)}\n';
+}
+
+/// The `schtasks /TR` value: a short `powershell -File <launcher>` call.
+///
+/// Deliberately NOT `-EncodedCommand`: `/TR` is capped at ~261 characters
+/// and the fully-encoded invocation (all paths + params, UTF-16 base64)
+/// would exceed that. The launcher file carries the arguments instead.
+String windowsUpdateTaskCommand({required String launcherPath}) =>
+    'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden '
+    '-ExecutionPolicy Bypass -File $launcherPath';
 
 /// Installs the extracted release [from] over [into]: every top-level entry
 /// is renamed to `<name>.old` first and then replaced by the new version.
@@ -526,12 +644,12 @@ class SelfUpdateController extends ChangeNotifier {
         // hidden helper that waits for our exit, swaps and relaunches.
         phase = UpdatePhase.restarting;
         notifyListeners();
-        await _startWindowsHelper(
+        await _launchWindowsHelper(
             tmp: tmp,
             installDir: Directory(installDir),
             stageDir: extractDir,
             log: log);
-        log.line('helper spawned; exiting app now');
+        log.line('helper launched; exiting app now');
         exit(0);
       }
 
@@ -570,16 +688,20 @@ class SelfUpdateController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Writes [windowsUpdateHelperScript] into [tmp] and starts it detached
-  /// and hidden; the helper performs the swap once this process has exited
-  /// (Windows only — see the script for the rationale). [tmp] (staging +
-  /// script) is removed by the helper on success.
+  /// Launches the Windows helper that swaps the files after this process has
+  /// exited. [tmp] (staging + script) is removed by the helper on success.
   ///
-  /// Uses [ProcessStartMode.detachedWithStdio] (not plain `detached`, which
-  /// routes all three stdio streams to NUL) and briefly drains stdout/stderr
-  /// into [log] — a PowerShell that refuses to start (policy, job kill,
-  /// missing console) then leaves a trace instead of dying silently.
-  Future<void> _startWindowsHelper(
+  /// Primary route: a one-shot **Task Scheduler** task, because the app runs
+  /// inside a job object (`in job: true` in the log) with
+  /// `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` — a plain child process (even
+  /// `detached`, which never sets `CREATE_BREAKAWAY_FROM_JOB`) is killed the
+  /// moment the app calls `exit(0)`. The task is created/run by the service
+  /// outside the job, and the helper deletes it again when done.
+  ///
+  /// Fallback: the previous direct `detachedWithStdio` spawn (works when the
+  /// app is *not* in a job, e.g. launched from a terminal) with a short
+  /// stdout/stderr drain so a start failure leaves a trace.
+  Future<void> _launchWindowsHelper(
       {required Directory tmp,
       required Directory installDir,
       required Directory stageDir,
@@ -588,19 +710,52 @@ class SelfUpdateController extends ChangeNotifier {
     if (pid == null || pid == 0) {
       throw StateError('Cannot determine own process id for the update helper');
     }
+    final exeName = p.basename(Platform.resolvedExecutable);
+    final logPath = p.join(installDir.path, kUpdateLogName);
     final script = File(p.join(tmp.path, 'updater.ps1'));
     script.writeAsStringSync(windowsUpdateHelperScript());
-    final exeName = p.basename(Platform.resolvedExecutable);
+    final launcher = File(p.join(tmp.path, 'updater_launch.ps1'));
+    launcher.writeAsStringSync(windowsUpdateLauncherScript(
+      scriptPath: script.path,
+      appDir: installDir.path,
+      exeName: exeName,
+      stageDir: stageDir.path,
+      waitPid: pid,
+      logPath: logPath,
+      taskName: kUpdateTaskName,
+    ));
+
+    // Best-effort: drop a leftover task from an earlier aborted update.
+    _runSchtasks(schtasksDeleteArgs(kUpdateTaskName), log, 'cleanup');
+
+    final command = windowsUpdateTaskCommand(launcherPath: launcher.path);
+
+    log.line('creating scheduled task $kUpdateTaskName');
+    final create = _runSchtasks(
+        schtasksCreateArgs(taskName: kUpdateTaskName, command: command),
+        log,
+        'create');
+    final run = create.ok
+        ? _runSchtasks(schtasksRunArgs(kUpdateTaskName), log, 'run')
+        : _SchtasksResult(ok: false, code: -1, output: 'skipped (create failed)');
+
+    if (create.ok && run.ok) {
+      log.line('helper started via Task Scheduler ($kUpdateTaskName)');
+      return;
+    }
+
+    // Fallback: direct detached spawn (survives only outside a job object).
+    log.line('Task Scheduler route failed — falling back to direct spawn');
     final args = windowsUpdateHelperArgs(
       scriptPath: script.path,
       appDir: installDir.path,
       exeName: exeName,
       stageDir: stageDir.path,
       waitPid: pid,
-      logPath: p.join(installDir.path, kUpdateLogName),
+      logPath: logPath,
+      taskName: kUpdateTaskName,
     );
     log.line('spawning helper: powershell.exe ${args.join(' ')}');
-
     final Process proc;
     try {
       proc = await Process.start(
@@ -613,9 +768,6 @@ class SelfUpdateController extends ChangeNotifier {
       rethrow;
     }
     log.line('helper pid=${proc.pid}');
-
-    // Drain the pipes briefly so startup errors land in the log, then stop
-    // listening; the child keeps running detached after we exit.
     final out = StringBuffer();
     final err = StringBuffer();
     proc.stdout.transform(utf8.decoder).listen(out.write);
@@ -627,6 +779,21 @@ class SelfUpdateController extends ChangeNotifier {
     if (e.isNotEmpty) log.line('helper stderr: $e');
     if (o.isEmpty && e.isEmpty) {
       log.line('helper produced no output in 700ms (started or died silently)');
+    }
+  }
+
+  /// Runs `schtasks.exe` with [args] and logs the outcome; never throws.
+  _SchtasksResult _runSchtasks(
+      List<String> args, UpdateLog log, String label) {
+    try {
+      final r = Process.runSync('schtasks.exe', args);
+      final out = '${r.stdout}${r.stderr}'.trim().replaceAll('\n', ' | ');
+      log.line('schtasks $label rc=${r.exitCode}'
+          '${out.isEmpty ? '' : ' :: $out'}');
+      return _SchtasksResult(ok: r.exitCode == 0, code: r.exitCode, output: out);
+    } catch (e) {
+      log.line('schtasks $label FAILED: $e');
+      return _SchtasksResult(ok: false, code: -1, output: '$e');
     }
   }
 
