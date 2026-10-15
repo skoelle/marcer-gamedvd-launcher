@@ -93,8 +93,11 @@ Save, the manual screenshot curation described below.
   `⬆ <version>` button appears left of the Folders button. Click to download
   the platform ZIP, swap it in place (user config, favorites and `TOS.IMG`
   are never touched) and restart the app automatically. Failures show a
-  dialog; leftover `*.old` files are cleaned up on the next start. Dev runs
-  (`run.sh`) never check.
+  dialog; leftover `*.old` files are cleaned up on the next start. On
+  Windows the swap runs in a hidden helper after the app exits (the running
+  app locks its mapped libraries `data\app.so` / `flutter_windows.dll`;
+  the helper's steps are logged to `MarcerUpdater.log` next to the app).
+  Dev runs (`run.sh`) never check.
 
 ### 🚀 Quick start
 

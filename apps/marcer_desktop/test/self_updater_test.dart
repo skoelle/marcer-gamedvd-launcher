@@ -228,4 +228,76 @@ void main() {
           isFalse);
     });
   });
+
+  group('windowsUpdateHelper', () {
+    test('args bind every parameter as its own -File argument', () {
+      final args = windowsUpdateHelperArgs(
+        scriptPath: r'C:\Temp\marcer update\u.ps1',
+        appDir: r'C:\Repos\tools\Marcer Desktop',
+        exeName: 'MarcerGameDVDLauncher.exe',
+        stageDir: r'C:\Temp\marcer update\extract',
+        waitPid: 4242,
+        logPath: r'C:\Repos\tools\Marcer Desktop\MarcerUpdater.log',
+      );
+
+      expect(args, [
+        '-NoProfile',
+        '-NonInteractive',
+        '-WindowStyle',
+        'Hidden',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        r'C:\Temp\marcer update\u.ps1',
+        '-AppDir',
+        r'C:\Repos\tools\Marcer Desktop',
+        '-ExeName',
+        'MarcerGameDVDLauncher.exe',
+        '-StageDir',
+        r'C:\Temp\marcer update\extract',
+        '-WaitPid',
+        '4242',
+        '-LogPath',
+        r'C:\Repos\tools\Marcer Desktop\MarcerUpdater.log',
+      ]);
+      // paths with spaces stay single list entries (quoting is done by the
+      // Process.start launcher, not by the script).
+      expect(args.where((a) => a.contains(' ')).length, 4);
+    });
+
+    test('script declares all parameters and the two-phase update flow', () {
+      final s = windowsUpdateHelperScript();
+
+      expect(s, startsWith('param('));
+      for (final name in [
+        r'[string]$AppDir',
+        r'[string]$ExeName',
+        r'[string]$StageDir',
+        r'[int]$WaitPid',
+        r'[string]$LogPath',
+      ]) {
+        expect(s, contains(name), reason: 'param $name');
+      }
+      // phase 1: wait for our pid to disappear (mapped libs unlock)
+      expect(s, contains('Get-Process -Id \$WaitPid'));
+      expect(s, contains('Start-Sleep -Milliseconds 200'));
+      // phase 2: .old backup + move staged entries in, skip __MACOSX
+      expect(s, contains(r"Where-Object { $_.Name -like '*.old' }"));
+      expect(s, contains("Move-Item -LiteralPath \$target -Destination (\$target + '.old')"));
+      expect(s, contains("if (\$name -eq '__MACOSX') { continue }"));
+      // phase 3: relaunch, restoring the old exe after a failed swap
+      expect(s, contains('Start-Process -FilePath \$exePath'));
+      expect(s, contains('restored previous exe after failed swap'));
+      // diagnostics + termination
+      expect(s, contains('Add-Content -LiteralPath \$LogPath'));
+      expect(s, contains('exit 0'));
+      expect(s, contains('timeout waiting for pid'));
+    });
+
+    test('script is static — no values are interpolated into it', () {
+      // values arrive via -File arguments; the script must be identical on
+      // every call so quoting/escaping bugs cannot come from Dart.
+      expect(windowsUpdateHelperScript(), windowsUpdateHelperScript());
+    });
+  });
 }

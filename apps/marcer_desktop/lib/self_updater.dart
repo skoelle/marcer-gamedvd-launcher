@@ -9,6 +9,8 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import 'index_editor.dart';
+
 /// GitHub repo hosting both apps; desktop releases use the `desktop-v*`
 /// tag prefix (see .github/workflows/desktop-release.yml).
 const String kSelfUpdateRepo = 'skoelle/marcer-gamedvd-launcher';
@@ -135,12 +137,150 @@ void _copyDir(Directory src, String destPath) {
   }
 }
 
-/// Installs the extracted release [from] over [into]:
-/// every top-level entry is renamed to `<name>.old` first (rename is safe
-/// for running executables / mapped libraries on all three platforms) and
-/// then replaced by the new version. User files not contained in the zip
-/// (`desktop.config.json`, `favorites.txt`, `TOS.IMG`, …) are never touched.
-/// The `.old` leftovers are removed by [cleanupOldFiles] on the next start.
+/// Name of the tiny update log written next to the app by the Windows
+/// helper (the only diagnostic channel — the helper runs without UI).
+const String kUpdateLogName = 'MarcerUpdater.log';
+
+/// PowerShell script performed by a detached hidden helper AFTER this
+/// process has exited (two-phase update, Windows only).
+///
+/// Why: the running app maps `data\app.so` and `flutter_windows.dll` into
+/// its address space; Windows refuses to rename those files (or the `data`
+/// directory containing `app.so`) while they are loaded
+/// (ERROR_ACCESS_DENIED). The helper waits for the app PID to disappear,
+/// then performs the same `.old` backup + swap + relaunch dance the
+/// POSIX in-process path does, cleans up and writes [kUpdateLogName].
+/// All values are passed as `-File` arguments (no string interpolation),
+/// so paths with spaces need no escaping here.
+String windowsUpdateHelperScript() => r'''param(
+  [Parameter(Mandatory = $true)][string]$AppDir,
+  [Parameter(Mandatory = $true)][string]$ExeName,
+  [Parameter(Mandatory = $true)][string]$StageDir,
+  [Parameter(Mandatory = $true)][int]$WaitPid,
+  [string]$LogPath = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Write-Log([string]$msg) {
+  if ([string]::IsNullOrEmpty($LogPath)) { return }
+  try {
+    Add-Content -LiteralPath $LogPath -Value ('{0} {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg) -Encoding UTF8
+  } catch { }
+}
+
+try {
+  Write-Log ('start: app={0} pid={1}' -f $AppDir, $WaitPid)
+
+  # Phase 1: wait until the app exited (mapped libraries unlock then).
+  $deadline = (Get-Date).AddSeconds(30)
+  while ($null -ne (Get-Process -Id $WaitPid -ErrorAction SilentlyContinue)) {
+    if ((Get-Date) -gt $deadline) {
+      Write-Log ('timeout waiting for pid {0}' -f $WaitPid)
+      exit 1
+    }
+    Start-Sleep -Milliseconds 200
+  }
+  Write-Log 'app exited'
+
+  # Phase 2: drop stale *.old leftovers, then backup + swap per staged entry
+  # (same semantics as the POSIX swapInstall: only staged names are touched,
+  # user files like desktop.config.json / favorites.txt stay in place).
+  Get-ChildItem -LiteralPath $AppDir -Force |
+    Where-Object { $_.Name -like '*.old' } |
+    ForEach-Object {
+      try {
+        Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction Stop
+        Write-Log ('removed stale {0}' -f $_.Name)
+      } catch {
+        Write-Log ('stale kept {0}: {1}' -f $_.Name, $_.Exception.Message)
+      }
+    }
+
+  foreach ($entity in @(Get-ChildItem -LiteralPath $StageDir -Force)) {
+    $name = $entity.Name
+    if ($name -eq '__MACOSX') { continue }
+    $target = Join-Path $AppDir $name
+    if (Test-Path -LiteralPath $target) {
+      Move-Item -LiteralPath $target -Destination ($target + '.old') -Force -ErrorAction Stop
+      Write-Log ('backed up {0}' -f $name)
+    }
+    Move-Item -LiteralPath $entity.FullName -Destination $target -Force -ErrorAction Stop
+    Write-Log ('installed {0}' -f $name)
+  }
+
+  # Phase 3: relaunch (restore the previous exe if the swap died halfway).
+  $exePath = Join-Path $AppDir $ExeName
+  if (-not (Test-Path -LiteralPath $exePath)) {
+    if (Test-Path -LiteralPath ($exePath + '.old')) {
+      Move-Item -LiteralPath ($exePath + '.old') -Destination $exePath -Force -ErrorAction Stop
+      Write-Log 'restored previous exe after failed swap'
+    } else {
+      Write-Log 'no executable to launch'
+      exit 1
+    }
+  }
+  Start-Process -FilePath $exePath -WorkingDirectory $AppDir
+  Write-Log 'relaunched'
+
+  # Phase 4: best-effort cleanup of backups and the staging dir.
+  Get-ChildItem -LiteralPath $AppDir -Force |
+    Where-Object { $_.Name -like '*.old' } |
+    ForEach-Object {
+      try { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction Stop } catch { }
+    }
+  try { Remove-Item -LiteralPath $StageDir -Recurse -Force -ErrorAction Stop } catch { }
+  Write-Log 'done'
+  exit 0
+} catch {
+  Write-Log ('error: {0}' -f $_.Exception.Message)
+  exit 1
+}
+''';
+
+/// Arguments for the hidden PowerShell helper running
+/// [windowsUpdateHelperScript] (`-File` binds them to the param block;
+/// each path is one list entry, so spaces are handled by the Dart
+/// launcher's quoting).
+List<String> windowsUpdateHelperArgs({
+  required String scriptPath,
+  required String appDir,
+  required String exeName,
+  required String stageDir,
+  required int waitPid,
+  required String logPath,
+}) =>
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-WindowStyle',
+      'Hidden',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      scriptPath,
+      '-AppDir',
+      appDir,
+      '-ExeName',
+      exeName,
+      '-StageDir',
+      stageDir,
+      '-WaitPid',
+      '$waitPid',
+      '-LogPath',
+      logPath,
+    ];
+
+/// Installs the extracted release [from] over [into]: every top-level entry
+/// is renamed to `<name>.old` first and then replaced by the new version.
+/// User files not contained in the zip (`desktop.config.json`,
+/// `favorites.txt`, `TOS.IMG`, …) are never touched. The `.old` leftovers
+/// are removed by [cleanupOldFiles] on the next start.
+///
+/// Used in-process on macOS/Linux only: renaming a *running* executable is
+/// fine everywhere, but Windows additionally locks loaded libraries
+/// (`data\app.so`, `flutter_windows.dll`) against rename — see
+/// [windowsUpdateHelperScript] for the two-phase Windows path.
 void swapInstall({required Directory from, required Directory into}) {
   into.createSync(recursive: true);
   for (final entity in from.listSync(followLinks: false)) {
@@ -271,6 +411,18 @@ class SelfUpdateController extends ChangeNotifier {
       final installDir = installTargetDir(
           resolvedExecutable: Platform.resolvedExecutable,
           isMacOS: Platform.isMacOS);
+
+      if (Platform.isWindows) {
+        // Two-phase: the running app maps data\app.so and
+        // flutter_windows.dll, which Windows refuses to rename. Stage a
+        // hidden helper that waits for our exit, swaps and relaunches.
+        phase = UpdatePhase.restarting;
+        notifyListeners();
+        await _startWindowsHelper(
+            tmp: tmp, installDir: Directory(installDir), stageDir: extractDir);
+        exit(0);
+      }
+
       swapInstall(from: extractDir, into: Directory(installDir));
 
       phase = UpdatePhase.restarting;
@@ -297,6 +449,35 @@ class SelfUpdateController extends ChangeNotifier {
     }
     error = null;
     notifyListeners();
+  }
+
+  /// Writes [windowsUpdateHelperScript] into [tmp] and starts it detached
+  /// and hidden; the helper performs the swap once this process has exited
+  /// (Windows only — see the script for the rationale). [tmp] (staging +
+  /// script) is removed by the helper on success.
+  Future<void> _startWindowsHelper(
+      {required Directory tmp,
+      required Directory installDir,
+      required Directory stageDir}) async {
+    final pid = selfPid;
+    if (pid == null || pid == 0) {
+      throw StateError('Cannot determine own process id for the update helper');
+    }
+    final script = File(p.join(tmp.path, 'updater.ps1'));
+    script.writeAsStringSync(windowsUpdateHelperScript());
+    final exeName = p.basename(Platform.resolvedExecutable);
+    await Process.start(
+      'powershell.exe',
+      windowsUpdateHelperArgs(
+        scriptPath: script.path,
+        appDir: installDir.path,
+        exeName: exeName,
+        stageDir: stageDir.path,
+        waitPid: pid,
+        logPath: p.join(installDir.path, kUpdateLogName),
+      ),
+      mode: ProcessStartMode.detached,
+    );
   }
 
   Future<void> _download(String url, File target) async {
