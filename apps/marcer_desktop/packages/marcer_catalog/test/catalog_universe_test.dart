@@ -222,6 +222,32 @@ void main() {
     });
   });
 
+  group('CatalogUniverse status counts (status bar)', () {
+    test('statusCounts aggregates displayStatus over cracked cards', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+        relA2: entryJson(relA2, 'pending', 'ROOT'), // Alpha: done+pending
+        relB: entryJson(relB, 'desktop', 'ROOT', preview: 'beta.png'),
+        relB9: entryJson(relB9, 'pending', 'ROOT'),
+      });
+      expect(u.statusCounts, {'done': 1, 'desktop': 1, 'pending': 1});
+    });
+
+    test('pendingAnyVariantCount follows the app filter rule, not the '
+        'aggregate', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+        relA2: entryJson(relA2, 'pending', 'ROOT'), // aggregate hides it
+        relB: entryJson(relB, 'error', 'ROOT'), // fallback aggregate pending
+        relB9: entryJson(relB9, 'pending', 'ROOT'),
+      });
+      // Alpha (pending ZIP inside a done folder) + 999; the error-only card
+      // aggregates to `pending` but has no pending ZIP.
+      expect(u.pendingAnyVariantCount, 2);
+      expect(u.statusCounts['pending'], 2);
+    });
+  });
+
   group('CatalogFilter.matchesCard', () {
     late CatalogUniverse u;
     late GameCard alpha;

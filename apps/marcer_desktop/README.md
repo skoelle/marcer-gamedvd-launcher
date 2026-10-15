@@ -127,16 +127,31 @@ The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
 - All other status values use the gallery's aggregated card status
   (`done → desktop → no usable shots → interrupted → pending → skipped`).
 
-Note the units: the status bar counts **ZIP entries**, the filter counts
-**games** — `pending 5` in the bar can therefore mean fewer games.
+The status bar reports every status as **games (ZIPs)** (see below), so the
+games number always equals the result count of the matching dropdown
+selection.
 
 ## Status bar
 
 The gray bar at the bottom shows the current view path (folder browser),
-result/entry counts, the gallery-style status info (above) and — right
-aligned — the **running app version** (`v…`; release builds: stamped from
-the `desktop-v*` git tag via `--build-name`, dev builds: the pubspec
-version).
+result/entry counts, the gallery-style status info and — right aligned —
+the **running app version** (`v…`; release builds: stamped from the
+`desktop-v*` git tag via `--build-name`, dev builds: the pubspec version).
+
+Status info in catalog mode (app-only divergence from the gallery footer,
+which shows ZIP-entry counts only):
+
+- `3211 / 3287 with screenshot` — cracked **games** with a preview out of
+  all cracked games (both sides are games, not ZIP entries).
+- `done 2635 (8979 zips)` — per status: number of **games** (cards) plus
+  their **ZIP entries** in parentheses. The games number equals the result
+  count of the matching status dropdown selection — `done`, `desktop`,
+  `no usable shots`, `interrupted` and `skipped (disk 2+)` use the
+  aggregated card status, `pending` counts a game when **any** of its ZIPs
+  is pending (same rule as the filter; a game can therefore appear in
+  `pending` and `done` at once).
+- `info N folders`, `N without info`, `index.json: …`, `gameinfo: …` —
+  unchanged (folders / index ZIP entries / timestamps).
 
 ## License
 

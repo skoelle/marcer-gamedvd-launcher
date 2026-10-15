@@ -19,7 +19,7 @@ view; filter bar hidden), **gallery-style lightbox** (header, large preview,
 variant filmstrip with horizontal scrollbar, candidate strip, info panel,
 `Space`/`P` launch; `←/→` cards, `↑/↓` variants, `PgUp/PgDn` images), help
 overlay, favorites persistence (§11, R25/R26), status bar with gallery-style
-counts + degradation notices. **Hatari launch** (§12): `P` / `Space` / Play
+games+ZIP counts + degradation notices. **Hatari launch** (§12): `P` / `Space` / Play
 button, `{cfg}`/`{zip}` substitution, bundled `MarcerGameDvd-Hatari.cfg`
 fallback, non-blocking process + "Hatari is running…" indicator, launch-error
 modal. Platform app icon
@@ -219,11 +219,13 @@ Playnite-inspired master-detail layout, hybrid model:
   switching to the folder browser hides it but keeps the filter state.
 - **Catalog mode:** the global card grid (`CatalogFilter.isActive` only
   decides whether the result is considered "filtered"); `clear` resets the
-  filters. Result counts in the status bar. **Status bar** mirrors the gallery
-  (`renderStats`/`renderFooter`): `N / M with screenshot`, status counts
-  (ZIP-entry level: `done`/`desktop`/`pending`/… — the `pending` *filter*
-  counts games instead, so bar and filter numbers use different units),
-  `info N folders`, `index.json: <mtime>`,
+  filters. Result counts in the status bar. **Status bar** starts from the
+  gallery (`renderStats`/`renderFooter`) but diverges app-only (2026-10-15):
+  `N / M with screenshot` counts **games** on both sides, every status
+  segment shows **games (ZIPs)** — `done 2635 (8979 zips)` — where the
+  games number equals the matching dropdown result count (`pending` uses
+  the app's any-pending-ZIP rule and can therefore overlap e.g. with
+  `done`); `info N folders`, `index.json: <mtime>`,
   `gameinfo: <generated_at>`, plus degradation notices; the app version
   (from `package_info_plus`, always read — not only in release builds)
   is right-aligned at the end.

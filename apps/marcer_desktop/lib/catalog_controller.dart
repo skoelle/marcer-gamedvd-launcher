@@ -634,19 +634,20 @@ class CatalogController extends ChangeNotifier {
     return '${visibleEntries.length} entries';
   }
 
-  /// Gallery-style status line (`renderStats` + `renderFooter`):
-  /// `N / M with screenshot`, status counts, `info X folders`,
-  /// `index.json: …`, `gameinfo: …`, `gallery …`.
+  /// Gallery-style status line (`renderStats` + `renderFooter`), app-only
+  /// divergence: counts are shown as games (cards) plus their ZIP entries —
+  /// `N / M with screenshot` (both games), `done 2635 (8979 zips)` etc. so
+  /// the done segment matches the dropdown result count.
   List<String> get statusLine {
     final parts = <String>[];
     if (catalogMode && filter.section == 'cracked' && gameinfo.length > 0) {
-      parts.add('${universe.crackedWithScreenshot} / ${screenshots.length} '
+      parts.add('${universe.crackedWithScreenshot} / ${universe.cracked.length} '
           'with screenshot');
     } else if (screenshots.length > 0) {
       parts.add('${screenshots.length} index entries');
     }
     if (catalogMode) {
-      final sc = screenshots.statusCounts;
+      final zipCounts = screenshots.statusCounts;
       for (final k in const [
         'done',
         'desktop',
@@ -655,7 +656,13 @@ class CatalogController extends ChangeNotifier {
         'no_usable_shots',
         'interrupted',
       ]) {
-        if ((sc[k] ?? 0) > 0) parts.add('$k ${sc[k]}');
+        // pending uses the app's any-variant rule (not the displayStatus
+        // aggregate) so the segment equals the dropdown's pending count.
+        final games = k == 'pending'
+            ? universe.pendingAnyVariantCount
+            : (universe.statusCounts[k] ?? 0);
+        final zips = zipCounts[k] ?? 0;
+        if (games > 0 || zips > 0) parts.add('$k $games ($zips zips)');
       }
       final matched = gameinfo.matchedFolders;
       if (matched != null) parts.add('info $matched folders');

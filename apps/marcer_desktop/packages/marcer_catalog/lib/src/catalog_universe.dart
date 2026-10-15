@@ -109,7 +109,9 @@ class CatalogUniverse {
   final CatalogFacets pdFacets;
   final CatalogFacets utilsFacets;
 
-  /// Aggregated `displayStatus` counts over cracked cards (status bar).
+  /// Aggregated `displayStatus` counts over cracked cards (status bar
+  /// games column). `pending` is overridden by [pendingAnyVariantCount]
+  /// there so the segment matches the app's pending filter rule.
   final Map<String, int> statusCounts;
 
   /// Every card of every section (the `★ Favorites` filter lists all
@@ -129,8 +131,14 @@ class CatalogUniverse {
       };
 
   /// Number of cracked cards with at least one preview (status bar
-  /// `4414 / 22938 with screenshot`).
+  /// `3211 / 3287 with screenshot` — both counts are games/cards).
   int get crackedWithScreenshot => cracked.where((c) => c.screenshots).length;
+
+  /// Cracked cards with at least one `pending` ZIP — the app-specific
+  /// pending filter rule (`matchesCard`), used by the status bar pending
+  /// segment so it matches the dropdown result count.
+  int get pendingAnyVariantCount =>
+      cracked.where((c) => c.variants.any((v) => v.status == 'pending')).length;
 
   /// Cracked cards without gameinfo (gallery `sections.cracked.no_info`).
   int get crackedNoInfo => cracked.where((c) => c.info == null).length;
