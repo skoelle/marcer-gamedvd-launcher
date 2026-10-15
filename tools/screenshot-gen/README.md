@@ -150,17 +150,35 @@ program double click), not by the image classifier, so titles whose start
 screen is not recognized as `game` (e.g. a 3-colour GEM dialog) still count
 as a successful click. `--retry-desktop --force` allows a second attempt.
 
-When a previous preview is replaced, it is kept as an additional candidate
-(`_cNN`) instead of being overwritten, and every intermediate click-chain
-screenshot (drive window, folder window, program window) is kept as a
-candidate too, so the path to a successful click stays traceable.
-
 Each parallel worker runs on its own Xvfb display, so
 `run --retry-desktop --jobs N` can safely click several titles at once.
 Within a display the click sequence is serialized with a global lock and
 raises its own Hatari window first; Hatari 2.4.1 has no `mousemove` control
 command, which is why the real X pointer (XTest via `xdotool`) is used for
 positioning.
+
+### Candidate retention (`keep_candidates`)
+
+When a previous preview is replaced, it is kept as an additional candidate
+(`_cNN`) instead of being overwritten, and every intermediate click-chain
+screenshot (drive window, folder window, program window) is kept as a
+candidate too, so the path to a successful click stays traceable.
+
+Entries that end as **`no_usable_shots`** keep *all* their captured shots
+the same way — the `black` shots the classifier rejected and the
+near-duplicates the pHash pass would drop included, because nothing was
+usable and the raw grabs are exactly what needs manual review. The index
+entry has `status: no_usable_shots`, `preview: null` and
+a `candidates` list (`_c01`, `_c02`, ... in capture order); no metadata
+JSON is written for it. A preview left over from an earlier `done`/`desktop`
+run of the same entry is renamed to the next `_cNN` instead of becoming an
+unreferenced file, and that run's stale metadata JSON is deleted. Review
+these entries in the desktop app or the gallery: status filter
+**no usable shots**, then open the lightbox (`Enter` / click) to step
+through the candidates.
+
+All of this is gated on `keep_candidates` (default `true`); with `false`
+such an entry keeps `candidates: []`.
 
 ### Drive-LED white screens (`--drive-led false`, `cleanup-drive-led`)
 
@@ -204,7 +222,9 @@ both have a near-zero pixel standard deviation and are classified `black`)
 ends as `no_usable_shots` with no preview. That is expected for titles whose
 disk really produces no output: the blank LED-white placeholder of the old
 runs is gone, the entry can still be picked up later with
-`run --retry-no-usable` (e.g. with longer timepoints).
+`run --retry-no-usable` (e.g. with longer timepoints), and with
+`keep_candidates` the shots of the refetch are kept as `_cNN` candidates
+for review (see "Candidate retention").
 
 Entries that were reset this way but contain **no** bootable disk/program
 image (manuals, box scans, raw dumps, data-only ZIPs) can never produce a

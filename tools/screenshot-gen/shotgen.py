@@ -1186,6 +1186,32 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
 
             if pick is None:
                 status = "no_usable_shots"
+                # Keep every captured shot for manual review: nothing was
+                # usable, so the raw grabs (black screens included — they
+                # are exactly what needs checking) stay visible as `_cNN`
+                # candidates; preview stays null (SPEC 8.5/8.6).
+                if cfg["keep_candidates"]:
+                    ci = 0
+                    for g in grabs:
+                        ci += 1
+                        cname = f"{base}_c{ci:02d}.png"
+                        drop_case_variants(mirror_dir, (cname,))
+                        shutil.copy2(g, mirror_dir / cname)
+                        candidates.append(cname)
+                    old_preview = mirror_dir / preview_name
+                    if old_preview.exists():
+                        # a previous run's preview (e.g. a forced rerun of
+                        # a done entry) becomes a candidate instead of an
+                        # unreferenced orphan file
+                        ci += 1
+                        old = f"{base}_c{ci:02d}.png"
+                        drop_case_variants(mirror_dir, (old,))
+                        os.replace(old_preview, mirror_dir / old)
+                        candidates.append(old)
+                # none is written for no_usable_shots (SPEC 10.3), so a
+                # metadata JSON from an earlier done/desktop run would keep
+                # a stale status/preview reference — drop it
+                meta_path.unlink(missing_ok=True)
             else:
                 kind = refine_desktop_kind(pick["kind"], pick, cfg)
                 status = ("desktop" if kind in

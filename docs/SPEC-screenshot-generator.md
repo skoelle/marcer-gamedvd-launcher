@@ -687,7 +687,10 @@ metadata JSON (`kind`, `preview_is_desktop`) when it exists.
   `preview_is_desktop: true` in metadata (also for the refined kinds
   `textscreen` and `darkscreen`, section 8.4.1).
 - If nothing exists (all black or Hatari produced no files), status is
-  `no_usable_shots`.
+  `no_usable_shots`, `preview` and `kind` stay `null`, and no metadata
+  JSON is written (section 10.3). With `keep_candidates` set, every
+  captured shot is retained as a `_cNN` candidate for manual review —
+  black ones included and unfiltered (section 8.6).
 
 ### 8.6 Optional candidate retention
 
@@ -697,6 +700,19 @@ store all non-duplicate candidates next to the preview with suffixes
 file (for example a desktop shot replaced by a game shot after the click
 retry), the previous file is kept as an additional `_cNN` candidate
 instead of being overwritten.
+
+Retention also covers entries that end as `no_usable_shots` (section 8.5):
+there *all* captured shots are kept as `_cNN` candidates in capture order —
+including those the classifier rejected as `black` (section 8.2) and
+near-duplicates the pHash pass would drop (section 8.2) — because nothing
+was usable and the raw grabs are exactly what needs manual review. A
+preview left over from an earlier successful run of the same entry is
+renamed to the next free `_cNN` instead of becoming an unreferenced file,
+and the metadata JSON of that earlier run is deleted (its status/preview
+reference no longer holds). Consumers must treat `no_usable_shots` with
+`preview: null` and a non-empty `candidates` list as a normal, supported
+state. With `keep_candidates` false none of this retention happens:
+`candidates` stays empty for such entries.
 
 ### 8.7 Drive-LED white screens (detection and cleanup)
 
@@ -739,8 +755,9 @@ usable preview, `process_entry` clears `drive_led` and
 permanent label. A refetch that still shows nothing (uniform black *or*
 uniform white; both are classified `black` in section 8.4 because of
 their near-zero pixel standard deviation) ends as `no_usable_shots` with
-no preview — the old blank LED-white placeholder is gone, and the entry
-remains reachable via `run --retry-no-usable`.
+no preview — the old blank LED-white placeholder is gone, the entry
+remains reachable via `run --retry-no-usable`, and with `keep_candidates`
+set the shots of that refetch are kept as `_cNN` candidates (section 8.6).
 
 Reset entries whose ZIP contains **no** bootable disk/program image
 (manuals, box scans, raw dumps, data-only ZIPs) can never produce a game
@@ -884,13 +901,21 @@ Allowed values for `kind` (section 8): `game`, `desktop`, `textscreen`,
 e.g. after a drive-LED reset). `status` stays `desktop` for all three
 desktop sub-kinds.
 
+The file is written only for entries that end as `done` or `desktop`.
+An entry ending as `no_usable_shots` (section 8.5) has no metadata JSON;
+when such an entry is reprocessed, a JSON left over from an earlier
+`done`/`desktop` run is deleted, since neither its `status` nor its
+`preview` reference holds any longer.
+
 ### 10.4 Index JSON
 
 Array or object map keyed by entry relative path with: `status`, `kind`
 (`game` | `desktop` | `textscreen` | `darkscreen` | `no_game_image` | null,
 sections 8 and 8.4.1),
-`size`, `mtime`, `profile`, `last_run`, `preview_path`, and for the click
-retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
+`size`, `mtime`, `profile`, `last_run`, `preview` (relative PNG name, or
+null when there is no preview), `candidates` (list of `_cNN` names,
+possibly non-empty even while `preview` is null, section 8.6), and for the
+click retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
 source}` or absent), `icon_found` (true/false after `detect`),
 `click_retried` (true after an attempt), `click_result`
 (`click-icon-prg` | `click-icon-drive` | `click-failed` |
@@ -1195,14 +1220,20 @@ A conforming implementation satisfies all of the following.
 
 **Output**
 - [ ] O1 Output mirrors the source tree under `MARCER_OUT_DIR`.
-- [ ] O2 Every processed entry has a preview PNG and a metadata JSON with the
-      fields of section 10.3.
+- [ ] O2 Every entry processed to `done`/`desktop` has a preview PNG and a
+      metadata JSON with the fields of section 10.3; an entry ending as
+      `no_usable_shots` has neither (sections 8.5 and 10.3).
 - [ ] O3 The index is updated after every entry (crash loses at most one
       entry of work); with parallel jobs all updates are serialized under
       one lock.
 - [ ] O4 The run is resumable without `--force`, and `--force` reprocesses.
 - [ ] O5 A replaced preview file is kept as an additional `_cNN` candidate
       when `keep_candidates` is set (section 8.6).
+- [ ] O6 An entry ending as `no_usable_shots` keeps every captured shot as
+      a `_cNN` candidate when `keep_candidates` is set (black shots
+      included, unfiltered), reports `preview: null`, renames a preview
+      left over from an earlier run to the next `_cNN` and deletes that
+      run's stale metadata JSON (sections 8.5, 8.6, 10.3).
 
 **Process**
 - [ ] R1 Missing required environment variables abort with a clear message.
