@@ -10,6 +10,8 @@ import 'package:marcer_desktop/catalog_controller.dart';
 import 'package:marcer_desktop/index_editor.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late Directory tmp;
   late CatalogController c;
 
@@ -104,5 +106,74 @@ void main() {
     expect(diskEntry()['status'], 'desktop');
     // lock file still there (ours refused; shotgen's untouched)
     expect(File('${tmp.path}/$outRel/shotgen.lock').existsSync(), isTrue);
+  });
+
+  group('swapPreviewImage (M)', () {
+    late String preview;
+    late String cand;
+
+    setUp(() async {
+      await c.init();
+      preview = '${tmp.path}/$outRel/A/Alpha/a.png';
+      cand = '${tmp.path}/$outRel/A/Alpha/a_c01.png';
+      File(preview).writeAsStringSync('MAIN');
+      File(cand).writeAsStringSync('CAND');
+    });
+
+    test('swaps contents, bumps both versions and notifies', () {
+      expect(c.imageVersionOf(preview), '0');
+      expect(c.imageVersionOf(cand), '0');
+      var notified = 0;
+      c.addListener(() => notified++);
+
+      final err =
+          c.swapPreviewImage(previewPath: preview, candidatePath: cand);
+
+      expect(err, isNull);
+      expect(File(preview).readAsStringSync(), 'CAND');
+      expect(File(cand).readAsStringSync(), 'MAIN');
+      // both paths share the bump; untouched paths stay at the default key
+      expect(c.imageVersionOf(preview), '1');
+      expect(c.imageVersionOf(cand), '1');
+      expect(c.imageVersionOf('${tmp.path}/$outRel/A/Alpha/x.png'), '0');
+      expect(notified, 1);
+
+      // a second swap bumps again → keys change again
+      expect(
+          c.swapPreviewImage(previewPath: preview, candidatePath: cand),
+          isNull);
+      expect(c.imageVersionOf(preview), '2');
+      expect(c.imageVersionOf(cand), '2');
+    });
+
+    test('refuses while the shotgen lock is live', () {
+      final me = selfPid;
+      if (me == null) {
+        markTestSkipped('FFI pid lookup unavailable on this platform');
+        return;
+      }
+      File('${tmp.path}/$outRel/shotgen.lock').writeAsStringSync('$me');
+
+      final err =
+          c.swapPreviewImage(previewPath: preview, candidatePath: cand);
+
+      expect(err, isNotNull);
+      expect(File(preview).readAsStringSync(), 'MAIN');
+      expect(File(cand).readAsStringSync(), 'CAND');
+      expect(c.imageVersionOf(preview), '0');
+      expect(c.imageVersionOf(cand), '0');
+    });
+
+    test('reports a missing candidate without touching versions', () {
+      final missing = '${tmp.path}/$outRel/A/Alpha/nope.png';
+
+      final err =
+          c.swapPreviewImage(previewPath: preview, candidatePath: missing);
+
+      expect(err, startsWith('Swap failed'));
+      expect(File(preview).readAsStringSync(), 'MAIN');
+      expect(c.imageVersionOf(preview), '0');
+      expect(c.imageVersionOf(missing), '0');
+    });
   });
 }

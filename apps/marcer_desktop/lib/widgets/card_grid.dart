@@ -321,6 +321,7 @@ class _CenterGridState extends State<CenterGrid> {
               clipBehavior: Clip.antiAlias,
               child: Image.file(
                 io.File(t.path),
+                key: ValueKey('${t.path}#${c.imageVersionOf(t.path)}'),
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => Container(color: Colors.black),
               ),
@@ -474,6 +475,8 @@ class _CenterGridState extends State<CenterGrid> {
                     clipBehavior: Clip.antiAlias,
                     child: Image.file(
                       io.File(cands[i]),
+                      key: ValueKey(
+                          '${cands[i]}#${widget.controller.imageVersionOf(cands[i])}'),
                       width: 44,
                       height: 26,
                       fit: BoxFit.cover,
@@ -536,6 +539,7 @@ class _CenterGridState extends State<CenterGrid> {
     }
     return Image.file(
       io.File(path),
+      key: ValueKey('$path#${widget.controller.imageVersionOf(path)}'),
       fit: BoxFit.cover,
       cacheWidth: 440,
       errorBuilder: (_, _, _) => const Center(

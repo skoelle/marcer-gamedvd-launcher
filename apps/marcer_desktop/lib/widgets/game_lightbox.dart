@@ -10,7 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
-import '../index_editor.dart';
 import 'game_info_panel.dart';
 import 'status_kind_dialog.dart';
 
@@ -353,7 +352,10 @@ class _GameLightboxState extends State<GameLightbox> {
   /// `M`: swap the currently viewed candidate PNG with the variant's main
   /// image (fixed names on disk — only the contents trade places, manual
   /// curation). Only meaningful while a candidate is displayed
-  /// (`_imageIdx > 0`); the shotgen lock is respected.
+  /// (`_imageIdx > 0`); the shotgen lock is respected. The controller owns
+  /// the swap (lock, rename, image-cache clear, per-path version bump →
+  /// grid/detail/filmstrip refresh via their `ValueKey`s); this method only
+  /// jumps to the new main image locally.
   void _makeMainCurrent() {
     final c = widget.controller;
     final vs = _variants;
@@ -363,22 +365,13 @@ class _GameLightboxState extends State<GameLightbox> {
     if (_imageIdx <= 0 || _imageIdx >= images.length || v.preview == null) {
       return;
     }
-    try {
-      if (isShotgenActive(c.config.outDirectory)) {
-        throw ShotgenLockedException(
-            readShotgenLockPid(c.config.outDirectory));
-      }
-      swapPreviewCandidate(
-          previewPath: v.preview!, candidatePath: images[_imageIdx]);
-      // Same file names, new contents: drop the decoded caches so the grid,
-      // detail strip and lightbox show the swapped images immediately.
-      PaintingBinding.instance.imageCache.clear();
-      setState(() => _imageIdx = 0); // the new main image
-    } on ShotgenLockedException catch (e) {
-      _showCurationMessage(e.toString());
-    } catch (e) {
-      _showCurationMessage('Swap failed: $e');
+    final err = c.swapPreviewImage(
+        previewPath: v.preview!, candidatePath: images[_imageIdx]);
+    if (err != null) {
+      _showCurationMessage(err);
+      return;
     }
+    setState(() => _imageIdx = 0); // the new main image
   }
 
   /// `C`: status/kind dialog for the filmstrip-selected variant; the change
@@ -699,6 +692,8 @@ class _GameLightboxState extends State<GameLightbox> {
                                             fontSize: 14,
                                             color: Color(0xFF556677))))
                                 : Image.file(io.File(v.preview!),
+                                    key: ValueKey(
+                                        '${v.preview}#${widget.controller.imageVersionOf(v.preview!)}'),
                                     fit: BoxFit.cover,
                                     filterQuality: FilterQuality.none,
                                     errorBuilder: (_, _, _) =>
@@ -774,6 +769,8 @@ class _GameLightboxState extends State<GameLightbox> {
                 clipBehavior: Clip.antiAlias,
                 child: Image.file(
                   io.File(v.candidates[i]),
+                  key: ValueKey(
+                      '${v.candidates[i]}#${widget.controller.imageVersionOf(v.candidates[i])}'),
                   height: 48,
                   fit: BoxFit.contain,
                   filterQuality: FilterQuality.none,

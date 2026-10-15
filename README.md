@@ -76,7 +76,9 @@ Save, the manual screenshot curation described below.
   favorites are shared as long as both apps see the same absolute paths).
 - **Manual screenshot curation** — `M` in the lightbox swaps the currently
   viewed candidate with the variant's main image (fixed file names, only the
-  PNG contents trade places); `C` (lightbox/detail view) changes a ZIP's
+  PNG contents trade places); the grid card, detail view, filmstrip and
+  candidate strips refresh immediately (per-path image version keys, so only
+  the swapped files re-decode). `C` (lightbox/detail view) changes a ZIP's
   `status`/`kind` in memory. Changes accumulate in a pending list; a cyan
   **Save (n)** button (left of the update badge) writes them to `index.json`
   and the per-entry meta under the screenshot-gen lock (a running

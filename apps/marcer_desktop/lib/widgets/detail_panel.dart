@@ -231,6 +231,7 @@ class DetailPanel extends StatelessWidget {
             child: preview != null
                 ? Image.file(
                     File(preview),
+                    key: ValueKey('$preview#${c.imageVersionOf(preview)}'),
                     fit: BoxFit.contain,
                     errorBuilder: (_, _, _) =>
                         _noPreview('Failed to load $preview'),
@@ -248,6 +249,8 @@ class DetailPanel extends StatelessWidget {
                   .map((path) => Padding(
                         padding: const EdgeInsets.only(right: 6),
                         child: Image.file(File(path),
+                            key: ValueKey(
+                                '$path#${c.imageVersionOf(path)}'),
                             height: 56,
                             errorBuilder: (_, _, _) =>
                                 const SizedBox(width: 56)),

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
@@ -761,6 +762,51 @@ class CatalogController extends ChangeNotifier {
           '${e.path == null || e.path!.isEmpty ? '' : ' (${e.path})'}';
     } catch (e) {
       return 'Save failed: $e';
+    }
+  }
+
+  // ------------------------------------------------------- preview image swap
+
+  /// Per-path image versions for `M`: the swap keeps the file names (and
+  /// thus the `FileImage` cache keys) fixed, only the contents trade places.
+  /// Path-keyed `Image.file` widgets therefore take
+  /// `ValueKey('$path#${imageVersionOf(path)}')` so that exactly the two
+  /// affected images are recreated and re-read after [swapPreviewImage],
+  /// while every other widget keeps its key (no thumbnail flash).
+  final Map<String, int> _imageVersions = {};
+  int _imageBump = 0;
+
+  /// Version token for [path]; `'0'` until the path was swapped once.
+  String imageVersionOf(String path) => '${_imageVersions[path] ?? 0}';
+
+  /// Swaps the preview main image with a candidate on disk (lightbox `M`):
+  /// shotgen lock check → rename pair → drop the decoded image cache →
+  /// bump both paths' versions → refresh all views. Returns null on success
+  /// or an error message (lock taken, IO failure); the disk state and the
+  /// versions stay untouched then.
+  String? swapPreviewImage(
+      {required String previewPath, required String candidatePath}) {
+    try {
+      if (isShotgenActive(config.outDirectory)) {
+        throw ShotgenLockedException(readShotgenLockPid(config.outDirectory));
+      }
+      swapPreviewCandidate(
+          previewPath: previewPath, candidatePath: candidatePath);
+      // Order matters: clear the cache first, bump afterwards, so widgets
+      // recreated by the notify re-read from disk instead of stale entries.
+      PaintingBinding.instance.imageCache.clear();
+      final v = ++_imageBump;
+      _imageVersions[previewPath] = v;
+      _imageVersions[candidatePath] = v;
+      notifyListeners();
+      return null;
+    } on ShotgenLockedException catch (e) {
+      return e.toString();
+    } on FileSystemException catch (e) {
+      return 'Swap failed: ${e.message}'
+          '${e.path == null || e.path!.isEmpty ? '' : ' (${e.path})'}';
+    } catch (e) {
+      return 'Swap failed: $e';
     }
   }
 
