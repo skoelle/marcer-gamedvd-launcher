@@ -112,6 +112,10 @@ class CatalogUniverse {
   /// Aggregated `displayStatus` counts over cracked cards (status bar).
   final Map<String, int> statusCounts;
 
+  /// Every card of every section (the `★ Favorites` filter lists all
+  /// sections at once).
+  List<GameCard> get allCards => [...cracked, ...pd, ...utils];
+
   List<GameCard> cardsFor(String section) => switch (section) {
         'pd' => pd,
         'utils' => utils,

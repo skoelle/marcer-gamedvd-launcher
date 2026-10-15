@@ -3,10 +3,11 @@
 Inventory browser for the Marcer GameDVD archive: windowed master-detail UI,
 gameinfo metadata and screenshot previews, gallery-style global filters with a
 **catalog grid as the default view** (section tabs, search, facets incl.
-crew/cracker, sort) and a gallery-style detail sidebar (Game info + Release
-variants + This ZIP); an optional overlay folder browser (`T` / Folders button)
-per `SPEC.md` §7, plus a gallery-style lightbox (filmstrip + info panel).
-**Read-only** consumer of all data roots.
+crew/cracker, sort, **★ Favorites**) and a gallery-style detail sidebar
+(Game info + Release variants + This ZIP); an optional overlay folder
+browser (`T` / Folders button) per `SPEC.md` §7, plus a gallery-style
+lightbox (filmstrip + info panel). **Read-only** consumer of all data roots
+except favorites and, on explicit Save, manual screenshot curation.
 
 ![Catalog grid](../../docs/images/catalog.png)
 
@@ -89,6 +90,29 @@ same locations as the config) when `Hatari.ConfigFile` is empty. Launching is
 errors appear as a modal (missing executable, vanished ZIP, …). The bundled
 config expects a TOS ROM (`TOS.IMG`) next to the app, matching the console
 launcher.
+
+## Favorites
+
+`*` favorites the selected ZIP/catalog card (also from the detail panel and
+from the ★/☆ star on every lightbox filmstrip thumb). A card shows as
+favorite as soon as **any** of its ZIPs is starred; the **★ Favorites**
+filter lists your favorites of **all** sections at once (facets and status
+are ignored there, the text search stays active). Cards without raw variants
+(pd/utils) resolve their folder ZIPs on demand, so they can be starred and
+launched like cracked games. Launching a favorited card plays the starred ZIP
+when exactly one variant is favorited.
+
+Storage (one absolute path per line, same format as the console launcher):
+
+- with a patch layer: `<Patch>/<section tree>/favorites.txt` per section
+  (e.g. `Patch/Title Sorted/Cracked Games - Title Sorted/favorites.txt`) —
+  the same files the console launcher shares; paths outside any section tree
+  go to `<Patch>/favorites.txt`.
+- without a patch layer: `favorites-<section>.txt` next to the executable
+  (misc paths → `favorites.txt`).
+- a legacy single `favorites.txt` (`PatchDirectory` → application directory
+  → CWD) is still read; entries of the other OS (e.g. Windows `Y:\…`
+  lines in a shared file) are preserved on save but not shown.
 
 ## License
 

@@ -18,3 +18,4 @@ export 'src/gameinfo.dart';
 export 'src/launch.dart';
 export 'src/overlay.dart';
 export 'src/screenshot_index.dart';
+export 'src/section_trees.dart';

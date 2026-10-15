@@ -43,6 +43,11 @@ class CatalogController extends ChangeNotifier {
   late CatalogUniverse universe;
   FavoritesService? favorites;
 
+  /// Section → tree directory rel path (e.g.
+  /// `Title Sorted/Cracked Games - Title Sorted`), discovered from the
+  /// overlay root (see `discoverSectionTrees`).
+  late Map<String, String> sectionTrees;
+
   bool ready = false;
   String progress = '';
   final List<String> notices = [];
@@ -95,20 +100,44 @@ class CatalogController extends ChangeNotifier {
       notices.add('RootDirectory missing: ${config.rootDirectory}');
     }
 
-    // SPEC §11.1: PatchDirectory → application directory → CWD; the console
-    // launcher writes to PatchDirectory or next to its EXE with the same
-    // format (one absolute effective path per line).
-    favorites = FavoritesService.load(resolveFavoritesPath(
-      patchDir: config.patchDirectory.isEmpty ? null : config.patchDirectory,
-      appDir: File(Platform.resolvedExecutable).parent.path,
-      cwd: Directory.current.path,
-      exists: (path) => File(path).existsSync(),
-    ));
-
     browser = OverlayBrowser(
       rootDir: config.rootDirectory,
       patchDir: config.patchDirectory.isEmpty ? null : config.patchDirectory,
     );
+
+    // Section trees (`Title Sorted/Cracked…`, `PD…`, `Util…`) — they define
+    // where the per-section favorites files live (console layout) and the
+    // folder rel of every card (favorite matching, pd/utils ZIP resolution).
+    sectionTrees = discoverSectionTrees(browser);
+
+    // SPEC §11.1: one favorites file per section tree (console layout), plus
+    // the legacy/unknown-section file resolved patchDir → appDir → CWD so a
+    // single `favorites.txt` written by an older build or the console
+    // launcher is still honored.
+    final patch = config.patchDirectory;
+    final appDir = File(Platform.resolvedExecutable).parent.path;
+    final cwd = Directory.current.path;
+    favorites = FavoritesService.load(
+      fileForSection: {
+        for (final section in kSections)
+          if (patch.isEmpty)
+            section: p.join(appDir, favoritesSectionFileName(section))
+          else if (sectionTrees[section] != null)
+            section: p.join(patch, sectionTrees[section]!, kFavoritesFileName),
+        kMiscFavoritesSection: resolveFavoritesPath(
+          patchDir: patch.isEmpty ? null : patch,
+          appDir: appDir,
+          cwd: cwd,
+          exists: (path) => File(path).existsSync(),
+        ),
+      },
+      extraFiles: [
+        p.join(appDir, kFavoritesFileName),
+        p.join(cwd, kFavoritesFileName),
+      ],
+      sectionOfPath: _sectionOfFavoritePath,
+    );
+
     ready = true;
     progress = '';
     notifyListeners();
@@ -129,22 +158,44 @@ class CatalogController extends ChangeNotifier {
 
   CatalogFacets get facets => universe.facetsFor(filter.section);
 
-  bool get crewFocusActive =>
-      filter.crew != 'any' && kindFilters(filter.section).contains('crew');
-  bool get crackerFocusActive =>
-      filter.cracker != 'any' && kindFilters(filter.section).contains('cracker');
+  bool get crewFocusActive => !favoritesOnly &&
+      filter.crew != 'any' &&
+      kindFilters(filter.section).contains('crew');
+  bool get crackerFocusActive => !favoritesOnly &&
+      filter.cracker != 'any' &&
+      kindFilters(filter.section).contains('cracker');
 
   /// True while a crew/cracker focus filter is active (gallery
   /// `focusActive`); drives the grid miss/2×2 bodies and lightbox labels.
   bool get focusActive => crackerFocusActive || crewFocusActive;
 
   /// Filtered + sorted cards of the active section (memoized until the next
-  /// filter change); narrowed to favorites while [favoritesOnly] is on.
+  /// filter change); the ★ [favoritesOnly] filter lists favorites of **all**
+  /// sections at once — status/facets/flags are ignored then, the text
+  /// search and the sort stay active (user decision 2026-10-15).
   List<GameCard> get catalogCards {
     if (!_catalogDirty && _catalogCache != null) return _catalogCache!;
-    var cards = queryCards(universe.cardsFor(filter.section), filter);
+    final List<GameCard> cards;
     if (favoritesOnly) {
-      cards = [for (final card in cards) if (isFavoriteCard(card)) card];
+      final favCards = [
+        for (final card in universe.allCards)
+          if (isFavoriteCard(card)) card,
+      ];
+      final f = filter.copy()
+        ..status = 'any'
+        ..letter = 'any'
+        ..publisher = 'any'
+        ..crew = 'any'
+        ..cracker = 'any'
+        ..language = 'any'
+        ..year = 'any'
+        ..raw = 'any'
+        ..pasti = 'any'
+        ..boxscan = 'any'
+        ..tos = 'any';
+      cards = queryCards(favCards, f);
+    } else {
+      cards = queryCards(universe.cardsFor(filter.section), filter);
     }
     _catalogCache = cards;
     _catalogDirty = false;
@@ -283,23 +334,38 @@ class CatalogController extends ChangeNotifier {
     final out = <Entry>[];
     for (final path in favs.paths) {
       final rel = _relFromAbsolute(path);
-      final inRoot = rel != null &&
-          File(p.join(config.rootDirectory, rel)).existsSync();
-      final inPatch = rel != null &&
-          config.patchDirectory.isNotEmpty &&
-          File(p.join(config.patchDirectory, rel)).existsSync();
-      final name = p.basenameWithoutExtension(path);
+      // Foreign line (other OS/other roots, kept in the file for console
+      // interop): not reachable here — no entry is built for it.
+      if (rel == null) continue;
+      final rootAbs = p.join(config.rootDirectory, rel);
+      final patchAbs = config.patchDirectory.isEmpty
+          ? null
+          : p.join(config.patchDirectory, rel);
+      final inRoot = File(rootAbs).existsSync();
+      final inPatch = patchAbs != null && File(patchAbs).existsSync();
       out.add(Entry(
-        name: name,
+        name: p.basename(path),
         kind: EntryKind.zip,
-        inRoot: inRoot || !inPatch,
+        inRoot: inRoot,
         inPatch: inPatch,
-        rootPath: inRoot ? p.join(config.rootDirectory, rel) : null,
-        patchPath: inPatch ? p.join(config.patchDirectory, rel) : null,
+        // Keep the stored path when the file vanished, so the entry stays
+        // selectable and removable (`*`) and launching reports the missing
+        // ZIP instead of doing nothing.
+        rootPath: inRoot ? rootAbs : (inPatch ? null : path),
+        patchPath: inPatch ? patchAbs : null,
         isVirtual: false,
       ));
     }
     return out;
+  }
+
+  /// Section key of an absolute favorite path (per-section favorites files):
+  /// the section tree of its root-relative location, else
+  /// [kMiscFavoritesSection].
+  String _sectionOfFavoritePath(String path) {
+    final rel = _relFromAbsolute(path);
+    if (rel == null) return kMiscFavoritesSection;
+    return sectionOfRel(sectionTrees, rel) ?? kMiscFavoritesSection;
   }
 
   String? _relFromAbsolute(String absPath) {
@@ -349,14 +415,40 @@ class CatalogController extends ChangeNotifier {
   GameInfo? infoFor(Entry e) => gameinfo.lookupByRel(relOf(e));
 
   String sectionOf(Entry e) {
-    if (inFavoritesView) return '';
-    final parts = relOf(e).split('/');
+    final rel = relOf(e);
+    if (rel.isEmpty) return '';
+    // Known section tree (also works for the flat favorites list, which
+    // mixes all sections).
+    final section = sectionOfRel(sectionTrees, rel);
+    if (section != null) {
+      return switch (section) {
+        'cracked' => 'Cracked',
+        'pd' => 'PD',
+        _ => 'Utils',
+      };
+    }
+    final parts = rel.split('/');
     if (parts.length < 2) return '';
-    final tree = parts[1];
-    if (tree.startsWith('Cracked')) return 'Cracked';
-    if (tree.startsWith('PD')) return 'PD';
-    if (tree.startsWith('Util')) return 'Utils';
-    return tree;
+    return parts[1];
+  }
+
+  /// Folder rel path of an entry inside the flat favorites view (e.g.
+  /// `Title Sorted/Cracked Games - Title Sorted/A/Alpha`), so the grid tile
+  /// keeps the folder context the ZIP was favorites-toggled from. Empty
+  /// outside the favorites view.
+  String folderRelOf(Entry e) {
+    if (!inFavoritesView) return '';
+    final rel = relOf(e);
+    final idx = rel.lastIndexOf('/');
+    return idx <= 0 ? '' : rel.substring(0, idx);
+  }
+
+  /// Short form of [folderRelOf] for badges: the last two path segments
+  /// (`A/Alpha`), prefixed with `…` when longer.
+  static String shortFolder(String folder) {
+    final parts = folder.split('/');
+    if (parts.length <= 2) return folder;
+    return '…/${parts[parts.length - 2]}/${parts.last}';
   }
 
   static String _titleOf(GameInfo info) {
@@ -388,15 +480,55 @@ class CatalogController extends ChangeNotifier {
   /// when a focus filter is active, otherwise the variant whose preview is the
   /// card preview (falling back to the first).
   CardVariant? launchVariantForCard(GameCard card) {
-    if (card.variants.isEmpty) return null;
+    final variants = variantsOfCard(card);
+    if (variants.isEmpty) return null;
     var idx = (card.focusVariant ?? -1) >= 0 ? card.focusVariant! : -1;
     if (idx < 0 && card.previewPath != null) {
       final match =
-          card.variants.indexWhere((v) => v.previewPath == card.previewPath);
+          variants.indexWhere((v) => v.previewPath == card.previewPath);
       if (match >= 0) idx = match;
     }
-    return card.variants[idx < 0 ? 0 : idx];
+    return variants[idx < 0 ? 0 : idx];
   }
+
+  /// Folder rel path of [card] (`<tree>/<letter>/<folder>`) from its section
+  /// tree, falling back to the parent of its first ZIP; null when neither is
+  /// known (no tree discovered and no variants).
+  String? cardFolderRel(GameCard card) {
+    final tree = sectionTrees[card.kind];
+    if (tree != null && card.letter.isNotEmpty && card.folder.isNotEmpty) {
+      return '$tree/${card.letter}/${card.folder}';
+    }
+    if (card.variants.isNotEmpty) return p.dirname(card.variants.first.rel);
+    return null;
+  }
+
+  /// ZIP variants of [card], resolving pd/utils folder ZIPs lazily on first
+  /// use (one overlay listing per folder, cached — a NAS-wide scan would take
+  /// tens of seconds, so it must never run eagerly). Cracked cards return
+  /// their index-derived variants without any I/O.
+  List<CardVariant> variantsOfCard(GameCard card) {
+    final raw = card.variants;
+    if (raw.isNotEmpty) return raw;
+    final cached = _resolvedCardVariants[card];
+    if (cached != null) return cached;
+    final dir = cardFolderRel(card);
+    if (dir == null) return const [];
+    final out = <CardVariant>[];
+    for (final e in browser.list(dir)) {
+      if (e.kind != EntryKind.zip) continue;
+      out.add(CardVariant(
+        rel: '$dir/${e.name}',
+        name: e.name,
+        status: '',
+        layer: e.layerStatus.name.toUpperCase(),
+      ));
+    }
+    _resolvedCardVariants[card] = out;
+    return out;
+  }
+
+  final Map<GameCard, List<CardVariant>> _resolvedCardVariants = {};
 
   /// Launches [zipPath] with Hatari (non-blocking). Sets [launchError] when the
   /// configuration or ZIP is invalid; [launching] while the process runs.
@@ -416,18 +548,26 @@ class CatalogController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Launches the ZIP of a catalog card's variant [index] (lightbox "Play").
+  /// Launches the ZIP of a catalog card's variant [index] — an index into
+  /// [variantsOfCard] (lightbox "Play").
   Future<void> launchCardVariant(GameCard card, int index) async {
-    if (index < 0 || index >= card.variants.length) return;
-    await launchZip(zipPathForVariant(card.variants[index]));
+    final variants = variantsOfCard(card);
+    if (index < 0 || index >= variants.length) return;
+    await launchZip(zipPathForVariant(variants[index]));
   }
 
   /// Launches the current selection: a ZIP in browse mode, the card's ZIP in
-  /// catalog mode.
+  /// catalog mode. A card with exactly one favorited variant launches that
+  /// favorited ZIP (user decision 2026-10-15), otherwise [launchVariantForCard].
   Future<void> launchSelected() async {
     if (catalogMode) {
       final card = selectedCard;
       if (card == null) return;
+      final favoriteKeys = favoriteKeysOfCard(card);
+      if (favoriteKeys.length == 1) {
+        await launchZip(favoriteKeys.first);
+        return;
+      }
       final v = launchVariantForCard(card);
       if (v == null) {
         launchError = 'No ZIP to launch.';
@@ -485,9 +625,14 @@ class CatalogController extends ChangeNotifier {
   int get itemCount => catalogMode ? catalogCards.length : visibleEntries.length;
 
   /// Count text for the status bar.
-  String get countText => catalogMode
-      ? '${catalogCards.length} results'
-      : '${visibleEntries.length} entries';
+  String get countText {
+    if (catalogMode) {
+      return favoritesOnly
+          ? '${catalogCards.length} favorites'
+          : '${catalogCards.length} results';
+    }
+    return '${visibleEntries.length} entries';
+  }
 
   /// Gallery-style status line (`renderStats` + `renderFooter`):
   /// `N / M with screenshot`, status counts, `info X folders`,
@@ -635,11 +780,35 @@ class CatalogController extends ChangeNotifier {
     return v == null ? null : zipPathForVariant(v);
   }
 
-  /// ZIP path of a card's variant [index] (patch wins); null when the index
-  /// is out of range.
+  /// Effective paths (R26) of [card]'s ZIP variants that currently are
+  /// favorites — both layers are checked, the stored key decides. Used to
+  /// launch/play the favorited ZIP when exactly one variant is favorited and
+  /// to make `*` un-favorite the single favorited variant of a card.
+  List<String> favoriteKeysOfCard(GameCard card) {
+    final favs = favorites;
+    if (favs == null || favs.isEmpty) return const [];
+    final out = <String>[];
+    final seen = <String>{};
+    for (final v in variantsOfCard(card)) {
+      final rootPath = p.join(config.rootDirectory, v.rel);
+      final patchPath = config.patchDirectory.isEmpty
+          ? null
+          : p.join(config.patchDirectory, v.rel);
+      final hit = favs.contains(rootPath) ||
+          (patchPath != null && favs.contains(patchPath));
+      if (!hit) continue;
+      final effective = zipPathForVariant(v);
+      if (seen.add(effective.toLowerCase())) out.add(effective);
+    }
+    return out;
+  }
+
+  /// ZIP path of a card's variant [index] — an index into [variantsOfCard]
+  /// (patch wins); null when the index is out of range.
   String? zipPathForCardVariant(GameCard card, int index) {
-    if (index < 0 || index >= card.variants.length) return null;
-    return zipPathForVariant(card.variants[index]);
+    final variants = variantsOfCard(card);
+    if (index < 0 || index >= variants.length) return null;
+    return zipPathForVariant(variants[index]);
   }
 
   bool isFavorite(Entry e) {
@@ -648,21 +817,60 @@ class CatalogController extends ChangeNotifier {
     return favorites?.contains(eff) ?? false;
   }
 
+  /// True when the ZIP at overlay rel [rel] is stored as a favorite in
+  /// either layer (root or patch path key). Pure string comparison — no
+  /// filesystem access, so it is safe to call per filmstrip thumb.
+  bool isFavoriteRel(String rel) {
+    if (rel.isEmpty) return false;
+    final favs = favorites;
+    if (favs == null || favs.isEmpty) return false;
+    if (favs.contains(p.join(config.rootDirectory, rel))) return true;
+    final patch = config.patchDirectory;
+    return patch.isNotEmpty && favs.contains(p.join(patch, rel));
+  }
+
+  /// True when any ZIP of the card's folder is a favorite (folder-keyed, so
+  /// multi-variant cards stay visible in the ★ filter — user decision
+  /// 2026-10-15). Membership is checked against a precomputed set of
+  /// favorite folder rels (no per-card filesystem access).
   bool isFavoriteCard(GameCard card) {
-    final key = favoriteKeyOfCard(card);
-    if (key == null) return false;
-    return favorites?.contains(key) ?? false;
+    final folder = cardFolderRel(card);
+    if (folder == null) return false;
+    return _favoriteFolderRels.contains(p.normalize(folder).toLowerCase());
+  }
+
+  Set<String>? _favoriteFolderRelsCache;
+
+  /// Lowercased folder rel paths that hold at least one favorite ZIP
+  /// (rebuilt after every toggle).
+  Set<String> get _favoriteFolderRels {
+    final cached = _favoriteFolderRelsCache;
+    if (cached != null) return cached;
+    final out = <String>{};
+    for (final path in favorites?.paths ?? const <String>[]) {
+      final rel = _relFromAbsolute(path);
+      if (rel == null) continue;
+      final dir = p.dirname(rel);
+      if (dir.isEmpty || dir == '.') continue;
+      out.add(p.normalize(dir).toLowerCase());
+    }
+    return _favoriteFolderRelsCache = out;
   }
 
   /// R26: toggle keyed by the effective path (patch path when present).
   /// Works in both views: on the selected ZIP entry (browse) or on the
-  /// selected card's launch ZIP (catalog).
+  /// selected card (catalog) — a card with exactly one favorited variant
+  /// toggles that variant (so `*` always removes a single star), otherwise
+  /// the launch variant is toggled.
   void toggleFavoriteSelected() {
     String? key;
     if (catalogMode) {
       final card = selectedCard;
       if (card == null) return;
-      key = favoriteKeyOfCard(card);
+      final favoriteKeys = favoriteKeysOfCard(card);
+      key = favoriteKeys.length == 1
+          ? favoriteKeys.first
+          : favoriteKeyOfCard(card);
     } else {
       final e = selectedEntry;
       if (e == null || e.kind != EntryKind.zip) return;
@@ -677,6 +885,7 @@ class CatalogController extends ChangeNotifier {
   void toggleFavoritePath(String path) {
     favorites?.toggle(path);
     _entryCache.remove(kFavoritesRel);
+    _favoriteFolderRelsCache = null;
     _catalogDirty = true;
     notifyListeners();
   }
@@ -734,6 +943,8 @@ class CatalogController extends ChangeNotifier {
       info: gameinfo,
       outDir: config.outDirectory,
     );
+    // New card objects — drop the lazy pd/utils variant cache (identity-keyed).
+    _resolvedCardVariants.clear();
   }
 
   /// Persists the pending changes (shotgen lock, atomic `index.json` +

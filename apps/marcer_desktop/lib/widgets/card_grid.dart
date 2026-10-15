@@ -512,6 +512,9 @@ class _CenterGridState extends State<CenterGrid> {
     }
     final preview = c.previewPathFor(e);
     final fav = c.isFavorite(e);
+    // Flat favorites view: keep the ZIP's folder on the tile (the list
+    // would otherwise strip all path context).
+    final folder = CatalogController.shortFolder(c.folderRelOf(e));
     return _tileFrame(
       selected: selected,
       index: index,
@@ -525,6 +528,7 @@ class _CenterGridState extends State<CenterGrid> {
       badges: [
         e.layerStatus.name.toUpperCase(),
         if (fav) 'FAVORITE',
+        if (folder.isNotEmpty) folder,
       ],
       title: e.name,
       dim: preview == null,

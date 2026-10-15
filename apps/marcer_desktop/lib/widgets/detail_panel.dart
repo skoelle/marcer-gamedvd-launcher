@@ -61,7 +61,7 @@ class DetailPanel extends StatelessWidget {
     final String? kind;
     if (c.catalogMode) {
       final card = c.selectedCard;
-      if (card == null || card.variants.isEmpty) return;
+      if (card == null) return;
       final view = _primaryVariant(card);
       if (view == null) return;
       rel = view.rel;
@@ -75,6 +75,16 @@ class DetailPanel extends StatelessWidget {
       title = e.name;
       status = c.screenshotFor(e)?.status;
       kind = c.screenshotFor(e)?.kind;
+    }
+    // pd/utils ZIPs (and favorites of ZIPs outside the screenshot archive)
+    // have no index.json entry — the change could never be saved.
+    if (c.screenshots[rel] == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+        content: Text('No index.json entry for this ZIP — '
+            'status editing is unavailable.'),
+        duration: const Duration(seconds: 3),
+      ));
+      return;
     }
     final choice = await showStatusKindDialog(context,
         title: title, currentStatus: status, currentKind: kind);
@@ -109,6 +119,7 @@ class DetailPanel extends StatelessWidget {
   }
 
   Widget _cardInfo(CatalogController c, GameCard card) {
+    final variants = c.variantsOfCard(card);
     // Gallery-style detail (no large preview — the lightbox shows the image).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -133,8 +144,8 @@ class DetailPanel extends StatelessWidget {
                   if (card.displayStatus.isNotEmpty)
                     _badge(card.displayStatus, Colors.blueGrey),
                   if (card.year != 'unknown') _badge(card.year, Colors.teal),
-                  if (card.variants.length > 1)
-                    _badge('${card.variants.length} variants', Colors.indigo),
+                  if (variants.length > 1)
+                    _badge('${variants.length} variants', Colors.indigo),
                 ],
               ),
             ],
@@ -164,17 +175,19 @@ class DetailPanel extends StatelessWidget {
 
   /// The ZIP shown in the "This ZIP" table: the crew/cracker-focused variant
   /// when a focus filter is active, else the variant that produced the card's
-  /// primary preview, else the first variant.
+  /// primary preview, else the first (indexes [CatalogController.variantsOfCard],
+  /// so pd/utils cards resolve their folder ZIPs on demand).
   ZipVariantView? _primaryVariant(GameCard card) {
-    if (card.variants.isEmpty) return null;
+    final variants = controller.variantsOfCard(card);
+    if (variants.isEmpty) return null;
     var idx = (card.focusVariant ?? -1) >= 0 ? card.focusVariant! : -1;
     if (idx < 0 && card.previewPath != null) {
-      final match = card.variants
-          .indexWhere((v) => v.previewPath == card.previewPath);
+      final match =
+          variants.indexWhere((v) => v.previewPath == card.previewPath);
       if (match >= 0) idx = match;
     }
-    if (idx < 0) idx = 0;
-    final v = card.variants[idx];
+    if (idx < 0 || idx >= variants.length) idx = 0;
+    final v = variants[idx];
     return ZipVariantView(
       name: v.name,
       status: v.status,

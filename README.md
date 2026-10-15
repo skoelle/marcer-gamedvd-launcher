@@ -52,11 +52,11 @@ Save, the manual screenshot curation described below.
   the lightbox info panel) opens that group's ZIP in the lightbox; when no
   ZIP matches, the lightbox opens with a "… ZIP not found —" hint.
 - **Full-screen lightbox** — integer-upscaled pixel-art-safe image, variant
-  filmstrip with `+N` candidate badges, a scrollbar and a clickable favorite
-  star (top-right, toggled with `*`), candidate strip and
-  the release-variant table; `←/→` cards, `↑/↓` variants, `PgUp/PgDn` images,
-  `M` promote the shown candidate to the main image, `C` edit the shown
-  variant's status/kind.
+  filmstrip with `+N` candidate badges, a scrollbar and a **favorite star on
+  every thumb** (`★` favorited, `☆` on the active variant — click or `*` to
+  toggle), candidate strip and the release-variant table; `←/→` cards,
+  `↑/↓` variants, `PgUp/PgDn` images, `M` promote the shown candidate to the
+  main image, `C` edit the shown variant's status/kind.
 - **Optional folder browser** (`T`) — the overlay tree (main + patch layer)
   with layer labels and the virtual `Favorites` folder.
 - **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
@@ -68,12 +68,22 @@ Save, the manual screenshot curation described below.
   list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
   detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
   bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking.
-- **Favorites** (`*` on the selected ZIP/card) with `FAVORITE` badges, a
-  **★ Favorites** filter toggle in the filter bar and the virtual `Favorites`
-  folder in the browser view. Persisted to `favorites.txt` (one absolute path
-  per line — same format and search order as the console launcher:
-  `PatchDirectory` → application directory → CWD, so existing console
-  favorites are shared as long as both apps see the same absolute paths).
+- **Favorites** (`*` on the selected ZIP/card, in the detail panel or on a
+  filmstrip star) with `FAVORITE` badges, the virtual `Favorites` folder in
+  the browser view and a **★ Favorites** filter that lists your favorite
+  games of **all** sections at once (status and facets are ignored there, the
+  text search stays active). A card counts as favorite as soon as **any** of
+  its ZIPs is starred, and launching it plays that starred ZIP when exactly
+  one variant is favorited; pd/utils cards resolve their folder ZIPs on
+  demand, so they can be starred and launched like cracked games. Persisted
+  per section tree as `favorites.txt` (one absolute path per line —
+  `Patch/<section tree>/favorites.txt`, the same format and location the
+  console launcher uses, so both apps share their favorites; without a
+  `PatchDirectory` each section gets `favorites-<section>.txt` next to the
+  executable). A legacy single `favorites.txt` (`PatchDirectory` →
+  application directory → CWD) is still read, and entries that belong to
+  another OS (e.g. Windows `Y:\…` lines in a shared file) are preserved on
+  save but not shown.
 - **Manual screenshot curation** — `M` in the lightbox swaps the currently
   viewed candidate with the variant's main image (fixed file names, only the
   PNG contents trade places); the grid card, detail view, filmstrip and
@@ -160,7 +170,7 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `PgUp` / `PgDn` | Jump one page up / down |
 | `Enter` / `→` | Open the folder / show the lightbox |
 | `Backspace` | Parent directory (in catalog view: clear filters) |
-| `*` | Toggle favorite on the selected ZIP / catalog card (also in the detail panel and, in the lightbox, on the shown variant) |
+| `*` | Toggle favorite on the selected ZIP / catalog card (for a card: its single starred variant, else the launch ZIP; also in the detail panel and on the lightbox's shown variant / filmstrip star) |
 | `M` | Lightbox only, on a candidate image: swap it with the variant's main image (`<base>.png`) |
 | `C` | Lightbox/detail view: change the shown ZIP's status/kind (pending until **Save (n)**) |
 | `P` | Launch the selected ZIP with Hatari |
@@ -170,8 +180,10 @@ Without a config the app shows a page listing the searched locations. Template: 
 | `ESC` / `q` | Exit |
 
 In the **lightbox**: `←`/`→` switch card, `↑`/`↓` switch variant, `PgUp`/`PgDn`
-switch image, `Space`/`P` launch the shown ZIP, `*` favorite it, `M` make the
-shown candidate the main image, `C` edit status/kind, `Esc` closes.
+switch image, `Space`/`P` launch the shown ZIP (the favorited ZIP of that card
+when exactly one variant is starred), `*` favorite the shown variant (or click
+a filmstrip star), `M` make the shown candidate the main image, `C` edit
+status/kind, `Esc` closes.
 
 > **Manual curation & shotgen compatibility** — `M` is an immediate file swap
 > (no index write; names never change). `C` changes stay in memory until the

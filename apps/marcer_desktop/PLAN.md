@@ -184,8 +184,9 @@ Playnite-inspired master-detail layout, hybrid model:
   dropdowns (facet dropdowns type-to-filter/jump); tri-state `raw` / `pasti` /
   `boxscan` (`any`/`yes`/`no`); `TOS/Bad`; combined sort dropdown
   (`name`/`year`/`publisher`/`cracker`/`crew` × `asc`/`desc`, replaces the
-  sort facet + asc/desc button); `★ Favorites` toggle (catalog-only favorites
-  filter); amber `⬆ <version>` self-update badge left of the Folders button
+  sort facet + asc/desc button); `★ Favorites` toggle (lists the favorite
+  cards of **all** sections at once — facets/status ignored, text search
+  stays active, sort still applies); amber `⬆ <version>` self-update badge left of the Folders button
   (release builds only, see below);
   `clear`; letter row (`any`, `0-9`, `A`–`Z`, dimmed when
   absent from facets). Field order matches the gallery webapp. Facet values
@@ -220,11 +221,19 @@ Playnite-inspired master-detail layout, hybrid model:
   variant, no focus) a candidate thumb strip; clicking a thumb opens the
   lightbox on that image.
 - **Left:** overlay folder tree per `SPEC.md` §7 with `Enter`/`Backspace` semantics,
-  layer labels `BOTH`/`ROOT`/`PTCH`, virtual `Favorites` folder per `SPEC.md` §11
-  (stored in `favorites.txt`, keyed by effective path; location per §11.1:
-  `PatchDirectory` → application directory → CWD — shared with the console
-  launcher. `*` toggles the selected card's/ZIP's favorite in both views;
-  catalog cards and the detail panel show a `FAVORITE` badge).
+  layer labels `BOTH`/`ROOT`/`PTCH`, virtual `Favorites` folder per `SPEC.md` §11.
+  Favorites are stored **per section tree** like the console launcher writes
+  them (`<Patch>/<section tree>/favorites.txt`, keyed by effective path;
+  without a patch layer: `favorites-<section>.txt` next to the executable,
+  misc paths → `<patch>/favorites.txt`), plus a legacy single `favorites.txt`
+  (`PatchDirectory` → application directory → CWD) still read for
+  compatibility. Foreign lines of the other OS (e.g. Windows `Y:\…` in a
+  shared file) are preserved on save but never rendered. A card counts as
+  favorite when **any** of its ZIPs is starred (pd/utils resolve their
+  folder ZIPs lazily on first use); `*` on a card toggles its single
+  starred variant, else the launch ZIP, in both views; catalog cards,
+  the detail panel and the flat `Favorites` view (folder badge + section
+  label) show favorite context.
 - **Center:** list view (SPEC §9.1 line format, §10 keys, §9.3 colors) **or**
   grid/icon view — auto: grid in catalog mode or when the folder contains at
   least one ZIP. Grid shows folder tiles, ZIP cards with preview and catalog
@@ -236,7 +245,8 @@ Playnite-inspired master-detail layout, hybrid model:
   candidate strip (fixed height, wraps images), info panel with release
   variants table (open ZIP highlighted) + "This ZIP" table; `←/→` item,
   `↑/↓` variant (wrap), `PgUp/PgDn` image (wrap), `*` favorite the shown
-  variant, Esc close.
+  variant, a ★/☆ favorite star on every filmstrip thumb (click to toggle;
+  `☆` marks the active variant, `★ FAVORITE` shows in the header), Esc close.
   **Clickable groups:** in the detail sidebar and the lightbox info panel,
   clicking a crew/cracker (release-variant row or Game info value) opens
   that group's ZIP via `focusVariant` matching — no match ("not found")
@@ -253,7 +263,7 @@ Playnite-inspired master-detail layout, hybrid model:
   or in dev builds); a newer version shows the amber `⬆ <version>` badge
   left of the Folders button. Click downloads the platform ZIP
   (`MarcerDesktop-v…-{win-x64,linux-x64,osx-arm64}.zip`) and extracts it;
-  user files (`desktop.config.json`, `favorites.txt`, `TOS.IMG`) are never
+  user files (`desktop.config.json`, `favorites*.txt`, `TOS.IMG`) are never
   touched; `*.old` leftovers are removed on the next start. macOS/Linux
   swap in-process: every replaced top-level entry is renamed to `*.old`
   first, the new files copied in, the app relaunched. **Windows is

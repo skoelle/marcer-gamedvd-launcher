@@ -113,17 +113,19 @@ class _GameLightboxState extends State<GameLightbox> {
   List<_Variant> get _variants {
     final item = _item;
     if (item is GameCard) {
+      // Resolved list: pd/utils cards fetch their folder ZIPs lazily (once).
+      final variants = widget.controller.variantsOfCard(item);
       final list = [
-        for (var i = 0; i < item.variants.length; i++)
+        for (var i = 0; i < variants.length; i++)
           _Variant(
-            title: item.variants[i].name,
-            status: item.variants[i].status,
-            kind: item.variants[i].kind,
-            layer: item.variants[i].layer,
-            preview: item.variants[i].previewPath,
-            candidates: item.variants[i].candidatePaths,
-            size: item.variants[i].size,
-            rel: item.variants[i].rel,
+            title: variants[i].name,
+            status: variants[i].status,
+            kind: variants[i].kind,
+            layer: variants[i].layer,
+            preview: variants[i].previewPath,
+            candidates: variants[i].candidatePaths,
+            size: variants[i].size,
+            rel: variants[i].rel,
             origIndex: i,
           ),
       ];
@@ -303,38 +305,30 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 
   /// `*`: favorite the currently shown variant's ZIP (not the card default).
-  void _toggleFavoriteCurrent() {
+  void _toggleFavoriteCurrent() => _toggleFavoriteVariant(_variantIdx);
+
+  /// Toggles the favorite of the filmstrip variant at display index [i]
+  /// (the star on the thumb or `*` for the active variant).
+  void _toggleFavoriteVariant(int i) {
     final c = widget.controller;
+    final vs = _variants;
+    if (i >= vs.length) return;
     final item = _item;
     if (item is GameCard) {
-      final vs = _variants;
-      final orig = _variantIdx < vs.length ? vs[_variantIdx].origIndex : 0;
-      final path = c.zipPathForCardVariant(item, orig);
+      final path = c.zipPathForCardVariant(item, vs[i].origIndex);
       if (path != null) c.toggleFavoritePath(path);
     } else if (item is Entry) {
       final path = item.effectivePath;
       if (path != null) c.toggleFavoritePath(path);
     }
-    setState(() {}); // refresh the star badge (the lightbox is modal)
+    setState(() {}); // refresh the stars/badges (the lightbox is modal)
   }
 
-  /// True when the currently shown variant's ZIP is a favorite.
+  /// True when the currently shown variant's ZIP is a favorite (header badge).
   bool _currentVariantIsFavorite() {
-    final c = widget.controller;
-    final fav = c.favorites;
-    if (fav == null) return false;
-    final item = _item;
-    if (item is GameCard) {
-      final vs = _variants;
-      final orig = _variantIdx < vs.length ? vs[_variantIdx].origIndex : 0;
-      final path = c.zipPathForCardVariant(item, orig);
-      return path != null && fav.contains(path);
-    }
-    if (item is Entry) {
-      final path = item.effectivePath;
-      return path != null && fav.contains(path);
-    }
-    return false;
+    final vs = _variants;
+    if (_variantIdx >= vs.length) return false;
+    return widget.controller.isFavoriteRel(vs[_variantIdx].rel);
   }
 
   void _scrollActiveFilmIntoView() {
@@ -382,11 +376,18 @@ class _GameLightboxState extends State<GameLightbox> {
     if (_variantIdx >= vs.length) return;
     final v = vs[_variantIdx];
     final entry = c.screenshots[v.rel];
+    if (entry == null) {
+      // pd/utils ZIPs (and favorites outside the screenshot archive) are not
+      // part of index.json — a change could never be saved.
+      _showCurationMessage('No index.json entry for this ZIP — '
+          'status editing is unavailable.');
+      return;
+    }
     final choice = await showStatusKindDialog(
       context,
       title: v.title,
-      currentStatus: entry?.status ?? v.status,
-      currentKind: entry?.kind ?? v.kind,
+      currentStatus: entry.status,
+      currentKind: entry.kind ?? v.kind,
     );
     if (choice == null || !mounted) return;
     final keepItem = _itemIdx;
@@ -470,7 +471,7 @@ class _GameLightboxState extends State<GameLightbox> {
                                       : _IntegerScaledImage(path: imagePath),
                                 ),
                               ),
-                              if (vs.isNotEmpty) _filmstripWithStar(vs),
+                              if (vs.isNotEmpty) _filmstrip(vs),
                               Container(
                                 height: 60,
                                 color: const Color(0xFF111111),
@@ -503,8 +504,12 @@ class _GameLightboxState extends State<GameLightbox> {
     final counts =
         _statusCounts.entries.map((e) => '${e.value}× ${e.key}').join('  ');
     // gallery `lb-sub` miss prefix: focus filter active but no ZIP matched.
+    // pd/utils cards have no raw variants to match against (they resolve
+    // lazily), so the prefix is limited to cards where focus could miss.
     final item = _item;
-    final focusMiss = item is GameCard && item.focusVariant == -1;
+    final focusMiss = item is GameCard &&
+        item.focusVariant == -1 &&
+        item.variants.isNotEmpty;
     final missPrefix = focusMiss
         ? (widget.controller.filter.cracker != 'any'
             ? 'cracker ZIP not found — '
@@ -561,6 +566,8 @@ class _GameLightboxState extends State<GameLightbox> {
             spacing: 6,
             runSpacing: 4,
             children: [
+              if (v != null && _currentVariantIsFavorite())
+                _badge('★ FAVORITE', Colors.amber),
               if (_layer != null && _layer!.isNotEmpty)
                 _badge(_layer!, Colors.green),
               if (counts.isNotEmpty) _badge(counts, Colors.blueGrey),
@@ -590,51 +597,15 @@ class _GameLightboxState extends State<GameLightbox> {
     return s;
   }
 
-  /// Filmstrip with the favorite star badge (top-right): shows whether the
-  /// currently shown variant's ZIP is a favorite; click (or `*`) toggles.
-  Widget _filmstripWithStar(List<_Variant> vs) {
-    final fav = _currentVariantIsFavorite();
-    return Stack(
-      children: [
-        _filmstrip(vs),
-        Positioned(
-          top: 4,
-          right: 14,
-          child: GestureDetector(
-            onTap: () {
-              _focus.requestFocus();
-              _toggleFavoriteCurrent();
-            },
-            child: Tooltip(
-              message: fav
-                  ? 'Favorite — click (or *) to remove'
-                  : 'Not a favorite — click (or *) to add',
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A1A),
-                  border: Border.all(
-                      color: fav ? Colors.amber : const Color(0xFF3A3A3A)),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  fav ? '★ FAVORITE' : '☆  *',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: fav ? Colors.amber : Colors.grey,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
+  /// Filmstrip: one thumb per ZIP variant. Every thumb carries its own
+  /// favorite star (★ on a favorited variant, ☆ on the active one) — click
+  /// toggles that variant's favorite (`*` does the same for the active one),
+  /// so multi-variant folders mark exactly which ZIP is starred (user
+  /// decision 2026-10-15; replaces the former single header pill).
   Widget _filmstrip(List<_Variant> vs) {
+    final favFlags = <bool>[
+      for (final v in vs) widget.controller.isFavoriteRel(v.rel),
+    ];
     return Container(
       height: 96,
       color: const Color(0xFF111111),
@@ -651,6 +622,7 @@ class _GameLightboxState extends State<GameLightbox> {
           itemBuilder: (context, i) {
           final v = vs[i];
           final active = i == _variantIdx;
+          final fav = favFlags[i];
           final stColor = v.preview == null
               ? const Color(0xFF444444)
               : (v.status == 'done'
@@ -719,6 +691,46 @@ class _GameLightboxState extends State<GameLightbox> {
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,
                                         height: 1.2)),
+                              ),
+                            ),
+                          if (fav || active)
+                            Positioned(
+                              left: 3,
+                              top: 3,
+                              child: GestureDetector(
+                                onTap: () {
+                                  // Keep keyboard focus on the lightbox so
+                                  // `*` works after clicking the star.
+                                  _focus.requestFocus();
+                                  _toggleFavoriteVariant(i);
+                                },
+                                child: Tooltip(
+                                  message: fav
+                                      ? 'Favorite — click to remove'
+                                      : 'Click to favorite this ZIP',
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 3, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xCC000000),
+                                      borderRadius: BorderRadius.circular(7),
+                                      border: Border.all(
+                                          color: fav
+                                              ? Colors.amber
+                                              : const Color(0xFF3A3A3A)),
+                                    ),
+                                    child: Text(
+                                      fav ? '★' : '☆',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        height: 1.2,
+                                        color: fav
+                                            ? Colors.amber
+                                            : Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                         ],

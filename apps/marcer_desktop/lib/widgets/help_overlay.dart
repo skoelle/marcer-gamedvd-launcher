@@ -77,7 +77,7 @@ class _HelpOverlayState extends State<HelpOverlay> {
    PgUp / PgDn    Jump one page up / down
    Enter / →      Open folder / show gallery lightbox
    Backspace      Parent directory (clears filters in catalog view)
-   *              Toggle favorite (selected ZIP / shown lightbox variant)
+   *              Toggle favorite (selected ZIP / lightbox variant / star)
    M              Make shown candidate the main image (lightbox)
    C              Change status/kind of the shown ZIP (lightbox/detail)
    P              Launch the selected ZIP with Hatari
@@ -89,7 +89,10 @@ class _HelpOverlayState extends State<HelpOverlay> {
   The default view is the gallery-style catalog grid (section tabs,
   search, dropdowns). Press T (or the Folders button) for the optional
   overlay folder browser. Navigation is strictly limited to RootDirectory.
-  In the lightbox Space/P launches the shown ZIP and * favorites it.
+  In the lightbox Space/P launches the shown ZIP and * favorites it;
+  every filmstrip thumb carries its own favorite star (click to toggle).
+  The ★ Favorites filter lists your favorite games of all sections
+  (search still applies; facets and status are ignored).
   M swaps the shown candidate into the main image; C edits a ZIP's
   status/kind (pending until the Save (n) button in the filter bar).
 

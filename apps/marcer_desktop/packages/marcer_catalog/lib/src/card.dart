@@ -168,6 +168,7 @@ class GameCard {
   GameCard({
     required this.id,
     required this.name,
+    required this.kind,
     required this.letter,
     required this.folder,
     required this.displayStatus,
@@ -197,6 +198,10 @@ class GameCard {
 
   final String id;
   final String name;
+
+  /// Section kind of the card (`cracked`/`pd`/`utils`, `kSections` keys) —
+  /// used to derive the card's section tree folder (per-section favorites).
+  final String kind;
   final String letter;
   final String folder;
   final String displayStatus;
@@ -411,6 +416,7 @@ GameCard _finalizeCard({
   return GameCard(
     id: id,
     name: name,
+    kind: kind,
     letter: letter,
     folder: folder,
     displayStatus: displayStatus,
@@ -566,6 +572,7 @@ GameCard _copyCard(
   return GameCard(
     id: card.id,
     name: card.name,
+    kind: card.kind,
     letter: card.letter,
     folder: card.folder,
     displayStatus: displayStatus ?? card.displayStatus,
