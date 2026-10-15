@@ -991,10 +991,11 @@ class CatalogController extends ChangeNotifier {
   String imageVersionOf(String path) => '${_imageVersions[path] ?? 0}';
 
   /// Swaps the preview main image with a candidate on disk (lightbox `M`):
-  /// shotgen lock check → rename pair → drop the decoded image cache →
-  /// bump both paths' versions → refresh all views. Returns null on success
-  /// or an error message (lock taken, IO failure); the disk state and the
-  /// versions stay untouched then.
+  /// shotgen lock check → rename pair → drop the decoded image cache
+  /// (keepAlive **and** live refs — see below) → bump both paths' versions →
+  /// refresh all views. Returns null on success or an error message (lock
+  /// taken, IO failure); the disk state and the versions stay untouched
+  /// then.
   String? swapPreviewImage(
       {required String previewPath, required String candidatePath}) {
     try {
@@ -1003,9 +1004,21 @@ class CatalogController extends ChangeNotifier {
       }
       swapPreviewCandidate(
           previewPath: previewPath, candidatePath: candidatePath);
-      // Order matters: clear the cache first, bump afterwards, so widgets
+      // Order matters: clear the caches first, bump afterwards, so widgets
       // recreated by the notify re-read from disk instead of stale entries.
-      PaintingBinding.instance.imageCache.clear();
+      //
+      // `clear()` alone is NOT enough: it drops `_cache` (keepAlive) and
+      // `_pendingImages` but keeps `_liveImages`, and `putIfAbsent` falls
+      // through to `_liveImages[key]` — during the very rebuild that
+      // recreates the keyed widgets, the old `ImageState`s are still
+      // mounted (their listeners detach later in the same frame), so every
+      // re-resolve of the swapped path would get the OLD completer back
+      // and keep painting stale pixels. `clearLiveImages()` (key-agnostic,
+      // also covers `cacheWidth`'s ResizeImage keys) makes those lookups
+      // miss and forces a fresh disk read.
+      PaintingBinding.instance.imageCache
+        ..clear()
+        ..clearLiveImages();
       final v = ++_imageBump;
       _imageVersions[previewPath] = v;
       _imageVersions[candidatePath] = v;

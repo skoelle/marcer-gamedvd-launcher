@@ -28,7 +28,12 @@ named `MarcerGameDVDLauncher`.
 **Manual screenshot curation** (2026-10-15): lightbox `M` swaps the shown
 candidate with the main image (`lib/index_editor.dart`, fixed file names);
 the controller owns the swap (`CatalogController.swapPreviewImage`: lock →
-rename → `imageCache.clear()` → bump per-path versions → notify) and every
+rename → flush the image cache with `clear()` **and** `clearLiveImages()` →
+bump per-path versions → notify; `clear()` keeps `_liveImages` and
+`putIfAbsent` falls through to it — during the rebuild that recreates the
+keyed widgets the old `ImageState`s are still mounted, so the same-path
+re-resolve would get the old completer back and keep painting stale
+pixels, hence `clearLiveImages()`) and every
 path-keyed `Image.file` takes `ValueKey('$path#${imageVersionOf(path)}')`
 (grid ×3, detail ×2, lightbox filmstrip/candidate strip) — required because
 the swap keeps the file names (the `FileImage` cache keys) fixed, so only
@@ -40,8 +45,9 @@ cyan **Save (n)** + ✕ (discard) left of the update badge — Save writes
 `shotgen.lock` PID lock (stale locks overwritten; a live run blocks with a
 snackbar). Status filter: `kStatusFilterKeys` adds strict `desktop_text` /
 `desktop_black` (status desktop + kind); "This ZIP" shows a Kind row under
-Status. Tests: package 59 `dart test`, app 43 `flutter test` (index editor,
-controller curation + preview swap), `flutter analyze` clean.
+Status. Tests: package 65 `dart test`, app 57 `flutter test` (index editor,
+controller curation + preview swap incl. the live-cache refresh regression
+test `image_swap_refresh_test.dart`), `flutter analyze` clean.
 Linux debug build + xvfb smoke run OK; launch verified end-to-end with a fake
 emulator. Next: Surface B (couch mode).
 Written 2026-10-11.
