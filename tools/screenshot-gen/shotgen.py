@@ -244,9 +244,34 @@ def build_index(cfg: dict, P: dict, full: bool) -> dict:
                 merged[key] = [rel, info, "BOTH"]
             else:
                 merged[key] = [rel, info, "PATCH"]
+        # Directory-level canonical spelling (SPEC §7, launcher merge):
+        # when the same directory exists in both layers under a spelling
+        # that differs only in case, the patch spelling wins for EVERY
+        # file below it — including root-only files. Without this, a
+        # root-only zip kept its root folder spelling next to patch-only
+        # zips under the patch spelling, producing two case-variant
+        # output directories that a case-insensitive NAS/Dropbox sync
+        # renames into …CaseConflict siblings mid-run.
+        canon_dirs = {}  # dir path (lower) -> winning spelling
+        for rel in r_map:
+            d = str(Path(rel).parent)
+            canon_dirs.setdefault(d.lower(), d)
+        for rel in p_map:
+            d = str(Path(rel).parent)
+            canon_dirs[d.lower()] = d
         low_entries = {k.lower(): k for k in entries}
         for key in sorted(merged):
             rel, src, layer = merged[key]
+            orig_rel = rel  # layer's own spelling, used to read the source
+            parent = canon_dirs.get(str(Path(rel).parent).lower())
+            if parent:
+                rel = (str(Path(parent) / Path(rel).name) if parent != "."
+                       else Path(rel).name)
+            # src_rel keeps the spelling the file actually has under its
+            # own layer root; only differs from rel when the canonical
+            # (patch) folder spelling wins over a root-only folder.
+            src_rel = orig_rel if orig_rel != rel else None
+            key = rel.lower()
             seen.add(rel)
             name = Path(rel).name
             old_key = rel if rel in entries else low_entries.get(key)
@@ -261,6 +286,10 @@ def build_index(cfg: dict, P: dict, full: bool) -> dict:
                     entries[rel] = old
                 # refresh canonical fields (e.g. layer PATCH -> BOTH)
                 old.update({"rel": rel, "name": name, "layer": layer})
+                if src_rel:
+                    old["src_rel"] = src_rel
+                else:
+                    old.pop("src_rel", None)
                 stats["kept"] += 1
                 continue
             if disk_re.search(name):
@@ -279,6 +308,8 @@ def build_index(cfg: dict, P: dict, full: bool) -> dict:
                 "candidates": [],
                 "last_run": None,
             }
+            if src_rel:
+                entries[rel]["src_rel"] = src_rel
             stats["new"] += 1
         save_index(out, idx)
 
@@ -1001,10 +1032,13 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     rel_path = Path(rel)
     parts = rel_path.parts
 
-    if layer in ("PATCH", "BOTH"):
-        src_zip = Path(P["patch"]) / rel
-    else:
-        src_zip = Path(P["root"]) / rel
+    # src_rel carries the folder spelling the file actually has under its
+    # own layer root when the canonical output spelling differs (case-only
+    # patch-folder win). Fall back to rel for legacy entries.
+    src_root = P["patch"] if layer in ("PATCH", "BOTH") else P["root"]
+    src_zip = Path(src_root) / entry.get("src_rel", rel)
+    if not src_zip.exists():
+        src_zip = Path(src_root) / rel
 
     mirror_dir = out / rel_path.parent
     base = safe_filename(rel_path.stem)
