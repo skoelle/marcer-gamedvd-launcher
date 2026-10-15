@@ -216,4 +216,67 @@ void main() {
         contains('stray.zip'));
     expect(c.favorites!.contains(stray), isTrue);
   });
+
+  test('canonical section trees win over decoy prefix matches', () async {
+    // Real-DVD decoys that sort *before* `Title Sorted` — first-prefix-wins
+    // used to pick them, which emptied the ★ filter and mis-filed toggles
+    // into the misc favorites file (bug 2026-10-15).
+    for (final rel in [
+      'Bonus/Cracked Demos/D/demo.zip',
+      'Bonus/PD Games - Data Disks/P/p.zip',
+      'Crew Sorted/Utilitys - Scene and Cracks - Crew Sorted/U/u.zip',
+    ]) {
+      final f = File('${tmp.path}/root/$rel');
+      f.parent.createSync(recursive: true);
+      f.createSync();
+    }
+
+    await c.init();
+    expect(c.sectionTrees, {
+      'cracked': crackedTree,
+      'pd': pdTree,
+      'utils': utilsTree,
+    });
+
+    c.toggleFavoriteSelected();
+    expect(
+        File('${tmp.path}/patch/$crackedTree/favorites.txt').readAsStringSync(),
+        contains('Alpha/a.zip'));
+    expect(File('${tmp.path}/patch/favorites.txt').existsSync(), isFalse,
+        reason: 'must not fall back to the misc file');
+    expect(c.isFavoriteCard(c.catalogCards.single), isTrue);
+  });
+
+  test('a favorite deeper than the card folder (Original/) marks the card',
+      () async {
+    const relOrig = '$crackedTree/0-9/Nested/Original/n.zip';
+    final zip = File('${tmp.path}/root/$relOrig');
+    zip.parent.createSync(recursive: true);
+    zip.createSync();
+    final indexFile = File('${tmp.path}/out/index.json');
+    final idx = jsonDecode(indexFile.readAsStringSync()) as Map<String, dynamic>;
+    (idx['entries'] as Map<String, dynamic>)[relOrig] = {
+      'rel': relOrig,
+      'name': 'n.zip',
+      'status': 'done',
+      'kind': 'game',
+      'layer': 'ROOT',
+      'preview': null,
+      'candidates': <String>[],
+    };
+    indexFile.writeAsStringSync(jsonEncode(idx));
+
+    await c.init();
+    c.setStatus('any'); // the preview-less Nested card only shows then
+    final card = c.catalogCards.firstWhere((card) => card.folder == 'Nested');
+    expect(card.letter, '0-9');
+    expect(c.cardFolderRel(card), '$crackedTree/0-9/Nested');
+
+    c.toggleFavoritePath(rootZip(relOrig));
+    expect(c.isFavoriteCard(card), isTrue,
+        reason: 'favorite dir is nested below the card folder');
+
+    c.toggleFavoritesOnly();
+    expect(c.catalogCards.single.folder, 'Nested');
+  });
 }

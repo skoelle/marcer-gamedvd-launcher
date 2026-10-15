@@ -114,6 +114,21 @@ Storage (one absolute path per line, same format as the console launcher):
   → CWD) is still read; entries of the other OS (e.g. Windows `Y:\…`
   lines in a shared file) are preserved on save but not shown.
 
+## Status filter
+
+The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
+`desktop text`, `desktop black`, `pending`, `no usable shots`,
+`interrupted`, `skipped (disk 2+)`):
+
+- `pending` matches a game when **at least one** of its ZIPs is pending
+  (app-specific — the gallery's aggregated card status hides pending ZIPs
+  inside otherwise-done folders).
+- All other status values use the gallery's aggregated card status
+  (`done → desktop → no usable shots → interrupted → pending → skipped`).
+
+Note the units: the status bar counts **ZIP entries**, the filter counts
+**games** — `pending 5` in the bar can therefore mean fewer games.
+
 ## License
 
 MIT License — Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

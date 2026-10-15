@@ -45,7 +45,10 @@ cyan **Save (n)** + ✕ (discard) left of the update badge — Save writes
 `shotgen.lock` PID lock (stale locks overwritten; a live run blocks with a
 snackbar). Status filter: `kStatusFilterKeys` adds strict `desktop_text` /
 `desktop_black` (status desktop + kind); "This ZIP" shows a Kind row under
-Status. Tests: package 65 `dart test`, app 57 `flutter test` (index editor,
+Status. `pending` is app-specific too (2026-10-15): it matches a card when
+**any** of its ZIPs is pending (the gallery aggregate hides pending ZIPs in
+done folders; error-only cards no longer count as pending). Tests: package
+68 `dart test`, app 59 `flutter test` (index editor,
 controller curation + preview swap incl. the live-cache refresh regression
 test `image_swap_refresh_test.dart`), `flutter analyze` clean.
 Linux debug build + xvfb smoke run OK; launch verified end-to-end with a fake
@@ -132,7 +135,9 @@ Reimplementation of the spec contract in Dart (the project's established
     `OutDirectory + "/" + dirname(rel) + "/" + preview` (same rule as
     `tools/gallery/gallery.py::_full_png`);
   - status aggregation / primary preview selection mirrored from the gallery spec
-    (`done → desktop → no_usable_shots → interrupted → pending → skipped_disk_n`).
+    (`done → desktop → no_usable_shots → interrupted → pending → skipped_disk_n`);
+    the app-only `pending` status filter overrides the aggregate and matches
+    any pending ZIP variant (see filter bar status note).
 - **Graceful degradation** (DECISION §7): missing `index.json`, missing `Data/` dir or
   missing trees → empty states with a notice, never a crash.
 - **Read-only guarantee**: the package never writes to `RootDirectory`,
@@ -209,7 +214,9 @@ Playnite-inspired master-detail layout, hybrid model:
   decides whether the result is considered "filtered"); `clear` resets the
   filters. Result counts in the status bar. **Status bar** mirrors the gallery
   (`renderStats`/`renderFooter`): `N / M with screenshot`, status counts
-  (`done`/`desktop`/`pending`/…), `info N folders`, `index.json: <mtime>`,
+  (ZIP-entry level: `done`/`desktop`/`pending`/… — the `pending` *filter*
+  counts games instead, so bar and filter numbers use different units),
+  `info N folders`, `index.json: <mtime>`,
   `gameinfo: <generated_at>`, plus degradation notices.
   **Crew/cracker focus** (gallery `_apply_focus`): with an active crew or
   cracker filter (cracker takes precedence) each card's preview/status
@@ -228,7 +235,12 @@ Playnite-inspired master-detail layout, hybrid model:
   lightbox on that image.
 - **Left:** overlay folder tree per `SPEC.md` §7 with `Enter`/`Backspace` semantics,
   layer labels `BOTH`/`ROOT`/`PTCH`, virtual `Favorites` folder per `SPEC.md` §11.
-  Favorites are stored **per section tree** like the console launcher writes
+  Section trees are discovered at depth 1+2 with **canonical-name
+  preference** (`Cracked Games - Title Sorted`, `PD Games - Title Sorted`,
+  `Utilitys - Title Sorted` win over decoy prefix matches like
+  `Bonus/Cracked Demos` / `Crew Sorted/Utilitys - Scene and Cracks - Crew
+  Sorted` — first-prefix-wins used to pick the decoys and emptied the ★
+  filter, bug 2026-10-15). Favorites are stored **per section tree** like the console launcher writes
   them (`<Patch>/<section tree>/favorites.txt`, keyed by effective path;
   without a patch layer: `favorites-<section>.txt` next to the executable,
   misc paths → `<patch>/favorites.txt`), plus a legacy single `favorites.txt`

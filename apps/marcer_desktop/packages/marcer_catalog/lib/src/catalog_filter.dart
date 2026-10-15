@@ -146,6 +146,11 @@ bool matchesCard(GameCard c, CatalogFilter f) {
           .any((v) => v.status == 'desktop' && v.kind == 'darkscreen')) {
         return false;
       }
+    } else if (f.status == 'pending') {
+      // App-only: a game counts as pending as soon as **any** of its ZIPs
+      // is pending (the gallery's aggregated display_status would hide
+      // pending ZIPs behind done folders — user decision 2026-10-15).
+      if (!c.variants.any((v) => v.status == 'pending')) return false;
     } else if (f.status != 'any' && c.displayStatus != f.status) {
       return false;
     }

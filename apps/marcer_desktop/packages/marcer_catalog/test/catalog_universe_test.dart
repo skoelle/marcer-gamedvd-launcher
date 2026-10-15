@@ -205,6 +205,25 @@ void main() {
       expect(matchesCard(alpha, f), isFalse);
     });
 
+    test('pending matches any pending ZIP, not the card aggregate', () {
+      // App-only semantics (user decision 2026-10-15): a pending ZIP inside
+      // a mostly-done folder must stay reachable; error-only cards are not
+      // pending (their aggregate falls back to `pending` in the gallery).
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+        relA2: entryJson(relA2, 'pending', 'ROOT'),
+        relB: entryJson(relB, 'error', 'ROOT'),
+      });
+      final mixed = u.cracked.firstWhere((c) => c.folder == 'Alpha');
+      final errorOnly = u.cracked.firstWhere((c) => c.folder == 'Beta');
+      expect(mixed.displayStatus, 'done',
+          reason: 'aggregate hides the pending variant');
+      expect(matchesCard(mixed, CatalogFilter()..status = 'pending'), isTrue);
+      expect(matchesCard(errorOnly, CatalogFilter()..status = 'pending'),
+          isFalse);
+      expect(matchesCard(mixed, CatalogFilter()..status = 'done'), isTrue);
+    });
+
     test('desktop umbrella keeps all kinds; text/black are strict', () {
       final u = buildUniverse({
         relA: entryJson(relA, 'desktop', 'ROOT', preview: 'a.png',

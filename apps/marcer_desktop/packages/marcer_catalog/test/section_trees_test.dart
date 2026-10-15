@@ -57,6 +57,40 @@ void main() {
       expect(discoverSectionTrees(browser),
           {'cracked': 'Cracked Games - Title Sorted'});
     });
+
+    test('canonical tree wins over decoy prefix matches (real-DVD layout)',
+        () {
+      // Decoys sort before `Title Sorted` — first-prefix-wins used to pick
+      // them (bug 2026-10-15).
+      final decoy = '${tmp.path}/decoy';
+      for (final rel in [
+        'Bonus/Cracked Demos/A/demo.zip',
+        'Bonus/PD Games - Data Disks/P/p.zip',
+        'Crew Sorted/Utilitys - Scene and Cracks - Crew Sorted/U/u.zip',
+        'Title Sorted/Cracked Games - Title Sorted/A/a.zip',
+        'Title Sorted/PD Games - Title Sorted/P/p.zip',
+        'Title Sorted/Utilitys - Title Sorted/U/u.zip',
+      ]) {
+        final file = File('$decoy/$rel');
+        file.parent.createSync(recursive: true);
+        file.createSync();
+      }
+      final browser = OverlayBrowser(rootDir: decoy);
+      expect(discoverSectionTrees(browser), {
+        'cracked': 'Title Sorted/Cracked Games - Title Sorted',
+        'pd': 'Title Sorted/PD Games - Title Sorted',
+        'utils': 'Title Sorted/Utilitys - Title Sorted',
+      });
+    });
+
+    test('prefix fallback keeps the only candidate without a canonical name',
+        () {
+      final only = '${tmp.path}/only';
+      Directory('$only/Bonus/Cracked Demos/A').createSync(recursive: true);
+      final browser = OverlayBrowser(rootDir: only);
+      expect(discoverSectionTrees(browser),
+          {'cracked': 'Bonus/Cracked Demos'});
+    });
   });
 
   group('sectionOfRel', () {

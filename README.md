@@ -62,8 +62,17 @@ Save, the manual screenshot curation described below.
 - **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
   several ZIPs; if exactly one of them is a game screenshot (`done`), the
   large game preview is shown instead.
-- **Gallery-style status bar** — with-screenshot ratio, status counts, matched
-  folder count, `index.json` mtime and gameinfo generation time.
+- **Gallery-style status bar** — with-screenshot ratio, status counts (ZIP
+  entries of `index.json`), matched folder count, `index.json` mtime and
+  gameinfo generation time.
+- **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
+  `desktop text` / `desktop black` / `pending` / … . `pending` is
+  **app-specific**: it matches a game when **at least one** of its ZIPs is
+  pending (the gallery's aggregated card status would hide pending ZIPs
+  inside otherwise-done folders); every other status value uses the
+  gallery's card aggregation. Note the different units: the status bar
+  counts ZIP entries, the filter counts games — `pending 5` in the bar can
+  therefore mean fewer games.
 - **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
   list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
   detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the

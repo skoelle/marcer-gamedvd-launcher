@@ -832,12 +832,30 @@ class CatalogController extends ChangeNotifier {
   /// True when any ZIP of the card's folder is a favorite (folder-keyed, so
   /// multi-variant cards stay visible in the ★ filter — user decision
   /// 2026-10-15). Membership is checked against a precomputed set of
-  /// favorite folder rels (no per-card filesystem access).
+  /// favorite folder rels (no per-card filesystem access). Candidate
+  /// folders are the card's actual variant directories (index-derived —
+  /// covers nested folders like `…/Original`) plus its [cardFolderRel];
+  /// a hit counts when the paths are equal or nested in either direction
+  /// (favorite ZIP sits deeper than, or directly above, the card folder).
   bool isFavoriteCard(GameCard card) {
+    final favs = _favoriteFolderRels;
+    if (favs.isEmpty) return false;
+    final dirs = <String>{
+      for (final v in card.variants) _favoriteDirKey(p.dirname(v.rel)),
+    };
     final folder = cardFolderRel(card);
-    if (folder == null) return false;
-    return _favoriteFolderRels.contains(p.normalize(folder).toLowerCase());
+    if (folder != null) dirs.add(_favoriteDirKey(folder));
+    if (dirs.isEmpty) return false;
+    for (final dir in dirs) {
+      if (favs.contains(dir)) return true;
+      for (final fav in favs) {
+        if (fav.startsWith('$dir/') || dir.startsWith('$fav/')) return true;
+      }
+    }
+    return false;
   }
+
+  String _favoriteDirKey(String dir) => p.normalize(dir).toLowerCase();
 
   Set<String>? _favoriteFolderRelsCache;
 
