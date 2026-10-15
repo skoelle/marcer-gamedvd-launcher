@@ -300,4 +300,55 @@ void main() {
       expect(windowsUpdateHelperScript(), windowsUpdateHelperScript());
     });
   });
+
+  group('UpdateLog', () {
+    late Directory sandbox;
+
+    setUp(() {
+      sandbox = Directory.systemTemp.createTempSync('updatelog_test_');
+    });
+
+    tearDown(() {
+      try {
+        sandbox.deleteSync(recursive: true);
+      } catch (_) {}
+    });
+
+    test('appends timestamped [app] lines to the preferred path', () {
+      final target = p.join(sandbox.path, 'MarcerUpdater.log');
+      final log = UpdateLog(target);
+      log.line('first');
+      log.line('second');
+
+      final body = File(target).readAsStringSync();
+      expect(body.split('\n').where((l) => l.isNotEmpty).length, 2);
+      expect(body, contains('[app] first'));
+      expect(body, contains('[app] second'));
+      expect(log.writeErrors, isEmpty);
+      expect(log.path, target);
+    });
+
+    test('falls back to the temp dir when the preferred path is not writable',
+        () {
+      // A directory in place of the file makes the primary write fail.
+      final blocked = p.join(sandbox.path, 'MarcerUpdater.log');
+      Directory(blocked).createSync();
+      final log = UpdateLog(blocked);
+
+      log.line('goes to fallback');
+
+      expect(log.writeErrors, isNotEmpty);
+      final fallback = p.join(Directory.systemTemp.path, 'MarcerUpdater.log');
+      expect(File(fallback).existsSync(), isTrue);
+      expect(File(fallback).readAsStringSync(), contains('[app] goes to fallback'));
+      try {
+        File(fallback).deleteSync();
+      } catch (_) {}
+    });
+
+    test('null preferred path logs straight to the temp dir', () {
+      final log = UpdateLog(null);
+      expect(log.path, p.join(Directory.systemTemp.path, 'MarcerUpdater.log'));
+    });
+  });
 }

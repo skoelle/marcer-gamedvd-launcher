@@ -48,9 +48,10 @@ snackbar). Status filter: `kStatusFilterKeys` adds strict `desktop_text` /
 Status. `pending` is app-specific too (2026-10-15): it matches a card when
 **any** of its ZIPs is pending (the gallery aggregate hides pending ZIPs in
 done folders; error-only cards no longer count as pending). Tests: package
-68 `dart test`, app 59 `flutter test` (index editor,
+69 `dart test`, app 62 `flutter test` (index editor,
 controller curation + preview swap incl. the live-cache refresh regression
-test `image_swap_refresh_test.dart`), `flutter analyze` clean.
+test `image_swap_refresh_test.dart`, self-updater helper script/args +
+`UpdateLog`), `flutter analyze` clean.
 Linux debug build + xvfb smoke run OK; launch verified end-to-end with a fake
 emulator. Next: Surface B (couch mode).
 Written 2026-10-11.
@@ -297,7 +298,14 @@ Playnite-inspired master-detail layout, hybrid model:
   PowerShell helper (`windowsUpdateHelperScript`/`Args`, no UI) waits for
   the app PID to exit, performs the same `.old` backup + swap + relaunch,
   cleans up and logs each step to `MarcerUpdater.log` next to the app
-  (restoring the `*.old` exe if the swap died halfway). Gated via
+  (restoring the `*.old` exe if the swap died halfway). The **app itself
+  also logs** to `MarcerUpdater.log` (`UpdateLog`): update start, install
+  dir/exe/PID, `currentProcessInJob()` (FFI `IsProcessInJob` — a job with
+  `JOB_OBJECT_KILL_ON_JOB_CLOSE` kills the detached helper), download/extract
+  sizes, the exact helper spawn command line, and — via
+  `ProcessStartMode.detachedWithStdio` plus a 700 ms stdout/stderr drain —
+  any PowerShell start error; the log path is shown in the failure dialog.
+  Gated via
   `--dart-define=RELEASE_BUILD=true` (release workflow); the current
   version comes from `--build-name` (the git tag) via `package_info_plus`.
   Install failures surface as a dialog and the badge click retries.

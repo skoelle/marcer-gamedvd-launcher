@@ -184,13 +184,23 @@ class _HomePageState extends State<HomePage> {
     }
     _showingUpdateError = true;
     final err = _updater.error!;
+    final logPath = _updater.logPath;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Update failed'),
-          content: Text(err),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SelectableText(err),
+              const SizedBox(height: 12),
+              SelectableText('Log: $logPath',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
           actions: [
             TextButton(
               onPressed: () {

@@ -117,7 +117,9 @@ Save, the manual screenshot curation described below.
   dialog; leftover `*.old` files are cleaned up on the next start. On
   Windows the swap runs in a hidden helper after the app exits (the running
   app locks its mapped libraries `data\app.so` / `flutter_windows.dll`;
-  the helper's steps are logged to `MarcerUpdater.log` next to the app).
+  both the app and the helper log their steps to `MarcerUpdater.log` next to
+  the app — a failed update always leaves that log, whose path is also shown
+  in the error dialog).
   Dev runs (`run.sh`) never check.
 
 ### 🚀 Quick start

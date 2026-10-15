@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -140,6 +141,90 @@ void _copyDir(Directory src, String destPath) {
 /// Name of the tiny update log written next to the app by the Windows
 /// helper (the only diagnostic channel — the helper runs without UI).
 const String kUpdateLogName = 'MarcerUpdater.log';
+
+/// App-side update log (parent process). The helper writes [kUpdateLogName]
+/// next to the app; the parent appends to the same file so that a helper
+/// which never starts still leaves a trace. Falls back to the temp dir when
+/// the install dir is not writable.
+class UpdateLog {
+  UpdateLog(String? preferredPath)
+      : path = preferredPath ?? p.join(Directory.systemTemp.path, kUpdateLogName);
+
+  final String path;
+  final List<String> _writeErrors = [];
+
+  /// Paths the log could not be written to (surfaced in the error dialog).
+  List<String> get writeErrors => List.unmodifiable(_writeErrors);
+
+  void line(String message) {
+    final stamp = DateTime.now().toIso8601String();
+    final entry = '$stamp [app] $message\n';
+    for (final candidate in _candidates()) {
+      try {
+        File(candidate).writeAsStringSync(entry, mode: FileMode.append);
+        return;
+      } catch (e) {
+        final note = '$candidate: $e';
+        if (!_writeErrors.contains(note)) _writeErrors.add(note);
+      }
+    }
+  }
+
+  /// Primary path first, then the system temp dir.
+  Iterable<String> _candidates() sync* {
+    yield path;
+    final temp = p.join(Directory.systemTemp.path, kUpdateLogName);
+    if (temp != path) yield temp;
+  }
+}
+
+/// Whether the current process is assigned to a job object (Windows). A job
+/// with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` kills detached children when the
+/// parent exits; Dart's detached mode uses `DETACHED_PROCESS` but never
+/// `CREATE_BREAKAWAY_FROM_JOB`, so the helper can die before its first line.
+/// Null = unknown (non-Windows / lookup failure).
+bool? currentProcessInJob() {
+  if (!Platform.isWindows) return null;
+  try {
+    final k32 = DynamicLibrary.open('kernel32.dll');
+    final getCurrent = k32.lookupFunction<_GetCurrentProcessC,
+        _GetCurrentProcessD>('GetCurrentProcess');
+    final inJob =
+        k32.lookupFunction<_IsProcessInJobC, _IsProcessInJobD>('IsProcessInJob');
+    final crt = _openCrt();
+    final malloc = crt.lookupFunction<_MallocC, _MallocD>('malloc');
+    final free = crt.lookupFunction<_FreeC, _FreeD>('free');
+    final out = malloc(4).cast<Int32>();
+    try {
+      final ok = inJob(getCurrent(), 0, out);
+      return ok != 0 ? out.value != 0 : null;
+    } finally {
+      free(out.cast<Uint8>());
+    }
+  } catch (_) {
+    return null;
+  }
+}
+
+typedef _GetCurrentProcessC = IntPtr Function();
+typedef _GetCurrentProcessD = int Function();
+typedef _IsProcessInJobC = Int32 Function(IntPtr, IntPtr, Pointer<Int32>);
+typedef _IsProcessInJobD = int Function(int, int, Pointer<Int32>);
+typedef _MallocC = Pointer<Uint8> Function(IntPtr);
+typedef _MallocD = Pointer<Uint8> Function(int);
+typedef _FreeC = Void Function(Pointer<Uint8>);
+typedef _FreeD = void Function(Pointer<Uint8>);
+
+DynamicLibrary _openCrt() {
+  for (final name in ['ucrtbase.dll', 'msvcrt.dll']) {
+    try {
+      return DynamicLibrary.open(name);
+    } catch (_) {
+      // try the next one
+    }
+  }
+  throw StateError('no C runtime found');
+}
 
 /// PowerShell script performed by a detached hidden helper AFTER this
 /// process has exited (two-phase update, Windows only).
@@ -345,6 +430,16 @@ class SelfUpdateController extends ChangeNotifier {
   double? progress; // 0..1 while downloading
   String? error;
 
+  /// App-side log next to the installed app (see [UpdateLog]).
+  late final UpdateLog _log = UpdateLog(p.join(
+      installTargetDir(
+          resolvedExecutable: Platform.resolvedExecutable,
+          isMacOS: Platform.isMacOS),
+      kUpdateLogName));
+
+  /// Where the update log lives (shown in the error dialog).
+  String get logPath => _log.path;
+
   /// Silent startup check; network failures stay silent.
   Future<void> check() async {
     if (!enabled) return;
@@ -374,12 +469,15 @@ class SelfUpdateController extends ChangeNotifier {
         final tag = platformAssetTag();
         available =
             tag == null ? null : pickRelease(list, current: currentVersion, assetTag: tag);
+        _log.line('check: current=$currentVersion '
+            'latest=${available?.version ?? 'none'} (asset tag $tag)');
       } finally {
         client.close(force: true);
       }
       phase = UpdatePhase.none;
-    } catch (_) {
+    } catch (e) {
       // offline / rate-limited / API down — stay silent, keep old state
+      _log.line('check failed (ignored): $e');
       available = null;
       phase = UpdatePhase.none;
     }
@@ -391,6 +489,10 @@ class SelfUpdateController extends ChangeNotifier {
   Future<void> install() async {
     final info = available;
     if (!enabled || info == null) return;
+    final installDir = installTargetDir(
+        resolvedExecutable: Platform.resolvedExecutable,
+        isMacOS: Platform.isMacOS);
+    final log = _log;
     Directory? tmp;
     try {
       phase = UpdatePhase.downloading;
@@ -398,19 +500,25 @@ class SelfUpdateController extends ChangeNotifier {
       error = null;
       notifyListeners();
 
+      log.line('--- update start: $currentVersion -> ${info.version} '
+          '(${info.assetName})');
+      log.line('install dir: $installDir');
+      log.line('exe: ${Platform.resolvedExecutable}');
+      log.line('pid: ${selfPid ?? 'unknown'}  '
+          'in job: ${currentProcessInJob() ?? 'unknown'}');
+
       tmp = Directory.systemTemp.createTempSync('marcer_update_');
       final zipFile = File(p.join(tmp.path, 'update.zip'));
       await _download(info.assetUrl, zipFile);
+      log.line('download ok: ${zipFile.lengthSync()} bytes');
 
       phase = UpdatePhase.installing;
       notifyListeners();
       final extractDir = Directory(p.join(tmp.path, 'extract'));
       extractDir.createSync(recursive: true);
       await extractZipToDir(zipFile, extractDir);
-
-      final installDir = installTargetDir(
-          resolvedExecutable: Platform.resolvedExecutable,
-          isMacOS: Platform.isMacOS);
+      log.line('extracted ${extractDir.listSync().length} top-level '
+          'entries to ${extractDir.path}');
 
       if (Platform.isWindows) {
         // Two-phase: the running app maps data\app.so and
@@ -419,19 +527,30 @@ class SelfUpdateController extends ChangeNotifier {
         phase = UpdatePhase.restarting;
         notifyListeners();
         await _startWindowsHelper(
-            tmp: tmp, installDir: Directory(installDir), stageDir: extractDir);
+            tmp: tmp,
+            installDir: Directory(installDir),
+            stageDir: extractDir,
+            log: log);
+        log.line('helper spawned; exiting app now');
         exit(0);
       }
 
       swapInstall(from: extractDir, into: Directory(installDir));
+      log.line('in-process swap done');
 
       phase = UpdatePhase.restarting;
       notifyListeners();
       relaunch(installDir);
+      log.line('relaunched; exiting app now');
       exit(0);
     } catch (e) {
+      log.line('ERROR: $e');
       phase = UpdatePhase.failed;
-      error = e.toString();
+      final writeNote = log.writeErrors.isEmpty
+          ? ''
+          : '\n\n(Update log could not be written: '
+              '${log.writeErrors.join('; ')})';
+      error = '$e\n\nUpdate log: ${log.path}$writeNote';
       notifyListeners();
       if (tmp != null) {
         try {
@@ -455,10 +574,16 @@ class SelfUpdateController extends ChangeNotifier {
   /// and hidden; the helper performs the swap once this process has exited
   /// (Windows only — see the script for the rationale). [tmp] (staging +
   /// script) is removed by the helper on success.
+  ///
+  /// Uses [ProcessStartMode.detachedWithStdio] (not plain `detached`, which
+  /// routes all three stdio streams to NUL) and briefly drains stdout/stderr
+  /// into [log] — a PowerShell that refuses to start (policy, job kill,
+  /// missing console) then leaves a trace instead of dying silently.
   Future<void> _startWindowsHelper(
       {required Directory tmp,
       required Directory installDir,
-      required Directory stageDir}) async {
+      required Directory stageDir,
+      required UpdateLog log}) async {
     final pid = selfPid;
     if (pid == null || pid == 0) {
       throw StateError('Cannot determine own process id for the update helper');
@@ -466,18 +591,43 @@ class SelfUpdateController extends ChangeNotifier {
     final script = File(p.join(tmp.path, 'updater.ps1'));
     script.writeAsStringSync(windowsUpdateHelperScript());
     final exeName = p.basename(Platform.resolvedExecutable);
-    await Process.start(
-      'powershell.exe',
-      windowsUpdateHelperArgs(
-        scriptPath: script.path,
-        appDir: installDir.path,
-        exeName: exeName,
-        stageDir: stageDir.path,
-        waitPid: pid,
-        logPath: p.join(installDir.path, kUpdateLogName),
-      ),
-      mode: ProcessStartMode.detached,
+    final args = windowsUpdateHelperArgs(
+      scriptPath: script.path,
+      appDir: installDir.path,
+      exeName: exeName,
+      stageDir: stageDir.path,
+      waitPid: pid,
+      logPath: p.join(installDir.path, kUpdateLogName),
     );
+    log.line('spawning helper: powershell.exe ${args.join(' ')}');
+
+    final Process proc;
+    try {
+      proc = await Process.start(
+        'powershell.exe',
+        args,
+        mode: ProcessStartMode.detachedWithStdio,
+      );
+    } catch (e) {
+      log.line('helper spawn FAILED: $e');
+      rethrow;
+    }
+    log.line('helper pid=${proc.pid}');
+
+    // Drain the pipes briefly so startup errors land in the log, then stop
+    // listening; the child keeps running detached after we exit.
+    final out = StringBuffer();
+    final err = StringBuffer();
+    proc.stdout.transform(utf8.decoder).listen(out.write);
+    proc.stderr.transform(utf8.decoder).listen(err.write);
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    final o = out.toString().trim();
+    final e = err.toString().trim();
+    if (o.isNotEmpty) log.line('helper stdout: $o');
+    if (e.isNotEmpty) log.line('helper stderr: $e');
+    if (o.isEmpty && e.isEmpty) {
+      log.line('helper produced no output in 700ms (started or died silently)');
+    }
   }
 
   Future<void> _download(String url, File target) async {
