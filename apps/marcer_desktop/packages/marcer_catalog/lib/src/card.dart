@@ -302,13 +302,16 @@ GameCard buildCrackedCard({
       break;
     }
   }
+  // Among done variants prefer a `game` shot (e.g. over `textscreen`);
+  // within a tier the sorted-rel order decides.
   String? preview;
   for (final v in variants) {
-    if (v.status == 'done' && v.previewPath != null) {
+    if (v.status == 'done' && v.kind == 'game' && v.previewPath != null) {
       preview = v.previewPath;
       break;
     }
   }
+  preview ??= _firstDonePreview(variants);
   preview ??= _firstDesktopPreview(variants);
   final layer = layers.length == 1
       ? layers.first
@@ -328,6 +331,13 @@ GameCard buildCrackedCard({
     info: info,
     kind: 'cracked',
   );
+}
+
+String? _firstDonePreview(List<CardVariant> variants) {
+  for (final v in variants) {
+    if (v.status == 'done' && v.previewPath != null) return v.previewPath;
+  }
+  return null;
 }
 
 String? _firstDesktopPreview(List<CardVariant> variants) {

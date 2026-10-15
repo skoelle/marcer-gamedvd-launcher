@@ -61,7 +61,9 @@ Save, the manual screenshot curation described below.
   with layer labels and the virtual `Favorites` folder.
 - **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
   several ZIPs; if exactly one of them is a game screenshot (`done`), the
-  large game preview is shown instead.
+  large game preview is shown instead. The card's main preview prefers a
+  `done` variant of kind `game` over e.g. `textscreen` (gallery-parity
+  divergence: the gallery still takes the first `done` variant by path).
 - **Gallery-style status bar** — with-screenshot ratio, status counts (ZIP
   entries of `index.json`), matched folder count, `index.json` mtime and
   gameinfo generation time.

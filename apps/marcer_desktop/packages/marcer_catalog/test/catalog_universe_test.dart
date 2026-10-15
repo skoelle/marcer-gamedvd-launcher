@@ -87,6 +87,18 @@ void main() {
       expect(card.statusCounts, {'done': 1, 'pending': 1});
     });
 
+    test('done preview prefers kind game over earlier textscreen', () {
+      final u = buildUniverse({
+        // 'Alpha v2.zip' sorts before 'a.zip' (ASCII) and must NOT win.
+        relA2: entryJson(relA2, 'done', 'ROOT', preview: 'a2.png',
+            kindOverride: 'textscreen'),
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+      });
+      expect(
+          u.cracked.first.previewPath,
+          '$outDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.png');
+    });
+
     test('display status priority: no_usable_shots beats pending', () {
       final u = buildUniverse({
         relA: entryJson(relA, 'pending', 'ROOT'),

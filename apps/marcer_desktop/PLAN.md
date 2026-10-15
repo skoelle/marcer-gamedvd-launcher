@@ -136,7 +136,9 @@ Reimplementation of the spec contract in Dart (the project's established
     `tools/gallery/gallery.py::_full_png`);
   - status aggregation / primary preview selection mirrored from the gallery spec
     (`done → desktop → no_usable_shots → interrupted → pending → skipped_disk_n`);
-    the app-only `pending` status filter overrides the aggregate and matches
+    among `done` variants the app prefers `kind: game` over e.g. `textscreen`
+    (app-only divergence: gallery §4.4 stays first-by-rel); the app-only
+    `pending` status filter overrides the aggregate and matches
     any pending ZIP variant (see filter bar status note).
 - **Graceful degradation** (DECISION §7): missing `index.json`, missing `Data/` dir or
   missing trees → empty states with a notice, never a crash.
