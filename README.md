@@ -62,8 +62,11 @@ Save, the manual screenshot curation described below.
 - **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
   several ZIPs; if exactly one of them is a game screenshot (`done`), the
   large game preview is shown instead. The card's main preview prefers a
-  `done` variant of kind `game` over e.g. `textscreen` (gallery-parity
-  divergence: the gallery still takes the first `done` variant by path).
+  `done` variant of kind `game` over e.g. `textscreen`, and the four tiles
+  are ordered the same way (`done game` → other `done` → `desktop`), so a
+  late-sorting game shot is never pushed out by textscreens
+  (gallery-parity divergence: the gallery still ranks the first `done`
+  variant by path and orders tiles by status only).
 - **Gallery-style status bar** — with-screenshot ratio, status counts (ZIP
   entries of `index.json`), matched folder count, `index.json` mtime and
   gameinfo generation time; the running app version (right-aligned).

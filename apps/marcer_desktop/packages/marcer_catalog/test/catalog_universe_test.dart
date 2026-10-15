@@ -99,6 +99,44 @@ void main() {
           '$outDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.png');
     });
 
+    test('thumb indices: kind game wins inside a status tier (2×2 order)',
+        () {
+      const relA3 =
+          'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha v3.zip';
+      const relA4 =
+          'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha v4.zip';
+      const relA5 =
+          'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha v5.zip';
+      final u = buildUniverse({
+        // Sorted variants: v2(0,ts) v3(1,ts) v4(2,ts) v5(3,game) a.zip(4,game).
+        // Without the kind tier the first four are three textscreens plus
+        // one game — the game at index 4 would be dropped from the tile.
+        relA2: entryJson(relA2, 'done', 'ROOT', preview: 'a2.png',
+            kindOverride: 'textscreen'),
+        relA3: entryJson(relA3, 'done', 'ROOT', preview: 'a3.png',
+            kindOverride: 'textscreen'),
+        relA4: entryJson(relA4, 'done', 'ROOT', preview: 'a4.png',
+            kindOverride: 'textscreen'),
+        relA5: entryJson(relA5, 'done', 'ROOT', preview: 'a5.png'),
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+      });
+      final card = u.cracked.single;
+      expect(card.thumbIndices(), [3, 4, 0, 1]);
+    });
+
+    test('thumb indices: status tier dominates kind (desktop game last)',
+        () {
+      const relB2 =
+          'Title Sorted/Cracked Games - Title Sorted/B/Beta/Beta v2.zip';
+      final u = buildUniverse({
+        relB2: entryJson(relB2, 'done', 'ROOT', preview: 'b2.png',
+            kindOverride: 'textscreen'),
+        relB: entryJson(relB, 'desktop', 'ROOT', preview: 'beta.png',
+            kindOverride: 'game'),
+      });
+      expect(u.cracked.single.thumbIndices(), [0, 1]);
+    });
+
     test('display status priority: no_usable_shots beats pending', () {
       final u = buildUniverse({
         relA: entryJson(relA, 'pending', 'ROOT'),

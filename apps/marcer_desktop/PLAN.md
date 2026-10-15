@@ -241,7 +241,11 @@ Playnite-inspired master-detail layout, hybrid model:
   `done` game shot, in which case the large game preview is shown — and
   (when `ShowCandidates` is true, single
   variant, no focus) a candidate thumb strip; clicking a thumb opens the
-  lightbox on that image.
+  lightbox on that image. Thumb order (`GameCard.thumbIndices`): status
+  tier (`done` → `desktop`), then **`kind: game` first** (e.g.
+  `done game` before `done textscreen`, then variant index — app-only
+  divergence: gallery `variantThumbs` ranks status only; with subfolder
+  ZIPs sorting late, a game could otherwise fall out of the top four).
 - **Left:** overlay folder tree per `SPEC.md` §7 with `Enter`/`Backspace` semantics,
   layer labels `BOTH`/`ROOT`/`PTCH`, virtual `Favorites` folder per `SPEC.md` §11.
   Section trees are discovered at depth 1+2 with **canonical-name

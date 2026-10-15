@@ -283,25 +283,14 @@ class _CenterGridState extends State<CenterGrid> {
       _countPreviews(card) >= 2 &&
       _doneThumbCount(card) != 1;
 
-  static const Map<String, int> _statusRank = {'done': 0, 'desktop': 1};
-
-  /// Up to 4 clickable variant screenshots, best status first
-  /// (gallery `variantThumbs`): `done`, then `desktop`, then the rest,
-  /// ties broken by variant index.
-  List<({int index, String path})> _variantThumbs(GameCard card) {
-    final items = <({int index, String path})>[
-      for (var i = 0; i < card.variants.length; i++)
-        if (card.variants[i].previewPath != null)
+  /// Up to 4 clickable variant screenshots, best first
+  /// ([GameCard.thumbIndices]: status tier, then `kind: game` before other
+  /// kinds — app-only, the gallery only ranks by status — then variant
+  /// index).
+  List<({int index, String path})> _variantThumbs(GameCard card) => [
+        for (final i in card.thumbIndices())
           (index: i, path: card.variants[i].previewPath!),
-    ];
-    items.sort((a, b) {
-      final ra = _statusRank[card.variants[a.index].status] ?? 2;
-      final rb = _statusRank[card.variants[b.index].status] ?? 2;
-      final cmp = ra.compareTo(rb);
-      return cmp != 0 ? cmp : a.index.compareTo(b.index);
-    });
-    return items.take(4).toList();
-  }
+      ];
 
   Widget _thumbGrid(
       CatalogController c, GameCard card, int index,

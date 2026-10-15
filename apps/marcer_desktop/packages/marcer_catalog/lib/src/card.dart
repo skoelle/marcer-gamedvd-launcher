@@ -249,6 +249,32 @@ class GameCard {
 
   /// Cards without a year always sort last (both directions).
   bool get hasUnknownYear => yearNum == 0;
+
+  /// Status tier for the 2×2 thumb grid (gallery `STATUS_RANK`): `done`
+  /// first, then `desktop`, everything else last.
+  static const Map<String, int> _thumbStatusRank = {'done': 0, 'desktop': 1};
+
+  /// Variant indices shown as clickable thumbs in the no-focus 2×2 grid
+  /// and the focus-miss hint strip (gallery `variantThumbs`), best first:
+  /// status tier, then **`kind: game` before other kinds** (app-only
+  /// divergence: e.g. `done game` before `done textscreen`; the gallery
+  /// only ranks by status), then variant index. At most [limit] entries.
+  List<int> thumbIndices({int limit = 4}) {
+    final items = [
+      for (var i = 0; i < variants.length; i++)
+        if (variants[i].previewPath != null) i,
+    ];
+    items.sort((a, b) {
+      final ra = _thumbStatusRank[variants[a].status] ?? 2;
+      final rb = _thumbStatusRank[variants[b].status] ?? 2;
+      if (ra != rb) return ra.compareTo(rb);
+      final ka = variants[a].kind == 'game' ? 0 : 1;
+      final kb = variants[b].kind == 'game' ? 0 : 1;
+      if (ka != kb) return ka.compareTo(kb);
+      return a.compareTo(b);
+    });
+    return items.take(limit).toList();
+  }
 }
 
 /// Sorts case-insensitively-unique values like the gallery's `sorted(set(..))`.
