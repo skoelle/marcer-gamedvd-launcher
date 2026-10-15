@@ -131,7 +131,7 @@ class CatalogUniverse {
       };
 
   /// Number of cracked cards with at least one preview (status bar
-  /// `3211 / 3287 with screenshot` — both counts are games/cards).
+  /// `3211 with screenshot`, next to the `3287 folders` segment).
   int get crackedWithScreenshot => cracked.where((c) => c.screenshots).length;
 
   /// Cracked cards with at least one `pending` ZIP — the app-specific

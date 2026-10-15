@@ -141,8 +141,10 @@ the **running app version** (`v…`; release builds: stamped from the
 Status info in catalog mode (app-only divergence from the gallery footer,
 which shows ZIP-entry counts only):
 
-- `3211 / 3287 with screenshot` — cracked **games** with a preview out of
-  all cracked games (both sides are games, not ZIP entries).
+- `3287 folders` — cracked games (cards) built from `index.json`; every
+  game folder with at least one ZIP is one card.
+- `3211 with screenshot` — cracked **games** with a preview (prefer `done`
+  game shot, else first `done`, else first `desktop`).
 - `done 2635 (8979 zips)` — per status: number of **games** (cards) plus
   their **ZIP entries** in parentheses. The games number equals the result
   count of the matching status dropdown selection — `done`, `desktop`,
@@ -150,8 +152,11 @@ which shows ZIP-entry counts only):
   aggregated card status, `pending` counts a game when **any** of its ZIPs
   is pending (same rule as the filter; a game can therefore appear in
   `pending` and `done` at once).
-- `info N folders`, `N without info`, `index.json: …`, `gameinfo: …` —
-  unchanged (folders / index ZIP entries / timestamps).
+- `gameinfo N folders`, `N without gameinfo` — gameinfo match coverage:
+  `N` folders matched by the gameinfo generator (`manifest.json`
+  `matched_folders`) / cracked cards whose gameinfo join is empty.
+- `index.json: …`, `gameinfo: …` — index mtime and gameinfo generation
+  timestamp.
 
 ## License
 

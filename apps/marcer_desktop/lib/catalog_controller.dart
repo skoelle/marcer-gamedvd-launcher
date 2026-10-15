@@ -636,13 +636,13 @@ class CatalogController extends ChangeNotifier {
 
   /// Gallery-style status line (`renderStats` + `renderFooter`), app-only
   /// divergence: counts are shown as games (cards) plus their ZIP entries —
-  /// `N / M with screenshot` (both games), `done 2635 (8979 zips)` etc. so
+  /// `N folders`, `M with screenshot`, `done 2635 (8979 zips)` etc. so
   /// the done segment matches the dropdown result count.
   List<String> get statusLine {
     final parts = <String>[];
     if (catalogMode && filter.section == 'cracked' && gameinfo.length > 0) {
-      parts.add('${universe.crackedWithScreenshot} / ${universe.cracked.length} '
-          'with screenshot');
+      parts.add('${universe.cracked.length} folders');
+      parts.add('${universe.crackedWithScreenshot} with screenshot');
     } else if (screenshots.length > 0) {
       parts.add('${screenshots.length} index entries');
     }
@@ -665,9 +665,9 @@ class CatalogController extends ChangeNotifier {
         if (games > 0 || zips > 0) parts.add('$k $games ($zips zips)');
       }
       final matched = gameinfo.matchedFolders;
-      if (matched != null) parts.add('info $matched folders');
+      if (matched != null) parts.add('gameinfo $matched folders');
       if (universe.crackedNoInfo > 0) {
-        parts.add('${universe.crackedNoInfo} without info');
+        parts.add('${universe.crackedNoInfo} without gameinfo');
       }
     }
     if (screenshots.mtime != null) {

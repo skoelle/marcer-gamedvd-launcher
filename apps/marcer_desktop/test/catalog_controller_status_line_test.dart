@@ -107,13 +107,15 @@ void main() {
     // Cards: Alpha (done+pending → done, preview), Beta (desktop, preview),
     // Gamma (pending×2), Delta (done, preview), Epsilon (error → aggregate
     // pending, no pending ZIP).
-    expect(c.statusLine, contains('3 / 5 with screenshot'));
+    expect(c.statusLine, contains('5 folders'));
+    expect(c.statusLine, contains('3 with screenshot'));
     expect(c.statusLine, contains('done 2 (2 zips)'));
     expect(c.statusLine, contains('desktop 1 (1 zips)'));
     expect(c.statusLine, contains('pending 2 (3 zips)'),
         reason: 'games = any-pending-ZIP cards (Alpha, Gamma); '
             'zips = index pending entries (a_v2, gamma, gamma2)');
-    expect(c.statusLine, contains('info 4 folders'));
+    expect(c.statusLine, contains('gameinfo 4 folders'));
+    expect(c.statusLine, contains('5 without gameinfo'));
     expect(c.statusLine, isNot(contains(contains('skipped_disk_n'))));
     expect(c.statusLine, isNot(contains(contains('no_usable_shots'))));
     expect(c.statusLine, isNot(contains(contains('interrupted'))));
@@ -135,9 +137,9 @@ void main() {
     expect(c.countText, '1 results');
     expect(c.statusLine, contains('desktop 1 (1 zips)'));
 
-    // Default status: screenshot cards == coverage numerator.
+    // Default status: screenshot cards == the `with screenshot` segment.
     c.resetFilters();
     expect(c.countText, '3 results');
-    expect(c.statusLine, contains('3 / 5 with screenshot'));
+    expect(c.statusLine, contains('3 with screenshot'));
   });
 }
