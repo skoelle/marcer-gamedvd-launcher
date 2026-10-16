@@ -172,7 +172,7 @@ header { margin-bottom: 8px; }
   width: 100%;
   height: auto;
   border-radius: 3px;
-  image-rendering: pixelated;
+  image-rendering: auto;
   background: #000;
   display: block;
 }
@@ -184,7 +184,7 @@ header { margin-bottom: 8px; }
 }
 .card .cands img {
   width: 48px;
-  image-rendering: pixelated;
+  image-rendering: auto;
   border-radius: 2px;
   opacity: 0.85;
 }
@@ -205,7 +205,7 @@ header { margin-bottom: 8px; }
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
-  image-rendering: pixelated;
+  image-rendering: auto;
   border-radius: 2px;
   opacity: 0.85;
 }
@@ -511,7 +511,7 @@ footer {
   width: 100%;
   height: 60px;
   object-fit: contain;
-  image-rendering: pixelated;
+  image-rendering: auto;
   display: block;
   background: #000;
   border-radius: 2px;
@@ -567,7 +567,7 @@ footer {
 }
 .lb-cands img {
   height: 52px;
-  image-rendering: pixelated;
+  image-rendering: auto;
   border-radius: 3px;
   cursor: pointer;
   border: 2px solid transparent;
