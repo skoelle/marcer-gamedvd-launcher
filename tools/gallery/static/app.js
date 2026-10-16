@@ -388,6 +388,11 @@ async function loadEntries() {
 }
 
 // ---------------------------------------------------------------- hover panel
+// The info panel is a mouse affordance only: touch/mobile devices synthesize
+// mouseover on tap, so without this guard the panel would pop up ~400 ms
+// after every tap and could stick (SPEC 6.x — no hover info on touch).
+const hoverMedia = window.matchMedia("(hover: hover) and (pointer: fine)");
+const canHover = () => hoverMedia.matches;
 let hoverTimer = null;
 function hoverHTML(card) {
   const rows = [];
@@ -876,6 +881,10 @@ function changePage(dir) {
 function wireEvents() {
   $("grid").addEventListener("keydown", gridKeydown);
   document.addEventListener("keydown", globalKeydown);
+  // the hover panel is position:fixed — dismiss it on key press (SPEC 6.1)
+  // and whenever the grid scrolls under it
+  document.addEventListener("keydown", hideHover);
+  window.addEventListener("scroll", hideHover, true);
   // help overlay: click on the backdrop closes it
   $("help").addEventListener("click", (e) => {
     if (e.target === $("help")) closeHelp();
@@ -908,6 +917,7 @@ function wireEvents() {
     openLightbox(idx, fv);
   });
   $("grid").addEventListener("mouseover", (e) => {
+    if (!canHover()) return;
     const cardEl = e.target.closest(".card");
     if (!cardEl) return;
     const idx = parseInt(cardEl.dataset.idx, 10);
