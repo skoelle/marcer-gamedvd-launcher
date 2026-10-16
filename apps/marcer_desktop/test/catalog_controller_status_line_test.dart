@@ -91,8 +91,8 @@ void main() {
     c = CatalogController(DesktopConfig(
       rootDirectory: '${tmp.path}/root',
       patchDirectory: '${tmp.path}/patch',
-      outDirectory: '${tmp.path}/out',
-      dataDirectory: '${tmp.path}/data',
+      screenshotDirectory: '${tmp.path}/out',
+      gameinfoDirectory: '${tmp.path}/data',
     ));
   });
 

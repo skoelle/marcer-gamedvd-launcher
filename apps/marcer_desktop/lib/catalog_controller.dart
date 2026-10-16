@@ -88,8 +88,8 @@ class CatalogController extends ChangeNotifier {
     // sendable even when listeners are attached to the controller.
     final cfg = config;
     final bundle = await Isolate.run(() => CatalogBundle.loadSync(
-          outDir: cfg.outDirectory,
-          dataDir: cfg.resolveDataDirectory(),
+          screenshotDir: cfg.screenshotDirectory,
+          gameinfoDir: cfg.resolveGameinfoDirectory(),
         ));
     notices.addAll(bundle.warnings);
     screenshots = bundle.index;
@@ -987,7 +987,7 @@ class CatalogController extends ChangeNotifier {
     universe = CatalogUniverse.build(
       indices: screenshots,
       info: gameinfo,
-      outDir: config.outDirectory,
+      screenshotDir: config.screenshotDirectory,
     );
     // New card objects — drop the lazy pd/utils variant cache (identity-keyed).
     _resolvedCardVariants.clear();
@@ -1000,7 +1000,7 @@ class CatalogController extends ChangeNotifier {
     if (_pendingStatus.isEmpty) return null;
     try {
       await applyStatusChanges(
-        outDir: config.outDirectory,
+        screenshotDir: config.screenshotDirectory,
         changes: {
           for (final e in _pendingStatus.entries)
             e.key: (
@@ -1045,8 +1045,9 @@ class CatalogController extends ChangeNotifier {
   String? swapPreviewImage(
       {required String previewPath, required String candidatePath}) {
     try {
-      if (isShotgenActive(config.outDirectory)) {
-        throw ShotgenLockedException(readShotgenLockPid(config.outDirectory));
+      if (isShotgenActive(config.screenshotDirectory)) {
+        throw ShotgenLockedException(
+            readShotgenLockPid(config.screenshotDirectory));
       }
       swapPreviewCandidate(
           previewPath: previewPath, candidatePath: candidatePath);

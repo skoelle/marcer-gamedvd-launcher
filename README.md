@@ -137,13 +137,17 @@ Save, the manual screenshot curation described below.
 1. **Download** the ZIP for your platform from the
    [Releases](https://github.com/skoelle/marcer-gamedvd-launcher/releases) page
    and extract it.
-2. **Configure** — copy the shipped `desktop.config.example.json` next to the
-   executable (or the `.app`), rename it to `desktop.config.json`, and set your
-   absolute paths (at minimum `RootDirectory`). See *Configuration* below.
-3. **Run** `MarcerGameDVDLauncher` (`MarcerGameDVDLauncher.exe` /
+2. **Run** `MarcerGameDVDLauncher` (`MarcerGameDVDLauncher.exe` /
    `MarcerGameDVDLauncher.app`).
+3. **Set up your paths** in the first-run **setup page** (shown automatically
+   when no `desktop.config.json` exists): fill in the paths, watch the live
+   ✓/✗ per field, and **Save** — the config file is written next to the
+   executable (macOS: next to the `.app`) and the app continues into the
+   catalog. See *Configuration* below.
 
-Without a config the app opens a page listing the folders it searched.
+Alternatively, copy the shipped `desktop.config.example.json` next to the
+executable (or the `.app`), rename it to `desktop.config.json`, and edit it by
+hand before the first start.
 
 ### 📥 Download
 
@@ -169,14 +173,37 @@ The app looks for `desktop.config.json` in this order (first existing wins):
 2. the directory of the executable (portable ZIP release)
 3. macOS only: the folder containing the `.app` bundle
 
-Without a config the app shows a page listing the searched locations. Template: [`apps/marcer_desktop/desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json).
+When no config is found the app opens the **first-run setup page** (it lists
+the searched locations and the target file it will write). A config that exists
+but cannot be read shows an error page with a **Setup…** button. Template: [`apps/marcer_desktop/desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json).
+
+> **Upgrading:** the config keys were renamed (`OutDirectory` →
+> `ScreenshotDirectory`, `DataDirectory` → `GameinfoDirectory`); the old names
+> are no longer read. Rename them in an existing `desktop.config.json` (or fix
+> them via the ⚙ settings editor), otherwise the screenshot/gameinfo paths stay
+> empty.
+
+The ⚙ gear button in the top bar opens an in-app **settings editor** for all
+path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
+`GameinfoDirectory`, `Hatari.Executable`, `Hatari.ConfigFile`) with native
+directory/file pickers. **Save** writes them back to the same
+`desktop.config.json` and reloads the catalog in place, so new paths apply
+without restarting the app; window settings and the remaining fields stay
+untouched.
+
+Every path field is validated live with a status icon: a green ✓ when the
+directory/file exists, a red ✗ when it does not (or a required field is empty),
+no icon for an empty optional field. **Save** is disabled until all fields are
+valid — an empty optional field is fine, but a filled-in wrong path blocks
+saving. `RootDirectory` is the only mandatory field; `Hatari.Executable` is
+optional (needed to launch, not to browse).
 
 | Field | Required | Notes |
 |---|---|---|
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
-| `OutDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
-| `DataDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
+| `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
+| `GameinfoDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
 | `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
 | `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |

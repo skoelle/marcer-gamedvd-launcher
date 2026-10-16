@@ -25,11 +25,11 @@ class ShotgenLockedException implements Exception {
       : 'shotgen is running (pid $pid)';
 }
 
-String shotgenLockPath(String outDir) => '$outDir/$kShotgenLockName';
+String shotgenLockPath(String screenshotDir) => '$screenshotDir/$kShotgenLockName';
 
 /// PID from the lock file, or null when absent/blank/not a number.
-int? readShotgenLockPid(String outDir) {
-  final lock = File(shotgenLockPath(outDir));
+int? readShotgenLockPid(String screenshotDir) {
+  final lock = File(shotgenLockPath(screenshotDir));
   if (!lock.existsSync()) return null;
   return int.tryParse(lock.readAsStringSync().trim());
 }
@@ -52,8 +52,8 @@ bool isPidAlive(int pid) {
 
 /// True when the lock file exists and its pid is still alive (stale locks
 /// from crashed runs are ignored, like `shotgen.acquire_lock`).
-bool isShotgenActive(String outDir) {
-  final pid = readShotgenLockPid(outDir);
+bool isShotgenActive(String screenshotDir) {
+  final pid = readShotgenLockPid(screenshotDir);
   return pid != null && isPidAlive(pid);
 }
 
@@ -72,15 +72,15 @@ int? get selfPid {
 
 /// Claims the shotgen lock for this process; throws [ShotgenLockedException]
 /// when a live run holds it (stale locks are overwritten).
-void acquireShotgenLock(String outDir) {
-  final pid = readShotgenLockPid(outDir);
+void acquireShotgenLock(String screenshotDir) {
+  final pid = readShotgenLockPid(screenshotDir);
   if (pid != null && isPidAlive(pid)) throw ShotgenLockedException(pid);
-  File(shotgenLockPath(outDir)).writeAsStringSync('${selfPid ?? 0}');
+  File(shotgenLockPath(screenshotDir)).writeAsStringSync('${selfPid ?? 0}');
 }
 
-void releaseShotgenLock(String outDir) {
+void releaseShotgenLock(String screenshotDir) {
   try {
-    File(shotgenLockPath(outDir)).deleteSync();
+    File(shotgenLockPath(screenshotDir)).deleteSync();
   } catch (_) {
     // already gone
   }
@@ -129,16 +129,16 @@ typedef StatusKindChange = ({String status, String? kind});
 /// `preview_is_desktop` into the per-entry `<base>.json` meta when present.
 /// The lock is always released, also on error.
 Future<void> applyStatusChanges({
-  required String outDir,
+  required String screenshotDir,
   required Map<String, StatusKindChange> changes,
 }) async {
   if (changes.isEmpty) return;
-  acquireShotgenLock(outDir);
+  acquireShotgenLock(screenshotDir);
   try {
     final loaded = <String, Map<String, dynamic>>{};
     var anyFile = false;
     for (final name in kSectionIndexNames.values) {
-      final file = File('$outDir/$name');
+      final file = File('$screenshotDir/$name');
       if (!file.existsSync()) {
         loaded[name] = {'version': 1, 'entries': <String, dynamic>{}};
         continue;
@@ -163,32 +163,32 @@ Future<void> applyStatusChanges({
       }
     }
     for (final name in touched) {
-      final file = File('$outDir/$name');
-      final tmp = File('$outDir/$name.tmp');
+      final file = File('$screenshotDir/$name');
+      final tmp = File('$screenshotDir/$name.tmp');
       tmp.writeAsStringSync(_encodeSorted(loaded[name]!));
       tmp.renameSync(file.path);
     }
     for (final e in changes.entries) {
-      _updateMirrorMeta(outDir, e.key, e.value.status, e.value.kind);
+      _updateMirrorMeta(screenshotDir, e.key, e.value.status, e.value.kind);
     }
   } finally {
-    releaseShotgenLock(outDir);
+    releaseShotgenLock(screenshotDir);
   }
 }
 
 /// Mirrors the new status/kind into the sidecar meta
-/// `<OutDirectory>/<dirname(rel)>/<base>.json` when it exists (written for
+/// `<ScreenshotDirectory>/<dirname(rel)>/<base>.json` when it exists (written for
 /// `done`/`desktop` entries by shotgen). A broken sidecar must not abort
 /// the save. `preview_is_desktop` matches shotgen's definition.
 void _updateMirrorMeta(
-    String outDir, String rel, String status, String? kind) {
+    String screenshotDir, String rel, String status, String? kind) {
   final idx = rel.lastIndexOf('/');
   final dir = idx == -1 ? '' : rel.substring(0, idx);
   final name = idx == -1 ? rel : rel.substring(idx + 1);
   final base =
       name.toLowerCase().endsWith('.zip') ? name.substring(0, name.length - 4) : name;
   final metaPath =
-      dir.isEmpty ? '$outDir/$base.json' : '$outDir/$dir/$base.json';
+      dir.isEmpty ? '$screenshotDir/$base.json' : '$screenshotDir/$dir/$base.json';
   final metaFile = File(metaPath);
   if (!metaFile.existsSync()) return;
   try {

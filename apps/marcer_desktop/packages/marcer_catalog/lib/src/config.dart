@@ -13,8 +13,8 @@ class DesktopConfig {
   DesktopConfig({
     required this.rootDirectory,
     this.patchDirectory = '',
-    this.outDirectory = '',
-    this.dataDirectory = '',
+    this.screenshotDirectory = '',
+    this.gameinfoDirectory = '',
     this.hatariExecutable = '',
     this.hatariConfigFile = '',
     this.hatariArgsTemplate = r'-c "{cfg}" --disk-a "{zip}"',
@@ -29,8 +29,8 @@ class DesktopConfig {
 
   final String rootDirectory;
   final String patchDirectory;
-  final String outDirectory;
-  final String dataDirectory;
+  final String screenshotDirectory;
+  final String gameinfoDirectory;
   final String hatariExecutable;
   final String hatariConfigFile;
   final String hatariArgsTemplate;
@@ -80,8 +80,8 @@ class DesktopConfig {
     return DesktopConfig(
       rootDirectory: (map['RootDirectory'] ?? '') as String,
       patchDirectory: (map['PatchDirectory'] ?? '') as String,
-      outDirectory: (map['OutDirectory'] ?? '') as String,
-      dataDirectory: (map['DataDirectory'] ?? '') as String,
+      screenshotDirectory: (map['ScreenshotDirectory'] ?? '') as String,
+      gameinfoDirectory: (map['GameinfoDirectory'] ?? '') as String,
       hatariExecutable: (hatari['Executable'] ?? '') as String,
       hatariConfigFile: (hatari['ConfigFile'] ?? '') as String,
       hatariArgsTemplate:
@@ -96,10 +96,75 @@ class DesktopConfig {
     );
   }
 
+  /// Returns a copy with the given fields replaced (used by the in-app
+  /// settings editor to build an edited config while keeping the fields it
+  /// does not expose, e.g. window size, `ShowCandidates`, `DefaultStatus`).
+  DesktopConfig copyWith({
+    String? rootDirectory,
+    String? patchDirectory,
+    String? screenshotDirectory,
+    String? gameinfoDirectory,
+    String? hatariExecutable,
+    String? hatariConfigFile,
+    String? hatariArgsTemplate,
+    bool? showCandidates,
+    String? defaultStatus,
+    String? appDir,
+    List<String>? searchDirs,
+    int? windowWidth,
+    int? windowHeight,
+    bool? windowMaximized,
+  }) {
+    return DesktopConfig(
+      rootDirectory: rootDirectory ?? this.rootDirectory,
+      patchDirectory: patchDirectory ?? this.patchDirectory,
+      screenshotDirectory: screenshotDirectory ?? this.screenshotDirectory,
+      gameinfoDirectory: gameinfoDirectory ?? this.gameinfoDirectory,
+      hatariExecutable: hatariExecutable ?? this.hatariExecutable,
+      hatariConfigFile: hatariConfigFile ?? this.hatariConfigFile,
+      hatariArgsTemplate: hatariArgsTemplate ?? this.hatariArgsTemplate,
+      showCandidates: showCandidates ?? this.showCandidates,
+      defaultStatus: defaultStatus ?? this.defaultStatus,
+      appDir: appDir ?? this.appDir,
+      searchDirs: searchDirs ?? this.searchDirs,
+      windowWidth: windowWidth ?? this.windowWidth,
+      windowHeight: windowHeight ?? this.windowHeight,
+      windowMaximized: windowMaximized ?? this.windowMaximized,
+    );
+  }
+
+  /// Serializes the persisted schema of `desktop.config.json` (PLAN.md §3).
+  /// Runtime-only fields ([appDir], [searchDirs]) are not written.
+  Map<String, dynamic> toJson() => {
+        'RootDirectory': rootDirectory,
+        'PatchDirectory': patchDirectory,
+        'ScreenshotDirectory': screenshotDirectory,
+        'GameinfoDirectory': gameinfoDirectory,
+        'Hatari': {
+          'Executable': hatariExecutable,
+          'ConfigFile': hatariConfigFile,
+          'ArgsTemplate': hatariArgsTemplate,
+        },
+        'ShowCandidates': showCandidates,
+        'DefaultStatus': defaultStatus,
+        'Window': {
+          'width': windowWidth,
+          'height': windowHeight,
+          'maximized': windowMaximized,
+        },
+      };
+
+  /// Writes this config as pretty-printed JSON (with a trailing newline) to
+  /// [path]. Used by the in-app settings editor (see `settings_dialog.dart`).
+  void save(String path) {
+    final text = '${const JsonEncoder.withIndent('  ').convert(toJson())}\n';
+    File(path).writeAsStringSync(text);
+  }
+
   /// Default gameinfo directory convention `<PatchDirectory>/../Data`
-  /// (ANALYSIS-game-data.md §5.5) when [dataDirectory] is empty.
-  String resolveDataDirectory() {
-    if (dataDirectory.isNotEmpty) return dataDirectory;
+  /// (ANALYSIS-game-data.md §5.5) when [gameinfoDirectory] is empty.
+  String resolveGameinfoDirectory() {
+    if (gameinfoDirectory.isNotEmpty) return gameinfoDirectory;
     if (patchDirectory.isEmpty) return '';
     final dir = Directory('$patchDirectory/../Data');
     try {

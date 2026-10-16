@@ -16,6 +16,7 @@ dependencies:
   marcer_catalog:
     path: packages/marcer_catalog
   window_manager: ^0.5.2
+  file_picker: ^11.0.3
 
 dev_dependencies:
   flutter_test:

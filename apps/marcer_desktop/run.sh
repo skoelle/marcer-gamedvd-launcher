@@ -18,8 +18,8 @@ if [ ! -f "$CONFIG" ] && [ -f "$REPO_ROOT/local/paths.env" ]; then
 {
   "RootDirectory": "${MARCER_ROOT_DIR:-}",
   "PatchDirectory": "${MARCER_PATCH_DIR:-}",
-  "OutDirectory": "${MARCER_OUT_DIR:-}",
-  "DataDirectory": "${MARCER_DATA_DIR:-}",
+  "ScreenshotDirectory": "${MARCER_OUT_DIR:-}",
+  "GameinfoDirectory": "${MARCER_DATA_DIR:-}",
   "Hatari": {
     "Executable": "${MARCER_HATARI_BIN:-hatari}",
     "ConfigFile": "",

@@ -138,12 +138,12 @@ void main() {
       final f = File('${tmp.path}/desktop.config.json')
         ..writeAsStringSync('''
         {"RootDirectory": "/r", "PatchDirectory": "/p",
-         "OutDirectory": "/o", "DataDirectory": "/d",
+         "ScreenshotDirectory": "/o", "GameinfoDirectory": "/d",
          "ShowCandidates": false, "DefaultStatus": "done",
          "Window": {"width": 1024, "height": 768, "maximized": false}}''');
       final c = DesktopConfig.load(f.path);
       expect(c.rootDirectory, '/r');
-      expect(c.outDirectory, '/o');
+      expect(c.screenshotDirectory, '/o');
       expect(c.windowWidth, 1024);
       expect(c.windowMaximized, isFalse);
       expect(c.hatariArgsTemplate, contains('{zip}'));
@@ -160,6 +160,83 @@ void main() {
       expect(c.windowMaximized, isTrue, reason: 'start maximized by default');
       expect(c.windowWidth, 1280);
       expect(c.windowHeight, 800);
+    });
+
+    test('copyWith replaces only the given path fields', () {
+      final c = DesktopConfig(
+        rootDirectory: '/r',
+        patchDirectory: '/p',
+        screenshotDirectory: '/o',
+        gameinfoDirectory: '/d',
+        hatariExecutable: '/hatari',
+        hatariConfigFile: '',
+        showCandidates: false,
+        defaultStatus: 'done',
+        windowWidth: 1024,
+        windowHeight: 768,
+        windowMaximized: false,
+      );
+      final edited = c.copyWith(
+        rootDirectory: '/new-root',
+        hatariExecutable: '/new-hatari',
+      );
+      expect(edited.rootDirectory, '/new-root');
+      expect(edited.hatariExecutable, '/new-hatari');
+      expect(edited.patchDirectory, '/p');
+      expect(edited.screenshotDirectory, '/o');
+      expect(edited.gameinfoDirectory, '/d');
+      expect(edited.showCandidates, isFalse);
+      expect(edited.defaultStatus, 'done');
+      expect(edited.windowWidth, 1024);
+      expect(edited.windowMaximized, isFalse);
+    });
+
+    test('toJson/save round-trips every persisted field', () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync('{"RootDirectory": "/r"}');
+      final original = DesktopConfig.load(f.path);
+      final edited = original.copyWith(
+        rootDirectory: '/root',
+        patchDirectory: '/patch',
+        screenshotDirectory: '/out',
+        gameinfoDirectory: '/data',
+        hatariExecutable: '/hatari/bin/hatari',
+        hatariConfigFile: '/cfg/hatari.cfg',
+        hatariArgsTemplate: '-c "{cfg}" --disk-a "{zip}"',
+        showCandidates: false,
+        defaultStatus: 'done',
+        windowWidth: 1600,
+        windowHeight: 900,
+        windowMaximized: false,
+      );
+      edited.save(f.path);
+      final reloaded = DesktopConfig.load(f.path);
+      expect(reloaded.rootDirectory, '/root');
+      expect(reloaded.patchDirectory, '/patch');
+      expect(reloaded.screenshotDirectory, '/out');
+      expect(reloaded.gameinfoDirectory, '/data');
+      expect(reloaded.hatariExecutable, '/hatari/bin/hatari');
+      expect(reloaded.hatariConfigFile, '/cfg/hatari.cfg');
+      expect(reloaded.hatariArgsTemplate, '-c "{cfg}" --disk-a "{zip}"');
+      expect(reloaded.showCandidates, isFalse);
+      expect(reloaded.defaultStatus, 'done');
+      expect(reloaded.windowWidth, 1600);
+      expect(reloaded.windowHeight, 900);
+      expect(reloaded.windowMaximized, isFalse);
+    });
+
+    test('save writes empty optional paths and a trailing newline', () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync('{"RootDirectory": "/r"}');
+      final c = DesktopConfig.load(f.path).copyWith(rootDirectory: '/r');
+      c.save(f.path);
+      final text = f.readAsStringSync();
+      expect(text.endsWith('\n'), isTrue);
+      final reloaded = DesktopConfig.load(f.path);
+      expect(reloaded.patchDirectory, '');
+      expect(reloaded.screenshotDirectory, '');
+      expect(reloaded.gameinfoDirectory, '');
+      expect(reloaded.hatariConfigFile, '');
     });
   });
 }

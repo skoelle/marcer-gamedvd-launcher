@@ -49,9 +49,9 @@ class CatalogUniverse {
   factory CatalogUniverse.build({
     required ScreenshotIndices indices,
     required GameInfoIndex info,
-    required String outDir,
+    required String screenshotDir,
   }) {
-    final fullPng = _fullPngFn(outDir);
+    final fullPng = _fullPngFn(screenshotDir);
 
     final cracked = _buildIndexedSection(
       kind: 'cracked',
@@ -220,15 +220,15 @@ _SectionBuild _buildIndexedSection({
 }
 
 /// Gallery `_full_png`: OUT-relative `dirname(rel)/name`, resolved against
-/// [outDir] to an absolute path. Returns null for empty names.
-String? Function(String rel, String? baseName) _fullPngFn(String outDir) {
+/// [screenshotDir] to an absolute path. Returns null for empty names.
+String? Function(String rel, String? baseName) _fullPngFn(String screenshotDir) {
   return (String rel, String? baseName) {
     if (baseName == null || baseName.isEmpty) return null;
     final idx = rel.lastIndexOf('/');
     final relDir = idx == -1 ? '' : rel.substring(0, idx);
     return relDir.isEmpty
-        ? '$outDir/$baseName'
-        : '$outDir/$relDir/$baseName';
+        ? '$screenshotDir/$baseName'
+        : '$screenshotDir/$relDir/$baseName';
   };
 }
 
@@ -312,29 +312,29 @@ class CatalogBundle {
 
   /// Loads everything synchronously (call inside an isolate).
   static CatalogBundle loadSync({
-    required String outDir,
-    required String dataDir,
+    required String screenshotDir,
+    required String gameinfoDir,
   }) {
     final warnings = <String>[];
 
-    final index = ScreenshotIndices.load(outDir);
+    final index = ScreenshotIndices.load(screenshotDir);
     warnings.addAll(index.warnings);
 
     GameInfoIndex info;
-    if (dataDir.isEmpty) {
+    if (gameinfoDir.isEmpty) {
       info = GameInfoIndex.load('');
-      warnings.add('Game metadata: DataDirectory not configured');
+      warnings.add('Game metadata: GameinfoDirectory not configured');
     } else {
-      info = GameInfoIndex.load(dataDir);
+      info = GameInfoIndex.load(gameinfoDir);
       if (info.length == 0) {
-        warnings.add('Game metadata: no games found in $dataDir');
+        warnings.add('Game metadata: no games found in $gameinfoDir');
       }
     }
 
     final universe = CatalogUniverse.build(
       indices: index,
       info: info,
-      outDir: outDir,
+      screenshotDir: screenshotDir,
     );
     return CatalogBundle(
       index: index,
