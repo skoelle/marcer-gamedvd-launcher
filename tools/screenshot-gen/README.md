@@ -30,6 +30,8 @@ tools/screenshot-gen/run.sh index --scope utils       # build index-utils.json
 tools/screenshot-gen/run.sh run --scope utils --jobs 8 --limit 50
 tools/screenshot-gen/run.sh detect --scope utils
 tools/screenshot-gen/run.sh prune --scope utils
+tools/screenshot-gen/run.sh index --scope pd          # build index-pd.json
+tools/screenshot-gen/run.sh run --scope pd --jobs 4 --limit 16
 
 # Desktop entries (game never started): find the GEM program icon in the
 # existing desktop previews, then boot once more and click it:
@@ -73,6 +75,7 @@ Each scope has its own tree list and its own index file:
 |--------|--------------------------------------------|--------------------|
 | `cracked` (default) | `Title Sorted/Cracked Games - Title Sorted` | `index.json`   |
 | `utils` (`--scope utils`) | `Title Sorted/Utilitys - Title Sorted` | `index-utils.json` |
+| `pd` (`--scope pd`) | `Title Sorted/PD Games - Title Sorted` | `index-pd.json`   |
 
 The default scope always maps to `index.json` — that is the file the
 gallery and the desktop app read (the cracked view); other scope index
@@ -349,6 +352,17 @@ After changing `exclude_dirs`, run `index` to rebuild the index (removed
 entries are dropped automatically) and then `prune` to delete their
 leftover logs and empty output directories.
 
+## Mono directories
+
+A game folder whose name ends with `mono_dir_suffix` (default `"Mono"`,
+matched case-insensitively against the ZIP's **parent directory**, e.g.
+`Abalone - Mono`) is booted with Hatari `--mono --tos-res high`: monochrome
+monitor plus forced ST high resolution 640x400. The flags are appended
+entry-level on top of the profile's arguments; `monitor: mono`/`color` is
+recorded in the index entry and the metadata JSON. Set the key to `""` to
+disable the rule. The rule applies in every scope (see SPEC-screenshot-generator
+§4.6).
+
 ## Config
 
 Defaults live in `shotgen.py`. Override via `config.example.json` (copy and
@@ -364,8 +378,10 @@ Scope configuration:
   "scope_default": "cracked",
   "scopes": {
     "cracked": { "trees": ["Title Sorted/Cracked Games - Title Sorted"] },
-    "utils":   { "trees": ["Title Sorted/Utilitys - Title Sorted"] }
-  }
+    "utils":   { "trees": ["Title Sorted/Utilitys - Title Sorted"] },
+    "pd":      { "trees": ["Title Sorted/PD Games - Title Sorted"] }
+  },
+  "mono_dir_suffix": "Mono"
 }
 ```
 

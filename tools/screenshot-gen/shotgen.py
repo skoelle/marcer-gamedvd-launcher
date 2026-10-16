@@ -62,7 +62,16 @@ DEFAULT_CONFIG = {
                 "Title Sorted/Utilitys - Title Sorted",
             ],
         },
+        "pd": {
+            "trees": [
+                "Title Sorted/PD Games - Title Sorted",
+            ],
+        },
     },
+    # Directory names ending with this suffix (case-insensitive, matched
+    # against the ZIP's parent directory, e.g. "Abalone - Mono") are booted
+    # with --mono --tos-res high (ST high res, 640x400). Empty = disabled.
+    "mono_dir_suffix": "Mono",
     # Legacy (pre-scopes) single-scope configuration: used only when the
     # merged config carries no "scopes" entry at all.
     "scope_trees": [
@@ -1104,6 +1113,14 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     rel_path = Path(rel)
     parts = rel_path.parts
 
+    # Mono directories (config mono_dir_suffix, e.g. "Abalone - Mono"):
+    # boot with a monochrome monitor in ST high resolution (640x400).
+    mono_suffix = (cfg.get("mono_dir_suffix") or "").strip()
+    parent_name = rel_path.parent.name if len(parts) > 1 else ""
+    is_mono = bool(mono_suffix) and \
+        parent_name.strip().lower().endswith(mono_suffix.lower())
+    monitor = "mono" if is_mono else "color"
+
     # src_rel carries the folder spelling the file actually has under its
     # own layer root when the canonical output spelling differs (case-only
     # patch-folder win). Fall back to rel for legacy entries.
@@ -1169,6 +1186,11 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "--log-file", str(hatari_log),
             "--log-level", "info",
         ] + prof.get("extra_args", [])
+        if is_mono:
+            # --mono selects the monochrome monitor (TOS then boots to
+            # high res); --tos-res high forces 640x400 explicitly.
+            cmd += ["--mono", "--tos-res", "high"]
+            log(f"mono directory ({parent_name}): --mono --tos-res high")
 
         env = {**os.environ, "DISPLAY": P["display"]}
         log(f"hatari start ({' '.join(cmd[:6])} ...)")
@@ -1397,6 +1419,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             entry["duration_s"] = round(time.time() - t_start, 1)
             entry["zip_contents"] = zip_contents
             entry["capture_method"] = "cmd-fifo"
+            entry["monitor"] = monitor
             if preview:
                 # a fresh preview supersedes the drive-LED reset state
                 entry.pop("drive_led", None)
@@ -1413,6 +1436,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "source_size": entry["size"],
             "profile": prof["name"],
             "machine": prof["machine"],
+            "monitor": monitor,
             "status": status,
             "kind": kind,
             "preview_is_desktop": bool(kind in

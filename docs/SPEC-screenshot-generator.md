@@ -267,6 +267,8 @@ Defined scopes:
   with its patch counterpart).
 - `utils` (opt-in via `--scope utils`):
   `Title Sorted/Utilitys - Title Sorted` (merged with its patch counterpart).
+- `pd` (opt-in via `--scope pd`):
+  `Title Sorted/PD Games - Title Sorted` (merged with its patch counterpart).
 
 Every subcommand (`index`, `run`, `detect`, `reclassify`,
 `cleanup-drive-led`, `prune`) takes `--scope` and works exclusively on the
@@ -280,7 +282,6 @@ verified 2026-10-16: 12,429 indexed ZIPs, pilot run of 50 entries with
 
 Explicitly out of scope for now (no scope defined):
 
-- All `PD Games` trees
 - `Bonus`, `Tools`, `Falcon 030`
 - All `Crew Sorted` trees
 - Everything else
@@ -307,6 +308,21 @@ files are invisible to them until a future join step.
 - Crack-variants inside one game folder are **not** multi-disk sets. Every
   crack ZIP gets its own screenshots, because crack intros differ
   (user decision).
+
+### 4.6 Mono directories (user decision)
+
+- A folder whose name ends with the configured suffix (config
+  `mono_dir_suffix`, default `"Mono"`, matched case-insensitively against
+  the ZIP's **parent directory** name, e.g. `Abalone - Mono`) is booted
+  with Hatari `--mono --tos-res high`: monochrome monitor plus explicitly
+  forced ST high resolution 640x400. The folder `1000 Bornes - Col and Mon`
+  does not match (ends with `Mon`, not `Mono`).
+- The flags are appended entry-level on top of the selected profile's
+  arguments; `monitor` (`mono` | `color`) is stored in the index entry and
+  the metadata JSON. The capture pipeline, timepoints and filters are
+  unchanged (screenshots are 640x400 for mono entries).
+- Applies in every scope (the rule is a config key, not a per-scope key).
+  Verified on the PD scope (section 14.1.2).
 
 ---
 
@@ -951,6 +967,7 @@ deleted by the one-off data repair that accompanies the merge change
   "source_size": 181107,
   "profile": "st",
   "machine": "st",
+  "monitor": "color",
   "tos": "TOS104GE.IMG",
   "status": "done",
   "kind": "game",
@@ -982,7 +999,8 @@ Allowed values for `kind` (section 8): `game`, `desktop`, `textscreen`,
 `darkscreen`, `no_game_image` (and `null` for an entry that has no
 preview, e.g. after a drive-LED reset, and for every `no_usable_shots`
 entry — that status never carries a kind, section 8.5). `status` stays
-`desktop` for all three desktop sub-kinds.
+`desktop` for all three desktop sub-kinds. `monitor` is `mono` when the
+entry was booted in mono mode (section 4.6), otherwise `color`.
 
 The file is written only for entries that end as `done` or `desktop`.
 An entry ending as `no_usable_shots` (section 8.5) can have a preview but
@@ -995,7 +1013,8 @@ from an earlier `done`/`desktop` run is deleted, since its `status`,
 Array or object map keyed by entry relative path with: `status`, `kind`
 (`game` | `desktop` | `textscreen` | `darkscreen` | `no_game_image` | null,
 sections 8 and 8.4.1),
-`size`, `mtime`, `profile`, `last_run`, `preview` (relative PNG name, or
+`size`, `mtime`, `profile`, `monitor` (`mono` | `color`, section 4.6),
+`last_run`, `preview` (relative PNG name, or
 null when no image exists at all), `candidates` (list of `_cNN` names,
 disjoint from the preview, section 8.6), and for the
 click retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
@@ -1095,7 +1114,8 @@ MARCER_DISPLAY=...
 `scope_default` + `scopes` (per scope: tree list and optional index file
 name; the default scope maps to `index.json`, every other scope to
 `index-<name>.json`, section 4.4; legacy `scope_trees` is still accepted
-when no `scopes` entry exists), `exclude_dirs` (sub-directory names never
+when no `scopes` entry exists), `mono_dir_suffix` (folder suffix that
+triggers `--mono --tos-res high`, section 4.6), `exclude_dirs` (sub-directory names never
 scanned, section 4.4), time points, timeouts, filter thresholds (the
 black/empty thresholds `black_mean_max`, `black_std_max`,
 `black_std_content_min` of section 8.1 and the desktop sub-kind thresholds
@@ -1209,6 +1229,24 @@ Resolved decisions:
   *(verified)*. Gallery and desktop app (cracked view) unchanged, as they
   read only `index.json` *(verified)*.
 
+### 14.1.2 PD scope + mono pilot (verified 2026-10-16)
+
+- `index --scope pd`: 6,097 entries written to `index-pd.json` (5,979
+  pending, 118 `skipped_disk_n`); `index.json` (cracked) and
+  `index-utils.json` byte-identical afterwards *(verified)*.
+- `run --scope pd --limit 16 --jobs 4`: 16 entries in 3.4 min — 15
+  `desktop`, 1 `done`. Every `… - Mono` folder (6 of the 16) logged
+  `mono directory (<name>): --mono --tos-res high` and produced 640x400
+  screenshots; `1000 Bornes - Col and Mon` correctly stayed color.
+  Index entries and metadata carry `monitor: mono` *(verified)*.
+- The mono previews show genuine ST-high GEM screens (e.g. the mono
+  desktop of `123 Jumble - Mono`). Most pd entries end `desktop` (program
+  menus / GEM desktop without auto-boot) — expected for the pilot window,
+  same shape as the utils pilot; follow-up is `detect` + click retry.
+  The color-click-retry templates (`icon-prg.png`, `icon-drive.png`) are
+  2–3-color black/white images, so detection on mono GEM desktops is
+  expected to work.
+
 ### 14.2 Adjustment
 
 - Tune time points and thresholds based on pilot data.
@@ -1317,6 +1355,9 @@ A conforming implementation satisfies all of the following.
       `click_result`). Each worker resolves its own Hatari window by process
       id, so `--jobs N` is safe, and all intermediate chain screenshots are
       kept as `_cNN` candidates.
+- [ ] P8 Directories ending with `mono_dir_suffix` (case-insensitive, the
+      ZIP's parent directory) are booted with `--mono --tos-res high`, and
+      `monitor: mono` is recorded in index and metadata (section 4.6).
 
 **Filtering**
 - [ ] F1 Black or empty shots are rejected by configurable thresholds.
