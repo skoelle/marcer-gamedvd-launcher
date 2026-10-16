@@ -66,10 +66,11 @@ Save, the manual screenshot curation described below.
   are ordered the same way (`done game` → other `done` → `desktop`), so a
   late-sorting game shot is never pushed out by textscreens (same rules
   as the gallery webapp).
-- **Gallery-style status bar** — with-screenshot ratio (games), status
-  counts as `done <games> (<zips> zips)`, matched folder count,
-  `index.json` mtime and gameinfo generation time; the running app
-  version (right-aligned).
+- **Gallery-style status bar** — coverage as separate games segments
+  (`3287 folders`, `3211 with screenshot`), status counts as
+  `done <games> (<zips> zips)`, gameinfo coverage (`gameinfo N folders` /
+  `N without gameinfo`), `index.json` mtime and gameinfo generation time;
+  the running app version (right-aligned).
 - **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
   `desktop text` / `desktop black` / `pending` / … . `pending` matches a
   game when **at least one** of its ZIPs is pending — the same rule the
