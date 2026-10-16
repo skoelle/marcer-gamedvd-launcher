@@ -562,8 +562,11 @@ elements *(palette frozen in `tools/gallery/static/style.css`)*:
 - Background `#14181c`, text `#dde`, card `#1c2228`, headings `#9ad`,
   badge colors: game `#173`/`#cfc`, desktop `#331`/`#fd6`, failed
   `#411`/`#f88`, placeholder `#333`/`#aaa`.
-- Cards ~220 px wide in a wrapping flex grid, `image-rendering: pixelated`
-  for the pixel-art screenshots, `loading="lazy"` on all images.
+- Cards ~220 px wide in a wrapping flex grid, downscaled with the browser's
+  high-quality resampling (`image-rendering: auto`) so shrunken 832x552
+  screenshots stay smooth like in the desktop app; nearest-neighbor
+  (`image-rendering: pixelated`) is reserved for the integer-scaled lightbox
+  main image. `loading="lazy"` on all images.
 - New components (statistics bar, facet controls, letter nav, hover panel,
   lightbox) are styled consistently with the same palette and border/radius
   language.
