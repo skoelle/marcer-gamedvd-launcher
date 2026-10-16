@@ -22,14 +22,60 @@ List<String> configSearchDirs({
 }) {
   final dirs = <String>[cwd, exeDir];
   if (isMacOS) {
-    // exeDir = <...>/Foo.app/Contents/MacOS → parent of the .app bundle.
-    dirs.add(p.normalize(p.join(exeDir, '..', '..', '..')));
+    dirs.add(macAppParent(exeDir));
   }
   final seen = <String>{};
   return [
     for (final d in dirs)
       if (seen.add(d)) d,
   ];
+}
+
+/// Folder *containing* the macOS `.app` bundle, given the directory of the
+/// executable inside `Foo.app/Contents/MacOS`.
+String macAppParent(String exeDir) =>
+    p.normalize(p.join(exeDir, '..', '..', '..'));
+
+/// Ordered directories for writing a **new** `desktop.config.json` when none
+/// exists (first-run setup), most portable first, current working directory
+/// as a writability fallback:
+///
+/// - macOS: the folder containing the `.app` bundle, then CWD
+/// - Windows/Linux: the executable's directory, then CWD
+///
+/// Duplicates are removed while preserving order.
+List<String> configSaveDirs({
+  required String cwd,
+  required String exeDir,
+  bool isMacOS = false,
+}) {
+  final primary = isMacOS ? macAppParent(exeDir) : exeDir;
+  final seen = <String>{};
+  return [
+    for (final d in [primary, cwd])
+      if (seen.add(d)) d,
+  ];
+}
+
+/// Writes a new config by calling [write] with `<dir>/<fileName>` for each
+/// directory in [dirs] until one succeeds, returning that full path; `null`
+/// when none is writable. Used by the first-run setup (e.g. a read-only
+/// install dir falls back to the next candidate).
+String? writeFirstWritable(
+  List<String> dirs, {
+  required String fileName,
+  required void Function(String path) write,
+}) {
+  for (final dir in dirs) {
+    final candidate = p.join(dir, fileName);
+    try {
+      write(candidate);
+      return candidate;
+    } catch (_) {
+      // Try the next candidate (read-only install dir, missing parent, …).
+    }
+  }
+  return null;
 }
 
 /// Returns the full path of the first `<dir>/<fileName>` for which [exists]

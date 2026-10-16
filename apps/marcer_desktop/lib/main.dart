@@ -20,11 +20,22 @@ import 'widgets/filter_bar.dart';
 import 'widgets/folder_tree.dart';
 import 'widgets/game_lightbox.dart';
 import 'widgets/help_overlay.dart';
+import 'widgets/settings_dialog.dart';
+import 'widgets/setup_page.dart';
 
 Future<void> main() async {
+  final cwd = Directory.current.path;
+  final exeDir = File(Platform.resolvedExecutable).parent.path;
   final searchDirs = configSearchDirs(
-    cwd: Directory.current.path,
-    exeDir: File(Platform.resolvedExecutable).parent.path,
+    cwd: cwd,
+    exeDir: exeDir,
+    isMacOS: Platform.isMacOS,
+  );
+  // Where a new config is written by the first-run setup (portable location
+  // next to the executable / .app, CWD as writability fallback).
+  final saveDirs = configSaveDirs(
+    cwd: cwd,
+    exeDir: exeDir,
     isMacOS: Platform.isMacOS,
   );
   final configPath = resolveConfigPath(
@@ -37,18 +48,14 @@ Future<void> main() async {
     try {
       // Hatari paths + the bundled config resolve against the executable dir;
       // the bundled config is searched in CWD → exe dir → (macOS) .app parent.
-      final exeDir = searchDirs.length > 1 ? searchDirs[1] : searchDirs.first;
       config = DesktopConfig.load(configPath,
           appDir: exeDir, searchDirs: searchDirs);
     } catch (e) {
       configError = '$configPath: $e';
     }
-  } else {
-    configError = 'desktop.config.json not found. Searched:\n'
-        '${searchDirs.map((d) => '  $d').join('\n')}\n\n'
-        'Copy desktop.config.example.json there and rename it to '
-        'desktop.config.json.';
   }
+  // configPath == null && configError == null → no config found: the app
+  // opens the first-run setup page instead of an error hint.
   // Remove *.old leftovers from the previous self-update (best effort;
   // runs in every build so a dev build can also clean a release install).
   unawaited(cleanupOldFiles(installTargetDir(
@@ -78,7 +85,12 @@ Future<void> main() async {
       await windowManager.focus();
     },
   );
-  runApp(MarcerDesktopApp(config: config, configError: configError));
+  runApp(MarcerDesktopApp(
+    config: config,
+    configError: configError,
+    configPath: configPath,
+    saveDirs: saveDirs,
+  ));
   if (maximized) {
     // Windows safeguard: the runner reveals the window on the first frame
     // (win32_window.cpp Show() uses SW_SHOW since the SW_SHOWNORMAL fix) —
@@ -99,10 +111,23 @@ Future<void> main() async {
 }
 
 class MarcerDesktopApp extends StatelessWidget {
-  const MarcerDesktopApp({super.key, this.config, this.configError});
+  const MarcerDesktopApp({
+    super.key,
+    this.config,
+    this.configError,
+    this.configPath,
+    this.saveDirs = const [],
+  });
 
   final DesktopConfig? config;
   final String? configError;
+
+  /// Resolved `desktop.config.json` path, used by the settings editor to
+  /// save edits back to the same file.
+  final String? configPath;
+
+  /// Candidate directories for a first-run config file (see [configSaveDirs]).
+  final List<String> saveDirs;
 
   @override
   Widget build(BuildContext context) {
@@ -110,17 +135,116 @@ class MarcerDesktopApp extends StatelessWidget {
       title: 'MarcerGameDVDLauncher',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      home: configError != null
-          ? _ConfigErrorPage(message: configError!)
-          : HomePage(config: config!),
+      home: _AppRoot(
+        config: config,
+        configError: configError,
+        configPath: configPath,
+        saveDirs: saveDirs,
+      ),
+    );
+  }
+}
+
+/// Owns the live config so the first-run setup can hand a freshly written
+/// config to [HomePage] without restarting: no config → [SetupPage], an
+/// unreadable config → [_ConfigErrorPage] with a setup shortcut, otherwise
+/// straight to the catalog.
+class _AppRoot extends StatefulWidget {
+  const _AppRoot({
+    required this.config,
+    required this.configError,
+    required this.configPath,
+    required this.saveDirs,
+  });
+
+  final DesktopConfig? config;
+  final String? configError;
+  final String? configPath;
+  final List<String> saveDirs;
+
+  @override
+  State<_AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<_AppRoot> {
+  DesktopConfig? _config;
+  String? _configPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _config = widget.config;
+    _configPath = widget.configPath;
+  }
+
+  void _onConfigured(DesktopConfig config, String path) {
+    setState(() {
+      _config = config;
+      _configPath = path;
+    });
+  }
+
+  /// Error-page shortcut: modal settings editor for the broken config file.
+  Future<void> _openSetupForError() async {
+    final edited = await showSettingsDialog(
+      context,
+      config: DesktopConfig(rootDirectory: ''),
+      title: 'Setup',
+      subtitle:
+          '${_configPath ?? kConfigFileName} — edit and save to fix it',
+    );
+    if (edited == null || !mounted) return;
+
+    final known = _configPath;
+    final path = known ??
+        writeFirstWritable(
+          widget.saveDirs,
+          fileName: kConfigFileName,
+          write: edited.save,
+        );
+    if (path == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not write desktop.config.json')));
+      return;
+    }
+    try {
+      if (known != null) edited.save(known);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not write $known: $e'),
+          duration: const Duration(seconds: 5)));
+      return;
+    }
+    _onConfigured(edited, path);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final config = _config;
+    if (config != null) {
+      return HomePage(config: config, configPath: _configPath ?? '');
+    }
+    if (widget.configError != null) {
+      return _ConfigErrorPage(
+        message: widget.configError!,
+        onOpenSetup: _openSetupForError,
+      );
+    }
+    return SetupPage(
+      saveDirs: widget.saveDirs,
+      onConfigured: _onConfigured,
     );
   }
 }
 
 class _ConfigErrorPage extends StatelessWidget {
-  const _ConfigErrorPage({required this.message});
+  const _ConfigErrorPage({required this.message, this.onOpenSetup});
 
   final String message;
+
+  /// When set, a button opens the setup to fix/replace the config file.
+  final VoidCallback? onOpenSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -128,9 +252,21 @@ class _ConfigErrorPage extends StatelessWidget {
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: SelectableText(
-            'desktop.config.json error:\n\n$message',
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SelectableText(
+                'desktop.config.json error:\n\n$message',
+                textAlign: TextAlign.center,
+              ),
+              if (onOpenSetup != null) ...[
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: onOpenSetup,
+                  child: const Text('Setup…'),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -139,16 +275,20 @@ class _ConfigErrorPage extends StatelessWidget {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.config});
+  const HomePage({super.key, required this.config, this.configPath = ''});
 
   final DesktopConfig config;
+
+  /// Resolved config file path the settings editor writes to.
+  final String configPath;
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  late final CatalogController _controller;
+  late DesktopConfig _config;
+  late CatalogController _controller;
   final FocusNode _searchFocus = FocusNode(debugLabel: 'search');
 
   /// Shared by the grid/list so Escape in the search field can hand focus
@@ -167,7 +307,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _controller = CatalogController(widget.config);
+    _config = widget.config;
+    _controller = CatalogController(_config);
     _controller.addListener(_onControllerChanged);
     _controller.init();
     _updater.addListener(_onUpdateChanged);
@@ -277,6 +418,39 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Opens the settings editor, persists the edited paths back to
+  /// `desktop.config.json` and reloads the catalog in place so the new
+  /// paths take effect without restarting the app.
+  Future<void> _openSettings() async {
+    final edited = await showSettingsDialog(context, config: _config);
+    if (edited == null || !mounted) return;
+    try {
+      edited.save(widget.configPath);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Could not save desktop.config.json: $e'),
+            duration: const Duration(seconds: 5)),
+      );
+      return;
+    }
+    _applyConfig(edited);
+  }
+
+  /// Rebuilds the catalog controller with [cfg] (overlay, screenshots,
+  /// gameinfo and favorites are all re-read by `init`).
+  void _applyConfig(DesktopConfig cfg) {
+    _controller.removeListener(_onControllerChanged);
+    _controller.dispose();
+    setState(() {
+      _config = cfg;
+      _controller = CatalogController(cfg);
+    });
+    _controller.addListener(_onControllerChanged);
+    _controller.init();
+  }
+
   void _toggleHelp() {
     if (_showHelp) return; // modal; any key or a barrier tap closes it
     setState(() => _showHelp = true);
@@ -327,6 +501,7 @@ class _HomePageState extends State<HomePage> {
                 controller: c,
                 searchFocus: _searchFocus,
                 onExitSearch: () => _centerFocus.requestFocus(),
+                onOpenSettings: _openSettings,
                 updater: _updater,
               ),
               const Divider(height: 1),

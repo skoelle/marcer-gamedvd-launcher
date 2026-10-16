@@ -23,19 +23,19 @@ const List<String> kSections = ['cracked', 'pd', 'utils'];
 /// rel-path lookups across all of them.
 ///
 /// Key gotcha (PLAN.md §2): on disk `preview` and `candidates` are *basenames*;
-/// the real PNG is `<OutDirectory>/<dirname(rel)>/<preview>`.
+/// the real PNG is `<ScreenshotDirectory>/<dirname(rel)>/<preview>`.
 class ScreenshotIndex {
-  ScreenshotIndex._(this._entries, this.outDirectory, this._loadError,
+  ScreenshotIndex._(this._entries, this.screenshotDirectory, this._loadError,
       this.mtime, this.indexName);
 
-  /// Loads `<outDirectory>/<indexName>`; missing/unreadable file yields an
+  /// Loads `<screenshotDirectory>/<indexName>`; missing/unreadable file yields an
   /// empty index ([loadError] set) instead of throwing (DECISION §7).
-  factory ScreenshotIndex.load(String outDirectory,
+  factory ScreenshotIndex.load(String screenshotDirectory,
       [String indexName = 'index.json']) {
-    final file = File('$outDirectory/$indexName');
+    final file = File('$screenshotDirectory/$indexName');
     if (!file.existsSync()) {
       return ScreenshotIndex._(
-          const {}, outDirectory, '$indexName not found', null, indexName);
+          const {}, screenshotDirectory, '$indexName not found', null, indexName);
     }
     try {
       final mtime = file.statSync().modified;
@@ -46,10 +46,10 @@ class ScreenshotIndex {
         entries[key] =
             ScreenshotEntry.fromJson(key, value as Map<String, dynamic>);
       });
-      return ScreenshotIndex._(entries, outDirectory, null, mtime, indexName);
+      return ScreenshotIndex._(entries, screenshotDirectory, null, mtime, indexName);
     } catch (e) {
       return ScreenshotIndex._(
-          const {}, outDirectory, 'parse error: $e', null, indexName);
+          const {}, screenshotDirectory, 'parse error: $e', null, indexName);
     }
   }
 
@@ -58,7 +58,7 @@ class ScreenshotIndex {
       : this._(const {}, '', reason, null, '');
 
   final Map<String, ScreenshotEntry> _entries;
-  final String outDirectory;
+  final String screenshotDirectory;
   final String? _loadError;
 
   /// File name this index was loaded from (`index.json`, `index-pd.json`, …).
@@ -89,7 +89,7 @@ class ScreenshotIndex {
     if (entry == null || entry.preview == null) return null;
     final dir = _dirname(relPath);
     final path =
-        dir.isEmpty ? '$outDirectory/${entry.preview}' : '$outDirectory/$dir/${entry.preview}';
+        dir.isEmpty ? '$screenshotDirectory/${entry.preview}' : '$screenshotDirectory/$dir/${entry.preview}';
     return File(path).existsSync() ? path : null;
   }
 
@@ -99,7 +99,7 @@ class ScreenshotIndex {
     if (entry == null) return const [];
     final dir = _dirname(relPath);
     return entry.candidates
-        .map((c) => dir.isEmpty ? '$outDirectory/$c' : '$outDirectory/$dir/$c')
+        .map((c) => dir.isEmpty ? '$screenshotDirectory/$c' : '$screenshotDirectory/$dir/$c')
         .where((p) => File(p).existsSync())
         .toList();
   }
@@ -118,18 +118,18 @@ class ScreenshotIndex {
 class ScreenshotIndices {
   ScreenshotIndices._(this._bySection, this.warnings);
 
-  factory ScreenshotIndices.load(String outDirectory) {
+  factory ScreenshotIndices.load(String screenshotDirectory) {
     final warnings = <String>[];
     final bySection = <String, ScreenshotIndex>{};
-    if (outDirectory.isEmpty) {
+    if (screenshotDirectory.isEmpty) {
       for (final section in kSections) {
         bySection[section] =
-            ScreenshotIndex.empty('OutDirectory not configured');
+            ScreenshotIndex.empty('ScreenshotDirectory not configured');
       }
-      warnings.add('Screenshots: OutDirectory not configured');
+      warnings.add('Screenshots: ScreenshotDirectory not configured');
     } else {
       for (final entry in kSectionIndexNames.entries) {
-        final idx = ScreenshotIndex.load(outDirectory, entry.value);
+        final idx = ScreenshotIndex.load(screenshotDirectory, entry.value);
         bySection[entry.key] = idx;
         // Only the cracked index is historically required; a missing
         // pd/utils index degrades silently to gameinfo-only cards.

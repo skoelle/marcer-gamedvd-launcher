@@ -71,8 +71,8 @@ locations.
 |---|---|---|
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
-| `OutDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
-| `DataDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
+| `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
+| `GameinfoDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
 | `Hatari.ConfigFile` | no | empty ⇒ bundled `MarcerGameDvd-Hatari.cfg` |
 | `Hatari.ArgsTemplate` | no | must contain `{cfg}` and `{zip}` |

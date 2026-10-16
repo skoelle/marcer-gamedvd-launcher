@@ -9,8 +9,8 @@ import 'package:test/test.dart';
 
 void main() {
   late Directory tmp;
-  late String outDir;
-  late String dataDir;
+  late String screenshotDir;
+  late String gameinfoDir;
 
   const relA = 'Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.zip';
   const relA2 = 'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha v2.zip';
@@ -35,13 +35,13 @@ void main() {
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('universe_test');
-    outDir = '${tmp.path}/out';
-    dataDir = '${tmp.path}/data';
-    Directory('$outDir/A/Alpha').createSync(recursive: true);
-    Directory('$outDir/B/Beta').createSync(recursive: true);
-    File('$outDir/A/Alpha/a.png').createSync();
-    File('$outDir/B/Beta/beta.png').createSync();
-    Directory(dataDir).createSync();
+    screenshotDir = '${tmp.path}/out';
+    gameinfoDir = '${tmp.path}/data';
+    Directory('$screenshotDir/A/Alpha').createSync(recursive: true);
+    Directory('$screenshotDir/B/Beta').createSync(recursive: true);
+    File('$screenshotDir/A/Alpha/a.png').createSync();
+    File('$screenshotDir/B/Beta/beta.png').createSync();
+    Directory(gameinfoDir).createSync();
   });
 
   tearDown(() {
@@ -53,33 +53,33 @@ void main() {
       String pdGames = '[]',
       Map<String, String> pdEntries = const {},
       Map<String, String> utilsEntries = const {}}) {
-    File('$outDir/index.json').writeAsStringSync(jsonEncode({
+    File('$screenshotDir/index.json').writeAsStringSync(jsonEncode({
       'version': 1,
       'entries': {
         for (final e in entries.entries) e.key: jsonDecode(e.value),
       },
     }));
-    File('$outDir/index-pd.json').writeAsStringSync(jsonEncode({
+    File('$screenshotDir/index-pd.json').writeAsStringSync(jsonEncode({
       'version': 1,
       'entries': {
         for (final e in pdEntries.entries) e.key: jsonDecode(e.value),
       },
     }));
-    File('$outDir/index-utils.json').writeAsStringSync(jsonEncode({
+    File('$screenshotDir/index-utils.json').writeAsStringSync(jsonEncode({
       'version': 1,
       'entries': {
         for (final e in utilsEntries.entries) e.key: jsonDecode(e.value),
       },
     }));
-    File('$dataDir/games-cracked.json').writeAsStringSync(
+    File('$gameinfoDir/games-cracked.json').writeAsStringSync(
         jsonEncode({'schema_version': 1, 'kind': 'cracked', 'games': jsonDecode(crackedGames)}));
-    File('$dataDir/games-pd.json').writeAsStringSync(
+    File('$gameinfoDir/games-pd.json').writeAsStringSync(
         jsonEncode({'schema_version': 1, 'kind': 'pd', 'games': jsonDecode(pdGames)}));
-    File('$dataDir/games-utils.json')
+    File('$gameinfoDir/games-utils.json')
         .writeAsStringSync(jsonEncode({'schema_version': 1, 'kind': 'utils', 'games': []}));
-    final index = ScreenshotIndices.load(outDir);
-    final info = GameInfoIndex.load(dataDir);
-    return CatalogUniverse.build(indices: index, info: info, outDir: outDir);
+    final index = ScreenshotIndices.load(screenshotDir);
+    final info = GameInfoIndex.load(gameinfoDir);
+    return CatalogUniverse.build(indices: index, info: info, screenshotDir: screenshotDir);
   }
 
   group('CatalogUniverse.build (cracked cards)', () {
@@ -98,7 +98,7 @@ void main() {
       expect(card.screenshots, isTrue);
       expect(
           card.previewPath,
-          '$outDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.png');
+          '$screenshotDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.png');
       expect(card.statusCounts, {'done': 1, 'pending': 1});
     });
 
@@ -111,7 +111,7 @@ void main() {
       });
       expect(
           u.cracked.first.previewPath,
-          '$outDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.png');
+          '$screenshotDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.png');
     });
 
     test('thumb indices: kind game wins inside a status tier (2×2 order)',
@@ -171,7 +171,7 @@ void main() {
       expect(card.screenshots, isTrue);
       expect(
           card.previewPath,
-          '$outDir/Title Sorted/Cracked Games - Title Sorted/B/Beta/beta.png');
+          '$screenshotDir/Title Sorted/Cracked Games - Title Sorted/B/Beta/beta.png');
     });
 
     test('single layer stays, candidates resolve against rel dir', () {
@@ -183,7 +183,7 @@ void main() {
       expect(
           u.cracked.first.variants.first.candidatePaths,
           [
-            '$outDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a_c01.png'
+            '$screenshotDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a_c01.png'
           ]);
     });
 

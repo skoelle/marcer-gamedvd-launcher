@@ -20,6 +20,7 @@ class FilterBar extends StatefulWidget {
     required this.controller,
     required this.searchFocus,
     this.onExitSearch,
+    this.onOpenSettings,
     this.updater,
   });
 
@@ -32,6 +33,10 @@ class FilterBar extends StatefulWidget {
   /// Called when Escape leaves an empty search field (focus goes back to
   /// the grid/list).
   final VoidCallback? onExitSearch;
+
+  /// Opens the in-app settings editor (path fields of `desktop.config.json`);
+  /// rendered as a gear button left of the Folders toggle.
+  final VoidCallback? onOpenSettings;
 
   /// Self-update state; when a release build found a newer version, the
   /// first row shows an amber update badge left of the Folders button.
@@ -111,6 +116,10 @@ class _FilterBarState extends State<FilterBar> {
                 ],
                 if (widget.updater != null) ...[
                   _updateBadge(widget.updater!),
+                  const SizedBox(width: 6),
+                ],
+                if (widget.onOpenSettings != null) ...[
+                  _settingsButton(widget.onOpenSettings!),
                   const SizedBox(width: 6),
                 ],
                 _labelButton(c.catalogMode ? 'Folders (T)' : 'Catalog (T)',
@@ -353,6 +362,29 @@ class _FilterBarState extends State<FilterBar> {
           ),
         );
       },
+    );
+  }
+
+  /// Gear button left of the Folders toggle: opens the settings editor for
+  /// the `desktop.config.json` path fields.
+  Widget _settingsButton(VoidCallback onTap) {
+    return SizedBox(
+      width: 32,
+      height: 28,
+      child: Tooltip(
+        message: 'Settings — edit desktop.config.json paths',
+        child: TextButton(
+          onPressed: onTap,
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.grey,
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(32, 28),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            alignment: Alignment.center,
+          ),
+          child: const Icon(Icons.settings, size: 16),
+        ),
+      ),
     );
   }
 

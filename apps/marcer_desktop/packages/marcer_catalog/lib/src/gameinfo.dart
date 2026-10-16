@@ -15,17 +15,17 @@ class GameInfoIndex {
   GameInfoIndex._(
       this._byLetterFolder, this._byKind, this._byKindKey, this.manifest);
 
-  /// Loads all `games-<kind>.json` files found in [dataDir] (may be empty).
-  factory GameInfoIndex.load(String dataDir) {
+  /// Loads all `games-<kind>.json` files found in [gameinfoDir] (may be empty).
+  factory GameInfoIndex.load(String gameinfoDir) {
     final byLetterFolder = <String, GameInfo>{};
     final byKind = <String, List<GameInfo>>{};
     final byKindKey = <String, Map<String, GameInfo>>{};
     var manifest = <String, dynamic>{};
-    final dir = Directory(dataDir);
+    final dir = Directory(gameinfoDir);
     if (!dir.existsSync()) {
       return GameInfoIndex._(byLetterFolder, byKind, byKindKey, manifest);
     }
-    final manifestFile = File('$dataDir/manifest.json');
+    final manifestFile = File('$gameinfoDir/manifest.json');
     if (manifestFile.existsSync()) {
       try {
         manifest =
@@ -35,7 +35,7 @@ class GameInfoIndex {
       }
     }
     for (final kind in ['cracked', 'pd', 'utils']) {
-      final file = File('$dataDir/games-$kind.json');
+      final file = File('$gameinfoDir/games-$kind.json');
       if (!file.existsSync()) continue;
       final map = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
       final games = (map['games'] as List<dynamic>?) ?? const [];
