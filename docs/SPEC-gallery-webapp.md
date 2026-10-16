@@ -570,7 +570,10 @@ elements *(palette frozen in `tools/gallery/static/style.css`)*:
 
 The app is responsive enough for desktop use (primary target); below ~700 px
 the grid shrinks to fewer columns. No mobile-first work is required *(user
-decision: local desktop browser)*.
+decision: local desktop browser)*. Touch/mobile is explicitly excluded from
+hover-only affordances: the hover info panel and sticky `:hover` highlights
+never appear on touch devices (section 6.4) — tapping a card only opens the
+lightbox, whose side panel carries the same metadata.
 
 ### 6.2 Page structure (top to bottom)
 
@@ -630,13 +633,21 @@ Filter/search/sort state is reflected in the URL query string
 
 ### 6.4 Hover info panel
 
-- Hovering (≥ 400 ms delay, no delay on keyboard focus) a card shows a
+- The panel is a **mouse-only affordance**: on touch/mobile devices the
+  media query `(hover: hover) and (pointer: fine)` does not match and the
+  panel is **never shown** — a tap must not raise an info overlay (mobile
+  parity: no hover info). Sticky `:hover` highlight styles throughout the
+  UI are gated behind `@media (hover: hover)` for the same reason; keyboard
+  focus styles (`:focus-visible`, `.kbd-focus`) are unaffected.
+- Hovering a card (≥ 400 ms delay; **mouse hover only** — keyboard focus
+  does not raise the panel) shows a
   non-interactive panel with the joined metadata: title, publisher, cracker,
   crew, language, year, disks, dump flags (RAW/PASTI/Boxscan), TOS/bad note,
   special flag/note — the fields of ANALYSIS-game-data.md §5.3.
 - Without gameinfo: panel shows relative path, status, layer and file size.
-- Panels never cover the whole grid; they disappear on mouse leave / key
-  press. Full details always live in the lightbox.
+- Panels never cover the whole grid; they disappear on mouse leave, key
+  press and when the grid scrolls under them. Full details always live in
+  the lightbox.
 
 ### 6.5 Lightbox
 
@@ -932,6 +943,12 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     variant 0); header shows layer + status histogram + year badges.
 15. **Help**: `?` opens the overlay, the next key closes it, `?` typed
     into the search input stays in the input.
+16. **Touch/no-hover**: with a touch-only pointer (DevTools device
+    emulation or a phone on the LAN) a tap on a card opens the lightbox
+    and **never** raises the hover info panel; thumbnail/filmstrip/candidate
+    taps leave no sticky `:hover` highlight. With a mouse the panel still
+    appears after ≥ 400 ms, vanishes on mouse leave, key press and scroll,
+    and `:focus-visible`/keyboard focus styling keeps working.
 
 ---
 
@@ -1008,6 +1025,10 @@ A conforming implementation satisfies all of the following.
       game-shot exception.
 - [x] U8 Lightbox filmstrip order (screenshots first), header badges and
       clickable crew/cracker groups follow section 6.5.
+- [ ] U9 No hover info on touch/mobile: panel gated behind
+      `(hover: hover) and (pointer: fine)`, sticky `:hover` highlights
+      behind `@media (hover: hover)`, panel dismissed on key press/scroll
+      (section 6.4); keyboard focus styles unaffected.
 
 **Process**
 - [x] P1 Zero new packages in the repo `.venv` (stdlib only).

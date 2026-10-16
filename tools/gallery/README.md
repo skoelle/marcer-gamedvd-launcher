@@ -65,6 +65,10 @@ results. There is no live refresh/polling in v1.
 - **Deep links**: `?entry=…` jumps to the card's page and opens it;
   closing the lightbox keeps the list state.
 - **Help**: `?` opens the keyboard overview; any key closes it.
+- **Hover info**: hovering a card for ≥ 400 ms shows the metadata panel —
+  mouse-only: touch/mobile devices never show it (no hover info on mobile),
+  and sticky `:hover` highlights are likewise disabled there. The same
+  metadata always lives in the lightbox side panel.
 - **Favicon**: GEM desktop drawer/drive icon on the Atari ST green
   (`static/favicon.svg`, pixel-traced from `local/drawer.png`).
 
