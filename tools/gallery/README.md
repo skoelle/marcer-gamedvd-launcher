@@ -33,14 +33,21 @@ results. There is no live refresh/polling in v1.
 
 ## Features & Keyboard
 
-- **Sections**: tabs for Cracked Games / PD Games / Utilities (when
+- **Sections**: tabs for games (cracked) / pd / utils (when
   `MARCER_DATA_DIR` is set).
 - **Filters**: status preset, search, letter nav, publisher/crew/cracker/
-  language/year facets, RAW/PASTI/Boxscan/TOS tri-state flags, sort + order.
-  The URL always reflects the current list state (shareable).
+  language/year facets, RAW/PASTI/Boxscan/TOS tri-state flags, and one
+  combined sort dropdown (`name asc` … `crew desc`). The URL always
+  reflects the current list state (shareable).
+- **Statistics bar**: `X / Y with screenshot` (both games), per-status
+  segments as `done <games> (<zips> zips)` (the `pending` segment and
+  filter count cards whose **any** ZIP is pending), `info N folders`,
+  `N without info` and the tool version right-aligned.
 - **Multi-variant grid**: without an active crew/cracker filter, cards with
-  several screenshots show up to four variant thumbnails (best first);
-  clicking one opens that ZIP in the lightbox.
+  several screenshots show up to four variant thumbnails (best first:
+  status tier, then `kind: game`); a card with exactly **one** game shot
+  shows that shot large instead of the 2×2 grid. Clicking a thumb opens
+  that ZIP in the lightbox.
 - **Crew/cracker focus**: picking a crew or cracker shows each card's
   screenshot for that group's ZIP, even when the variant has no screenshot
   yet (cracker takes precedence when both are set). Matching is fuzzy
@@ -48,17 +55,21 @@ results. There is no live refresh/polling in v1.
   "Hotline & MCA" ↔ "Hotline MCA"); when no ZIP can be identified the card
   shows a hint plus up to four screenshots of the folder's other variants.
 - **Lightbox**: integer-upscaled screenshot, variant filmstrip (click or
-  `↑`/`↓`), candidate images, metadata + release-variant table with the
-  open ZIP highlighted, deep link `?entry=<rel>`.
+  `↑`/`↓`; variants with a screenshot are listed first), candidate images,
+  header badges (layer, status histogram, year), metadata +
+  release-variant table with the open ZIP highlighted, and **clickable
+  crew/cracker groups** (Game info values and release-variant rows jump to
+  that group's ZIP), deep link `?entry=<rel>`.
 - **Deep links**: `?entry=…` jumps to the card's page and opens it;
   closing the lightbox keeps the list state.
+- **Help**: `?` opens the keyboard overview; any key closes it.
 - **Favicon**: GEM desktop drawer/drive icon on the Atari ST green
   (`static/favicon.svg`, pixel-traced from `local/drawer.png`).
 
 | Context | Keys |
 |---|---|
-| Grid | `←` `→` `↑` `↓` move · `Enter`/`Space` open · `PgUp`/`PgDn` page · `Home`/`End` first/last · `/` search · `Esc` clear focus |
-| Lightbox | `←` `→` previous/next card · `↑` `↓` variant · `PgUp`/`PgDn` image · `Esc` close (also backdrop click) |
+| Grid | `←` `→` `↑` `↓` move · `Enter`/`Space` open · `PgUp`/`PgDn` page · `Home`/`End` first/last · `/` search · `?` help · `Esc` clear focus |
+| Lightbox | `←` `→` previous/next card · `↑` `↓` variant (screenshots first) · `PgUp`/`PgDn` image · `Esc` close (also backdrop click) · click a crew/cracker group to jump to its ZIP |
 
 ## Troubleshooting
 

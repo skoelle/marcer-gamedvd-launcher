@@ -64,20 +64,21 @@ Save, the manual screenshot curation described below.
   large game preview is shown instead. The card's main preview prefers a
   `done` variant of kind `game` over e.g. `textscreen`, and the four tiles
   are ordered the same way (`done game` → other `done` → `desktop`), so a
-  late-sorting game shot is never pushed out by textscreens
-  (gallery-parity divergence: the gallery still ranks the first `done`
-  variant by path and orders tiles by status only).
-- **Gallery-style status bar** — with-screenshot ratio, status counts (ZIP
-  entries of `index.json`), matched folder count, `index.json` mtime and
-  gameinfo generation time; the running app version (right-aligned).
+  late-sorting game shot is never pushed out by textscreens (same rules
+  as the gallery webapp).
+- **Gallery-style status bar** — with-screenshot ratio (games), status
+  counts as `done <games> (<zips> zips)`, matched folder count,
+  `index.json` mtime and gameinfo generation time; the running app
+  version (right-aligned).
 - **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
-  `desktop text` / `desktop black` / `pending` / … . `pending` is
-  **app-specific**: it matches a game when **at least one** of its ZIPs is
-  pending (the gallery's aggregated card status would hide pending ZIPs
-  inside otherwise-done folders); every other status value uses the
-  gallery's card aggregation. Note the different units: the status bar
-  counts ZIP entries, the filter counts games — `pending 5` in the bar can
-  therefore mean fewer games.
+  `desktop text` / `desktop black` / `pending` / … . `pending` matches a
+  game when **at least one** of its ZIPs is pending — the same rule the
+  gallery applies (a game can appear in `pending` and `done` at once);
+  every other status value uses the card aggregation (`done → desktop →
+  no usable shots → interrupted → pending → skipped`). The two
+  `desktop …` presets are app-only extras. The status bar reports each
+  status as games (ZIPs), so the games number equals the result count of
+  the matching dropdown selection.
 - **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
   list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
   detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
