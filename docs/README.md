@@ -10,7 +10,7 @@ per-app/per-tool READMEs stay next to their code.
 |---|---|
 | [`SPEC.md`](SPEC.md) | **Launcher behavior** — overlay/patch rules, navigation, rendering, colors, launch, favorites. The contract for reimplementing the launcher in any language/UI. |
 | [`SPEC-gallery-webapp.md`](SPEC-gallery-webapp.md) | **Gallery webapp** (`tools/gallery`) — filter/sort/search model, API payloads, grid/lightbox UI. The design reference for the desktop catalog. |
-| [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) | **Screenshot pipeline** (`tools/screenshot-gen`) — Hatari automation and the `index.json` + PNG artifact consumed by both UIs. |
+| [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) | **Screenshot pipeline** (`tools/screenshot-gen`) — Hatari automation and the per-scope `index.json` / `index-<name>.json` + PNG artifact (the default scope's `index.json` is the one consumed by both UIs). |
 
 ## Analysis & decisions
 
