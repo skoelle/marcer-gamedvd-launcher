@@ -55,7 +55,16 @@ Root and patch layers are merged case-insensitively, like in the console
 launcher: if the two layers hold the same ZIP under names that differ only
 in case (e.g. `Crossbow - Medway boys.zip` vs. `Crossbow - Medway Boys.zip`),
 they are **one** entry — the patch spelling wins, including for the preview
-file name (see SPEC-screenshot-generator §4.1 and §10.2).
+file name (see SPEC-screenshot-generator §4.1 and §10.2). The same applies to
+**folder names**: a folder present in both layers under spellings that differ
+only in case (root `…Prof Plays a New Game`, patch `…Prof Plays a new Game`)
+is canonicalised to the patch spelling for *every* file below it, root-only
+files included. Otherwise the mirror and log trees would grow two
+case-variant sibling folders, which a case-insensitive NAS or sync client
+renames into `…_DiskStation_…CaseConflict` folders while a run is writing
+into them. Root-only entries still read their source from their own layer
+spelling (index field `src_rel`); the canonical relative path stays the
+output identity.
 
 By default entries are processed one at a time. `--jobs N` runs N workers
 in parallel; each worker boots its own Hatari instance on its **own Xvfb

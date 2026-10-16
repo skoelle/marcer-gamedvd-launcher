@@ -196,6 +196,23 @@ launcher (SPEC.md section 7):
   second index entry (it would only produce a duplicate capture whose second
   write is renamed by a case-insensitive NAS, section 10.2). Curated state of
   the overridden spelling is carried over when file size and mtime match.
+- **Directory spellings are canonicalised as well.** The merge matches whole
+  relative paths case-insensitively, not just file names — the same rule the
+  launcher applies recursively at every level (SPEC.md R11, R12, R14): if a
+  directory exists in both layers under a spelling that differs only in case,
+  the patch spelling wins for **every** file below it — including files that
+  exist only in the root layer (root `…/a New Game/*.zip` below patch
+  `…/a new Game/`). Without this rule a root-only file would keep the root
+  folder spelling next to a patch-only file's patch folder spelling, so the
+  tool would emit **two case-variant output directories** (mirror and logs)
+  which a case-insensitive NAS or sync client renames into
+  `…_DiskStation_…CaseConflict` siblings mid-run (section 10.2).
+- Canonicalisation only affects output paths. The source is still read from
+  the file's own layer using that layer's spelling: where canonicalising
+  changed the folder name, the index stores the layer spelling in `src_rel`
+  and the run resolves `src_zip = <layer root>/src_rel` (falling back to `rel`
+  for entries without the field). `rel` stays the single identity for index
+  key, mirror and logs.
 - Entries not in scope trees are skipped entirely (section 4.4).
 
 ### 4.2 Index cache
@@ -205,7 +222,10 @@ blindly. Instead:
 
 - The tool maintains `index.json` in `MARCER_OUT_DIR`.
 - The index lists, per entry: relative path (from the layer root), name, layer
-  flags (ROOT, PATCH, BOTH), file size, and the last processing status.
+  flags (ROOT, PATCH, BOTH), file size, and the last processing status. When
+  output canonicalisation rewrote the folder spelling (section 4.1), the entry
+  additionally carries `src_rel` — the spelling the file has under its own
+  layer root; otherwise that field is absent.
 - A full index scan only walks the two scope trees (section 4.4), with a
   configurable per-directory timeout and progress logging. Default full scan
   timeout budget is generous (minutes are acceptable for a full scan, hours are
@@ -861,9 +881,16 @@ would look up a preview later (section 12).
 **Case-insensitive mirrors (Synology SMB).** The output mirror may live on a
 case-insensitive share. Two rules keep it conflict-free:
 
-1. The overlay merge (section 4.1) gives every game exactly one canonical
-   spelling (the patch one), so the mirror never holds a `<base>.png` /
-   `<base>.json` pair for two entries whose names differ only in case.
+1. The overlay merge (section 4.1) gives every game — and every directory —
+   exactly one canonical spelling (the patch one), so the mirror never holds a
+   `<base>.png` / `<base>.json` pair for two entries whose names differ only in
+   case, and never two sibling directories that differ only in case. Two
+   case-variant sibling directories are what a syncing client renames into
+   `…_DiskStation_<date>_UploadPathCaseConflict/` and
+   `…_UploadDBCaseConflict/` folders in the mirror and the log tree; while a
+   run is writing into such a pair the client moves files away underneath it,
+   which surfaces as `status: error` entries whose log ends mid-capture and
+   whose `last_run` is the only trace (the run has no stored failure reason).
 2. Before writing a preview, candidate or metadata file, the tool deletes
    stale files in the same mirror directory whose names match the target
    **only** by case (`drop_case_variants`). They belong to a merged-away
@@ -1089,6 +1116,16 @@ Risks:
 8. **Zip internals.** Multi-image ZIPs: which image Hatari mounts is
    *(untested)*. The tool records `zip_contents` in metadata so anomalies are
    visible. Single-image ZIPs are the verified case.
+9. **`status: error` carries no failure reason.** The index stores only the
+   status, so a failed entry has to be diagnosed from its log and
+   `last_run`. A stored error detail (copy failure, worker exception, FIFO
+   timeout) is a candidate hardening step.
+10. **Case-conflict siblings are only found manually.** Canonicalisation
+    (section 4.1) prevents new ones, and `drop_case_variants` prevents the
+    per-file variant, but folders renamed by an external sync client are
+    currently only found by inspecting the tree; `prune` clears their
+    leftover logs and empty directories. A dedicated check/repair path is a
+    candidate.
 
 Open questions (for the user, answer when convenient):
 
@@ -1196,7 +1233,9 @@ A conforming implementation satisfies all of the following.
 
 **Input**
 - [ ] I1 Merge rules match SPEC.md section 7 (case-insensitive, patch wins,
-      directories aside, only `.zip` entries).
+      only `.zip` entries), for file names **and** directory spellings: the
+      merge decides case-insensitively per whole relative path and emits one
+      canonical output folder per directory (section 4.1).
 - [ ] I2 Directories starting with `@` and hidden entries are ignored.
 - [ ] I3 Only the scope trees of section 4.4 are processed, and the
       `exclude_dirs` sub-directories (Boxscan/Manual/Kryoflux) are never
