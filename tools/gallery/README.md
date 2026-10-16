@@ -11,9 +11,10 @@ specification.
 
 - Python 3 with the repo `.venv` (no extra packages — stdlib only)
 - Environment in `local/paths.env` (git-ignored):
-  - `MARCER_OUT_DIR` (required): screenshot output with `index.json` + PNGs
+  - `MARCER_OUT_DIR` (required): screenshot output with the section
+    indices (`index.json`, `index-pd.json`, `index-utils.json`) + PNGs
   - `MARCER_DATA_DIR` (optional): `games-*.json` from `tools/gameinfo-gen`
-    (enables metadata facets, hover info, PD/Utils views)
+    (adds metadata facets and hover info to the index-backed cards)
 
 ## Usage
 
@@ -27,22 +28,23 @@ There is no authentication or TLS — anyone who can reach the bind address
 can browse the archive. Use `--host 127.0.0.1` (or a firewall) if that is
 not desired.
 
-The server revalidates `index.json` and the metadata files on each API
-request (mtime check), so a page reload shows the latest screenshot-run
+The server revalidates the section indices and the metadata files on each
+API request (mtime check), so a page reload shows the latest screenshot-run
 results. There is no live refresh/polling in v1.
 
 ## Features & Keyboard
 
-- **Sections**: tabs for games (cracked) / pd / utils (when
-  `MARCER_DATA_DIR` is set).
+- **Sections**: tabs for games (cracked) / pd / utils (pd/utils appear when
+  their index or gameinfo data exists). Each section joins its own
+  screenshot index with the matching `games-*.json`.
 - **Filters**: status preset, search, letter nav, publisher/crew/cracker/
   language/year facets, RAW/PASTI/Boxscan/TOS tri-state flags, and one
   combined sort dropdown (`name asc` … `crew desc`). The URL always
   reflects the current list state (shareable).
-- **Statistics bar**: `X / Y with screenshot` (both games), per-status
-  segments as `done <games> (<zips> zips)` (the `pending` segment and
-  filter count cards whose **any** ZIP is pending), `info N folders`,
-  `N without info` and the tool version right-aligned.
+- **Statistics bar**: section-aware — `X / Y with screenshot` (both games),
+  per-status segments as `done <games> (<zips> zips)` (the `pending`
+  segment and filter count cards whose **any** ZIP is pending), `info N
+  folders` (cracked), `N without info` and the tool version right-aligned.
 - **Multi-variant grid**: without an active crew/cracker filter, cards with
   several screenshots show up to four variant thumbnails (best first:
   status tier, then `kind: game`); a card with exactly **one** game shot
@@ -80,7 +82,8 @@ results. There is no live refresh/polling in v1.
 - `MARCER_OUT_DIR missing` → set it in `local/paths.env`.
 - `index.json not found` → run the screenshot generator's `index` command.
 - `MARCER_DATA_DIR not a directory` → warning only; the app runs in
-  screenshots-only mode (no facets/hover metadata, PD/Utils tabs hidden).
+  screenshots-only mode (no facets/hover metadata; the pd/utils tabs still
+  appear when their own indices exist).
 - Stale data → reload the page (mtime revalidation runs per request).
 
 ## Config

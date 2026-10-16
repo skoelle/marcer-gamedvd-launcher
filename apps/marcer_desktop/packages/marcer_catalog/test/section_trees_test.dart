@@ -117,7 +117,8 @@ void main() {
   group('GameCard.kind', () {
     test('cards carry their section kind (per-section favorites mapping)', () {
       const rel = 'Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.zip';
-      final cracked = buildCrackedCard(
+      final cracked = buildIndexedCard(
+        kind: 'cracked',
         letter: 'A',
         folder: 'Alpha',
         items: [

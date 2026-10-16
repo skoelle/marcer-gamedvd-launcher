@@ -149,8 +149,10 @@ class _FilterBarState extends State<FilterBar> {
                       ),
                     ),
                   ),
-                  if (f.section == 'cracked')
-                    _statusDropdown(f.status, c.setStatus),
+                  // Status filter is available for every section now that
+                  // pd/utils carry index-derived statuses (default `any`
+                  // there, `default_status` for cracked).
+                  _statusDropdown(f.status, c.setStatus),
                   if (fields.contains('publisher'))
                     _facetMenu(
                       'Publisher: any',

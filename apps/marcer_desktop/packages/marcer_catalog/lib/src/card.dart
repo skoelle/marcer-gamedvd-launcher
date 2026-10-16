@@ -292,9 +292,12 @@ String _minLower(Iterable<String> values) {
   return list.first;
 }
 
-/// Builds a cracked card from grouped index entries (gallery
-/// `_build_cracked_cards` + `_finalize_card`, kind `cracked`).
-GameCard buildCrackedCard({
+/// Builds a card from grouped index entries of one section (gallery
+/// `_build_cracked_cards` + `_finalize_card`). [kind] is the section
+/// (`cracked`/`pd`/`utils`); the aggregation / preview rules are identical
+/// for every section.
+GameCard buildIndexedCard({
+  required String kind,
   required String letter,
   required String folder,
   required List<(String, ScreenshotEntry)> items,
@@ -355,7 +358,7 @@ GameCard buildCrackedCard({
     previewPath: preview,
     variants: variants,
     info: info,
-    kind: 'cracked',
+    kind: kind,
   );
 }
 
