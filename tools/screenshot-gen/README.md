@@ -16,13 +16,20 @@ full specification.
 ## Usage
 
 ```bash
-tools/screenshot-gen/run.sh index          # build/refresh the zip index
-tools/screenshot-gen/run.sh run            # process pending entries
+tools/screenshot-gen/run.sh index          # build/refresh the zip index (default scope)
+tools/screenshot-gen/run.sh run            # process pending entries (default scope)
 tools/screenshot-gen/run.sh run --hours 8  # night run with time budget
 tools/screenshot-gen/run.sh run --limit 3  # small test batch
 tools/screenshot-gen/run.sh run --only Xevious   # only matching paths
 tools/screenshot-gen/run.sh run --jobs 8   # parallel workers (e.g. night runs)
 tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
+
+# Scopes: every command works on exactly one scope per invocation
+# (default: the configured scope_default, see "Scopes" below).
+tools/screenshot-gen/run.sh index --scope utils       # build index-utils.json
+tools/screenshot-gen/run.sh run --scope utils --jobs 8 --limit 50
+tools/screenshot-gen/run.sh detect --scope utils
+tools/screenshot-gen/run.sh prune --scope utils
 
 # Desktop entries (game never started): find the GEM program icon in the
 # existing desktop previews, then boot once more and click it:
@@ -50,6 +57,34 @@ A later `run` skips completed entries (`done`, `desktop`, `no_usable_shots`)
 and retries unfinished or failed ones (`pending`, `interrupted`, `timeout`,
 `error`). The `no_usable_shots` entries are not retried by a normal run;
 repeat them explicitly with `run --retry-no-usable`.
+
+## Scopes
+
+The archive is processed in named **scopes** (config `scope_default` +
+`scopes`). Every subcommand (`index`, `run`, `detect`, `reclassify`,
+`cleanup-drive-led`, `prune`) works on exactly one scope per invocation,
+selected with `--scope <name>`; without the flag the configured
+`scope_default` (cracked) is used. There is deliberately no "all scopes"
+mode — run the command once per scope.
+
+Each scope has its own tree list and its own index file:
+
+| Scope  | Trees (under root/patch)                   | Index file         |
+|--------|--------------------------------------------|--------------------|
+| `cracked` (default) | `Title Sorted/Cracked Games - Title Sorted` | `index.json`   |
+| `utils` (`--scope utils`) | `Title Sorted/Utilitys - Title Sorted` | `index-utils.json` |
+
+The default scope always maps to `index.json` — that is the file the
+gallery and the desktop app read (the cracked view); other scope index
+files are invisible to them. Every other scope uses
+`index-<name>.json`, overridable per scope with an explicit `"index"`
+key. One scope never reads or writes another scope's index, so a utils
+run cannot corrupt or bloat the curated cracked state (and each
+per-entry index save stays small). Logs and mirror previews of all
+scopes live side by side under `MARCER_OUT_DIR` (mirroring the source
+tree, so the scope trees keep them separated). The output lock
+(`shotgen.lock`) is shared: only one shotgen invocation runs at a time,
+regardless of scope.
 
 Root and patch layers are merged case-insensitively, like in the console
 launcher: if the two layers hold the same ZIP under names that differ only
@@ -321,6 +356,25 @@ adjust) or `config.local.json` (git-ignored). Time points are 10, 25 and 45
 seconds after Hatari start. Output mirrors the source tree under
 `MARCER_OUT_DIR`, one preview PNG plus optional candidate PNGs and a metadata
 JSON per entry.
+
+Scope configuration:
+
+```json
+{
+  "scope_default": "cracked",
+  "scopes": {
+    "cracked": { "trees": ["Title Sorted/Cracked Games - Title Sorted"] },
+    "utils":   { "trees": ["Title Sorted/Utilitys - Title Sorted"] }
+  }
+}
+```
+
+The index file name defaults to `index.json` for the default scope and
+`index-<name>.json` for every other scope (set `"index"` in a scope to
+override). A config without any `scopes` entry falls back to the legacy
+`scope_trees` list (single implicit `cracked` scope). Note: list-valued
+keys like a scope's `trees` are **replaced as a whole** by a
+`config.local.json` override, not merged element-wise.
 
 ## License
 

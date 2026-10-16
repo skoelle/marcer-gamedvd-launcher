@@ -1,7 +1,17 @@
 {
-  "scope_trees": [
-    "Title Sorted/Cracked Games - Title Sorted"
-  ],
+  "scope_default": "cracked",
+  "scopes": {
+    "cracked": {
+      "trees": [
+        "Title Sorted/Cracked Games - Title Sorted"
+      ]
+    },
+    "utils": {
+      "trees": [
+        "Title Sorted/Utilitys - Title Sorted"
+      ]
+    }
+  },
   "exclude_dirs": ["kryoflux", "boxscan", "manual"],
   "timepoints": [10, 25, 45],
   "entry_timeout_s": 90,

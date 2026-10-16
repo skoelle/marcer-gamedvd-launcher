@@ -46,8 +46,10 @@ For every ZIP entry in scope (section 4.4):
 - No keyboard key injection and no `--auto` autostart (still a future stage,
   section 15 milestone M7). The implemented desktop click retry (section 7.4)
   covers exactly one icon double click, nothing more.
-- No screenshots for PD games, utilities, tools, Falcon titles, Bonus or
-  anything outside the scope trees (section 4.4).
+- No screenshots outside the selected scope's trees (section 4.4): PD
+  games, tools, Falcon titles, Bonus and everything else stay out of
+  scope. Utilities (`Utilitys`) are processed only in their own opt-in
+  scope (section 4.4), never by the default scope.
 
 ---
 
@@ -213,25 +215,32 @@ launcher (SPEC.md section 7):
   and the run resolves `src_zip = <layer root>/src_rel` (falling back to `rel`
   for entries without the field). `rel` stays the single identity for index
   key, mirror and logs.
-- Entries not in scope trees are skipped entirely (section 4.4).
+- Entries outside the selected scope's trees are skipped entirely
+  (section 4.4).
 
 ### 4.2 Index cache
 
 The NAS is slow. A full recursive walk over the whole volume must never happen
 blindly. Instead:
 
-- The tool maintains `index.json` in `MARCER_OUT_DIR`.
+- The tool maintains **one index file per scope** in `MARCER_OUT_DIR`: the
+  default scope's file is `index.json` (read by the gallery and desktop app),
+  every other scope uses `index-<name>.json` (section 4.4). A scope never
+  reads or writes another scope's index file, so processing one scope can
+  neither corrupt nor bloat the state of another.
 - The index lists, per entry: relative path (from the layer root), name, layer
   flags (ROOT, PATCH, BOTH), file size, and the last processing status. When
   output canonicalisation rewrote the folder spelling (section 4.1), the entry
   additionally carries `src_rel` — the spelling the file has under its own
   layer root; otherwise that field is absent.
-- A full index scan only walks the two scope trees (section 4.4), with a
-  configurable per-directory timeout and progress logging. Default full scan
-  timeout budget is generous (minutes are acceptable for a full scan, hours are
-  not).
-- Incremental mode (default): only scan scope trees, compare with the stored
-  index, report new or changed entries (size or mtime differs).
+- A full index scan only walks the trees of the selected scope (section 4.4),
+  with a configurable per-directory timeout and progress logging. Default full
+  scan timeout budget is generous (minutes are acceptable for a full scan,
+  hours are not).
+- Incremental mode (default): only scan the selected scope's trees, compare
+  with the stored index, report new or changed entries (size or mtime
+  differs). Entries of the index that are no longer seen by the scan are
+  removed from **that scope's index file only**.
 
 ### 4.3 Relative path
 
@@ -240,31 +249,54 @@ The relative path of an entry (for example
 is the identity of the entry everywhere: index key, output mirror, metadata
 file, launcher integration later.
 
-### 4.4 Scope (user decision, fixed for now)
+### 4.4 Scopes (user decision)
 
-Only one tree is in scope:
+The tool processes **one scope per invocation**. A scope is a named group of
+relative tree paths plus its own index file (section 4.2). Configuration:
 
-- `<root>/Title Sorted/Cracked Games - Title Sorted` (also merged with its
-  patch counterpart)
+- `scope_default`: the scope used when no `--scope` flag is given.
+- `scopes`: a map of scope name → tree list. The default scope's index file
+  is always `index.json`; every other scope uses `index-<name>.json`, unless
+  the scope spec sets an explicit `index` key. A config without any `scopes`
+  entry falls back to the legacy `scope_trees` list (one implicit `cracked`
+  scope writing `index.json`).
 
-Explicitly out of scope for now:
+Defined scopes:
+
+- `cracked` (default): `Title Sorted/Cracked Games - Title Sorted` (merged
+  with its patch counterpart).
+- `utils` (opt-in via `--scope utils`):
+  `Title Sorted/Utilitys - Title Sorted` (merged with its patch counterpart).
+
+Every subcommand (`index`, `run`, `detect`, `reclassify`,
+`cleanup-drive-led`, `prune`) takes `--scope` and works exclusively on the
+selected scope's trees, index file and output subtree. There is deliberately
+**no "all scopes" mode**: running two scopes means running the command
+twice. This keeps each index file small, keeps per-entry index rewrites
+cheap, and means an experimental scope can never disturb the curated state
+of the default one. *(The utils scope with a separate `index-utils.json` was
+verified 2026-10-16: 12,429 indexed ZIPs, pilot run of 50 entries with
+`--jobs 8`.)*
+
+Explicitly out of scope for now (no scope defined):
 
 - All `PD Games` trees
-- All `Utilitys` trees
 - `Bonus`, `Tools`, `Falcon 030`
 - All `Crew Sorted` trees
 - Everything else
 
-Within the scope tree, sub-directories that never hold Hatari disk images are
-excluded too (config `exclude_dirs`, section 11.2): `Boxscan`/`Box Scan` (box
-scans), `Manual` (manuals/PDFs) and `Kryoflux` (flux dumps, usually under
-`RAW`). The scanner never enters them, so their ZIPs never reach the index.
-Matching is case-insensitive, ignores spaces/underscores/dashes, and applies
-at any depth. After changing the list, run `index` (dropped entries are
-removed automatically) and `prune` (section 5) to clean leftovers.
+Within a scope's trees, sub-directories that never hold Hatari disk images
+are excluded too (config `exclude_dirs`, section 11.2): `Boxscan`/`Box Scan`
+(box scans), `Manual` (manuals/PDFs) and `Kryoflux` (flux dumps, usually
+under `RAW`). The scanner never enters them, so their ZIPs never reach the
+index. Matching is case-insensitive, ignores spaces/underscores/dashes, and
+applies at any depth. After changing the list, run `index` (dropped entries
+are removed automatically) and `prune` (section 5) to clean leftovers.
 
-Scope is defined in the tool config (section 11.2) as a list of relative tree
-paths, so extending later is a config change, not a code change.
+Scope is defined in the tool config (section 11.2), so extending later is a
+config change, not a code change. Note for UI consumers: the gallery and
+desktop app read `index.json` only (the cracked view); other scope index
+files are invisible to them until a future join step.
 
 ### 4.5 Multi-disk sets (user decision)
 
@@ -283,7 +315,7 @@ paths, so extending later is a config change, not a code change.
 ```
 [1] load config + env (paths.env)
         |
-[2] load or refresh index  (bounded scan of scope trees only)
+[2] load or refresh index  (bounded scan of the selected scope's trees only)
         |
 [3] select pending entries (status != done, or --force;
          with --retry-desktop: only status == desktop with a stored
@@ -857,7 +889,8 @@ The output mirrors the source tree of the entry relative to its layer root:
 
 ```
 $MARCER_OUT_DIR/
-  index.json
+  index.json              <- default scope (cracked)
+  index-utils.json        <- utils scope (--scope utils)
   logs/
     Title Sorted/Cracked Games - Title Sorted/A/Arkanoid/<zip>.log
   Title Sorted/Cracked Games - Title Sorted/A/Arkanoid/
@@ -1059,13 +1092,18 @@ MARCER_DISPLAY=...
 ### 11.2 Tool config file
 
 `tools/screenshot-gen/config.example.json` (committed, contains no paths):
-scope trees, `exclude_dirs` (sub-directory names never scanned, section
-4.4), time points, timeouts, filter thresholds (the black/empty thresholds
-`black_mean_max`, `black_std_max`, `black_std_content_min` of section 8.1
-and the desktop sub-kind thresholds `textscreen_min_white` and
-`white_pixel_min`, section 8.4.1), profile map, disk-skip patterns,
-`keep_candidates`. A local override
-`config.local.json` (git-ignored) may exist for machine-specific tweaks.
+`scope_default` + `scopes` (per scope: tree list and optional index file
+name; the default scope maps to `index.json`, every other scope to
+`index-<name>.json`, section 4.4; legacy `scope_trees` is still accepted
+when no `scopes` entry exists), `exclude_dirs` (sub-directory names never
+scanned, section 4.4), time points, timeouts, filter thresholds (the
+black/empty thresholds `black_mean_max`, `black_std_max`,
+`black_std_content_min` of section 8.1 and the desktop sub-kind thresholds
+`textscreen_min_white` and `white_pixel_min`, section 8.4.1), profile map,
+disk-skip patterns, `keep_candidates`. A local override
+`config.local.json` (git-ignored) may exist for machine-specific tweaks;
+note that list-valued keys (like a scope's `trees`) are replaced as a whole
+by a local override, not merged element-wise.
 
 ### 11.3 Secrets
 
@@ -1147,10 +1185,10 @@ Resolved decisions:
 
 ### 14.1 Pilot run (20 entries)
 
-- Sample 20 ZIPs across both scope trees, spread over several letters and
-  game folders, including at least one entry that exists only in patch, and
-  one that exists in both layers *(if such entries exist within scope; the
-  pilot scan will confirm)*.
+- Sample 20 ZIPs across the selected scope's trees in both layers, spread
+  over several letters and game folders, including at least one entry that
+  exists only in patch, and one that exists in both layers *(if such entries
+  exist within scope; the pilot scan will confirm)*.
 - Process the pilot with the default profile and time points.
 - Evaluate:
   - boot success rate (at least one `game` shot)
@@ -1158,6 +1196,18 @@ Resolved decisions:
   - duplicate filter sanity (no two identical previews)
   - runtime per entry (median and worst case)
   - output tree correctness (mirror structure, metadata completeness)
+
+### 14.1.1 Utils scope pilot (verified 2026-10-16)
+
+- `index --scope utils`: 12,429 entries written to `index-utils.json`
+  (11,129 pending, 1,300 `skipped_disk_n`); `index.json` (cracked)
+  untouched *(verified)*.
+- `run --scope utils --limit 50 --jobs 8`: 50 entries in ~6 minutes,
+  48 ended `desktop` (plain TOS desktop / program menus; expected for
+  utilities that do not auto-boot — candidates for `detect` +
+  `run --retry-desktop`), 2 `no_usable_shots` (black at all timepoints)
+  *(verified)*. Gallery and desktop app (cracked view) unchanged, as they
+  read only `index.json` *(verified)*.
 
 ### 14.2 Adjustment
 
@@ -1202,8 +1252,8 @@ state.
 - **M1** This spec, reviewed and approved by the user.
 - **M2** Install Python packages into `.venv`, create `tools/screenshot-gen/`
   skeleton with config example and profile files.
-- **M3** Index builder: bounded scan of the two scope trees, writes
-  `index.json`, prints counts. Checkable against manual counts.
+- **M3** Index builder: bounded scan of the selected scope's trees, writes
+  the scope's index file, prints counts. Checkable against manual counts.
 - **M4** Single-entry pipeline: copy, run Hatari, capture via FIFO, classify,
   write preview and metadata for one hard-coded entry.
 - **M5** Filters and selection: desktop detection, dedup, scoring, preview
@@ -1237,13 +1287,14 @@ A conforming implementation satisfies all of the following.
       merge decides case-insensitively per whole relative path and emits one
       canonical output folder per directory (section 4.1).
 - [ ] I2 Directories starting with `@` and hidden entries are ignored.
-- [ ] I3 Only the scope trees of section 4.4 are processed, and the
-      `exclude_dirs` sub-directories (Boxscan/Manual/Kryoflux) are never
-      scanned.
+- [ ] I3 Only the trees of the selected scope (section 4.4, `--scope`,
+      default `scope_default`) are processed, and the `exclude_dirs`
+      sub-directories (Boxscan/Manual/Kryoflux) are never scanned.
 - [ ] I4 Disk-2-plus ZIPs are skipped and marked; crack variants are all
       processed.
 - [ ] I5 The index is persistent, incremental, and bounded (no unbounded
-      volume-wide scans).
+      volume-wide scans); each scope has its own index file, and a
+      subcommand never reads or writes another scope's index.
 
 **Pipeline**
 - [ ] P1 Each entry produces Hatari logs and per-shot metadata.

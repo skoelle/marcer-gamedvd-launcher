@@ -4,9 +4,17 @@
 """Marcer GameDVD Screenshot Generator.
 
 Implements SPEC-screenshot-generator.md:
-  index   build/refresh the ZIP index for the scope trees
+  index   build/refresh the ZIP index for one scope's trees
   run     process pending entries (interruptible, resumable)
   detect  find the program icon in existing desktop previews (offline)
+
+Scopes (config ``scope_default`` + ``scopes``): every subcommand works
+on exactly one scope per invocation, selected with ``--scope`` (default:
+the configured ``scope_default``). Each scope has its own tree list and
+its own index file: the default scope maps to ``index.json`` (what the
+gallery and desktop app read), every other scope to ``index-<name>.json``
+(overridable per scope via an explicit ``index`` key). There is
+deliberately no "all scopes" mode.
 
 The static HTML gallery (formerly 'html') has been replaced by the
 gallery webapp in tools/gallery/ — see SPEC-gallery-webapp.md.
@@ -38,6 +46,25 @@ STOP_EVENT = None  # set in main
 # --------------------------------------------------------------------------
 
 DEFAULT_CONFIG = {
+    # Scope selection: every invocation works on exactly one scope
+    # (--scope overrides the default). The default scope's index is
+    # index.json; every other scope uses index-<name>.json unless the
+    # scope spec sets an explicit "index" key.
+    "scope_default": "cracked",
+    "scopes": {
+        "cracked": {
+            "trees": [
+                "Title Sorted/Cracked Games - Title Sorted",
+            ],
+        },
+        "utils": {
+            "trees": [
+                "Title Sorted/Utilitys - Title Sorted",
+            ],
+        },
+    },
+    # Legacy (pre-scopes) single-scope configuration: used only when the
+    # merged config carries no "scopes" entry at all.
     "scope_trees": [
         "Title Sorted/Cracked Games - Title Sorted",
     ],
@@ -112,6 +139,44 @@ def _deep_merge(base: dict, over: dict) -> None:
             base[k] = v
 
 
+def resolve_scopes(cfg: dict) -> tuple:
+    """Return ``(default_scope, {name: {"name", "trees", "index"}})``.
+
+    New configs use ``scope_default`` + ``scopes``. A config without any
+    ``scopes`` entry falls back to the legacy ``scope_trees`` list (one
+    implicit scope ``cracked`` writing index.json). The default scope's
+    index file is always ``index.json`` (what the gallery and desktop
+    app read); every other scope uses ``index-<name>.json``, overridable
+    per scope via an explicit ``index`` key. Note: when switching
+    ``scope_default`` away from a section the UIs display, keep that
+    section on ``index.json`` via an explicit ``index`` entry.
+    """
+    default = (cfg.get("scope_default") or "cracked").strip()
+    raw = cfg.get("scopes") or {}
+    if not raw:
+        # legacy single-scope config (pre-scopes)
+        raw = {"cracked": {"trees": cfg.get("scope_trees")
+                           or DEFAULT_CONFIG["scope_trees"]}}
+        default = "cracked"
+    scopes = {}
+    for name, spec in raw.items():
+        if isinstance(spec, dict):
+            trees = [str(t) for t in (spec.get("trees") or [])]
+            index = spec.get("index")
+        else:
+            sys.exit(f"error: scopes.{name} must be an object with a "
+                     f"trees list")
+        if not trees:
+            sys.exit(f"error: scope {name!r} has no trees")
+        if not index:
+            index = "index.json" if name == default else f"index-{name}.json"
+        scopes[name] = {"name": name, "trees": trees, "index": index}
+    if default not in scopes:
+        sys.exit(f"error: scope_default {default!r} is not defined in "
+                 f"scopes ({', '.join(sorted(scopes))})")
+    return default, scopes
+
+
 def require_env(name: str) -> str:
     v = os.environ.get(name, "").strip()
     if not v:
@@ -139,20 +204,20 @@ INDEX_NAME = "index.json"
 LOCK_NAME = "shotgen.lock"
 
 
-def index_path(out: Path) -> Path:
-    return out / INDEX_NAME
+def index_path(out: Path, index_name: str = INDEX_NAME) -> Path:
+    return out / index_name
 
 
-def load_index(out: Path) -> dict:
-    p = index_path(out)
+def load_index(out: Path, index_name: str = INDEX_NAME) -> dict:
+    p = index_path(out, index_name)
     if p.exists():
         with open(p, encoding="utf-8") as f:
             return json.load(f)
     return {"version": 1, "entries": {}}
 
 
-def save_index(out: Path, idx: dict) -> None:
-    p = index_path(out)
+def save_index(out: Path, idx: dict, index_name: str = INDEX_NAME) -> None:
+    p = index_path(out, index_name)
     tmp = p.with_suffix(".json.tmp")
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(idx, f, indent=1, sort_keys=True)
@@ -215,20 +280,27 @@ def scan_tree(layer_base: Path, scope: str, disk_re, exclude=None) -> dict:
     return found
 
 
-def build_index(cfg: dict, P: dict, full: bool) -> dict:
+def build_index(cfg: dict, P: dict, full: bool, scope: dict) -> dict:
+    """Scan one scope's trees and refresh its own index file.
+
+    Entries of other scopes live in other index files and are never
+    touched here; within this file, entries not seen by the scan are
+    removed (rescoping/exclusions).
+    """
     disk_re = re.compile(cfg["disk_skip_regex"])
     exclude = _excluded_dirs(cfg)
     root, patch = Path(P["root"]), Path(P["patch"]) if P["patch"] else None
     out = Path(P["out"])
-    idx = load_index(out)
+    idx = load_index(out, scope["index"])
     entries = idx.setdefault("entries", {})
     seen = set()
     stats = {"new": 0, "kept": 0, "gone": 0}
 
-    for scope in cfg["scope_trees"]:
-        print(f"scan scope: {scope}", flush=True)
-        r_map = scan_tree(root, scope, disk_re, exclude)
-        p_map = scan_tree(patch, scope, disk_re, exclude) if patch else {}
+    for scope_tree in scope["trees"]:
+        print(f"scan scope[{scope['name']}]: {scope_tree}", flush=True)
+        r_map = scan_tree(root, scope_tree, disk_re, exclude)
+        p_map = scan_tree(patch, scope_tree, disk_re, exclude) \
+            if patch else {}
         # Overlay merge case-insensitively (SPEC §7): a patch file whose
         # name differs only in case from a root file overrides it, and the
         # patch spelling becomes the canonical rel — the same rule as the
@@ -311,13 +383,13 @@ def build_index(cfg: dict, P: dict, full: bool) -> dict:
             if src_rel:
                 entries[rel]["src_rel"] = src_rel
             stats["new"] += 1
-        save_index(out, idx)
+        save_index(out, idx, scope["index"])
 
     gone = [k for k in entries if k not in seen]
     for k in gone:
         del entries[k]
     stats["gone"] = len(gone)
-    save_index(out, idx)
+    save_index(out, idx, scope["index"])
     return stats, idx
 
 
@@ -1400,7 +1472,8 @@ def release_lock(lock: Path) -> None:
 
 def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   pending: list, jobs: int, t_start: float,
-                  done_counts: dict, displays: list):
+                  done_counts: dict, displays: list,
+                  index_name: str = INDEX_NAME):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
@@ -1465,7 +1538,7 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                               click_retry=args.retry_desktop,
                               force=args.force)
                 with state_lock:
-                    save_index(out, idx)
+                    save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
                                                 + 1)
         except Exception as ex:
@@ -1491,7 +1564,7 @@ def _display_list(base: str, jobs: int):
     return [f":{base_num + i}" for i in range(jobs)]
 
 
-def cmd_run(cfg: dict, P: dict, args) -> int:
+def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
     if args.retry_desktop and shutil.which("xdotool") is None:
         sys.exit("error: --retry-desktop needs xdotool in PATH")
     out = Path(P["out"])
@@ -1507,7 +1580,7 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
             print(f"Xvfb started on {disp} (pid {xv.pid})", flush=True)
             xvfbs.append(xv)
 
-    idx = load_index(out)
+    idx = load_index(out, scope["index"])
     entries = idx["entries"]
     pending = []
     for rel in sorted(entries):
@@ -1541,7 +1614,8 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
             continue
         pending.append(e)
 
-    print(f"pending entries: {len(pending)}", flush=True)
+    print(f"pending entries: {len(pending)} "
+          f"(scope {scope['name']}, index {scope['index']})", flush=True)
     if jobs > 1:
         print(f"parallel jobs: {jobs} on displays {', '.join(displays)}",
               flush=True)
@@ -1554,7 +1628,7 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
         if jobs > 1:
             interrupted, processed = _run_parallel(
                 cfg, P, args, out, idx, pending, jobs, t_start, done_counts,
-                displays)
+                displays, index_name=scope["index"])
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -1585,7 +1659,7 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
                 process_entry(cfg, P, e, log,
                               click_retry=args.retry_desktop,
                               force=args.force)
-                save_index(out, idx)
+                save_index(out, idx, scope["index"])
                 done_counts[e["status"]] = done_counts.get(e["status"], 0) + 1
                 if STOP_EVENT.is_set():
                     interrupted = True
@@ -1593,7 +1667,7 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
     except KeyboardInterrupt:
         interrupted = True
     finally:
-        save_index(out, idx)
+        save_index(out, idx, scope["index"])
         release_lock(lock)
         for xv in xvfbs:
             kill_group(xv.pid)
@@ -1608,14 +1682,15 @@ def cmd_run(cfg: dict, P: dict, args) -> int:
 # --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
-def cmd_index(cfg: dict, P: dict, args) -> int:
+def cmd_index(cfg: dict, P: dict, args, scope: dict) -> int:
     global STOP_EVENT
-    stats, idx = build_index(cfg, P, args.full)
+    stats, idx = build_index(cfg, P, args.full, scope)
     entries = idx["entries"]
     by_status = {}
     for e in entries.values():
         by_status[e["status"]] = by_status.get(e["status"], 0) + 1
-    print(f"\nindex: {len(entries)} entries "
+    print(f"\nindex[{scope['name']}] {scope['index']}: "
+          f"{len(entries)} entries "
           f"(new {stats['new']}, unchanged {stats['kept']}, "
           f"gone {stats['gone']})")
     for k in sorted(by_status):
@@ -1634,11 +1709,11 @@ def cmd_index(cfg: dict, P: dict, args) -> int:
     return 0
 
 
-def cmd_detect(cfg: dict, P: dict, args) -> int:
+def cmd_detect(cfg: dict, P: dict, args, scope: dict) -> int:
     """Offline icon detection on existing desktop previews (no Hatari)."""
     out = Path(P["out"])
     out.mkdir(parents=True, exist_ok=True)
-    idx = load_index(out)
+    idx = load_index(out, scope["index"])
     entries = idx["entries"]
     lock = acquire_lock(out)
     stats = {"checked": 0, "found": 0, "no_icon": 0, "skipped": 0,
@@ -1694,11 +1769,12 @@ def cmd_detect(cfg: dict, P: dict, args) -> int:
             if i % 200 == 0:
                 print(f"  ... {i}/{len(desktops)} "
                       f"({stats['found']} icons)", flush=True)
-                save_index(out, idx)
-        save_index(out, idx)
+                save_index(out, idx, scope["index"])
+        save_index(out, idx, scope["index"])
     finally:
         release_lock(lock)
-    print(f"detect: checked {stats['checked']}, icons {stats['found']} "
+    print(f"detect[{scope['name']}]: checked {stats['checked']}, "
+          f"icons {stats['found']} "
           f"(prg {stats['strategy']['prg']}, "
           f"drive {stats['strategy']['drive']}), "
           f"no icon {stats['no_icon']}, skipped {stats['skipped']}")
@@ -1717,7 +1793,7 @@ def _is_bootable(zip_contents) -> bool:
     return False
 
 
-def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
+def cmd_cleanup_drive_led(cfg: dict, P: dict, args, scope: dict) -> int:
     """Remove previews that only show Hatari's drive LED overlay.
 
     Such screenshots (documentation/manuals and some data disks) are a
@@ -1732,7 +1808,7 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
     (manual curation or a real game shot) and must not be reset.
     """
     out = Path(P["out"])
-    idx = load_index(out)
+    idx = load_index(out, scope["index"])
     entries = idx["entries"]
     lock = acquire_lock(out)
     stats = {"scanned": 0, "entries": 0, "previews": 0, "candidates": 0,
@@ -1817,11 +1893,11 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
             stats["scanned"] += 1
 
         if not args.dry_run:
-            save_index(out, idx)
+            save_index(out, idx, scope["index"])
     finally:
         release_lock(lock)
 
-    print(f"cleanup-drive-led: entries {stats['entries']} "
+    print(f"cleanup-drive-led[{scope['name']}]: entries {stats['entries']} "
           f"(bootable {stats['bootable']}, refetch {stats['refetch']}), "
           f"previews {stats['previews']}, candidates {stats['candidates']}, "
           f"jsons {stats['jsons']}"
@@ -1829,7 +1905,7 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args) -> int:
     return 0
 
 
-def cmd_reclassify(cfg: dict, P: dict, args) -> int:
+def cmd_reclassify(cfg: dict, P: dict, args, scope: dict) -> int:
     """Offline pass: split coarse ``desktop`` kinds into finer categories.
 
     Walks index entries with ``status == "desktop"``, re-analyzes their
@@ -1845,7 +1921,7 @@ def cmd_reclassify(cfg: dict, P: dict, args) -> int:
     drive-LED resets) are skipped and reported.
     """
     out = Path(P["out"])
-    idx = load_index(out)
+    idx = load_index(out, scope["index"])
     entries = idx["entries"]
     lock = acquire_lock(out)
     stats = {"scanned": 0, "updated": 0, "no_preview": 0,
@@ -1897,9 +1973,9 @@ def cmd_reclassify(cfg: dict, P: dict, args) -> int:
             stats["updated"] += 1
             if i % 500 == 0:
                 print(f"  ... {i}/{len(targets)}", flush=True)
-                save_index(out, idx)
+                save_index(out, idx, scope["index"])
         if not args.dry_run:
-            save_index(out, idx)
+            save_index(out, idx, scope["index"])
     finally:
         release_lock(lock)
 
@@ -1907,7 +1983,8 @@ def cmd_reclassify(cfg: dict, P: dict, args) -> int:
     listed = ""
     if getattr(args, "list", ""):
         listed = f" [list '{args.list}']"
-    print(f"reclassify: scanned {stats['scanned']}, updated "
+    print(f"reclassify[{scope['name']}]: scanned {stats['scanned']}, "
+          f"updated "
           f"{stats['updated']}, kinds ({kinds or '-'}), "
           f"no preview {stats['no_preview']}, errors {stats['errors']}"
           + (" [dry-run, nothing changed]" if args.dry_run else "")
@@ -1922,44 +1999,68 @@ def cmd_reclassify(cfg: dict, P: dict, args) -> int:
     return 0
 
 
-def cmd_prune(cfg: dict, P: dict, args) -> int:
+def cmd_prune(cfg: dict, P: dict, args, scope: dict) -> int:
     """Remove output left behind by index entries that no longer exist.
 
     Deletes per-entry ``logs/<rel>.log`` files whose index entry is gone and
     any mirror directories that became empty (bottom-up, only truly empty
     directories are removed, never ones that still hold files). Useful after
-    excluding directories (section 4.4) or rescoping.
+    excluding directories (section 4.4) or rescoping. Only this scope's
+    trees and index are considered; other scopes' files are never touched.
     """
     out = Path(P["out"])
-    idx = load_index(out)
+    idx = load_index(out, scope["index"])
     entries = idx["entries"]
     lock = acquire_lock(out)
     stats = {"logs": 0, "dirs": 0}
-    scope_roots = [out / s for s in cfg["scope_trees"]]
+    scope_roots = [out / s for s in scope["trees"]]
+
+    def _in_scope(rel: str) -> bool:
+        return any(rel == t or rel.startswith(t + "/")
+                   for t in scope["trees"])
 
     try:
-        # 1. logs/<rel>.log  ->  drop when <rel> is not in the index
+        # 1. logs/<rel>.log  ->  drop when <rel> is not in the index.
+        # Walk only this scope's log subtrees (never the whole logs/ tree,
+        # which holds every scope's logs and is slow on the NAS).
         logs_root = out / "logs"
         if logs_root.is_dir():
             expected = {
                 (Path(rel).parent / safe_filename(Path(rel).stem)).as_posix()
                 for rel in entries
             }
-            for log in logs_root.rglob("*.log"):
-                rel = log.relative_to(logs_root).with_suffix("").as_posix()
-                if rel in expected:
+            for tree in scope["trees"]:
+                sub = logs_root / tree
+                if not sub.is_dir():
                     continue
-                stats["logs"] += 1
-                if not args.dry_run:
-                    log.unlink(missing_ok=True)
+                for log in sub.rglob("*.log"):
+                    if STOP_EVENT is not None and STOP_EVENT.is_set():
+                        break
+                    rel = log.relative_to(logs_root).with_suffix("").as_posix()
+                    if not _in_scope(rel):
+                        continue
+                    if rel in expected:
+                        continue
+                    stats["logs"] += 1
+                    if not args.dry_run:
+                        log.unlink(missing_ok=True)
 
-        # 2. empty mirror directories under each scope root (bottom-up)
+        # 2. empty mirror directories under each scope root (bottom-up).
+        # Directory collection uses os.walk so Ctrl+C is honoured even on
+        # a slow NAS (a single rglob().sorted() would only be interruptible
+        # after the whole subtree was listed).
         for root in scope_roots:
             if not root.is_dir():
                 continue
-            dirs = sorted((p for p in root.rglob("*") if p.is_dir()),
-                          key=lambda p: len(p.parts), reverse=True)
+            dirs = []
+            for dp, dns, _fns in os.walk(root):
+                if STOP_EVENT is not None and STOP_EVENT.is_set():
+                    break
+                dirs.extend(Path(dp) / d for d in dns)
+            dirs.sort(key=lambda p: len(p.parts), reverse=True)
             for d in dirs:
+                if STOP_EVENT is not None and STOP_EVENT.is_set():
+                    break
                 try:
                     if any(d.iterdir()):
                         continue
@@ -1974,7 +2075,8 @@ def cmd_prune(cfg: dict, P: dict, args) -> int:
     finally:
         release_lock(lock)
 
-    print(f"prune: logs {stats['logs']}, empty dirs {stats['dirs']}"
+    print(f"prune[{scope['name']}]: logs {stats['logs']}, "
+          f"empty dirs {stats['dirs']}"
           + (" [dry-run, nothing changed]" if args.dry_run else ""))
     return 0
 
@@ -2003,11 +2105,18 @@ def main() -> int:
                                              "generator")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
+    def _scope_arg(p):
+        p.add_argument("--scope", type=str, default="",
+                       help="config scope to work on (default: the "
+                            "configured scope_default)")
+
     p_index = sub.add_parser("index", help="build/refresh the zip index")
+    _scope_arg(p_index)
     p_index.add_argument("--full", action="store_true",
                          help="rescan metadata of all entries")
 
     p_run = sub.add_parser("run", help="process pending entries")
+    _scope_arg(p_run)
     p_run.add_argument("--limit", type=int, default=0,
                        help="max entries this invocation")
     p_run.add_argument("--hours", type=float, default=0,
@@ -2036,6 +2145,7 @@ def main() -> int:
         "detect",
         help="find the program icon in existing desktop previews "
              "(offline, no Hatari)")
+    _scope_arg(p_detect)
     p_detect.add_argument("--force", action="store_true",
                           help="redetect even if a result already exists")
     p_detect.add_argument("--only", type=str, default="",
@@ -2045,6 +2155,7 @@ def main() -> int:
         "cleanup-drive-led",
         help="delete previews that only show Hatari's drive-LED overlay "
              "and clean the index")
+    _scope_arg(p_clean)
     p_clean.add_argument("--dry-run", action="store_true",
                          help="report what would be removed, change nothing")
     p_clean.add_argument("--only", type=str, default="",
@@ -2054,6 +2165,7 @@ def main() -> int:
         "reclassify",
         help="offline: split coarse desktop kinds into desktop/textscreen/"
              "darkscreen (no Hatari)")
+    _scope_arg(p_recl)
     p_recl.add_argument("--dry-run", action="store_true",
                         help="report the kind counts, change nothing")
     p_recl.add_argument("--only", type=str, default="",
@@ -2065,6 +2177,7 @@ def main() -> int:
     p_prune = sub.add_parser(
         "prune",
         help="remove logs and empty output directories of removed entries")
+    _scope_arg(p_prune)
     p_prune.add_argument("--dry-run", action="store_true",
                          help="report what would be removed, change nothing")
 
@@ -2077,20 +2190,26 @@ def main() -> int:
         ap.error("--retry-desktop, --retry-no-usable and --retry-drive-led "
                  "are mutually exclusive")
     cfg = load_config()
+    scope_default, scopes = resolve_scopes(cfg)
+    scope_name = (args.scope or scope_default).strip()
+    if scope_name not in scopes:
+        ap.error(f"unknown scope {scope_name!r} "
+                 f"(available: {', '.join(sorted(scopes))})")
+    scope = scopes[scope_name]
     P = paths()
 
     if args.cmd == "index":
-        return cmd_index(cfg, P, args)
+        return cmd_index(cfg, P, args, scope)
     if args.cmd == "run":
-        return cmd_run(cfg, P, args)
+        return cmd_run(cfg, P, args, scope)
     if args.cmd == "detect":
-        return cmd_detect(cfg, P, args)
+        return cmd_detect(cfg, P, args, scope)
     if args.cmd == "cleanup-drive-led":
-        return cmd_cleanup_drive_led(cfg, P, args)
+        return cmd_cleanup_drive_led(cfg, P, args, scope)
     if args.cmd == "reclassify":
-        return cmd_reclassify(cfg, P, args)
+        return cmd_reclassify(cfg, P, args, scope)
     if args.cmd == "prune":
-        return cmd_prune(cfg, P, args)
+        return cmd_prune(cfg, P, args, scope)
     return 2
 
 
