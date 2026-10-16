@@ -16,9 +16,9 @@
 </header>
 
 <nav class="tabs" id="tabs" hidden>
-  <button data-section="cracked" class="active" type="button">Screenshots</button>
-  <button data-section="pd" type="button">PD Games</button>
-  <button data-section="utils" type="button">Utilities</button>
+  <button data-section="cracked" class="active" type="button">games</button>
+  <button data-section="pd" type="button">pd</button>
+  <button data-section="utils" type="button">utils</button>
 </nav>
 
 <div class="banner" id="banner" hidden></div>
@@ -36,13 +36,17 @@
   <select id="boxscan" title="Boxscan"></select>
   <select id="tos" title="TOS / Bad"></select>
   <select id="sort" title="Sort by">
-    <option value="name">Sort: name</option>
-    <option value="year">Sort: year</option>
-    <option value="publisher">Sort: publisher</option>
-    <option value="cracker">Sort: cracker</option>
-    <option value="crew">Sort: crew</option>
+    <option value="name:asc">name asc</option>
+    <option value="name:desc">name desc</option>
+    <option value="year:asc">year asc</option>
+    <option value="year:desc">year desc</option>
+    <option value="publisher:asc">publisher asc</option>
+    <option value="publisher:desc">publisher desc</option>
+    <option value="cracker:asc">cracker asc</option>
+    <option value="cracker:desc">cracker desc</option>
+    <option value="crew:asc">crew asc</option>
+    <option value="crew:desc">crew desc</option>
   </select>
-  <button id="order" type="button" title="Toggle sort order">asc</button>
   <button id="clear" type="button" title="Clear all filters">clear</button>
   <span class="result-count" id="result-count"></span>
 </div>
@@ -66,13 +70,49 @@
 
 <div class="hover-panel" id="hover" hidden></div>
 
+<div class="help" id="help" hidden role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+  <div class="help-inner">
+    <div class="help-head">
+      <strong>Keyboard</strong>
+      <span class="help-hint">any key closes</span>
+    </div>
+    <div class="help-cols">
+      <div>
+        <h3>Grid</h3>
+        <table>
+          <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>move focus</td></tr>
+          <tr><td><kbd>Enter</kbd> <kbd>Space</kbd></td><td>open lightbox</td></tr>
+          <tr><td><kbd>PgUp</kbd> <kbd>PgDn</kbd></td><td>previous / next page</td></tr>
+          <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>first / last card of the page</td></tr>
+          <tr><td><kbd>/</kbd></td><td>focus the search box</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>close lightbox / clear search / clear focus</td></tr>
+          <tr><td><kbd>?</kbd></td><td>this help</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>Lightbox</h3>
+        <table>
+          <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>previous / next game</td></tr>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>previous / next variant (screenshots first)</td></tr>
+          <tr><td><kbd>PgUp</kbd> <kbd>PgDn</kbd></td><td>previous / next image (preview + candidates)</td></tr>
+          <tr><td><kbd>Esc</kbd> / click</td><td>close (backdrop click closes too)</td></tr>
+          <tr><td>click group</td><td>crew / cracker jump to that ZIP</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true">
   <div class="lb-inner">
     <div class="lb-header">
       <div>
-        <span class="lb-badge" id="lb-badge"></span>
-        <strong id="lb-title"></strong>
-        <span class="lb-meta" id="lb-sub"></span>
+        <div>
+          <span class="lb-badge" id="lb-badge"></span>
+          <strong id="lb-title"></strong>
+          <span class="lb-meta" id="lb-sub"></span>
+        </div>
+        <div class="lb-badges" id="lb-badges"></div>
       </div>
       <div class="lb-nav">
         <span id="lb-pos"></span>

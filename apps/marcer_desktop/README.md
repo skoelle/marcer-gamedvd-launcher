@@ -122,8 +122,9 @@ The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
 `interrupted`, `skipped (disk 2+)`):
 
 - `pending` matches a game when **at least one** of its ZIPs is pending
-  (app-specific — the gallery's aggregated card status hides pending ZIPs
-  inside otherwise-done folders).
+  (the same rule the gallery's status filter applies — the aggregated
+  card status would otherwise hide pending ZIPs inside otherwise-done
+  folders).
 - All other status values use the gallery's aggregated card status
   (`done → desktop → no usable shots → interrupted → pending → skipped`).
 
@@ -138,8 +139,9 @@ result/entry counts, the gallery-style status info and — right aligned —
 the **running app version** (`v…`; release builds: stamped from the
 `desktop-v*` git tag via `--build-name`, dev builds: the pubspec version).
 
-Status info in catalog mode (app-only divergence from the gallery footer,
-which shows ZIP-entry counts only):
+Status info in catalog mode (same `games (ZIPs)` format as the gallery's
+statistics bar, plus the folder total; the gallery labels the coverage
+`info N folders` / `N without info`):
 
 - `3287 folders` — cracked games (cards) built from `index.json`; every
   game folder with at least one ZIP is one card.

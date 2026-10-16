@@ -64,20 +64,22 @@ Save, the manual screenshot curation described below.
   large game preview is shown instead. The card's main preview prefers a
   `done` variant of kind `game` over e.g. `textscreen`, and the four tiles
   are ordered the same way (`done game` → other `done` → `desktop`), so a
-  late-sorting game shot is never pushed out by textscreens
-  (gallery-parity divergence: the gallery still ranks the first `done`
-  variant by path and orders tiles by status only).
-- **Gallery-style status bar** — with-screenshot ratio, status counts (ZIP
-  entries of `index.json`), matched folder count, `index.json` mtime and
-  gameinfo generation time; the running app version (right-aligned).
+  late-sorting game shot is never pushed out by textscreens (same rules
+  as the gallery webapp).
+- **Gallery-style status bar** — coverage as separate games segments
+  (`3287 folders`, `3211 with screenshot`), status counts as
+  `done <games> (<zips> zips)`, gameinfo coverage (`gameinfo N folders` /
+  `N without gameinfo`), `index.json` mtime and gameinfo generation time;
+  the running app version (right-aligned).
 - **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
-  `desktop text` / `desktop black` / `pending` / … . `pending` is
-  **app-specific**: it matches a game when **at least one** of its ZIPs is
-  pending (the gallery's aggregated card status would hide pending ZIPs
-  inside otherwise-done folders); every other status value uses the
-  gallery's card aggregation. Note the different units: the status bar
-  counts ZIP entries, the filter counts games — `pending 5` in the bar can
-  therefore mean fewer games.
+  `desktop text` / `desktop black` / `pending` / … . `pending` matches a
+  game when **at least one** of its ZIPs is pending — the same rule the
+  gallery applies (a game can appear in `pending` and `done` at once);
+  every other status value uses the card aggregation (`done → desktop →
+  no usable shots → interrupted → pending → skipped`). The two
+  `desktop …` presets are app-only extras. The status bar reports each
+  status as games (ZIPs), so the games number equals the result count of
+  the matching dropdown selection.
 - **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
   list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
   detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
@@ -264,7 +266,7 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 | [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR`). | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) |
 | [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`; entry kinds are `game`, `desktop`, `textscreen`, `darkscreen`,
 `no_game_image` (offline `reclassify` pass; drive-LED resets re-captured via
-`run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
+`run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview; the root/patch overlay merge is case-insensitive for file **and** folder names, so each directory has exactly one canonical output spelling). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
 
 ---
 

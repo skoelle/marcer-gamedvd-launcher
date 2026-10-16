@@ -267,7 +267,10 @@ A game folder aggregates the statuses of its ZIPs:
 - `count_done`, `count_pending` etc. are included in the card payload for
   the lightbox and statistics.
 - The card's primary preview = the first (by sorted `rel`) variant preview
-  with `status` `done`, else `desktop`.
+  with `status` `done` **and `kind` `game`**, else the first with
+  `status` `done`, else the first with `status` `desktop` (desktop-app
+  parity: a real game shot wins over e.g. a `textscreen`; within a tier
+  the sorted-`rel` order decides).
 - `layer` for a grouped card: the single layer value if all its ZIPs share
   one (`ROOT` or `PATCH`), otherwise `BOTH` (overlay semantics of
   SPEC.md section 7 — one logical game, present in one or both layers).
@@ -316,6 +319,7 @@ error body `{ "error": "<message>" }`.
   "gameinfo": true,
   "index": { "entries": 22938, "mtime": 1780000000 },
   "status_counts": { "done": 1467, "desktop": 2947, "pending": 14827, "...": 0 },
+  "game_status_counts": { "done": 881, "desktop": 400, "pending": 1500, "...": 0 },
   "status_labels": { "done": "done (game)", "with_screenshot": "with screenshot", "...": "..." },
   "sections": {
     "cracked": { "games": 3108, "cards": 3108, "with_screenshot": 881, "no_info": 615 },
@@ -351,6 +355,12 @@ error body `{ "error": "<message>" }`.
 - `status_counts` always reflects the raw index (not the current filter) —
   it feeds the statistics bar; `status_labels` maps status keys to the
   human labels used in the status filter.
+- `game_status_counts` counts cracked **cards** per aggregated
+  `display_status`, except `pending`, which uses the any-variant rule of
+  section 5.3 so the statistics-bar segment equals the pending filter's
+  result count (desktop-app parity). It is always present (cards come
+  from the index even without gameinfo); without gameinfo the statistics
+  bar ignores it and shows the ZIP-level counts only.
 - `coverage` comes from `manifest.json` if available.
 - `show_candidates` / `default_status` mirror the effective config
   (section 9): the frontend disables the card candidate strip when
@@ -386,6 +396,11 @@ Semantics:
 - `status=with_screenshot` is the **default** so the grid shows the 4,414
   screenshot cards first; `status=any` shows the full archive (including
   `pending` placeholders) — the statistics bar always shows global counts.
+- `status=pending` matches a card when **any** of its ZIPs is `pending`
+  (not the `display_status` aggregate: a folder with a `done` ZIP plus a
+  `pending` ZIP is shown as `done` **and** as `pending`; the aggregated
+  rule would hide it from the pending view). All other concrete statuses
+  match the aggregated `display_status` (desktop-app parity).
 - `entry` returns exactly one card (regardless of filters/pagination) with
   an additional `position` field: the card's index in the filtered list
   under the requested `sort`/`order` (defaults `name`/`asc`), or `null`
@@ -438,6 +453,7 @@ Response:
           "rel": "Title Sorted/…/10th Frame/10th Frame - Pedro.zip",
           "name": "10th Frame - Pedro.zip",
           "status": "done",
+          "kind": "game",
           "layer": "ROOT",
           "preview": "Title Sorted/…/10th Frame/10th Frame - Pedro.png",
           "candidates": [ "Title Sorted/…/10th Frame/10th Frame - Pedro_c01.png" ]
@@ -464,6 +480,10 @@ Response:
 - `info` is absent when the folder has no gameinfo match or gameinfo is
   unavailable.
 - `preview`/`candidates` are absent when no screenshot exists.
+- Each variant carries the raw `kind` of its index entry (`game`,
+  `textscreen`, `darkscreen`, …; empty string when the entry has none) —
+  the frontend needs it for the preview/thumbnail preference rules
+  (sections 4.4 and 6.3).
 - Cards in `pd`/`utils` sections have `preview` absent and `info` present.
 
 ### 5.4 `/img/<rel path>`
@@ -511,11 +531,15 @@ decision: local desktop browser)*.
 ### 6.2 Page structure (top to bottom)
 
 1. **Header**: title + statistics bar (section 6.7).
-2. **Section tabs**: `Screenshots` (cracked) | `PD Games` | `Utilities`
-   (PD/Utils hidden in screenshots-only mode).
+2. **Section tabs**: `games` (cracked) | `pd` | `utils`
+   (PD/Utils hidden in screenshots-only mode; labels match the desktop
+   app's section tabs).
 3. **Control bar**: search input, status select, facet filters
-   (publisher/crew/cracker/language/year/flags/tos), sort select + order
-   toggle, letter navigation row (A–Z + `0-9` + `Any`).
+   (publisher/crew/cracker/language/year/flags/tos), one **combined
+   sort+order dropdown** with the ten entries `<key> asc|desc`
+   (`name`/`year`/`publisher`/`cracker`/`crew`, e.g. `year desc` — the
+   URL keeps the separate `sort`/`order` parameters), letter navigation
+   row (A–Z + `0-9` + `Any`).
 4. **Grid**: grouped cards (section 6.4), paginated.
 5. **Pagination**: page indicator + prev/next + page-size-constant
    (`offset/limit`); keyboard PageUp/PageDown works on the grid (6.6).
@@ -536,8 +560,12 @@ Filter/search/sort state is reflected in the URL query string
 - Preview image, or placeholder block when `screenshots` is false.
 - **Multi-variant grid** (no focus): when no crew/cracker filter is active
   and the folder has **≥ 2 variants with a screenshot**, the card shows up
-  to **four** variant screenshots in a 2×2 grid (best status first:
-  `done`, then `desktop`, then the rest). Clicking a thumb opens the
+  to **four** variant screenshots in a 2×2 grid (best first: status tier
+  `done`, then `desktop`, then the rest; **within a tier `kind` `game`
+  before other kinds**, then variant order — desktop `thumbIndices`).
+  Exception: when exactly **one** shown thumb is a `done` game shot, the
+  card shows that game screenshot large instead of the 2×2 grid (the
+  desktop app's single game-shot card). Clicking a thumb opens the
   lightbox on that ZIP. Folders with a single screenshot keep the large
   single preview (+ candidate strip).
 - **Crew/cracker focus fallback** (`focus_variant === -1`): when a
@@ -582,6 +610,13 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
   gray = empty. When a variant has **more than one candidate** image
   (`candidates.length > 1`), a small blue `+N` count badge is shown at the
   bottom-right of its filmstrip thumbnail (above the name label).
+  - **Display order**: variants **with a screenshot first** (stable), then
+    the preview-less ones — only the rendered order and the `↑`/`↓`
+    navigation follow this; the underlying variant index (URL, side panel,
+    `↑`/`↓` target mapping) is unchanged (desktop-app parity).
+  - **Header badges** under the title line: layer (`ROOT`/`PATCH`/`BOTH`),
+    a status histogram of the folder (`2× done  1× pending`) and the year
+    when known.
 - **Candidate strip**: preview + all `_cNN` images of the *selected*
   variant selectable. The strip always reserves a fixed height (~56 px)
   so the layout does not jump when candidates appear/disappear between
@@ -597,12 +632,20 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
   be identified (`focus_variant === -1`), the subtitle is prefixed with
   `crew ZIP not found — ` and the XLS row matching the crew (normalized
   `&`/`and` comparison) is highlighted instead.
+  - **Clickable crew/cracker groups**: the `Cracked by`/`Crew` values of
+    the Game info table and the release-variant rows are links; clicking
+    one switches the lightbox to **that group's ZIP** of the current card
+    (same fuzzy matcher as the crew/cracker focus, section 5.3, applied
+    client-side). No matching ZIP → variant 0. Clicking a group does
+    **not** change the list filters.
 - Navigation: `←`/`→` move to the previous/next **card of the current page**
-  (v1 limit: within the loaded page), `↑`/`↓` switch variant, `PgUp`/`PgDn`
-  switch image (preview/candidates), `Esc` closes, click on the backdrop
-  closes.
+  (v1 limit: within the loaded page; the next card opens on its first
+  filmstrip entry), `↑`/`↓` switch variant **in filmstrip order**, `PgUp`/
+  `PgDn` switch image (preview/candidates), `Esc` closes, click on the
+  backdrop closes.
 - Status/step indicator (e.g. `3 / 60  ·  variant 2 / 3` — the variant
-  part only when the folder has more than one ZIP).
+  part only when the folder has more than one ZIP; the variant number is
+  the **filmstrip position** of the selected ZIP).
 
 ### 6.6 Keyboard model
 
@@ -617,8 +660,12 @@ parameter):
 | `PageUp` / `PageDown` | previous / next page |
 | `Home` / `End` | first / last card of the page |
 | `/` | focus the search input (any time) |
+| `?` | open the keyboard help overlay (grid focused; `?` typed into the search input stays in the input) |
 | `Esc` in search input | clear search and return focus to grid |
 
+- The help overlay closes on **any subsequent key** (auto-repeat is
+  ignored so a held key does not flicker it) or on a click on its
+  backdrop.
 - All interactive elements are reachable by Tab as well; focus is always
   visible (outline consistent with the selection colors of SPEC.md).
 - Mouse-only operation must remain fully equivalent.
@@ -627,8 +674,17 @@ parameter):
 
 Shown in the header, sourced from `/api/meta`:
 
-- Cracked view: counts by status (the six values of section 2.2) and
-  `with screenshot / total`; gameinfo coverage (`matched / folders`).
+- Cracked view: `X / Y with screenshot` where **both counts are games
+  (cards)**, then one segment per status formatted as
+  `done <games> (<zips> zips)` — games from `game_status_counts` (the
+  `pending` segment uses the any-variant rule so it equals the pending
+  filter's result count), ZIPs from `status_counts`; segments with zero
+  games and zero ZIPs are omitted. In screenshots-only mode (no join)
+  only the raw ZIP counts are shown (`done 1467`). Gameinfo coverage is
+  shown as `info <matched> folders` plus `<no_info> without info`.
+- The tool version (`gallery <x.y.z>`) is shown **right-aligned** at the
+  end of the statistics bar; the footer line keeps only the data
+  freshness (index mtime, gameinfo `generated_at`).
 - PD/Utils views: game counts + coverage from `manifest.json`.
 - Current result count of the active filters (`total` of the last
   `/api/entries` response) is shown next to the controls.
@@ -637,12 +693,12 @@ Shown in the header, sourced from `/api/meta`:
 
 | Tab | Source | Cards | Notes |
 |---|---|---|---|
-| Screenshots | join of `index.json` + `games-cracked.json` | grouped, with previews | default view |
-| PD Games | `games-pd.json` | metadata cards, placeholder image | no screenshots |
-| Utilities | `games-utils.json` | metadata cards, placeholder image | no screenshots |
+| games | join of `index.json` + `games-cracked.json` | grouped, with previews | default view (label `games`, section key `cracked`) |
+| pd | `games-pd.json` | metadata cards, placeholder image | no screenshots |
+| utils | `games-utils.json` | metadata cards, placeholder image | no screenshots |
 
 - Letter navigation, search, sorting, publisher/language/year facets work in
-  all three sections; status/flag/tos filters only in Screenshots.
+  all three sections; status/flag/tos filters only in games.
 - Switching tabs preserves `q`, `sort`, `order`, `letter` where applicable
   and resets incompatible filters (documented in the UI as a reset).
 
@@ -685,11 +741,14 @@ Shown in the header, sourced from `/api/meta`:
    four screenshots of the folder's other variants (section 6.3). Clicking
    the card opens the lightbox on that variant.
 4. **Status presets**: `with_screenshot` (default), `done`, `desktop`, … as
-   listed in section 5.2; the statistics bar always shows global numbers.
+   listed in section 5.2; `pending` matches a card when **any** of its ZIPs
+   is pending (section 5.3). The statistics bar always shows global numbers.
 5. **Sorting**: `name` (default, case-insensitive), `year` (numeric, `unknown`
    last), `publisher`, `cracker` (=`cracked_by`), `crew` (alphabetical,
    empty values last), `order` `asc|desc`; ties broken by name then `rel`
-   (stable pagination).
+   (stable pagination). The UI exposes key and order as one combined
+   dropdown (`<key> asc|desc`), while the API and the URL keep the two
+   parameters.
 6. **Letter navigation**: exact match on the card's `letter` facet value
    (`0-9` for the first bucket, `Any` disables the filter).
 
@@ -809,6 +868,18 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     new/updated card visible (section 8.4 reload path).
 12. **Performance**: `/api/entries` timings on the full dataset with the
     default filter and with `status=any` (budget table, section 8.5).
+13. **Desktop-parity display rules**: a folder with a `done` `textscreen`
+    plus a later `done` `game` ZIP previews the **game** shot; a 2×2 thumb
+    grid never shows exactly one `done` thumb (that card shows the game
+    shot large); `status=pending` lists a `done`+`pending` folder;
+    `done <games> (<zips> zips)` segments match the dropdown counts.
+14. **Lightbox order/groups**: filmstrip lists screenshot variants first
+    and `↑`/`↓` follows that order; the variant counter shows the
+    filmstrip position; a crew/cracker link in Game info and a
+    release-variant row both switch to that group's ZIP (unknown group →
+    variant 0); header shows layer + status histogram + year badges.
+15. **Help**: `?` opens the overlay, the next key closes it, `?` typed
+    into the search input stays in the input.
 
 ---
 
@@ -853,8 +924,12 @@ A conforming implementation satisfies all of the following.
       shown, never dropped.
 - [x] D2 Without `MARCER_DATA_DIR` the app runs in screenshots-only mode
       (section 4.6).
-- [x] D3 Status aggregation and primary preview follow section 4.4.
+- [x] D3 Status aggregation and primary preview follow section 4.4
+      (preview prefers `done` + `kind: game`).
 - [x] D4 Year extraction follows section 4.5 (`unknown` handling).
+- [x] D5 Variant payloads carry `kind`; `game_status_counts` follows the
+      any-variant `pending` rule (sections 5.2/5.3), and `status=pending`
+      matches per ZIP, not via `display_status`.
 
 **API**
 - [x] A1 All endpoints of section 5 exist with the documented parameters.
@@ -866,13 +941,21 @@ A conforming implementation satisfies all of the following.
 **UI**
 - [x] U1 Visual design matches the `GALLERY_TEMPLATE` language (colors,
       cards, badges, lazy images).
-- [x] U2 All section 6.6 keys work in the grid; all lightbox keys (6.5)
-      work.
+- [x] U2 All section 6.6 keys work in the grid (including `?` help) and all
+      lightbox keys (6.5) work.
 - [x] U3 Hover panels and lightbox show the gameinfo fields (or path info
       without gameinfo).
-- [x] U4 Deep links `?entry=` and list-state params behave per section 6.9.
-- [x] U5 Statistics bar shows global counts and current result count.
-- [x] U6 PD/Utils sections render metadata cards without previews.
+- [x] U4 Deep links `?entry=` and list-state params behave per section 6.9
+      (combined sort dropdown still writes `sort`+`order`).
+- [x] U5 Statistics bar shows the section 6.7 format (games/ZIPs segments,
+      `… without info`, right-aligned version) plus the current result
+      count.
+- [x] U6 PD/Utils sections render metadata cards without previews and are
+      labelled `pd`/`utils`.
+- [x] U7 Card thumbs follow the section 6.3 ordering, with the single
+      game-shot exception.
+- [x] U8 Lightbox filmstrip order (screenshots first), header badges and
+      clickable crew/cracker groups follow section 6.5.
 
 **Process**
 - [x] P1 Zero new packages in the repo `.venv` (stdlib only).

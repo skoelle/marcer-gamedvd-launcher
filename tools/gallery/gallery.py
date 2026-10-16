@@ -152,6 +152,7 @@ def _build_cracked_cards(entries, cracked_games):
                 "rel": rel,
                 "name": e.get("name") or rel.rsplit("/", 1)[-1],
                 "status": st,
+                "kind": e.get("kind") or "",
                 "layer": e.get("layer") or "",
                 "preview": _full_png(rel, e.get("preview")),
                 "candidates": [_full_png(rel, c)
@@ -160,8 +161,15 @@ def _build_cracked_cards(entries, cracked_games):
             })
         display_status = next((s for s in STATUS_ORDER if scounts.get(s)),
                               "pending")
+        # among done variants prefer a real game shot (e.g. over a
+        # textscreen); within a tier the sorted-rel order decides
+        # (desktop app `card.dart:331-374`, SPEC 4.4)
         preview = next((v["preview"] for v in variants
-                        if v["status"] == "done" and v["preview"]), None)
+                        if v["status"] == "done" and v["kind"] == "game"
+                        and v["preview"]), None)
+        if preview is None:
+            preview = next((v["preview"] for v in variants
+                            if v["status"] == "done" and v["preview"]), None)
         if preview is None:
             preview = next((v["preview"] for v in variants
                             if v["status"] == "desktop" and v["preview"]),
@@ -516,6 +524,18 @@ class DataStore:
                     "matched_folders": src.get("matched_folders"),
                     "unmatched_folders": src.get("unmatched_folders"),
                 }
+        # per-status CARD (game) counts for the statistics bar — the ZIP
+        # level counts above stay in `status_counts`. `pending` uses the
+        # any-variant rule of `_matches` so the bar segment equals the
+        # pending dropdown result count (desktop `statusLine`).
+        game_status_counts = {s: 0 for s in STATUS_ORDER}
+        for c in self.cards["cracked"]:
+            ds = c["display_status"]
+            if ds in game_status_counts:
+                game_status_counts[ds] += 1
+        game_status_counts["pending"] = sum(
+            1 for c in self.cards["cracked"]
+            if any(v["status"] == "pending" for v in c["variants"]))
         self.meta = {
             "gameinfo": self.gameinfo_available,
             "index": {
@@ -523,6 +543,7 @@ class DataStore:
                 "mtime": self._mtimes.get("index"),
             },
             "status_counts": status_counts,
+            "game_status_counts": game_status_counts,
             "sections": {
                 "cracked": {
                     "games": len(games["cracked"]),
@@ -563,6 +584,12 @@ def _matches(card, params, section):
         if st == "with_screenshot":
             # crew/cracker focus always shows the focused variant, even empty
             if not focus_active and not card["screenshots"]:
+                return False
+        elif st == "pending":
+            # app parity: a card matches `pending` when ANY of its ZIPs is
+            # pending (the display_status aggregate would hide pending ZIPs
+            # of folders that already have a done ZIP)
+            if not any(v["status"] == "pending" for v in card["variants"]):
                 return False
         elif st != "any" and card["display_status"] != st:
             return False

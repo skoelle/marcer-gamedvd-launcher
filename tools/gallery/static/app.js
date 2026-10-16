@@ -15,6 +15,7 @@ const STATUS_OPTIONS = [
 ];
 const TRI_OPTIONS = [["any", "any"], ["yes", "yes"], ["no", "no"]];
 const LETTERS = ["0-9", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
+const SORT_KEYS = ["name", "year", "publisher", "cracker", "crew"];
 
 const SECTION_CONTROLS = {
   cracked: ["status", "publisher", "crew", "cracker", "language", "year",
@@ -155,11 +156,11 @@ function buildFacets() {
   const fields = SECTION_CONTROLS[section] || [];
   // hide controls not available for this section / without gameinfo
   for (const id of ["status", "publisher", "crew", "cracker", "language",
-    "year", "raw", "pasti", "boxscan", "tos", "sort", "order", "clear",
+    "year", "raw", "pasti", "boxscan", "tos", "sort", "clear",
     "search"]) {
     const el = $(id);
     if (!el) continue;
-    if (id === "sort" || id === "order" || id === "clear" || id === "search") {
+    if (id === "sort" || id === "clear" || id === "search") {
       el.hidden = false;
       continue;
     }
@@ -183,9 +184,7 @@ function buildFacets() {
   $("tos").innerHTML =
     `<option value="any">TOS/Bad: any</option><option value="has">TOS/Bad: has note</option>`;
   $("tos").value = state.tos;
-  $("sort").value = ["name", "year", "publisher", "cracker", "crew"]
-    .includes(state.sort) ? state.sort : "name";
-  $("order").textContent = state.order;
+  $("sort").value = `${SORT_KEYS.includes(state.sort) ? state.sort : "name"}:${state.order === "desc" ? "desc" : "asc"}`;
 }
 
 function buildLetters() {
@@ -204,22 +203,37 @@ function buildLetters() {
 function renderStats(extra) {
   if (!meta) return;
   const sc = meta.status_counts || {};
+  const gc = meta.game_status_counts || {};
   const parts = [];
   if (meta.gameinfo && meta.sections && meta.sections.cracked) {
     const s = meta.sections.cracked;
-    parts.push(`<span class="st"><b>${s.with_screenshot}</b> / ${meta.index.entries} with screenshot</span>`);
+    // both counts are games (cards), like the desktop status bar
+    parts.push(`<span class="st"><b>${s.with_screenshot}</b> / ${s.cards} with screenshot</span>`);
   } else {
     parts.push(`<span class="st"><b>${meta.index.entries}</b> index entries</span>`);
   }
   const order = ["done", "desktop", "pending", "skipped_disk_n",
     "no_usable_shots", "interrupted"];
   for (const k of order) {
-    if (sc[k]) parts.push(`<span class="st">${esc(k)} <b>${sc[k]}</b></span>`);
+    const games = gc[k] || 0;
+    const zips = sc[k] || 0;
+    if (!meta.gameinfo) {
+      // no card join: only the ZIP level counts are known
+      if (zips) parts.push(`<span class="st">${esc(k)} <b>${zips}</b></span>`);
+      continue;
+    }
+    if (!games && !zips) continue;
+    // `done 2635 (8979 zips)` — games (ZIPs), like the desktop status bar
+    parts.push(`<span class="st">${esc(k)} <b>${games}</b> (${zips} zips)</span>`);
   }
   if (meta.coverage && meta.coverage.matched_folders != null) {
     parts.push(`<span class="st">info <b>${meta.coverage.matched_folders}</b> folders</span>`);
   }
+  const noInfo = meta.sections && meta.sections.cracked
+    ? meta.sections.cracked.no_info : 0;
+  if (noInfo) parts.push(`<span class="st">${noInfo} without info</span>`);
   if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
+  parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
   $("stats").innerHTML = parts.join("");
 }
 
@@ -230,7 +244,7 @@ function renderFooter() {
     bits.push("index.json: " + new Date(meta.index.mtime * 1000).toLocaleString());
   }
   if (meta.generated_at) bits.push("gameinfo: " + meta.generated_at);
-  bits.push("gallery " + meta.tool_version);
+  // the tool version is shown right-aligned in the statistics bar
   if (!meta.gameinfo) bits.push("gameinfo unavailable — screenshots only");
   $("footer").textContent = bits.join("  ·  ");
 }
@@ -286,8 +300,9 @@ function renderGrid(cards) {
         ? `<div class="var-miss">${missLabel}</div>` +
           `<div class="var-thumbs">${thumbs}</div>`
         : `<div class="ph"></div>`;
-    } else if (!focusActive && countPreviews(c) >= 2) {
-      // no focus: show up to 4 variant screenshots (best first)
+    } else if (!focusActive && countPreviews(c) >= 2 && doneThumbCount(c) !== 1) {
+      // no focus: show up to 4 variant screenshots (best first); exactly
+      // one game shot → the large preview instead (desktop `_multiThumbBody`)
       body = `<div class="var-thumbs">${variantThumbs(c)}</div>`;
     } else if (c.preview) {
       body = `<img loading="lazy" src="${imgSrc(c.preview)}" alt="">`;
@@ -315,18 +330,37 @@ function countPreviews(card) {
   return card.variants.reduce((n, vv) => n + (vv.preview ? 1 : 0), 0);
 }
 
-// up to 4 clickable variant screenshots, "best" status first
+// Variant indices shown as clickable thumbs, best first: status tier
+// (`done`, then `desktop`, then the rest), then `kind: game` before other
+// kinds, then variant index — desktop `GameCard.thumbIndices` (the plain
+// gallery only ranked by status). At most `limit` entries.
 const STATUS_RANK = { done: 0, desktop: 1 };
-function variantThumbs(card) {
+function thumbVariantIndices(card, limit = 4) {
   return card.variants
     .map((vv, vi) => ({ vv, vi }))
     .filter((x) => x.vv.preview)
     .sort((a, b) => (STATUS_RANK[a.vv.status] ?? 2)
-      - (STATUS_RANK[b.vv.status] ?? 2) || a.vi - b.vi)
-    .slice(0, 4)
-    .map((x) => `<img loading="lazy" src="${imgSrc(x.vv.preview)}" alt="" ` +
-      `data-varv="${x.vi}" title="${esc(x.vv.name)} (${esc(x.vv.status)})">`)
-    .join("");
+      - (STATUS_RANK[b.vv.status] ?? 2)
+      || (a.vv.kind === "game" ? 0 : 1) - (b.vv.kind === "game" ? 0 : 1)
+      || a.vi - b.vi)
+    .slice(0, limit)
+    .map((x) => x.vi);
+}
+
+// Number of shown thumbs that are real game screenshots (status `done`);
+// the rest are e.g. `desktop` shots (desktop `_doneThumbCount`).
+function doneThumbCount(card) {
+  return thumbVariantIndices(card)
+    .filter((vi) => card.variants[vi].status === "done").length;
+}
+
+// up to 4 clickable variant screenshots, "best" first
+function variantThumbs(card) {
+  return thumbVariantIndices(card).map((vi) => {
+    const vv = card.variants[vi];
+    return `<img loading="lazy" src="${imgSrc(vv.preview)}" alt="" ` +
+      `data-varv="${vi}" title="${esc(vv.name)} (${esc(vv.status)})">`;
+  }).join("");
 }
 
 function renderPager(total) {
@@ -439,6 +473,97 @@ function lightboxImages(card) {
   return imgs;
 }
 
+// Filmstrip display order: variants with a screenshot first (stable), then
+// the preview-less ones — desktop `_variants` (game_lightbox.dart).
+// `lb.variant` keeps the ORIGINAL variant index (used for the URL and the
+// side panel); only the rendered order and ↑/↓ navigation follow this.
+function filmOrder(card) {
+  const withP = [], withoutP = [];
+  card.variants.forEach((vv, vi) => (vv.preview ? withP : withoutP).push(vi));
+  return withP.concat(withoutP);
+}
+
+// ↑/↓: move to the previous/next variant in filmstrip display order
+function lbMoveVariant(delta) {
+  const card = pageCards[lb.idx];
+  if (!card || card.variants.length < 2) return;
+  const order = filmOrder(card);
+  let pos = order.indexOf(lb.variant);
+  if (pos < 0) pos = 0;
+  lb.variant = order[(pos + delta + order.length) % order.length];
+  lb.img = 0;
+  renderLightbox();
+  writeURL(false);
+}
+
+const CREW_STOPWORDS = new Set(["and", "the", "co", "crew", "inc", "ltd",
+  "team", "software"]);
+
+function crewTokens(s) {
+  return (String(s == null ? "" : s).toLowerCase().match(/[a-z0-9]+/g) || [])
+    .filter((t) => !CREW_STOPWORDS.has(t) && t.length >= 2);
+}
+
+function firstWithPreview(card, idxs) {
+  for (const i of idxs) if (card.variants[i].preview) return i;
+  return idxs.length ? idxs[0] : -1;
+}
+
+// Client-side port of the server `_focus_variant` / desktop
+// `focusVariant` fuzzy matcher: index of the ZIP variant that belongs to
+// the crew/cracker group `value`, or -1 (no matching ZIP).
+function lbGroupVariant(card, value, kind) {
+  const valueN = normCrew(value);
+  if (!valueN) return -1;
+  const variants = card.variants;
+  // 1) normalized substring match (`&`/`+` == "and")
+  const subs = variants
+    .map((vv, vi) => (normCrew(vv.name).includes(valueN) ? vi : -1))
+    .filter((vi) => vi >= 0);
+  if (subs.length) return firstWithPreview(card, subs);
+  // 2) (crew only) gameinfo variant with this crew → its cracker in names
+  if (kind === "crew") {
+    for (const iv of ((card.info && card.info.variants) || [])) {
+      if (normCrew(iv.crew) !== valueN) continue;
+      const cracker = String(iv.cracked_by == null ? "" : iv.cracked_by)
+        .trim().toLowerCase();
+      if (!cracker) continue;
+      const hits = variants
+        .map((vv, vi) => ((vv.name || "").toLowerCase().includes(cracker)
+          ? vi : -1))
+        .filter((vi) => vi >= 0);
+      if (hits.length) return firstWithPreview(card, hits);
+    }
+  }
+  // 3) token subset match (typo / missing connective tolerant)
+  const ct = crewTokens(value);
+  if (ct.length && ct.some((t) => t.length >= 3)) {
+    const hits = variants
+      .map((vv, vi) => {
+        const nt = new Set((vv.name || "").toLowerCase()
+          .match(/[a-z0-9]+/g) || []);
+        return ct.every((t) => nt.has(t)) ? vi : -1;
+      })
+      .filter((vi) => vi >= 0);
+    if (hits.length) return firstWithPreview(card, hits);
+  }
+  return -1;
+}
+
+// Click on a crew/cracker group in the side panel: switch to that group's
+// variant of the current card; no matching ZIP ("not found") → variant 0
+// (desktop `onSelectGroup`).
+function lbSelectGroup(value, kind) {
+  if (!lb) return;
+  const card = pageCards[lb.idx];
+  if (!card) return;
+  const target = lbGroupVariant(card, value, kind);
+  lb.variant = target >= 0 ? target : 0;
+  lb.img = 0;
+  renderLightbox();
+  writeURL(false);
+}
+
 // integer-only upscale of the lightbox main image (pixel-art safe)
 function fitIntegerScale(img) {
   if (!img || !img.naturalWidth) return;
@@ -470,9 +595,25 @@ function renderLightbox() {
   $("lb-sub").textContent = v
     ? `${missPrefix}${v.status}${v.layer ? " · " + v.layer : ""}${v.size ? " · " + Math.round(v.size / 1024) + " KB" : ""}`
     : `${missPrefix}no ZIP variants`;
+  // header badge row: layer, status histogram (`2× done 1× pending`), year
+  // (desktop `_header`; the FAVORITE badge has no gallery counterpart)
+  const badgeRow = [];
+  if (card.layer) badgeRow.push(`<span class="badge b-layer">${esc(card.layer)}</span>`);
+  const hist = Object.entries(card.status_counts || {})
+    .map(([k, n]) => `${n}× ${k}`).join("  ");
+  if (hist) badgeRow.push(`<span class="badge b-hist">${esc(hist)}</span>`);
+  if (card.year && card.year !== "unknown") {
+    badgeRow.push(`<span class="badge b-year">${esc(card.year)}</span>`);
+  }
+  $("lb-badges").innerHTML = badgeRow.join("");
+
   const pos = `${lb.idx + 1} / ${pageCards.length}`;
+  // the variant counter shows the FILMSTRIP position (screenshot variants
+  // first), not the raw variant index
+  const order = filmOrder(card);
+  const vpos = order.indexOf(lb.variant);
   $("lb-pos").textContent = card.variants.length > 1
-    ? `${pos}  ·  variant ${lb.variant + 1} / ${card.variants.length}`
+    ? `${pos}  ·  variant ${vpos >= 0 ? vpos + 1 : lb.variant + 1} / ${card.variants.length}`
     : pos;
 
   const imgs = lightboxImages(card);
@@ -490,8 +631,10 @@ function renderLightbox() {
     $("lb-ph").hidden = false;
   }
 
-  // filmstrip: one thumb per variant (hover shows full ZIP name via title)
-  $("lb-film").innerHTML = card.variants.map((vv, i) => {
+  // filmstrip: one thumb per variant in filmstrip display order (hover
+  // shows the full ZIP name via title); data-v keeps the original index
+  $("lb-film").innerHTML = order.map((i) => {
+    const vv = card.variants[i];
     const thumb = vv.preview
       ? `<img src="${imgSrc(vv.preview)}" alt="" loading="lazy">`
       : `<div class="ph-thumb">–</div>`;
@@ -515,15 +658,20 @@ function renderLightbox() {
   if (card.info) {
     const i = card.info;
     const rows = [];
-    const add = (k, val) => {
+    // `group` makes the value clickable: it jumps to that crew's/cracker's
+    // variant of this card (desktop `onSelectGroup`)
+    const add = (k, val, group) => {
       if (val !== "" && val != null && val !== false) {
-        rows.push(`<tr><td>${esc(k)}</td><td>${esc(val)}</td></tr>`);
+        const cell = group
+          ? `<a class="lb-link" href="#" data-group="${group}" data-group-val="${esc(val)}">${esc(val)}</a>`
+          : esc(val);
+        rows.push(`<tr><td>${esc(k)}</td><td>${cell}</td></tr>`);
       }
     };
     add("Title", i.title);
     add("Publisher", i.publisher);
-    add("Cracked by", i.cracked_by);
-    add("Crew", i.crew);
+    add("Cracked by", i.cracked_by, "cracker");
+    add("Crew", i.crew, "crew");
     add("Intro code", i.intro_code);
     add("Language", i.language);
     add("Release", i.release);
@@ -563,9 +711,18 @@ function renderLightbox() {
       html += `<h3>Release variants (${i.variants.length})</h3>` +
         `<table class="variants-table"><tr>` +
         `<th>Title</th><th>Cracker</th><th>Crew</th><th>Year</th></tr>` +
-        i.variants.map((rv, ri) =>
-          `<tr class="${ri === selIdx ? "selected" : ""}"><td>${esc(rv.title)}</td><td>${esc(rv.cracked_by)}</td>` +
-          `<td>${esc(rv.crew)}</td><td>${esc(rv.release)}</td></tr>`).join("") +
+        i.variants.map((rv, ri) => {
+          // clicking the row jumps to that group's ZIP: crew first, else
+          // cracker (desktop `_variantRow` + `onSelectGroup`)
+          const group = rv.crew ? "crew" : (rv.cracked_by ? "cracker" : "");
+          const gval = rv.crew || rv.cracked_by || "";
+          const title = group
+            ? `<a class="lb-link" href="#" data-group="${group}" data-group-val="${esc(gval)}">${esc(rv.title)}</a>`
+            : esc(rv.title);
+          return `<tr class="${ri === selIdx ? "selected " : ""}clickable">` +
+            `<td>${title}</td><td>${esc(rv.cracked_by)}</td>` +
+            `<td>${esc(rv.crew)}</td><td>${esc(rv.release)}</td></tr>`;
+        }).join("") +
         `</table>`;
     }
     if (v) {
@@ -591,11 +748,24 @@ function renderLightbox() {
 
 function lbPrev() {
   if (!lb) return;
-  if (lb.idx > 0) { lb.idx--; lb.variant = 0; lb.img = 0; renderLightbox(); writeURL(true); }
+  if (lb.idx > 0) {
+    lb.idx--;
+    // open on the first filmstrip entry (first variant with a screenshot)
+    lb.variant = filmOrder(pageCards[lb.idx])[0] || 0;
+    lb.img = 0;
+    renderLightbox();
+    writeURL(true);
+  }
 }
 function lbNext() {
   if (!lb) return;
-  if (lb.idx < pageCards.length - 1) { lb.idx++; lb.variant = 0; lb.img = 0; renderLightbox(); writeURL(true); }
+  if (lb.idx < pageCards.length - 1) {
+    lb.idx++;
+    lb.variant = filmOrder(pageCards[lb.idx])[0] || 0;
+    lb.img = 0;
+    renderLightbox();
+    writeURL(true);
+  }
 }
 
 // ---------------------------------------------------------------- keyboard
@@ -649,8 +819,18 @@ function gridColumns() {
   return Math.max(1, Math.round(grid.clientWidth / w));
 }
 
+// ---------------------------------------------------------------- help
+function openHelp() { $("help").hidden = false; }
+function closeHelp() { $("help").hidden = true; }
+
 function globalKeydown(e) {
   const inInput = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (!$("help").hidden) {
+    // any key closes the help; auto-repeat is ignored so a held key does
+    // not flicker it (desktop `help_overlay.dart`)
+    if (!e.repeat) { e.preventDefault(); closeHelp(); }
+    return;
+  }
   if (e.key === "Escape") {
     if (lb) { e.preventDefault(); closeLightbox(); return; }
     if (inInput && document.activeElement.id === "search") {
@@ -666,23 +846,16 @@ function globalKeydown(e) {
     switch (e.key) {
       case "ArrowLeft": e.preventDefault(); lbPrev(); return;
       case "ArrowRight": e.preventDefault(); lbNext(); return;
-      case "ArrowDown": {
-        e.preventDefault();
-        const card = pageCards[lb.idx];
-        const n = card.variants.length;
-        if (n > 1) { lb.variant = (lb.variant + 1) % n; lb.img = 0; renderLightbox(); writeURL(false); }
-        return;
-      }
-      case "ArrowUp": {
-        e.preventDefault();
-        const card = pageCards[lb.idx];
-        const n = card.variants.length;
-        if (n > 1) { lb.variant = (lb.variant - 1 + n) % n; lb.img = 0; renderLightbox(); writeURL(false); }
-        return;
-      }
+      case "ArrowDown": e.preventDefault(); lbMoveVariant(1); return;
+      case "ArrowUp": e.preventDefault(); lbMoveVariant(-1); return;
       case "PageDown": { e.preventDefault(); const imgs = lightboxImages(pageCards[lb.idx]); if (imgs.length) { lb.img = (lb.img + 1) % imgs.length; renderLightbox(); } return; }
       case "PageUp": { e.preventDefault(); const imgs = lightboxImages(pageCards[lb.idx]); if (imgs.length) { lb.img = (lb.img - 1 + imgs.length) % imgs.length; renderLightbox(); } return; }
     }
+    return;
+  }
+  if (!inInput && e.key === "?") {
+    e.preventDefault();
+    openHelp();
     return;
   }
   if (!inInput && e.key === "/") {
@@ -703,6 +876,10 @@ function changePage(dir) {
 function wireEvents() {
   $("grid").addEventListener("keydown", gridKeydown);
   document.addEventListener("keydown", globalKeydown);
+  // help overlay: click on the backdrop closes it
+  $("help").addEventListener("click", (e) => {
+    if (e.target === $("help")) closeHelp();
+  });
   window.addEventListener("popstate", () => {
     readURL();
     syncControls();
@@ -757,16 +934,19 @@ function wireEvents() {
     }, 250);
   });
   for (const id of ["status", "publisher", "crew", "cracker", "language",
-    "year", "raw", "pasti", "boxscan", "tos", "sort"]) {
+    "year", "raw", "pasti", "boxscan", "tos"]) {
     $(id).addEventListener("change", () => {
       state[id] = $(id).value;
       state.offset = 0;
       loadEntries();
     });
   }
-  $("order").addEventListener("click", () => {
-    state.order = state.order === "asc" ? "desc" : "asc";
-    $("order").textContent = state.order;
+  // combined sort + order dropdown, value `<key>:<order>` (desktop
+  // `_sortDropdown`); the URL keeps the separate `sort`/`order` params
+  $("sort").addEventListener("change", () => {
+    const [k, o] = $("sort").value.split(":");
+    state.sort = SORT_KEYS.includes(k) ? k : "name";
+    state.order = o === "desc" ? "desc" : "asc";
     state.offset = 0;
     loadEntries();
   });
@@ -815,6 +995,13 @@ function wireEvents() {
   $("lb-next").addEventListener("click", lbNext);
   $("lightbox").addEventListener("click", (e) => {
     if (e.target === $("lightbox")) closeLightbox();
+    // clickable crew/cracker group (Game info values, release-variant rows)
+    const gl = e.target.closest(".lb-link");
+    if (gl) {
+      e.preventDefault();
+      lbSelectGroup(gl.dataset.groupVal, gl.dataset.group);
+      return;
+    }
     const fi = e.target.closest(".lb-film-item");
     if (fi) { lb.variant = parseInt(fi.dataset.v, 10); lb.img = 0; renderLightbox(); writeURL(false); }
     const ci = e.target.closest("#lb-cands img");
