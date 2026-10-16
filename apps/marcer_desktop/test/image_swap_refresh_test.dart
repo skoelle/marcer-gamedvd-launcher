@@ -57,8 +57,8 @@ void main() {
 
     final c = CatalogController(DesktopConfig(
       rootDirectory: p.join(tmp.path, 'root'),
-      outDirectory: tmp.path,
-      dataDirectory: p.join(tmp.path, 'data'),
+      screenshotDirectory: tmp.path,
+      gameinfoDirectory: p.join(tmp.path, 'data'),
     ));
 
     // Same wiring as the real call sites (grid/detail/filmstrip): a

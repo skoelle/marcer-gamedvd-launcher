@@ -9,11 +9,11 @@ import 'package:marcer_desktop/index_editor.dart';
 
 void main() {
   late Directory tmp;
-  late String outDir;
+  late String screenshotDir;
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('index_editor_test');
-    outDir = tmp.path;
+    screenshotDir = tmp.path;
   });
 
   tearDown(() {
@@ -22,12 +22,12 @@ void main() {
 
   group('shotgen lock', () {
     test('missing lock: not active, acquire/release roundtrip', () {
-      expect(isShotgenActive(outDir), isFalse);
-      expect(readShotgenLockPid(outDir), isNull);
-      acquireShotgenLock(outDir);
-      expect(isShotgenActive(outDir), isTrue); // own pid is alive
-      releaseShotgenLock(outDir);
-      expect(File(shotgenLockPath(outDir)).existsSync(), isFalse);
+      expect(isShotgenActive(screenshotDir), isFalse);
+      expect(readShotgenLockPid(screenshotDir), isNull);
+      acquireShotgenLock(screenshotDir);
+      expect(isShotgenActive(screenshotDir), isTrue); // own pid is alive
+      releaseShotgenLock(screenshotDir);
+      expect(File(shotgenLockPath(screenshotDir)).existsSync(), isFalse);
     });
 
     test('live pid in the lock file blocks acquire', () {
@@ -36,9 +36,9 @@ void main() {
         markTestSkipped('FFI pid lookup unavailable on this platform');
         return;
       }
-      File(shotgenLockPath(outDir)).writeAsStringSync('$me');
+      File(shotgenLockPath(screenshotDir)).writeAsStringSync('$me');
       expect(
-          () => acquireShotgenLock(outDir),
+          () => acquireShotgenLock(screenshotDir),
           throwsA(isA<ShotgenLockedException>()));
     });
 
@@ -47,17 +47,17 @@ void main() {
       final proc = await Process.start('true', []);
       final deadPid = proc.pid;
       await proc.exitCode;
-      File(shotgenLockPath(outDir)).writeAsStringSync('$deadPid');
-      expect(isShotgenActive(outDir), isFalse);
-      acquireShotgenLock(outDir);
-      expect(readShotgenLockPid(outDir), selfPid);
-      releaseShotgenLock(outDir);
+      File(shotgenLockPath(screenshotDir)).writeAsStringSync('$deadPid');
+      expect(isShotgenActive(screenshotDir), isFalse);
+      acquireShotgenLock(screenshotDir);
+      expect(readShotgenLockPid(screenshotDir), selfPid);
+      releaseShotgenLock(screenshotDir);
     });
   });
 
   group('swapPreviewCandidate', () {
     test('trades contents, keeps the fixed names', () {
-      final dir = Directory('$outDir/mirror')..createSync();
+      final dir = Directory('$screenshotDir/mirror')..createSync();
       final preview = File('${dir.path}/a.png')..writeAsStringSync('MAIN');
       final cand = File('${dir.path}/a_c01.png')..writeAsStringSync('CAND');
       swapPreviewCandidate(
@@ -67,7 +67,7 @@ void main() {
     });
 
     test('missing candidate throws', () {
-      final dir = Directory('$outDir/mirror')..createSync();
+      final dir = Directory('$screenshotDir/mirror')..createSync();
       final preview = File('${dir.path}/a.png')..writeAsStringSync('MAIN');
       expect(
           () => swapPreviewCandidate(
@@ -77,8 +77,8 @@ void main() {
     });
 
     test('preview and candidate must share the directory', () {
-      final dirA = Directory('$outDir/a')..createSync();
-      final dirB = Directory('$outDir/b')..createSync();
+      final dirA = Directory('$screenshotDir/a')..createSync();
+      final dirB = Directory('$screenshotDir/b')..createSync();
       final preview = File('${dirA.path}/a.png')..writeAsStringSync('MAIN');
       final cand = File('${dirB.path}/a_c01.png')..writeAsStringSync('CAND');
       expect(
@@ -90,8 +90,8 @@ void main() {
 
   group('applyStatusChanges', () {
     setUp(() {
-      Directory('$outDir/A/Alpha').createSync(recursive: true);
-      File('$outDir/index.json').writeAsStringSync(jsonEncode({
+      Directory('$screenshotDir/A/Alpha').createSync(recursive: true);
+      File('$screenshotDir/index.json').writeAsStringSync(jsonEncode({
         'version': 1,
         'entries': {
           'A/Alpha/a.zip': {
@@ -105,7 +105,7 @@ void main() {
           },
         },
       }));
-      File('$outDir/A/Alpha/a.json').writeAsStringSync(jsonEncode({
+      File('$screenshotDir/A/Alpha/a.json').writeAsStringSync(jsonEncode({
         'spec_version': '1',
         'entry': 'A/Alpha/a.zip',
         'status': 'desktop',
@@ -115,22 +115,22 @@ void main() {
     });
 
     Map<String, dynamic> indexEntry() {
-      final idx = jsonDecode(File('$outDir/index.json').readAsStringSync())
+      final idx = jsonDecode(File('$screenshotDir/index.json').readAsStringSync())
           as Map<String, dynamic>;
       return ((idx['entries'] as Map)['A/Alpha/a.zip'] as Map)
           .cast<String, dynamic>();
     }
 
     Map<String, dynamic> meta() =>
-        (jsonDecode(File('$outDir/A/Alpha/a.json').readAsStringSync())
+        (jsonDecode(File('$screenshotDir/A/Alpha/a.json').readAsStringSync())
             as Map<String, dynamic>);
 
     test('writes status/kind to index + mirror meta, releases the lock',
         () async {
-      await applyStatusChanges(outDir: outDir, changes: {
+      await applyStatusChanges(screenshotDir: screenshotDir, changes: {
         'A/Alpha/a.zip': (status: 'done', kind: 'game'),
       });
-      expect(File(shotgenLockPath(outDir)).existsSync(), isFalse);
+      expect(File(shotgenLockPath(screenshotDir)).existsSync(), isFalse);
       expect(indexEntry()['status'], 'done');
       expect(indexEntry()['kind'], 'game');
       expect(meta()['status'], 'done');
@@ -139,7 +139,7 @@ void main() {
     });
 
     test('darkscreen keeps preview_is_desktop true in the meta', () async {
-      await applyStatusChanges(outDir: outDir, changes: {
+      await applyStatusChanges(screenshotDir: screenshotDir, changes: {
         'A/Alpha/a.zip': (status: 'desktop', kind: 'darkscreen'),
       });
       expect(meta()['kind'], 'darkscreen');
@@ -152,9 +152,9 @@ void main() {
         markTestSkipped('FFI pid lookup unavailable on this platform');
         return;
       }
-      File(shotgenLockPath(outDir)).writeAsStringSync('$me');
+      File(shotgenLockPath(screenshotDir)).writeAsStringSync('$me');
       await expectLater(
-          applyStatusChanges(outDir: outDir, changes: {
+          applyStatusChanges(screenshotDir: screenshotDir, changes: {
             'A/Alpha/a.zip': (status: 'done', kind: 'game'),
           }),
           throwsA(isA<ShotgenLockedException>()));
@@ -163,7 +163,7 @@ void main() {
     });
 
     test('unknown rel entries are skipped, existing ones updated', () async {
-      await applyStatusChanges(outDir: outDir, changes: {
+      await applyStatusChanges(screenshotDir: screenshotDir, changes: {
         'missing/none.zip': (status: 'done', kind: 'game'),
         'A/Alpha/a.zip': (status: 'done', kind: null),
       });

@@ -46,8 +46,8 @@ void main() {
     }));
     c = CatalogController(DesktopConfig(
       rootDirectory: '${tmp.path}/root',
-      outDirectory: '${tmp.path}/$outRel',
-      dataDirectory: '${tmp.path}/data',
+      screenshotDirectory: '${tmp.path}/$outRel',
+      gameinfoDirectory: '${tmp.path}/data',
     ));
   });
 

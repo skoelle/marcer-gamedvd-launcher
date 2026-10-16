@@ -112,7 +112,12 @@ header { margin-bottom: 8px; }
   cursor: pointer;
   font-size: 0.82em;
 }
-.bar button:hover, .bar button:focus-visible { background: var(--btn-active); }
+/* hover affordances only on hover-capable pointers — touch/mobile taps
+   never leave sticky :hover states (SPEC 6.1) */
+@media (hover: hover) {
+  .bar button:hover { background: var(--btn-active); }
+}
+.bar button:focus-visible { background: var(--btn-active); }
 .bar select[hidden], .bar [hidden] { display: none; }
 .result-count {
   margin-left: auto;
@@ -136,7 +141,9 @@ header { margin-bottom: 8px; }
   cursor: pointer;
   font-size: 0.8em;
 }
-.letters button:hover { color: var(--fg); border-color: var(--border-hi); }
+@media (hover: hover) {
+  .letters button:hover { color: var(--fg); border-color: var(--border-hi); }
+}
 .letters button.active { background: var(--btn-active); color: var(--fg); }
 
 /* ---- grid + cards ---- */
@@ -165,7 +172,7 @@ header { margin-bottom: 8px; }
   width: 100%;
   height: auto;
   border-radius: 3px;
-  image-rendering: pixelated;
+  image-rendering: auto;
   background: #000;
   display: block;
 }
@@ -177,11 +184,13 @@ header { margin-bottom: 8px; }
 }
 .card .cands img {
   width: 48px;
-  image-rendering: pixelated;
+  image-rendering: auto;
   border-radius: 2px;
   opacity: 0.85;
 }
-.card .cands img:hover { opacity: 1; outline: 1px solid var(--accent); }
+@media (hover: hover) {
+  .card .cands img:hover { opacity: 1; outline: 1px solid var(--accent); }
+}
 .var-miss {
   font-size: 0.66em;
   color: #e6a23c;
@@ -196,11 +205,13 @@ header { margin-bottom: 8px; }
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
-  image-rendering: pixelated;
+  image-rendering: auto;
   border-radius: 2px;
   opacity: 0.85;
 }
-.card .var-thumbs img:hover { opacity: 1; outline: 1px solid var(--accent); }
+@media (hover: hover) {
+  .card .var-thumbs img:hover { opacity: 1; outline: 1px solid var(--accent); }
+}
 .name {
   font-size: 0.8em;
   margin: 6px 0 2px;
@@ -462,7 +473,11 @@ footer {
 .lb-side .variants-table tr.selected td { color: var(--fg); font-weight: 600; }
 /* clickable crew/cracker group rows (desktop `onSelectGroup`) */
 .lb-side .variants-table tr.clickable { cursor: pointer; }
-.lb-side .variants-table tr.clickable:hover { background: rgba(153, 173, 221, 0.07); }
+@media (hover: hover) {
+  .lb-side .variants-table tr.clickable:hover {
+    background: rgba(153, 173, 221, 0.07);
+  }
+}
 .lb-footer { padding: 10px 2px 2px; }
 
 /* filmstrip: one thumb per variant, horizontal scroll */
@@ -488,13 +503,15 @@ footer {
   background: #0e1216;
   position: relative;
 }
-.lb-film-item:hover { border-color: var(--border-hi); }
+@media (hover: hover) {
+  .lb-film-item:hover { border-color: var(--border-hi); }
+}
 .lb-film-item.active { border-color: var(--accent); }
 .lb-film-item img {
   width: 100%;
   height: 60px;
   object-fit: contain;
-  image-rendering: pixelated;
+  image-rendering: auto;
   display: block;
   background: #000;
   border-radius: 2px;
@@ -550,13 +567,15 @@ footer {
 }
 .lb-cands img {
   height: 52px;
-  image-rendering: pixelated;
+  image-rendering: auto;
   border-radius: 3px;
   cursor: pointer;
   border: 2px solid transparent;
   opacity: 0.8;
 }
-.lb-cands img:hover { opacity: 1; }
+@media (hover: hover) {
+  .lb-cands img:hover { opacity: 1; }
+}
 .lb-cands img.active { border-color: var(--accent); opacity: 1; }
 
 @media (max-width: 900px) {

@@ -54,8 +54,9 @@ Everything else is *(untested)* and must be confirmed during implementation.
   authentication, no TLS, no public deployment story; loopback-only binds
   are available via config/CLI (`--host 127.0.0.1`).
 - **No live refresh in v1.** Changes made by a running `shotgen run` become
-  visible when the user reloads (the server revalidates `index.json` on each
-  API request, see section 8.4). There is no polling, push or WebSocket.
+  visible when the user reloads (the server revalidates the section indices
+  on each API request, see section 8.4). There is no polling, push or
+  WebSocket.
 - **No thumbnails.** Original PNGs are served as-is (user decision); lazy
   loading and pagination keep the load manageable.
 - **No game launching** and no replacement of the console launcher (SPEC.md)
@@ -75,7 +76,7 @@ Read from `local/paths.env` (git-ignored), exactly like the other tools:
 
 | Variable | Required | Meaning |
 |---|---|---|
-| `MARCER_OUT_DIR` | **yes** | screenshot output root: `index.json` + mirrored PNG tree |
+| `MARCER_OUT_DIR` | **yes** | screenshot output root: section indices + mirrored PNG tree |
 | `MARCER_DATA_DIR` | no | game metadata: `games-cracked.json`, `games-pd.json`, `games-utils.json`, `manifest.json` |
 | `MARCER_ROOT_DIR` | no | not read by this app (listed for completeness) |
 | `MARCER_PATCH_DIR` | no | not read by this app (listed for completeness) |
@@ -86,16 +87,23 @@ Rules:
   clear message (same policy as `shotgen`).
 - Missing or unreadable `MARCER_DATA_DIR` → app starts in **screenshots-only
   mode**: gallery, status filters and screenshot features work; metadata
-  facets, hover info and the PD/Utils views are hidden and `/api/meta`
-  reports `gameinfo: false` (section 4.6).
+  facets and hover info are hidden and `/api/meta` reports
+  `gameinfo: false` (section 4.6). The PD/Utils views remain available
+  whenever their own indices exist (index-backed cards without metadata).
 - Variable values never appear in committed files, logs or documentation
   (same rule as SPEC-screenshot-generator.md section 11).
 
-### 2.2 Screenshot index (`<OUT>/index.json`)
+### 2.2 Screenshot indices (`<OUT>/index.json`, `index-pd.json`, `index-utils.json`)
 
-*(verified, measured 2026-10-11)*
+*(verified, measured 2026-10-11; per-section split 2026-10-16)*
 
-- Size ≈ 12 MB, parsed in ≈ 0.16 s *(verified)*.
+- Three files with identical structure, one per section:
+  `index.json` (cracked, back-compat name), `index-pd.json` (PD games),
+  `index-utils.json` (utilities). Missing cracked `index.json` refuses
+  startup (section 2.1); missing pd/utils indices yield empty sections
+  (their cards then come from gameinfo only). Per-section mtimes are
+  reported in `/api/meta` (section 5.2).
+- Cracked `index.json`: size ≈ 12 MB, parsed in ≈ 0.16 s *(verified)*.
 - Structure `{ "version": …, "entries": { "<rel zip path>": {…} } }`;
   22,938 entries *(verified)*.
 - Entry fields *(verified)*: `rel`, `name`, `status`, `kind`, `layer`,
@@ -246,14 +254,23 @@ For every `index.json` entry with `rel` split into path parts:
 
 ### 4.3 PD and utilities views
 
-- `games-pd.json` and `games-utils.json` are displayed in their own views
-  (section 6.8) as metadata cards **without screenshots** (placeholder image
-  area, like the old `ph` placeholder).
-- Their folder names exist as directories in the game trees, but the
-  screenshot index does not cover them (scope decision in
-  SPEC-screenshot-generator.md section 4.4) — no join is attempted, no
-  preview is shown. If `index.json` entries for these trees ever appear,
-  the same join rule applies opportunistically *(untested, defensive)*.
+- `games-pd.json` / `games-utils.json` are shown in their own views
+  (section 6.8). Each section has its **own screenshot index**
+  (`index-pd.json` / `index-utils.json`, section 2.2), so a card is the
+  **union** of:
+  1. its index entries grouped by `(letter, folder)` — carrying status
+     counts, screenshots, variants and previews exactly like the cracked
+     view (section 4.4), joined with gameinfo when available; and
+  2. gameinfo folders **without** an index entry — metadata-only cards
+     (placeholder image area, like the old `ph` placeholder), the former
+     behaviour.
+- When a section's index is absent (or gameinfo is unavailable), the
+  respective half simply contributes nothing: pd/utils degrade to
+  gameinfo-only metadata cards, and — index available but no gameinfo —
+  to status/preview cards without metadata.
+- Join key, grouping and status aggregation rules are identical to the
+  cracked view (sections 4.2/4.4); `kind_fields`/`kind_filters` (section
+  6.8) still restrict which metadata facets apply per section.
 
 ### 4.4 Status aggregation for grouped cards
 
@@ -289,10 +306,14 @@ When `MARCER_DATA_DIR` is missing/unreadable or any `games-*.json` is
 absent/corrupt:
 
 - The cracked (screenshots) view works without hover metadata, metadata
-  facets, sorting by metadata or the PD/Utils views.
+  facets or sorting by metadata; the PD/Utils views still work when their
+  section indices exist (cards without metadata).
 - `/api/meta` reports per-source availability so the UI can hide controls.
 - A corrupt `manifest.json` never fails startup; it only disables the
   coverage figures.
+- A missing/corrupt pd/utils index simply empties that half of the section
+  (cards then come from gameinfo only); a missing cracked `index.json`
+  refuses startup (section 2.1).
 
 ---
 
@@ -317,14 +338,26 @@ error body `{ "error": "<message>" }`.
 ```json
 {
   "gameinfo": true,
-  "index": { "entries": 22938, "mtime": 1780000000 },
-  "status_counts": { "done": 1467, "desktop": 2947, "pending": 14827, "...": 0 },
-  "game_status_counts": { "done": 881, "desktop": 400, "pending": 1500, "...": 0 },
+  "index": {
+    "cracked": { "entries": 22938, "mtime": 1780000000 },
+    "pd":      { "entries": 2846,  "mtime": 1780000000 },
+    "utils":   { "entries": 7689,  "mtime": 1780000000 }
+  },
+  "status_counts": {
+    "cracked": { "done": 1467, "desktop": 2947, "pending": 14827, "...": 0 },
+    "pd":      { "...": 0 },
+    "utils":   { "...": 0 }
+  },
+  "game_status_counts": {
+    "cracked": { "done": 881, "desktop": 400, "pending": 1500, "...": 0 },
+    "pd":      { "...": 0 },
+    "utils":   { "...": 0 }
+  },
   "status_labels": { "done": "done (game)", "with_screenshot": "with screenshot", "...": "..." },
   "sections": {
     "cracked": { "games": 3108, "cards": 3108, "with_screenshot": 881, "no_info": 615 },
-    "pd":      { "games": 1901 },
-    "utils":   { "games": 3546 }
+    "pd":      { "games": 1901, "cards": 1901, "with_screenshot": 0,   "no_info": 0 },
+    "utils":   { "games": 3546, "cards": 3546, "with_screenshot": 0,   "no_info": 0 }
   },
   "coverage": { "matched_folders": 3108, "unmatched_folders": 181 },
   "facets": {
@@ -347,25 +380,34 @@ error body `{ "error": "<message>" }`.
 }
 ```
 
+- `index`, `status_counts`, `game_status_counts` and `sections` are **per
+  section** maps keyed by `cracked`/`pd`/`utils`; the statistics bar and
+  footer read the entry for the active section (`desktop-app parity`, where
+  the status bar is section-aware).
 - `facets` are computed once at startup from the metadata files and are
   **per section** (`facets[section]`, section 6.8) — the frontend reads
   `facets[state.section]`. Absent values (e.g. `crews`/`crackers` for `pd`)
   are omitted when the field does not apply to that section. `facets` is
   absent when `gameinfo` is false.
-- `status_counts` always reflects the raw index (not the current filter) —
-  it feeds the statistics bar; `status_labels` maps status keys to the
-  human labels used in the status filter.
-- `game_status_counts` counts cracked **cards** per aggregated
-  `display_status`, except `pending`, which uses the any-variant rule of
-  section 5.3 so the statistics-bar segment equals the pending filter's
-  result count (desktop-app parity). It is always present (cards come
-  from the index even without gameinfo); without gameinfo the statistics
-  bar ignores it and shows the ZIP-level counts only.
+- `status_counts[section]` always reflects that section's raw index (not the
+  current filter) — it feeds the statistics bar; `status_labels` maps status
+  keys to the human labels used in the status filter.
+- `game_status_counts[section]` counts the section's **cards** per
+  aggregated `display_status`, except `pending`, which uses the any-variant
+  rule of section 5.3 so the statistics-bar segment equals the pending
+  filter's result count (desktop-app parity). Without gameinfo the
+  statistics bar ignores it and shows the ZIP-level counts only.
+- `sections[section]` additionally carries `cards` and `with_screenshot`
+  (cards, index-backed) and `no_info` (cards without gameinfo), which the
+  statistics bar uses for the `M / N with screenshot` and `N without info`
+  segments; the cracked `coverage.matched_folders` figure stays
+  cracked-only.
 - `coverage` comes from `manifest.json` if available.
 - `show_candidates` / `default_status` mirror the effective config
   (section 9): the frontend disables the card candidate strip when
   `show_candidates` is false and uses `default_status` as the initial
-  status preset (URL parameters always win).
+  status preset for the cracked section (pd/utils default to `any`; URL
+  parameters always win).
 
 ### 5.3 `/api/entries`
 
@@ -374,7 +416,7 @@ Query parameters (all optional, defaults in parentheses):
 | Parameter | Values | Applies to |
 |---|---|---|
 | `section` | `cracked` (default) \| `pd` \| `utils` | view selection |
-| `status` | `any` \| `with_screenshot` (default) \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | cracked |
+| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default `with_screenshot` for `cracked`, `any` for `pd`/`utils`) |
 | `q` | free text | all |
 | `letter` | `0-9` … `Z` (or facet value) \| `any` (default) | all |
 | `publisher`, `crew`, `cracker`, `language`, `year` | facet value \| `any` (default) | cracked (+pd/utils where the field exists) |
@@ -393,9 +435,11 @@ Semantics:
   folder, all variant titles, ZIP names and relative paths, publisher,
   cracked_by, crew, intro_code, language, special_flag, special_note,
   tos_bad (and pd/utils equivalents). Empty `q` = no text filter.
-- `status=with_screenshot` is the **default** so the grid shows the 4,414
-  screenshot cards first; `status=any` shows the full archive (including
-  `pending` placeholders) — the statistics bar always shows global counts.
+- `status=with_screenshot` is the **default** for `cracked` so the grid shows
+  the 4,414 screenshot cards first; `pd`/`utils` default to `any` (their
+  metadata-only cards have no screenshot). `status=any` shows the full
+  archive (including `pending` placeholders) — the statistics bar always
+  shows the active section's counts.
 - `status=pending` matches a card when **any** of its ZIPs is `pending`
   (not the `display_status` aggregate: a folder with a `done` ZIP plus a
   `pending` ZIP is shown as `done` **and** as `pending`; the aggregated
@@ -518,15 +562,21 @@ elements *(palette frozen in `tools/gallery/static/style.css`)*:
 - Background `#14181c`, text `#dde`, card `#1c2228`, headings `#9ad`,
   badge colors: game `#173`/`#cfc`, desktop `#331`/`#fd6`, failed
   `#411`/`#f88`, placeholder `#333`/`#aaa`.
-- Cards ~220 px wide in a wrapping flex grid, `image-rendering: pixelated`
-  for the pixel-art screenshots, `loading="lazy"` on all images.
+- Cards ~220 px wide in a wrapping flex grid, downscaled with the browser's
+  high-quality resampling (`image-rendering: auto`) so shrunken 832x552
+  screenshots stay smooth like in the desktop app; nearest-neighbor
+  (`image-rendering: pixelated`) is reserved for the integer-scaled lightbox
+  main image. `loading="lazy"` on all images.
 - New components (statistics bar, facet controls, letter nav, hover panel,
   lightbox) are styled consistently with the same palette and border/radius
   language.
 
 The app is responsive enough for desktop use (primary target); below ~700 px
 the grid shrinks to fewer columns. No mobile-first work is required *(user
-decision: local desktop browser)*.
+decision: local desktop browser)*. Touch/mobile is explicitly excluded from
+hover-only affordances: the hover info panel and sticky `:hover` highlights
+never appear on touch devices (section 6.4) — tapping a card only opens the
+lightbox, whose side panel carries the same metadata.
 
 ### 6.2 Page structure (top to bottom)
 
@@ -586,13 +636,21 @@ Filter/search/sort state is reflected in the URL query string
 
 ### 6.4 Hover info panel
 
-- Hovering (≥ 400 ms delay, no delay on keyboard focus) a card shows a
+- The panel is a **mouse-only affordance**: on touch/mobile devices the
+  media query `(hover: hover) and (pointer: fine)` does not match and the
+  panel is **never shown** — a tap must not raise an info overlay (mobile
+  parity: no hover info). Sticky `:hover` highlight styles throughout the
+  UI are gated behind `@media (hover: hover)` for the same reason; keyboard
+  focus styles (`:focus-visible`, `.kbd-focus`) are unaffected.
+- Hovering a card (≥ 400 ms delay; **mouse hover only** — keyboard focus
+  does not raise the panel) shows a
   non-interactive panel with the joined metadata: title, publisher, cracker,
   crew, language, year, disks, dump flags (RAW/PASTI/Boxscan), TOS/bad note,
   special flag/note — the fields of ANALYSIS-game-data.md §5.3.
 - Without gameinfo: panel shows relative path, status, layer and file size.
-- Panels never cover the whole grid; they disappear on mouse leave / key
-  press. Full details always live in the lightbox.
+- Panels never cover the whole grid; they disappear on mouse leave, key
+  press and when the grid scrolls under them. Full details always live in
+  the lightbox.
 
 ### 6.5 Lightbox
 
@@ -672,20 +730,21 @@ parameter):
 
 ### 6.7 Statistics bar
 
-Shown in the header, sourced from `/api/meta`:
+Shown in the header, sourced from `/api/meta`; all counts are for the
+**active section** (desktop-app parity — the status bar is section-aware):
 
-- Cracked view: `X / Y with screenshot` where **both counts are games
-  (cards)**, then one segment per status formatted as
-  `done <games> (<zips> zips)` — games from `game_status_counts` (the
-  `pending` segment uses the any-variant rule so it equals the pending
-  filter's result count), ZIPs from `status_counts`; segments with zero
-  games and zero ZIPs are omitted. In screenshots-only mode (no join)
-  only the raw ZIP counts are shown (`done 1467`). Gameinfo coverage is
-  shown as `info <matched> folders` plus `<no_info> without info`.
+- `X / Y with screenshot` where **both counts are games (cards)** (`Y` is
+  the section's card count), then one segment per status formatted as
+  `done <games> (<zips> zips)` — games from `game_status_counts[section]`
+  (the `pending` segment uses the any-variant rule so it equals the pending
+  filter's result count), ZIPs from `status_counts[section]`; segments with
+  zero games and zero ZIPs are omitted. In screenshots-only mode (no join)
+  only the raw ZIP counts are shown (`done 1467`).
+- Gameinfo coverage is shown as `info <matched> folders` (cracked only)
+  plus `<no_info> without info` (cards without gameinfo, per section).
 - The tool version (`gallery <x.y.z>`) is shown **right-aligned** at the
   end of the statistics bar; the footer line keeps only the data
-  freshness (index mtime, gameinfo `generated_at`).
-- PD/Utils views: game counts + coverage from `manifest.json`.
+  freshness (the active section's index mtime, gameinfo `generated_at`).
 - Current result count of the active filters (`total` of the last
   `/api/entries` response) is shown next to the controls.
 
@@ -694,13 +753,15 @@ Shown in the header, sourced from `/api/meta`:
 | Tab | Source | Cards | Notes |
 |---|---|---|---|
 | games | join of `index.json` + `games-cracked.json` | grouped, with previews | default view (label `games`, section key `cracked`) |
-| pd | `games-pd.json` | metadata cards, placeholder image | no screenshots |
-| utils | `games-utils.json` | metadata cards, placeholder image | no screenshots |
+| pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
+| utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
 
-- Letter navigation, search, sorting, publisher/language/year facets work in
-  all three sections; status/flag/tos filters only in games.
-- Switching tabs preserves `q`, `sort`, `order`, `letter` where applicable
-  and resets incompatible filters (documented in the UI as a reset).
+- Letter navigation, search, sorting, the status filter and the
+  publisher/language/year facets work in all three sections; the remaining
+  flag/tos/crew/cracker filters only where `SECTION_CONTROLS` lists them.
+- Switching tabs preserves `q`, `sort`, `order`, `letter` where applicable,
+  resets incompatible filters and falls the status filter back to the
+  section default (`with_screenshot` for cracked, `any` for pd/utils).
 
 ### 6.9 Deep links
 
@@ -740,9 +801,10 @@ Shown in the header, sourced from `/api/meta`:
    identified (`focus_variant === -1`) the card shows a hint plus up to
    four screenshots of the folder's other variants (section 6.3). Clicking
    the card opens the lightbox on that variant.
-4. **Status presets**: `with_screenshot` (default), `done`, `desktop`, … as
-   listed in section 5.2; `pending` matches a card when **any** of its ZIPs
-   is pending (section 5.3). The statistics bar always shows global numbers.
+4. **Status presets**: `with_screenshot` (default for cracked; `any` for
+   pd/utils), `done`, `desktop`, … as listed in section 5.2; `pending`
+   matches a card when **any** of its ZIPs is pending (section 5.3). The
+   statistics bar always shows the active section's numbers.
 5. **Sorting**: `name` (default, case-insensitive), `year` (numeric, `unknown`
    last), `publisher`, `cracker` (=`cracked_by`), `crew` (alphabetical,
    empty values last), `order` `asc|desc`; ties broken by name then `rel`
@@ -779,10 +841,10 @@ mirrors SPEC-screenshot-generator.md §9 write safety (S1/S2).
 
 ### 8.4 Data freshness (v1)
 
-- The server `stat`s `index.json` (and the metadata files) on API requests;
-  if an mtime changed, the affected dataset is reloaded once before
-  answering (reload ≈ 0.16 s for the index *(verified)*, happens only on
-  change).
+- The server `stat`s the three section indices (and the metadata files) on
+  API requests; if an mtime changed, the affected dataset is reloaded once
+  before answering (reload ≈ 0.16 s for the index *(verified)*, happens
+  only on change).
 - The UI does **not** poll; the user reloads the page to see new data.
 
 ### 8.5 Performance budgets *(targets, untested)*
@@ -831,8 +893,9 @@ capped at 200.
 - `show_candidates`: enables/disables the candidate thumb strip on grid
   cards (delivered to the frontend via `/api/meta`). The lightbox strips
   are unaffected.
-- `default_status`: initial status preset of the status filter (delivered
-  via `/api/meta`; a `status` URL parameter always wins).
+- `default_status`: initial status preset of the **cracked** status filter
+  (delivered via `/api/meta`; pd/utils default to `any`; a `status` URL
+  parameter always wins).
 - Data paths are **never** configured here — `local/paths.env` only
   (same rule as the sibling tools).
 
@@ -873,6 +936,9 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     grid never shows exactly one `done` thumb (that card shows the game
     shot large); `status=pending` lists a `done`+`pending` folder;
     `done <games> (<zips> zips)` segments match the dropdown counts.
+    The **pd/utils** views show index-backed cards with previews unioned
+    with gameinfo-only metadata cards, their statistics bar uses the
+    per-section counts, and their status filter defaults to `any`.
 14. **Lightbox order/groups**: filmstrip lists screenshot variants first
     and `↑`/`↓` follows that order; the variant counter shows the
     filmstrip position; a crew/cracker link in Game info and a
@@ -880,6 +946,12 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     variant 0); header shows layer + status histogram + year badges.
 15. **Help**: `?` opens the overlay, the next key closes it, `?` typed
     into the search input stays in the input.
+16. **Touch/no-hover**: with a touch-only pointer (DevTools device
+    emulation or a phone on the LAN) a tap on a card opens the lightbox
+    and **never** raises the hover info panel; thumbnail/filmstrip/candidate
+    taps leave no sticky `:hover` highlight. With a mouse the panel still
+    appears after ≥ 400 ms, vanishes on mouse leave, key press and scroll,
+    and `:focus-visible`/keyboard focus styling keeps working.
 
 ---
 
@@ -956,6 +1028,10 @@ A conforming implementation satisfies all of the following.
       game-shot exception.
 - [x] U8 Lightbox filmstrip order (screenshots first), header badges and
       clickable crew/cracker groups follow section 6.5.
+- [ ] U9 No hover info on touch/mobile: panel gated behind
+      `(hover: hover) and (pointer: fine)`, sticky `:hover` highlights
+      behind `@media (hover: hover)`, panel dismissed on key press/scroll
+      (section 6.4); keyboard focus styles unaffected.
 
 **Process**
 - [x] P1 Zero new packages in the repo `.venv` (stdlib only).

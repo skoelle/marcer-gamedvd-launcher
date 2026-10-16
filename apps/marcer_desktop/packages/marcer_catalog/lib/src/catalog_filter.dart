@@ -131,29 +131,29 @@ bool matchesCard(GameCard c, CatalogFilter f) {
   final crewActive = f.crew != 'any' && fields.contains('crew');
   final crackerActive = f.cracker != 'any' && fields.contains('cracker');
   final focusActive = crewActive || crackerActive;
-  if (f.section == 'cracked') {
-    if (f.status == 'with_screenshot') {
-      // crew/cracker focus always shows the focused variant, even empty
-      if (!focusActive && !c.screenshots) return false;
-    } else if (f.status == 'desktop_text') {
-      // strict: only a status-desktop variant whose kind is textscreen
-      if (!c.variants
-          .any((v) => v.status == 'desktop' && v.kind == 'textscreen')) {
-        return false;
-      }
-    } else if (f.status == 'desktop_black') {
-      if (!c.variants
-          .any((v) => v.status == 'desktop' && v.kind == 'darkscreen')) {
-        return false;
-      }
-    } else if (f.status == 'pending') {
-      // App-only: a game counts as pending as soon as **any** of its ZIPs
-      // is pending (the gallery's aggregated display_status would hide
-      // pending ZIPs behind done folders — user decision 2026-10-15).
-      if (!c.variants.any((v) => v.status == 'pending')) return false;
-    } else if (f.status != 'any' && c.displayStatus != f.status) {
+  // Status/kind filters apply to every section (pd/utils cards carry an
+  // index-derived status now; the app's per-section default is `any` there).
+  if (f.status == 'with_screenshot') {
+    // crew/cracker focus always shows the focused variant, even empty
+    if (!focusActive && !c.screenshots) return false;
+  } else if (f.status == 'desktop_text') {
+    // strict: only a status-desktop variant whose kind is textscreen
+    if (!c.variants
+        .any((v) => v.status == 'desktop' && v.kind == 'textscreen')) {
       return false;
     }
+  } else if (f.status == 'desktop_black') {
+    if (!c.variants
+        .any((v) => v.status == 'desktop' && v.kind == 'darkscreen')) {
+      return false;
+    }
+  } else if (f.status == 'pending') {
+    // App-only: a game counts as pending as soon as **any** of its ZIPs
+    // is pending (the gallery's aggregated display_status would hide
+    // pending ZIPs behind done folders — user decision 2026-10-15).
+    if (!c.variants.any((v) => v.status == 'pending')) return false;
+  } else if (f.status != 'any' && c.displayStatus != f.status) {
+    return false;
   }
   if (f.letter != 'any' && c.letter != f.letter) return false;
   final q = f.q.trim().toLowerCase();

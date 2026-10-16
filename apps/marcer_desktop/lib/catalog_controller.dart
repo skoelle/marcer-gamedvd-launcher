@@ -38,7 +38,7 @@ class CatalogController extends ChangeNotifier {
   final DesktopConfig config;
 
   late final OverlayBrowser browser;
-  late ScreenshotIndex screenshots;
+  late ScreenshotIndices screenshots;
   late GameInfoIndex gameinfo;
   late CatalogUniverse universe;
   FavoritesService? favorites;
@@ -88,8 +88,8 @@ class CatalogController extends ChangeNotifier {
     // sendable even when listeners are attached to the controller.
     final cfg = config;
     final bundle = await Isolate.run(() => CatalogBundle.loadSync(
-          outDir: cfg.outDirectory,
-          dataDir: cfg.resolveDataDirectory(),
+          screenshotDir: cfg.screenshotDirectory,
+          gameinfoDir: cfg.resolveGameinfoDirectory(),
         ));
     notices.addAll(bundle.warnings);
     screenshots = bundle.index;
@@ -219,7 +219,7 @@ class CatalogController extends ChangeNotifier {
     if (filter.section == value) return;
     filter.section = value;
     // Gallery section switch: reset incompatible filters.
-    filter.status = config.defaultStatus;
+    filter.status = _defaultStatusFor(value);
     filter.raw = 'any';
     filter.pasti = 'any';
     filter.boxscan = 'any';
@@ -230,6 +230,13 @@ class CatalogController extends ChangeNotifier {
     if (value == 'pd' && filter.sort == 'cracker') filter.sort = 'name';
     _filtersChanged();
   }
+
+  /// Per-section default status: cracked uses the configured
+  /// `default_status`; pd/utils default to `any` so metadata-only cards
+  /// (no screenshot/status) stay visible — their status dropdown is
+  /// available, but the default must not hide the union of metadata cards.
+  String _defaultStatusFor(String section) =>
+      section == 'cracked' ? config.defaultStatus : 'any';
 
   void setStatus(String value) {
     filter.status = value;
@@ -303,6 +310,9 @@ class CatalogController extends ChangeNotifier {
   /// Gallery `clear`: keep the section, reset everything else.
   void resetFilters() {
     filter.reset();
+    // `filter.reset` restores the factory status (cracked default); keep the
+    // per-section default (pd/utils = any) so metadata cards stay visible.
+    filter.status = _defaultStatusFor(filter.section);
     favoritesOnly = false;
     _catalogDirty = true;
     selectedIndex = 0;
@@ -627,9 +637,9 @@ class CatalogController extends ChangeNotifier {
   /// Count text for the status bar.
   String get countText {
     if (catalogMode) {
-      return favoritesOnly
-          ? '${catalogCards.length} favorites'
-          : '${catalogCards.length} results';
+      if (favoritesOnly) return '${catalogCards.length} favorites';
+      final n = catalogCards.length;
+      return '$n result${n == 1 ? '' : 's'}';
     }
     return '${visibleEntries.length} entries';
   }
@@ -637,17 +647,23 @@ class CatalogController extends ChangeNotifier {
   /// Gallery-style status line (`renderStats` + `renderFooter`), app-only
   /// divergence: counts are shown as games (cards) plus their ZIP entries —
   /// `N folders`, `M with screenshot`, `done 2635 (8979 zips)` etc. so
-  /// the done segment matches the dropdown result count.
+  /// the done segment matches the dropdown result count. Every segment is
+  /// scoped to the **active section** (per-section screenshot indices, user
+  /// decision 2026-10-16); `gameinfo N folders` coverage stays cracked-only.
   List<String> get statusLine {
     final parts = <String>[];
-    if (catalogMode && filter.section == 'cracked' && gameinfo.length > 0) {
-      parts.add('${universe.cracked.length} folders');
-      parts.add('${universe.crackedWithScreenshot} with screenshot');
-    } else if (screenshots.length > 0) {
-      parts.add('${screenshots.length} index entries');
+    final section = filter.section;
+    final sectionIndex = screenshots.forSection(section);
+    final sectionCards = universe.cardsFor(section);
+    if (catalogMode && gameinfo.length > 0) {
+      parts.add('${sectionCards.length} folders');
+      parts.add('${universe.withScreenshotFor(section)} with screenshot');
+    } else if (sectionIndex.length > 0) {
+      parts.add('${sectionIndex.length} index entries');
     }
     if (catalogMode) {
-      final zipCounts = screenshots.statusCounts;
+      final zipCounts = screenshots.statusCountsFor(section);
+      final gameCounts = universe.statusCountsFor(section);
       for (final k in const [
         'done',
         'desktop',
@@ -659,19 +675,24 @@ class CatalogController extends ChangeNotifier {
         // pending uses the app's any-variant rule (not the displayStatus
         // aggregate) so the segment equals the dropdown's pending count.
         final games = k == 'pending'
-            ? universe.pendingAnyVariantCount
-            : (universe.statusCounts[k] ?? 0);
+            ? universe.pendingAnyVariantCountFor(section)
+            : (gameCounts[k] ?? 0);
         final zips = zipCounts[k] ?? 0;
         if (games > 0 || zips > 0) parts.add('$k $games ($zips zips)');
       }
-      final matched = gameinfo.matchedFolders;
-      if (matched != null) parts.add('gameinfo $matched folders');
-      if (universe.crackedNoInfo > 0) {
-        parts.add('${universe.crackedNoInfo} without gameinfo');
+      // Cracked gameinfo coverage from the manifest (matched folders).
+      if (section == 'cracked') {
+        final matched = gameinfo.matchedFolders;
+        if (matched != null) parts.add('gameinfo $matched folders');
+      }
+      final noInfo = universe.noInfoFor(section);
+      if (noInfo > 0) {
+        parts.add('$noInfo without gameinfo');
       }
     }
-    if (screenshots.mtime != null) {
-      parts.add('index.json: ${_fmtTime(screenshots.mtime!)}');
+    final mtime = screenshots.mtimeFor(section);
+    if (mtime != null) {
+      parts.add('${screenshots.indexNameFor(section)}: ${_fmtTime(mtime)}');
     }
     if (gameinfo.generatedAt.isNotEmpty) {
       parts.add('gameinfo: ${gameinfo.generatedAt}');
@@ -964,9 +985,9 @@ class CatalogController extends ChangeNotifier {
   /// identical, so the pending map keeps working.
   void _rebuildUniverse() {
     universe = CatalogUniverse.build(
-      index: screenshots,
+      indices: screenshots,
       info: gameinfo,
-      outDir: config.outDirectory,
+      screenshotDir: config.screenshotDirectory,
     );
     // New card objects — drop the lazy pd/utils variant cache (identity-keyed).
     _resolvedCardVariants.clear();
@@ -979,7 +1000,7 @@ class CatalogController extends ChangeNotifier {
     if (_pendingStatus.isEmpty) return null;
     try {
       await applyStatusChanges(
-        outDir: config.outDirectory,
+        screenshotDir: config.screenshotDirectory,
         changes: {
           for (final e in _pendingStatus.entries)
             e.key: (
@@ -1024,8 +1045,9 @@ class CatalogController extends ChangeNotifier {
   String? swapPreviewImage(
       {required String previewPath, required String candidatePath}) {
     try {
-      if (isShotgenActive(config.outDirectory)) {
-        throw ShotgenLockedException(readShotgenLockPid(config.outDirectory));
+      if (isShotgenActive(config.screenshotDirectory)) {
+        throw ShotgenLockedException(
+            readShotgenLockPid(config.screenshotDirectory));
       }
       swapPreviewCandidate(
           previewPath: previewPath, candidatePath: candidatePath);

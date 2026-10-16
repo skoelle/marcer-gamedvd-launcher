@@ -39,7 +39,8 @@ macOS); the Dart package name stays `marcer_desktop`.
 - Flutter SDK (stable) in `~/flutter` (`export PATH="$HOME/flutter/bin:$PATH"`)
 - Linux desktop toolchain: `clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev`
 - Data roots reachable (see `local/paths.env`): game tree, patch tree,
-  screenshot archive (`index.json` + PNGs), gameinfo `Data/` dir.
+  screenshot archive (`index.json`, `index-pd.json`, `index-utils.json` +
+  PNGs), gameinfo `Data/` dir.
   All optional — missing artifacts degrade to empty states.
 
 ## Commands
@@ -70,13 +71,13 @@ locations.
 |---|---|---|
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
-| `OutDirectory` | no | screenshot archive (`index.json`, PNGs) |
-| `DataDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
+| `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
+| `GameinfoDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
 | `Hatari.ConfigFile` | no | empty ⇒ bundled `MarcerGameDvd-Hatari.cfg` |
 | `Hatari.ArgsTemplate` | no | must contain `{cfg}` and `{zip}` |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
-| `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
+| `DefaultStatus` | no | initial status preset for the cracked section (default `with_screenshot`; pd/utils default `any`) |
 | `Window.width/height` | no | initial/restore window size (default 1280×800) |
 | `Window.maximized` | no | start maximized (default `true`; `false` ⇒ `width`×`height`, centered) |
 
@@ -119,14 +120,17 @@ Storage (one absolute path per line, same format as the console launcher):
 
 The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
 `desktop text`, `desktop black`, `pending`, `no usable shots`,
-`interrupted`, `skipped (disk 2+)`):
+`interrupted`, `skipped (disk 2+)`) is available in **all three sections**
+(cracked, pd, utils):
 
 - `pending` matches a game when **at least one** of its ZIPs is pending
   (the same rule the gallery's status filter applies — the aggregated
   card status would otherwise hide pending ZIPs inside otherwise-done
   folders).
-- All other status values use the gallery's aggregated card status
+- All other status values use the aggregated card status
   (`done → desktop → no usable shots → interrupted → pending → skipped`).
+- The default is `with screenshot` for cracked and `any` for pd/utils
+  (their metadata-only cards have no screenshot).
 
 The status bar reports every status as **games (ZIPs)** (see below), so the
 games number always equals the result count of the matching dropdown
@@ -139,25 +143,29 @@ result/entry counts, the gallery-style status info and — right aligned —
 the **running app version** (`v…`; release builds: stamped from the
 `desktop-v*` git tag via `--build-name`, dev builds: the pubspec version).
 
-Status info in catalog mode (same `games (ZIPs)` format as the gallery's
-statistics bar, plus the folder total; the gallery labels the coverage
-`info N folders` / `N without info`):
+Status info in catalog mode is **section-aware** (same `games (ZIPs)` format
+as the gallery's statistics bar, plus the folder total; the gallery labels
+the coverage `info N folders` / `N without info`):
 
-- `3287 folders` — cracked games (cards) built from `index.json`; every
-  game folder with at least one ZIP is one card.
-- `3211 with screenshot` — cracked **games** with a preview (prefer `done`
-  game shot, else first `done`, else first `desktop`).
+- `3287 folders` — games (cards) of the active section; cracked cards are
+  built from `index.json`, pd/utils cards are the union of their own
+  index (`index-pd.json` / `index-utils.json`) and gameinfo-only folders;
+  every game folder with at least one ZIP is one card.
+- `3211 with screenshot` — games of the section with a preview (prefer
+  `done` game shot, else first `done`, else first `desktop`).
 - `done 2635 (8979 zips)` — per status: number of **games** (cards) plus
-  their **ZIP entries** in parentheses. The games number equals the result
-  count of the matching status dropdown selection — `done`, `desktop`,
-  `no usable shots`, `interrupted` and `skipped (disk 2+)` use the
-  aggregated card status, `pending` counts a game when **any** of its ZIPs
-  is pending (same rule as the filter; a game can therefore appear in
-  `pending` and `done` at once).
-- `gameinfo N folders`, `N without gameinfo` — gameinfo match coverage:
-  `N` folders matched by the gameinfo generator (`manifest.json`
-  `matched_folders`) / cracked cards whose gameinfo join is empty.
-- `index.json: …`, `gameinfo: …` — index mtime and gameinfo generation
+  their **ZIP entries** in parentheses, counted for the active section.
+  The games number equals the result count of the matching status dropdown
+  selection — `done`, `desktop`, `no usable shots`, `interrupted` and
+  `skipped (disk 2+)` use the aggregated card status, `pending` counts a
+  game when **any** of its ZIPs is pending (same rule as the filter; a game
+  can therefore appear in `pending` and `done` at once).
+- `gameinfo N folders`, `N without gameinfo` — gameinfo match coverage
+  (`N` cracked folders matched by the gameinfo generator, `manifest.json`
+  `matched_folders`; cracked only) / cards of the active section whose
+  gameinfo join is empty.
+- `index.json: …` (or `index-pd.json` / `index-utils.json` for those
+  sections), `gameinfo: …` — active index mtime and gameinfo generation
   timestamp.
 
 ## License

@@ -91,8 +91,8 @@ void main() {
     c = CatalogController(DesktopConfig(
       rootDirectory: '${tmp.path}/root',
       patchDirectory: '${tmp.path}/patch',
-      outDirectory: '${tmp.path}/out',
-      dataDirectory: '${tmp.path}/data',
+      screenshotDirectory: '${tmp.path}/out',
+      gameinfoDirectory: '${tmp.path}/data',
     ));
   });
 
@@ -134,12 +134,56 @@ void main() {
     expect(c.statusLine, contains('pending 2 (3 zips)'));
 
     c.setStatus('desktop');
-    expect(c.countText, '1 results');
+    expect(c.countText, '1 result');
     expect(c.statusLine, contains('desktop 1 (1 zips)'));
 
     // Default status: screenshot cards == the `with screenshot` segment.
     c.resetFilters();
     expect(c.countText, '3 results');
     expect(c.statusLine, contains('3 with screenshot'));
+  });
+
+  test('pd/utils sections use their own index and a per-section default',
+      () async {
+    // pd index with one done PacMan ZIP (gameinfo already has one pd game).
+    const pdTree = 'Title Sorted/PD Games - Title Sorted';
+    const relPac = '$pdTree/P/PacMan/pacman.zip';
+    final f = File('${tmp.path}/root/$relPac');
+    f.parent.createSync(recursive: true);
+    f.createSync();
+    File('${tmp.path}/out/index-pd.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {
+        relPac: {
+          'rel': relPac,
+          'name': 'pacman.zip',
+          'status': 'done',
+          'kind': 'game',
+          'layer': 'ROOT',
+          'preview': 'pacman.png',
+          'candidates': <String>[],
+        },
+      },
+    }));
+    await c.init();
+
+    c.setSection('pd');
+    // pd/utils default to `any` so metadata-only cards stay visible.
+    expect(c.filter.status, 'any');
+    expect(c.countText, '1 result');
+    // Header + status segments come from the pd index, not the cracked one.
+    expect(c.statusLine, contains('1 folders'));
+    expect(c.statusLine, contains('1 with screenshot'));
+    expect(c.statusLine, contains('done 1 (1 zips)'));
+    expect(c.statusLine, isNot(contains('5 folders')),
+        reason: 'cracked has 5 folders — must not leak into pd');
+    expect(c.statusLine, isNot(contains('pending 2')),
+        reason: 'cracked pending must not leak into pd');
+
+    // The status dropdown filters pd cards too.
+    c.setStatus('pending');
+    expect(c.countText, '0 results');
+    c.setStatus('done');
+    expect(c.countText, '1 result');
   });
 }

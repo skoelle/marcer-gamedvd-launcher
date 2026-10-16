@@ -66,20 +66,22 @@ Save, the manual screenshot curation described below.
   are ordered the same way (`done game` → other `done` → `desktop`), so a
   late-sorting game shot is never pushed out by textscreens (same rules
   as the gallery webapp).
-- **Gallery-style status bar** — coverage as separate games segments
-  (`3287 folders`, `3211 with screenshot`), status counts as
+- **Gallery-style status bar** — section-aware coverage as separate games
+  segments (`3287 folders`, `3211 with screenshot`), status counts as
   `done <games> (<zips> zips)`, gameinfo coverage (`gameinfo N folders` /
-  `N without gameinfo`), `index.json` mtime and gameinfo generation time;
+  `N without gameinfo`), the active index mtime (`index.json` /
+  `index-pd.json` / `index-utils.json`) and gameinfo generation time;
   the running app version (right-aligned).
 - **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
-  `desktop text` / `desktop black` / `pending` / … . `pending` matches a
-  game when **at least one** of its ZIPs is pending — the same rule the
-  gallery applies (a game can appear in `pending` and `done` at once);
-  every other status value uses the card aggregation (`done → desktop →
-  no usable shots → interrupted → pending → skipped`). The two
-  `desktop …` presets are app-only extras. The status bar reports each
-  status as games (ZIPs), so the games number equals the result count of
-  the matching dropdown selection.
+  `desktop text` / `desktop black` / `pending` / … , available in **all
+  three sections** (cracked, pd, utils; pd/utils default to `any`).
+  `pending` matches a game when **at least one** of its ZIPs is pending —
+  the same rule the gallery applies (a game can appear in `pending` and
+  `done` at once); every other status value uses the card aggregation
+  (`done → desktop → no usable shots → interrupted → pending → skipped`).
+  The two `desktop …` presets are app-only extras. The status bar reports
+  each status as games (ZIPs), so the games number equals the result count
+  of the matching dropdown selection.
 - **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
   list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
   detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
@@ -106,14 +108,15 @@ Save, the manual screenshot curation described below.
   candidate strips refresh immediately (per-path image version keys, so only
   the swapped files re-decode). `C` (lightbox/detail view) changes a ZIP's
   `status`/`kind` in memory. Changes accumulate in a pending list; a cyan
-  **Save (n)** button (left of the update badge) writes them to `index.json`
+  **Save (n)** button (left of the update badge) writes them to the
+  section's index file (`index.json` / `index-pd.json` / `index-utils.json`)
   and the per-entry meta under the screenshot-gen lock (a running
   `shotgen.py` blocks the write). The status filter gains **`desktop text`**
   and **`desktop black`** — strictly `status: desktop` entries whose kind is
   `textscreen`/`darkscreen` (the plain `desktop` entry keeps showing every
   kind).
-- **Degrades gracefully** — missing `index.json` or gameinfo data simply shows
-  empty states instead of crashing.
+- **Degrades gracefully** — missing section indices or gameinfo data simply
+  shows empty states instead of crashing.
 - **Self-update** (release builds) — silent check against the GitHub
   `desktop-v*` releases after startup; when a newer version exists, an amber
   `⬆ <version>` button appears left of the Folders button. Click to download
@@ -134,13 +137,17 @@ Save, the manual screenshot curation described below.
 1. **Download** the ZIP for your platform from the
    [Releases](https://github.com/skoelle/marcer-gamedvd-launcher/releases) page
    and extract it.
-2. **Configure** — copy the shipped `desktop.config.example.json` next to the
-   executable (or the `.app`), rename it to `desktop.config.json`, and set your
-   absolute paths (at minimum `RootDirectory`). See *Configuration* below.
-3. **Run** `MarcerGameDVDLauncher` (`MarcerGameDVDLauncher.exe` /
+2. **Run** `MarcerGameDVDLauncher` (`MarcerGameDVDLauncher.exe` /
    `MarcerGameDVDLauncher.app`).
+3. **Set up your paths** in the first-run **setup page** (shown automatically
+   when no `desktop.config.json` exists): fill in the paths, watch the live
+   ✓/✗ per field, and **Save** — the config file is written next to the
+   executable (macOS: next to the `.app`) and the app continues into the
+   catalog. See *Configuration* below.
 
-Without a config the app opens a page listing the folders it searched.
+Alternatively, copy the shipped `desktop.config.example.json` next to the
+executable (or the `.app`), rename it to `desktop.config.json`, and edit it by
+hand before the first start.
 
 ### 📥 Download
 
@@ -166,14 +173,37 @@ The app looks for `desktop.config.json` in this order (first existing wins):
 2. the directory of the executable (portable ZIP release)
 3. macOS only: the folder containing the `.app` bundle
 
-Without a config the app shows a page listing the searched locations. Template: [`apps/marcer_desktop/desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json).
+When no config is found the app opens the **first-run setup page** (it lists
+the searched locations and the target file it will write). A config that exists
+but cannot be read shows an error page with a **Setup…** button. Template: [`apps/marcer_desktop/desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json).
+
+> **Upgrading:** the config keys were renamed (`OutDirectory` →
+> `ScreenshotDirectory`, `DataDirectory` → `GameinfoDirectory`); the old names
+> are no longer read. Rename them in an existing `desktop.config.json` (or fix
+> them via the ⚙ settings editor), otherwise the screenshot/gameinfo paths stay
+> empty.
+
+The ⚙ gear button in the top bar opens an in-app **settings editor** for all
+path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
+`GameinfoDirectory`, `Hatari.Executable`, `Hatari.ConfigFile`) with native
+directory/file pickers. **Save** writes them back to the same
+`desktop.config.json` and reloads the catalog in place, so new paths apply
+without restarting the app; window settings and the remaining fields stay
+untouched.
+
+Every path field is validated live with a status icon: a green ✓ when the
+directory/file exists, a red ✗ when it does not (or a required field is empty),
+no icon for an empty optional field. **Save** is disabled until all fields are
+valid — an empty optional field is fine, but a filled-in wrong path blocks
+saving. `RootDirectory` is the only mandatory field; `Hatari.Executable` is
+optional (needed to launch, not to browse).
 
 | Field | Required | Notes |
 |---|---|---|
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
-| `OutDirectory` | no | screenshot archive (`index.json`, PNGs) |
-| `DataDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
+| `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
+| `GameinfoDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
 | `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
 | `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
@@ -328,7 +358,7 @@ The design and specification documents live in [`docs/`](docs/README.md):
 | [`docs/ANALYSIS-boxscan-manual-structure.md`](docs/ANALYSIS-boxscan-manual-structure.md) | Analysis of the `Boxscan/` and `Manual/` companion folders (location, naming, ZIP/loose-file structure, edge cases, consumer requirements). |
 | [`docs/DECISION-app-architecture.md`](docs/DECISION-app-architecture.md) | Why the desktop app is Flutter, the gallery webapp is Python + HTML, and the couch surface is planned. |
 | [`docs/SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) | Behavioral spec of the gallery webapp (`tools/gallery`) — the design reference for the desktop catalog. |
-| [`docs/SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) | Screenshot pipeline and the `index.json` artifact consumed by both UIs. |
+| [`docs/SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) | Screenshot pipeline and the `index.json`/`index-pd.json`/`index-utils.json` artifacts consumed by both UIs. |
 | [`docs/BUGS.md`](docs/BUGS.md) | Known issues and their resolution status. |
 
 Per-app/per-tool docs stay next to their code: [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md), [`apps/marcer_console/README.md`](apps/marcer_console/README.md), and each `tools/*/README.md`.

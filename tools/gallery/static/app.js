@@ -16,12 +16,16 @@ const STATUS_OPTIONS = [
 const TRI_OPTIONS = [["any", "any"], ["yes", "yes"], ["no", "no"]];
 const LETTERS = ["0-9", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
 const SORT_KEYS = ["name", "year", "publisher", "cracker", "crew"];
+const SECTION_INDEX_NAMES = {
+  cracked: "index.json", pd: "index-pd.json", utils: "index-utils.json",
+};
 
 const SECTION_CONTROLS = {
   cracked: ["status", "publisher", "crew", "cracker", "language", "year",
             "raw", "pasti", "boxscan", "tos"],
-  pd: ["publisher", "language", "year"],
-  utils: ["publisher", "crew", "cracker", "language", "year", "raw", "tos"],
+  pd: ["status", "publisher", "language", "year"],
+  utils: ["status", "publisher", "crew", "cracker", "language", "year",
+          "raw", "tos"],
 };
 const FACET_LABELS = {
   status: "Status", publisher: "Publisher", crew: "Crew",
@@ -57,6 +61,12 @@ let searchTimer = null;
 let showCands = true;       // from meta.show_candidates (config)
 let defaultStatus = "with_screenshot";  // from meta.default_status (config)
 
+// Per-section default status: cracked defaults to the configured preset
+// (usually `with_screenshot`), pd/utils to `any` so metadata-only cards stay
+// visible (desktop-app parity, per-section indices).
+const sectionDefaultStatus = (section) =>
+  section === "cracked" ? defaultStatus : "any";
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -84,7 +94,7 @@ function writeURL(push) {
     if (v != null && v !== "" && v !== dflt) u.set(k, v);
   };
   keep("section", state.section, "cracked");
-  keep("status", state.status, defaultStatus);
+  keep("status", state.status, sectionDefaultStatus(state.section));
   keep("q", state.q, "");
   keep("letter", state.letter, "any");
   for (const k of ["publisher", "crew", "cracker", "language", "year",
@@ -117,7 +127,7 @@ async function api(path) {
 function entriesQuery(extra) {
   const p = new URLSearchParams();
   p.set("section", state.section);
-  if (state.section === "cracked") p.set("status", state.status);
+  p.set("status", state.status);
   if (state.q) p.set("q", state.q);
   if (state.letter !== "any") p.set("letter", state.letter);
   const fields = SECTION_CONTROLS[state.section] || [];
@@ -202,15 +212,17 @@ function buildLetters() {
 
 function renderStats(extra) {
   if (!meta) return;
-  const sc = meta.status_counts || {};
-  const gc = meta.game_status_counts || {};
+  const section = state.section;
+  const sec = (meta.sections && meta.sections[section]) || {};
+  const sc = (meta.status_counts && meta.status_counts[section]) || {};
+  const gc = (meta.game_status_counts && meta.game_status_counts[section]) || {};
+  const idx = (meta.index && meta.index[section]) || {};
   const parts = [];
-  if (meta.gameinfo && meta.sections && meta.sections.cracked) {
-    const s = meta.sections.cracked;
+  if (meta.gameinfo && sec.cards != null) {
     // both counts are games (cards), like the desktop status bar
-    parts.push(`<span class="st"><b>${s.with_screenshot}</b> / ${s.cards} with screenshot</span>`);
+    parts.push(`<span class="st"><b>${sec.with_screenshot}</b> / ${sec.cards} with screenshot</span>`);
   } else {
-    parts.push(`<span class="st"><b>${meta.index.entries}</b> index entries</span>`);
+    parts.push(`<span class="st"><b>${idx.entries || 0}</b> index entries</span>`);
   }
   const order = ["done", "desktop", "pending", "skipped_disk_n",
     "no_usable_shots", "interrupted"];
@@ -226,11 +238,12 @@ function renderStats(extra) {
     // `done 2635 (8979 zips)` — games (ZIPs), like the desktop status bar
     parts.push(`<span class="st">${esc(k)} <b>${games}</b> (${zips} zips)</span>`);
   }
-  if (meta.coverage && meta.coverage.matched_folders != null) {
+  // gameinfo coverage (matched folders) is cracked-only (desktop parity)
+  if (section === "cracked" && meta.coverage
+      && meta.coverage.matched_folders != null) {
     parts.push(`<span class="st">info <b>${meta.coverage.matched_folders}</b> folders</span>`);
   }
-  const noInfo = meta.sections && meta.sections.cracked
-    ? meta.sections.cracked.no_info : 0;
+  const noInfo = sec.no_info || 0;
   if (noInfo) parts.push(`<span class="st">${noInfo} without info</span>`);
   if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
   parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
@@ -240,8 +253,10 @@ function renderStats(extra) {
 function renderFooter() {
   if (!meta) return;
   const bits = [];
-  if (meta.index.mtime) {
-    bits.push("index.json: " + new Date(meta.index.mtime * 1000).toLocaleString());
+  const idx = (meta.index && meta.index[state.section]) || {};
+  if (idx.mtime) {
+    const name = SECTION_INDEX_NAMES[state.section] || "index.json";
+    bits.push(name + ": " + new Date(idx.mtime * 1000).toLocaleString());
   }
   if (meta.generated_at) bits.push("gameinfo: " + meta.generated_at);
   // the tool version is shown right-aligned in the statistics bar
@@ -388,6 +403,11 @@ async function loadEntries() {
 }
 
 // ---------------------------------------------------------------- hover panel
+// The info panel is a mouse affordance only: touch/mobile devices synthesize
+// mouseover on tap, so without this guard the panel would pop up ~400 ms
+// after every tap and could stick (SPEC 6.x — no hover info on touch).
+const hoverMedia = window.matchMedia("(hover: hover) and (pointer: fine)");
+const canHover = () => hoverMedia.matches;
 let hoverTimer = null;
 function hoverHTML(card) {
   const rows = [];
@@ -876,6 +896,10 @@ function changePage(dir) {
 function wireEvents() {
   $("grid").addEventListener("keydown", gridKeydown);
   document.addEventListener("keydown", globalKeydown);
+  // the hover panel is position:fixed — dismiss it on key press (SPEC 6.1)
+  // and whenever the grid scrolls under it
+  document.addEventListener("keydown", hideHover);
+  window.addEventListener("scroll", hideHover, true);
   // help overlay: click on the backdrop closes it
   $("help").addEventListener("click", (e) => {
     if (e.target === $("help")) closeHelp();
@@ -908,6 +932,7 @@ function wireEvents() {
     openLightbox(idx, fv);
   });
   $("grid").addEventListener("mouseover", (e) => {
+    if (!canHover()) return;
     const cardEl = e.target.closest(".card");
     if (!cardEl) return;
     const idx = parseInt(cardEl.dataset.idx, 10);
@@ -952,7 +977,7 @@ function wireEvents() {
   });
   const clearAll = () => {
     Object.assign(state, {
-      status: defaultStatus, q: "", letter: "any",
+      status: sectionDefaultStatus(state.section), q: "", letter: "any",
       publisher: "any", crew: "any", cracker: "any", language: "any",
       year: "any", raw: "any", pasti: "any", boxscan: "any", tos: "any",
       sort: "name", order: "asc", offset: 0,
@@ -977,8 +1002,8 @@ function wireEvents() {
     if (!b) return;
     state.section = b.dataset.section;
     state.offset = 0;
-    // reset incompatible filters
-    state.status = defaultStatus;
+    // reset incompatible filters; status falls back to the section default
+    state.status = sectionDefaultStatus(state.section);
     for (const k of ["raw", "pasti", "boxscan", "tos", "crew", "cracker"])
       state[k] = "any";
     if (state.sort === "cracker" && state.section === "pd") state.sort = "name";
@@ -1033,9 +1058,13 @@ async function boot() {
   }
   if (meta.show_candidates != null) showCands = !!meta.show_candidates;
   if (meta.default_status) defaultStatus = meta.default_status;
-  if (!urlStatus) state.status = defaultStatus;
-  $("tabs").hidden = !(meta.gameinfo && meta.sections &&
-    (meta.sections.pd.games || meta.sections.utils.games));
+  if (!urlStatus) state.status = sectionDefaultStatus(state.section);
+  // show the section tabs when pd/utils have any card (index- or
+  // gameinfo-derived), even without gameinfo
+  $("tabs").hidden = !(meta.sections &&
+    ((meta.sections.pd && (meta.sections.pd.games || meta.sections.pd.cards)) ||
+     (meta.sections.utils &&
+      (meta.sections.utils.games || meta.sections.utils.cards))));
   syncControls();
   renderStats();
   renderFooter();

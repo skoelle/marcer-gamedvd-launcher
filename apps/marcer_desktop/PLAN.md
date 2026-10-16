@@ -131,9 +131,9 @@ Reimplementation of the spec contract in Dart (the project's established
   parts → `letter = parts[2]`, `folder = parts[3]` (0-based), join to
   `games-cracked.json` (+ optionally `games-pd.json`, `games-utils.json`).
 - **Screenshot index lookup**:
-  - load `<OutDirectory>/index.json` (`version` + `entries` map keyed by rel zip path);
+  - load `<ScreenshotDirectory>/index.json` (`version` + `entries` map keyed by rel zip path);
   - **gotcha:** on disk `preview` and `candidates[]` are *basenames* — the real PNG is
-    `OutDirectory + "/" + dirname(rel) + "/" + preview` (same rule as
+    `ScreenshotDirectory + "/" + dirname(rel) + "/" + preview` (same rule as
     `tools/gallery/gallery.py::_full_png`);
   - status aggregation / primary preview selection mirrored from the gallery spec
     (`done → desktop → no_usable_shots → interrupted → pending → skipped_disk_n`);
@@ -144,7 +144,7 @@ Reimplementation of the spec contract in Dart (the project's established
 - **Graceful degradation** (DECISION §7): missing `index.json`, missing `Data/` dir or
   missing trees → empty states with a notice, never a crash.
 - **Read-only guarantee**: the package never writes to `RootDirectory`,
-  `PatchDirectory`, `<OutDirectory>` or `<DataDirectory>`.
+  `PatchDirectory`, `<ScreenshotDirectory>` or `<GameinfoDirectory>`.
 - **Unit tests**: small fixture trees covering overlay rules (BOTH/ROOT/PTCH flags,
   patch precedence, case-insensitive dedup, traversal attempts), join resolution,
   preview path resolution, and degradation when artifacts are absent.
@@ -160,8 +160,8 @@ git-ignored (same policy as `launcher.config.json`).
 {
   "RootDirectory": "",
   "PatchDirectory": "",
-  "OutDirectory": "",
-  "DataDirectory": "",
+  "ScreenshotDirectory": "",
+  "GameinfoDirectory": "",
   "Hatari": {
     "Executable": "",
     "ConfigFile": "",
@@ -175,8 +175,8 @@ git-ignored (same policy as `launcher.config.json`).
 - **Absolute paths** in the config (decided 2026-10-11); relative paths, if used
   anywhere, resolve against the application directory (R10, same rule as the console app).
 - `Hatari` is part of the schema but **unused in the MVP** (launch = Phase 5+).
-- `OutDirectory` (screenshot archive) and `DataDirectory` (gameinfo JSONs) are desktop-only
-  fields; `DataDirectory` default convention is `<PatchDirectory>/../Data`
+- `ScreenshotDirectory` (screenshot archive) and `GameinfoDirectory` (gameinfo JSONs) are
+  desktop-only fields; `GameinfoDirectory` default convention is `<PatchDirectory>/../Data`
   (per `ANALYSIS-game-data.md` §5.5) when left empty.
 - `run.sh` still sources `local/paths.env` for developer convenience, but only to
   **seed/print** a working `desktop.config.json` on first run — the app itself reads
@@ -185,6 +185,32 @@ git-ignored (same policy as `launcher.config.json`).
   (1) current working directory, (2) the executable's directory (portable ZIP
   release), (3) macOS: the folder containing the `.app` bundle. Release ZIPs ship
   `desktop.config.example.json`.
+- **Config key rename (2026-10-16, breaking):** `OutDirectory` → `ScreenshotDirectory`
+  and `DataDirectory` → `GameinfoDirectory` (JSON keys and the matching Dart API:
+  `DesktopConfig.screenshotDirectory`/`gameinfoDirectory`,
+  `resolveGameinfoDirectory()`, `ScreenshotIndex.screenshotDirectory`, the
+  `screenshotDir`/`gameinfoDir` parameters). Old keys are **not** read anymore;
+  existing configs must be renamed (see README "Upgrading"). The developer env vars
+  `MARCER_OUT_DIR`/`MARCER_DATA_DIR` are unchanged (`run.sh` maps them to the new keys).
+- **In-app settings editor (2026-10-16):** the ⚙ gear button in the top bar
+  (between the update badge and the Folders toggle) opens a modal to edit the
+  path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
+  `GameinfoDirectory`, `Hatari.Executable`, `Hatari.ConfigFile`) with native
+  directory/file pickers (`file_picker`). Save serializes the full schema back
+  to the resolved config file (`DesktopConfig.toJson`/`save`, via `copyWith`)
+  and rebuilds the catalog controller in place (`HomePage._applyConfig`), so
+  new paths apply immediately. Window geometry and the remaining fields are
+  preserved but not exposed.
+- **First-run setup (2026-10-16):** when no `desktop.config.json` is found the
+  app opens `SetupPage` instead of an error hint (an unreadable config keeps
+  the error page but gains a `Setup…` button). Both the setup page and the
+  gear dialog share `SettingsForm`, which validates each path live (green
+  ✓ / red ✗, no icon for empty optionals) and disables Save until every field
+  is valid — `RootDirectory` is the only required field, a filled-but-invalid
+  optional also blocks. The new file is written to the first writable of
+  `configSaveDirs` (exe dir / macOS `.app` parent, then CWD) via
+  `writeFirstWritable`; `_AppRoot` then swaps the setup page for the catalog
+  in place.
 - **Window (2026-10-15):** the app starts **maximized** via `window_manager`
   (`Window.maximized`, default `true`); `false` applies `Window.width/height`
   as the startup and restore size, centered. Before that the size fields were

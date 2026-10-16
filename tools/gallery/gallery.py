@@ -48,6 +48,14 @@ STATUS_LABELS = {
 YEAR_RE = re.compile(r"\d{4}")
 SORTS = ("name", "year", "publisher", "cracker", "crew")
 
+# Per-section screenshot index filenames (screenshot-gen; desktop parity).
+# `index.json` is the cracked archive (back-compat), pd/utils have their own.
+SECTION_INDEX_NAMES = {
+    "cracked": "index.json",
+    "pd": "index-pd.json",
+    "utils": "index-utils.json",
+}
+
 
 def log(msg):
     print(msg, flush=True)
@@ -127,9 +135,15 @@ def _info_search_text(info):
     return " ".join(parts).lower()
 
 
-def _build_cracked_cards(entries, cracked_games):
+def _build_indexed_cards(entries, games, kind, union_gameinfo):
+    """Group index entries by (letter, folder) into cards joined with gameinfo.
+
+    With ``union_gameinfo`` (pd/utils) gameinfo-only folders without an index
+    entry are appended as metadata-only cards (placeholder, no screenshots);
+    cracked stays index-only (desktop-app parity, per-section indices).
+    """
     info_by_key = {(g.get("letter", ""), g.get("folder", "")): g
-                   for g in cracked_games}
+                   for g in games}
     groups = {}
     for rel, e in entries.items():
         parts = rel.split("/")
@@ -138,6 +152,7 @@ def _build_cracked_cards(entries, cracked_games):
         groups.setdefault((letter, folder), []).append((rel, e))
 
     cards = []
+    seen = set()
     for (letter, folder), items in groups.items():
         items.sort(key=lambda t: t[0])
         variants = []
@@ -190,35 +205,41 @@ def _build_cracked_cards(entries, cracked_games):
             "variants": variants,
             "info": _variant_info_summary(info),
         }
-        _finalize_card(card, kind="cracked")
-        cards.append(card)
-    return cards
-
-
-def _build_simple_cards(games, kind):
-    cards = []
-    for g in games:
-        letter = g.get("letter", "")
-        folder = g.get("folder", "")
-        layers = g.get("layers") or []
-        layer = "BOTH" if len(layers) > 1 else (layers[0] if layers else "")
-        card = {
-            "id": f"{letter}/{folder}",
-            "name": folder,
-            "letter": letter,
-            "folder": folder,
-            "display_status": "",
-            "screenshots": False,
-            "status_counts": {},
-            "layer": layer,
-            "year": "",
-            "preview": None,
-            "variants": [],
-            "info": _variant_info_summary(g),
-        }
         _finalize_card(card, kind=kind)
         cards.append(card)
+        seen.add((letter.lower(), folder.lower()))
+
+    if union_gameinfo:
+        for g in games:
+            key = (g.get("letter", "").lower(),
+                   g.get("folder", "").lower())
+            if key in seen:
+                continue
+            cards.append(_simple_card(g, kind))
     return cards
+
+
+def _simple_card(g, kind):
+    letter = g.get("letter", "")
+    folder = g.get("folder", "")
+    layers = g.get("layers") or []
+    layer = "BOTH" if len(layers) > 1 else (layers[0] if layers else "")
+    card = {
+        "id": f"{letter}/{folder}",
+        "name": folder,
+        "letter": letter,
+        "folder": folder,
+        "display_status": "",
+        "screenshots": False,
+        "status_counts": {},
+        "layer": layer,
+        "year": "",
+        "preview": None,
+        "variants": [],
+        "info": _variant_info_summary(g),
+    }
+    _finalize_card(card, kind=kind)
+    return card
 
 
 def _finalize_card(card, kind):
@@ -427,7 +448,6 @@ class DataStore:
         self.data = Path(data_dir) if data_dir and os.path.isdir(data_dir) \
             else None
         self.lock = threading.Lock()
-        self.index_path = self.out / "index.json"
         self._mtimes = {}
         self.meta = {}
         self.cards = {"cracked": [], "pd": [], "utils": []}
@@ -438,24 +458,24 @@ class DataStore:
         self.reload(force=True)
 
     def _stamps(self):
-        stamps = {"index": None, "cracked": None, "pd": None,
-                  "utils": None, "manifest": None}
-        try:
-            stamps["index"] = os.path.getmtime(self.index_path)
-        except OSError:
-            pass
+        stamps = {}
+        for sec, name in SECTION_INDEX_NAMES.items():
+            try:
+                stamps[f"index_{sec}"] = os.path.getmtime(self.out / name)
+            except OSError:
+                stamps[f"index_{sec}"] = None
         if self.data:
             for kind in ("cracked", "pd", "utils"):
                 try:
-                    stamps[kind] = os.path.getmtime(
+                    stamps[f"info_{kind}"] = os.path.getmtime(
                         self.data / f"games-{kind}.json")
                 except OSError:
-                    pass
+                    stamps[f"info_{kind}"] = None
             try:
                 stamps["manifest"] = os.path.getmtime(
                     self.data / "manifest.json")
             except OSError:
-                pass
+                stamps["manifest"] = None
         return stamps
 
     def check_changed(self):
@@ -466,25 +486,29 @@ class DataStore:
             return False
         with self.lock:
             if not force and self._stamps() == self._mtimes \
-                    and self.meta.get("index", {}).get("entries"):
+                    and self.meta.get("sections") \
+                    and self.meta.get("index", {}).get("cracked", {}) \
+                    .get("entries"):
                 return False
             t0 = time.monotonic()
             self._load()
             log(f"[data] (re)loaded in {time.monotonic() - t0:.2f}s "
-                f"({self.meta.get('index', {}).get('entries')} index entries, "
-                f"{len(self.cards['cracked'])} cracked cards)")
+                f"({self.meta.get('index', {}).get('cracked', {}).get('entries')}"
+                f" index entries, {len(self.cards['cracked'])} cracked cards)")
         return True
 
     def _load(self):
         self._mtimes = self._stamps()
         entries = {}
-        if self.index_path.is_file():
-            with open(self.index_path, encoding="utf-8") as f:
-                entries = json.load(f).get("entries", {})
-        status_counts = {}
-        for e in entries.values():
-            s = e.get("status") or "unknown"
-            status_counts[s] = status_counts.get(s, 0) + 1
+        for sec, name in SECTION_INDEX_NAMES.items():
+            entries[sec] = {}
+            p = self.out / name
+            if p.is_file():
+                try:
+                    with open(p, encoding="utf-8") as f:
+                        entries[sec] = json.load(f).get("entries", {})
+                except Exception as exc:  # noqa: BLE001
+                    log(f"[warn] {name}: {exc}")
 
         games = {"cracked": [], "pd": [], "utils": []}
         self.kinds_loaded = set()
@@ -507,13 +531,18 @@ class DataStore:
                 log(f"[warn] manifest.json: {exc}")
                 self.manifest = {}
 
-        self.cards["cracked"] = _build_cracked_cards(
-            entries, games["cracked"] if "cracked" in self.kinds_loaded
-            else [])
-        self.cards["pd"] = _build_simple_cards(
-            games["pd"] if "pd" in self.kinds_loaded else [], "pd")
-        self.cards["utils"] = _build_simple_cards(
-            games["utils"] if "utils" in self.kinds_loaded else [], "utils")
+        self.cards["cracked"] = _build_indexed_cards(
+            entries["cracked"],
+            games["cracked"] if "cracked" in self.kinds_loaded else [],
+            "cracked", union_gameinfo=False)
+        self.cards["pd"] = _build_indexed_cards(
+            entries["pd"],
+            games["pd"] if "pd" in self.kinds_loaded else [],
+            "pd", union_gameinfo=True)
+        self.cards["utils"] = _build_indexed_cards(
+            entries["utils"],
+            games["utils"] if "utils" in self.kinds_loaded else [],
+            "utils", union_gameinfo=True)
         self.facets = {kind: _facets(self.cards[kind], kind)
                        for kind in ("cracked", "pd", "utils")}
 
@@ -524,37 +553,53 @@ class DataStore:
                     "matched_folders": src.get("matched_folders"),
                     "unmatched_folders": src.get("unmatched_folders"),
                 }
+
+        def zip_counts(sec):
+            counts = {}
+            for e in entries[sec].values():
+                s = e.get("status") or "unknown"
+                counts[s] = counts.get(s, 0) + 1
+            return counts
+
         # per-status CARD (game) counts for the statistics bar — the ZIP
-        # level counts above stay in `status_counts`. `pending` uses the
+        # level counts stay in `status_counts`. `pending` uses the
         # any-variant rule of `_matches` so the bar segment equals the
         # pending dropdown result count (desktop `statusLine`).
-        game_status_counts = {s: 0 for s in STATUS_ORDER}
-        for c in self.cards["cracked"]:
-            ds = c["display_status"]
-            if ds in game_status_counts:
-                game_status_counts[ds] += 1
-        game_status_counts["pending"] = sum(
-            1 for c in self.cards["cracked"]
-            if any(v["status"] == "pending" for v in c["variants"]))
+        def game_counts(sec):
+            counts = {s: 0 for s in STATUS_ORDER}
+            cards = self.cards[sec]
+            for c in cards:
+                ds = c["display_status"]
+                if ds in counts:
+                    counts[ds] += 1
+            counts["pending"] = sum(
+                1 for c in cards
+                if any(v["status"] == "pending" for v in c["variants"]))
+            return counts
+
         self.meta = {
             "gameinfo": self.gameinfo_available,
             "index": {
-                "entries": len(entries),
-                "mtime": self._mtimes.get("index"),
+                sec: {
+                    "entries": len(entries[sec]),
+                    "mtime": self._mtimes.get(f"index_{sec}"),
+                }
+                for sec in SECTION_INDEX_NAMES
             },
-            "status_counts": status_counts,
-            "game_status_counts": game_status_counts,
+            "status_counts": {sec: zip_counts(sec)
+                              for sec in SECTION_INDEX_NAMES},
+            "game_status_counts": {sec: game_counts(sec)
+                                   for sec in SECTION_INDEX_NAMES},
             "sections": {
-                "cracked": {
-                    "games": len(games["cracked"]),
-                    "cards": len(self.cards["cracked"]),
+                sec: {
+                    "games": len(games[sec]),
+                    "cards": len(self.cards[sec]),
                     "with_screenshot": sum(
-                        1 for c in self.cards["cracked"] if c["screenshots"]),
+                        1 for c in self.cards[sec] if c["screenshots"]),
                     "no_info": sum(
-                        1 for c in self.cards["cracked"] if not c["info"]),
-                },
-                "pd": {"games": len(games["pd"])},
-                "utils": {"games": len(games["utils"])},
+                        1 for c in self.cards[sec] if not c["info"]),
+                }
+                for sec in SECTION_INDEX_NAMES
             },
             "coverage": coverage,
             "facets": self.facets,
@@ -579,20 +624,24 @@ def _matches(card, params, section):
     cracker_active = (cracker != "any"
                       and "cracker" in kind_filters(section))
     focus_active = crew_active or cracker_active
-    if section == "cracked":
-        st = params.get("status", "with_screenshot") or "with_screenshot"
-        if st == "with_screenshot":
-            # crew/cracker focus always shows the focused variant, even empty
-            if not focus_active and not card["screenshots"]:
-                return False
-        elif st == "pending":
-            # app parity: a card matches `pending` when ANY of its ZIPs is
-            # pending (the display_status aggregate would hide pending ZIPs
-            # of folders that already have a done ZIP)
-            if not any(v["status"] == "pending" for v in card["variants"]):
-                return False
-        elif st != "any" and card["display_status"] != st:
+    st = params.get("status")
+    if st is None:
+        # cracked defaults to screenshots only; pd/utils show everything
+        # (metadata-only cards) — per-section default (desktop parity)
+        st = "with_screenshot" if section == "cracked" else "any"
+    st = st or "any"
+    if st == "with_screenshot":
+        # crew/cracker focus always shows the focused variant, even empty
+        if not focus_active and not card["screenshots"]:
             return False
+    elif st == "pending":
+        # app parity: a card matches `pending` when ANY of its ZIPs is
+        # pending (the display_status aggregate would hide pending ZIPs
+        # of folders that already have a done ZIP)
+        if not any(v["status"] == "pending" for v in card["variants"]):
+            return False
+    elif st != "any" and card["display_status"] != st:
+        return False
     letter = params.get("letter", "any") or "any"
     if letter != "any" and card["letter"] != letter:
         return False
@@ -782,7 +831,7 @@ class GalleryHandler(BaseHTTPRequestHandler):
         # single-card lookup for deep links (SPEC 5.3 "entry")
         entry = params.get("entry")
         if entry:
-            card = next((c for c in store.cards["cracked"]
+            card = next((c for c in store.cards[section]
                          if any(v["rel"] == entry for v in c["variants"])),
                         None)
             if card is None:
@@ -791,12 +840,12 @@ class GalleryHandler(BaseHTTPRequestHandler):
             entry_order = params.get("order", "asc") or "asc"
             if entry_order not in ("asc", "desc"):
                 entry_order = "asc"
-            filtered = [c for c in store.cards["cracked"]
-                        if _matches(c, params, "cracked")]
+            filtered = [c for c in store.cards[section]
+                        if _matches(c, params, section)]
             _sort_cards(filtered, entry_sort, entry_order)
             position = next(
                 (i for i, c in enumerate(filtered) if c is card), None)
-            payload = _public_card(card, "cracked")
+            payload = _public_card(card, section)
             payload["position"] = position
             return self._json({
                 "total": 1, "offset": 0, "limit": 1,
