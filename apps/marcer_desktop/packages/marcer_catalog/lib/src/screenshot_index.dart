@@ -4,21 +4,38 @@
 import 'dart:convert';
 import 'dart:io';
 
+/// Index file name per section (`index.json` stays the cracked index for
+/// backward compatibility; `pd`/`utils` get their own files next to it —
+/// see `SPEC-screenshot-generator.md`).
+const Map<String, String> kSectionIndexNames = {
+  'cracked': 'index.json',
+  'pd': 'index-pd.json',
+  'utils': 'index-utils.json',
+};
+
+/// Section keys in UI order (gallery tabs), matching [kSectionIndexNames].
+const List<String> kSections = ['cracked', 'pd', 'utils'];
+
 /// Screenshot index lookup (`SPEC-screenshot-generator.md`, `index.json`).
+///
+/// One instance represents **one** index file of one section. The
+/// [ScreenshotIndices] aggregate holds the three section indices and provides
+/// rel-path lookups across all of them.
 ///
 /// Key gotcha (PLAN.md §2): on disk `preview` and `candidates` are *basenames*;
 /// the real PNG is `<OutDirectory>/<dirname(rel)>/<preview>`.
 class ScreenshotIndex {
-  ScreenshotIndex._(
-      this._entries, this.outDirectory, this._loadError, this.mtime);
+  ScreenshotIndex._(this._entries, this.outDirectory, this._loadError,
+      this.mtime, this.indexName);
 
-  /// Loads `<outDirectory>/index.json`; missing/unreadable file yields an
+  /// Loads `<outDirectory>/<indexName>`; missing/unreadable file yields an
   /// empty index ([loadError] set) instead of throwing (DECISION §7).
-  factory ScreenshotIndex.load(String outDirectory) {
-    final file = File('$outDirectory/index.json');
+  factory ScreenshotIndex.load(String outDirectory,
+      [String indexName = 'index.json']) {
+    final file = File('$outDirectory/$indexName');
     if (!file.existsSync()) {
       return ScreenshotIndex._(
-          const {}, outDirectory, 'index.json not found', null);
+          const {}, outDirectory, '$indexName not found', null, indexName);
     }
     try {
       final mtime = file.statSync().modified;
@@ -29,21 +46,25 @@ class ScreenshotIndex {
         entries[key] =
             ScreenshotEntry.fromJson(key, value as Map<String, dynamic>);
       });
-      return ScreenshotIndex._(entries, outDirectory, null, mtime);
+      return ScreenshotIndex._(entries, outDirectory, null, mtime, indexName);
     } catch (e) {
       return ScreenshotIndex._(
-          const {}, outDirectory, 'parse error: $e', null);
+          const {}, outDirectory, 'parse error: $e', null, indexName);
     }
   }
 
   /// Empty index for an unconfigured output directory.
-  ScreenshotIndex.empty(String reason) : this._(const {}, '', reason, null);
+  ScreenshotIndex.empty(String reason)
+      : this._(const {}, '', reason, null, '');
 
   final Map<String, ScreenshotEntry> _entries;
   final String outDirectory;
   final String? _loadError;
 
-  /// `index.json` modification time (gallery footer), or null when absent.
+  /// File name this index was loaded from (`index.json`, `index-pd.json`, …).
+  final String indexName;
+
+  /// Index file modification time (gallery footer), or null when absent.
   final DateTime? mtime;
 
   String? get loadError => _loadError;
@@ -86,6 +107,86 @@ class ScreenshotIndex {
   static String _dirname(String relPath) {
     final idx = relPath.lastIndexOf('/');
     return idx == -1 ? '' : relPath.substring(0, idx);
+  }
+}
+
+/// The three per-section screenshot indices of one output directory
+/// (`index.json`, `index-pd.json`, `index-utils.json`). Missing files degrade
+/// to empty indices (warning collected in [warnings]), so an older output
+/// directory without the pd/utils indices still works (gameinfo-only pd/utils
+/// cards, no status counts there).
+class ScreenshotIndices {
+  ScreenshotIndices._(this._bySection, this.warnings);
+
+  factory ScreenshotIndices.load(String outDirectory) {
+    final warnings = <String>[];
+    final bySection = <String, ScreenshotIndex>{};
+    if (outDirectory.isEmpty) {
+      for (final section in kSections) {
+        bySection[section] =
+            ScreenshotIndex.empty('OutDirectory not configured');
+      }
+      warnings.add('Screenshots: OutDirectory not configured');
+    } else {
+      for (final entry in kSectionIndexNames.entries) {
+        final idx = ScreenshotIndex.load(outDirectory, entry.value);
+        bySection[entry.key] = idx;
+        // Only the cracked index is historically required; a missing
+        // pd/utils index degrades silently to gameinfo-only cards.
+        if (idx.loadError != null && entry.key == 'cracked') {
+          warnings.add('Screenshots: ${idx.loadError}');
+        }
+      }
+    }
+    return ScreenshotIndices._(bySection, warnings);
+  }
+
+  final Map<String, ScreenshotIndex> _bySection;
+
+  /// Load warnings (missing/unreadable files); also surfaced as app notices.
+  final List<String> warnings;
+
+  /// Index of one section (`cracked` | `pd` | `utils`); an empty index for
+  /// unknown keys.
+  ScreenshotIndex forSection(String section) =>
+      _bySection[section] ?? ScreenshotIndex.empty('unknown section $section');
+
+  Map<String, ScreenshotIndex> get bySection => _bySection;
+
+  /// Status histogram of one section's index.
+  Map<String, int> statusCountsFor(String section) =>
+      forSection(section).statusCounts;
+
+  /// Modification time of one section's index file.
+  DateTime? mtimeFor(String section) => forSection(section).mtime;
+
+  /// File name of one section's index (`index.json` / `index-pd.json` / …).
+  String indexNameFor(String section) =>
+      kSectionIndexNames[section] ?? forSection(section).indexName;
+
+  /// Index entry by rel ZIP path, searched across all sections.
+  ScreenshotEntry? operator [](String relPath) {
+    for (final idx in _bySection.values) {
+      final entry = idx[relPath];
+      if (entry != null) return entry;
+    }
+    return null;
+  }
+
+  /// Preview PNG by rel ZIP path, searched across all sections.
+  String? previewPathFor(String relPath) {
+    for (final idx in _bySection.values) {
+      if (idx[relPath] != null) return idx.previewPathFor(relPath);
+    }
+    return null;
+  }
+
+  /// Candidate PNGs by rel ZIP path, searched across all sections.
+  List<String> candidatePathsFor(String relPath) {
+    for (final idx in _bySection.values) {
+      if (idx[relPath] != null) return idx.candidatePathsFor(relPath);
+    }
+    return const [];
   }
 }
 

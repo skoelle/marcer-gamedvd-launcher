@@ -5,9 +5,6 @@ import 'card.dart';
 import 'gameinfo.dart';
 import 'screenshot_index.dart';
 
-/// Section identifiers matching the gallery tabs.
-const List<String> kSections = ['cracked', 'pd', 'utils'];
-
 /// Facet option lists of one section (gallery `/api/meta` `facets[section]`).
 class CatalogFacets {
   const CatalogFacets({
@@ -28,8 +25,16 @@ class CatalogFacets {
 }
 
 /// All catalog cards grouped per section plus their facets — the global
-/// "universe" of the desktop app, derived from `index.json` + gameinfo
-/// without any filesystem scan (user decision 2026-10-11).
+/// "universe" of the desktop app, derived from the per-section screenshot
+/// indices (`index.json` / `index-pd.json` / `index-utils.json`) + gameinfo
+/// without any filesystem scan (user decision 2026-10-11; per-section
+/// indices + pd/utils union 2026-10-16).
+///
+/// - `cracked` cards come from its index entries grouped by (letter, folder)
+///   joined with `games-cracked.json`.
+/// - `pd`/`utils` cards are the union of index groups (with status counts /
+///   screenshots / variants) and gameinfo-only folders without an index entry
+///   (metadata-only cards, the pre-index behaviour).
 class CatalogUniverse {
   CatalogUniverse._({
     required this.cracked,
@@ -38,67 +43,50 @@ class CatalogUniverse {
     required this.crackedFacets,
     required this.pdFacets,
     required this.utilsFacets,
-    required this.statusCounts,
-  });
+    required Map<String, Map<String, int>> statusCountsBySection,
+  }) : _countsBySection = statusCountsBySection;
 
   factory CatalogUniverse.build({
-    required ScreenshotIndex index,
+    required ScreenshotIndices indices,
     required GameInfoIndex info,
     required String outDir,
   }) {
     final fullPng = _fullPngFn(outDir);
 
-    // Cracked: group index entries by (letter, folder), join games-cracked.
-    final groups = <String, List<(String, ScreenshotEntry)>>{};
-    final groupKeys = <(String, String)>[];
-    index.entries.forEach((rel, e) {
-      final parts = rel.split('/');
-      final letter = parts.length > 2 ? parts[2] : '';
-      final folder = parts.length > 3 ? parts[3] : _stem(parts.last);
-      final key = (letter, folder);
-      final bucket = groups['${letter.toLowerCase()}|${folder.toLowerCase()}'];
-      if (bucket == null) {
-        groupKeys.add(key);
-        groups['${letter.toLowerCase()}|${folder.toLowerCase()}'] = [(rel, e)];
-      } else {
-        bucket.add((rel, e));
-      }
-    });
-
-    final cracked = <GameCard>[];
-    final statusCounts = <String, int>{};
-    for (final (letter, folder) in groupKeys) {
-      final items =
-          groups['${letter.toLowerCase()}|${folder.toLowerCase()}']!;
-      final game = info.lookupKind('cracked', letter, folder);
-      final card = buildCrackedCard(
-        letter: letter,
-        folder: folder,
-        items: items,
-        game: game,
-        fullPng: fullPng,
-      );
-      cracked.add(card);
-      statusCounts[card.displayStatus] =
-          (statusCounts[card.displayStatus] ?? 0) + 1;
-    }
-
-    final pd = [
-      for (final g in info.byKind('pd')) buildSimpleCard(game: g, kind: 'pd'),
-    ];
-    final utils = [
-      for (final g in info.byKind('utils'))
-        buildSimpleCard(game: g, kind: 'utils'),
-    ];
+    final cracked = _buildIndexedSection(
+      kind: 'cracked',
+      index: indices.forSection('cracked'),
+      info: info,
+      fullPng: fullPng,
+      unionGameinfo: false,
+    );
+    final pd = _buildIndexedSection(
+      kind: 'pd',
+      index: indices.forSection('pd'),
+      info: info,
+      fullPng: fullPng,
+      unionGameinfo: true,
+    );
+    final utils = _buildIndexedSection(
+      kind: 'utils',
+      index: indices.forSection('utils'),
+      info: info,
+      fullPng: fullPng,
+      unionGameinfo: true,
+    );
 
     return CatalogUniverse._(
-      cracked: cracked,
-      pd: pd,
-      utils: utils,
-      crackedFacets: _facets(cracked, 'cracked'),
-      pdFacets: _facets(pd, 'pd'),
-      utilsFacets: _facets(utils, 'utils'),
-      statusCounts: statusCounts,
+      cracked: cracked.cards,
+      pd: pd.cards,
+      utils: utils.cards,
+      crackedFacets: _facets(cracked.cards, 'cracked'),
+      pdFacets: _facets(pd.cards, 'pd'),
+      utilsFacets: _facets(utils.cards, 'utils'),
+      statusCountsBySection: {
+        'cracked': cracked.statusCounts,
+        'pd': pd.statusCounts,
+        'utils': utils.statusCounts,
+      },
     );
   }
 
@@ -108,11 +96,17 @@ class CatalogUniverse {
   final CatalogFacets crackedFacets;
   final CatalogFacets pdFacets;
   final CatalogFacets utilsFacets;
+  final Map<String, Map<String, int>> _countsBySection;
 
-  /// Aggregated `displayStatus` counts over cracked cards (status bar
-  /// games column). `pending` is overridden by [pendingAnyVariantCount]
-  /// there so the segment matches the app's pending filter rule.
-  final Map<String, int> statusCounts;
+  /// Aggregated `displayStatus` counts over cracked cards (status bar games
+  /// column). `pending` is overridden by [pendingAnyVariantCount] there so
+  /// the segment matches the app's pending filter rule. Shorthand for
+  /// [statusCountsFor]`('cracked')`.
+  Map<String, int> get statusCounts => statusCountsFor('cracked');
+
+  /// Aggregated `displayStatus` counts over the cards of [section].
+  Map<String, int> statusCountsFor(String section) =>
+      _countsBySection[section] ?? const {};
 
   /// Every card of every section (the `★ Favorites` filter lists all
   /// sections at once).
@@ -132,19 +126,97 @@ class CatalogUniverse {
 
   /// Number of cracked cards with at least one preview (status bar
   /// `3211 with screenshot`, next to the `3287 folders` segment).
-  int get crackedWithScreenshot => cracked.where((c) => c.screenshots).length;
+  int get crackedWithScreenshot => withScreenshotFor('cracked');
+
+  /// Cards of [section] with at least one preview.
+  int withScreenshotFor(String section) =>
+      cardsFor(section).where((c) => c.screenshots).length;
 
   /// Cracked cards with at least one `pending` ZIP — the app-specific
   /// pending filter rule (`matchesCard`), used by the status bar pending
   /// segment so it matches the dropdown result count.
-  int get pendingAnyVariantCount =>
-      cracked.where((c) => c.variants.any((v) => v.status == 'pending')).length;
+  int get pendingAnyVariantCount => pendingAnyVariantCountFor('cracked');
+
+  /// Cards of [section] with at least one `pending` ZIP variant.
+  int pendingAnyVariantCountFor(String section) => cardsFor(section)
+      .where((c) => c.variants.any((v) => v.status == 'pending'))
+      .length;
 
   /// Cracked cards without gameinfo (gallery `sections.cracked.no_info`).
-  int get crackedNoInfo => cracked.where((c) => c.info == null).length;
+  int get crackedNoInfo => noInfoFor('cracked');
 
-  int get crackedVariants =>
-      cracked.fold(0, (sum, c) => sum + c.variants.length);
+  /// Cards of [section] without gameinfo.
+  int noInfoFor(String section) =>
+      cardsFor(section).where((c) => c.info == null).length;
+
+  int get crackedVariants => variantsFor('cracked');
+
+  /// Number of ZIP variants of all cards of [section].
+  int variantsFor(String section) =>
+      cardsFor(section).fold(0, (sum, c) => sum + c.variants.length);
+}
+
+/// One section's index groups → cards (+ per-card status histogram).
+typedef _SectionBuild = ({List<GameCard> cards, Map<String, int> statusCounts});
+
+/// Groups [index] entries by (letter, folder), joins gameinfo and builds the
+/// section's cards. With [unionGameinfo] the gameinfo-only folders without an
+/// index entry are appended as metadata-only cards (pd/utils); cracked is
+/// index-only like before.
+_SectionBuild _buildIndexedSection({
+  required String kind,
+  required ScreenshotIndex index,
+  required GameInfoIndex info,
+  required String? Function(String rel, String? baseName) fullPng,
+  required bool unionGameinfo,
+}) {
+  final groups = <String, List<(String, ScreenshotEntry)>>{};
+  final groupKeys = <(String, String)>[];
+  index.entries.forEach((rel, e) {
+    final parts = rel.split('/');
+    final letter = parts.length > 2 ? parts[2] : '';
+    final folder = parts.length > 3 ? parts[3] : _stem(parts.last);
+    final key = '${letter.toLowerCase()}|${folder.toLowerCase()}';
+    final bucket = groups[key];
+    if (bucket == null) {
+      groupKeys.add((letter, folder));
+      groups[key] = [(rel, e)];
+    } else {
+      bucket.add((rel, e));
+    }
+  });
+
+  final cards = <GameCard>[];
+  final statusCounts = <String, int>{};
+  final seen = <String>{};
+  for (final (letter, folder) in groupKeys) {
+    final items = groups['${letter.toLowerCase()}|${folder.toLowerCase()}']!;
+    final game = info.lookupKind(kind, letter, folder);
+    final card = buildIndexedCard(
+      kind: kind,
+      letter: letter,
+      folder: folder,
+      items: items,
+      game: game,
+      fullPng: fullPng,
+    );
+    cards.add(card);
+    seen.add('${letter.toLowerCase()}|${folder.toLowerCase()}');
+    if (card.displayStatus.isNotEmpty) {
+      statusCounts[card.displayStatus] =
+          (statusCounts[card.displayStatus] ?? 0) + 1;
+    }
+  }
+
+  if (unionGameinfo) {
+    for (final g in info.byKind(kind)) {
+      final key = '${g.letter.toLowerCase()}|${g.folder.toLowerCase()}';
+      if (seen.contains(key)) continue;
+      cards.add(buildSimpleCard(game: g, kind: kind));
+    }
+  }
+
+  return (cards: cards, statusCounts: statusCounts);
 }
 
 /// Gallery `_full_png`: OUT-relative `dirname(rel)/name`, resolved against
@@ -228,7 +300,7 @@ Set<String> kindFields(String kind) => switch (kind) {
         },
     };
 
-/// One isolate-loadable bundle of all read-only data (index, gameinfo,
+/// One isolate-loadable bundle of all read-only data (indices, gameinfo,
 /// universe). Loaded once at startup via `Isolate.run`.
 class CatalogBundle {
   CatalogBundle({
@@ -245,16 +317,8 @@ class CatalogBundle {
   }) {
     final warnings = <String>[];
 
-    ScreenshotIndex index;
-    if (outDir.isEmpty) {
-      index = ScreenshotIndex.empty('OutDirectory not configured');
-      warnings.add('Screenshots: OutDirectory not configured');
-    } else {
-      index = ScreenshotIndex.load(outDir);
-      if (index.loadError != null) {
-        warnings.add('Screenshots: ${index.loadError}');
-      }
-    }
+    final index = ScreenshotIndices.load(outDir);
+    warnings.addAll(index.warnings);
 
     GameInfoIndex info;
     if (dataDir.isEmpty) {
@@ -268,7 +332,7 @@ class CatalogBundle {
     }
 
     final universe = CatalogUniverse.build(
-      index: index,
+      indices: index,
       info: info,
       outDir: outDir,
     );
@@ -280,7 +344,7 @@ class CatalogBundle {
     );
   }
 
-  final ScreenshotIndex index;
+  final ScreenshotIndices index;
   final GameInfoIndex info;
   final CatalogUniverse universe;
   final List<String> warnings;

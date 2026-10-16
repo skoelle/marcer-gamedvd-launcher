@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
+import 'package:marcer_catalog/marcer_catalog.dart';
+
 /// Lock file name in the screenshot output directory, identical to
 /// `shotgen.py LOCK_NAME` — the manual curation Save flow and the preview
 /// swap both refuse to touch the directory while a live shotgen run holds
@@ -120,9 +122,10 @@ void swapPreviewCandidate(
 /// One pending manual status/kind change (controller pending map).
 typedef StatusKindChange = ({String status, String? kind});
 
-/// Persists manual curation changes: claims the shotgen lock, updates
-/// `index.json` atomically (same format as `shotgen.save_index`: 1-space
-/// indent, sorted keys, tmp + rename) and mirrors `status`/`kind`/
+/// Persists manual curation changes: claims the shotgen lock, updates the
+/// section index file that holds each rel (`index.json` / `index-pd.json` /
+/// `index-utils.json`) atomically (same format as `shotgen.save_index`:
+/// 1-space indent, sorted keys, tmp + rename) and mirrors `status`/`kind`/
 /// `preview_is_desktop` into the per-entry `<base>.json` meta when present.
 /// The lock is always released, also on error.
 Future<void> applyStatusChanges({
@@ -132,23 +135,39 @@ Future<void> applyStatusChanges({
   if (changes.isEmpty) return;
   acquireShotgenLock(outDir);
   try {
-    final indexFile = File('$outDir/index.json');
-    if (!indexFile.existsSync()) {
+    final loaded = <String, Map<String, dynamic>>{};
+    var anyFile = false;
+    for (final name in kSectionIndexNames.values) {
+      final file = File('$outDir/$name');
+      if (!file.existsSync()) {
+        loaded[name] = {'version': 1, 'entries': <String, dynamic>{}};
+        continue;
+      }
+      anyFile = true;
+      loaded[name] = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+    }
+    if (!anyFile) {
       throw const FileSystemException('index.json not found', 'index.json');
     }
-    final map =
-        jsonDecode(indexFile.readAsStringSync()) as Map<String, dynamic>;
-    final entries = (map['entries'] as Map<String, dynamic>?) ??
-        <String, dynamic>{};
+    final touched = <String>{};
     for (final e in changes.entries) {
-      final entry = entries[e.key] as Map<String, dynamic>?;
-      if (entry == null) continue;
-      entry['status'] = e.value.status;
-      entry['kind'] = e.value.kind;
+      for (final name in kSectionIndexNames.values) {
+        final entries =
+            (loaded[name]!['entries'] as Map<String, dynamic>?) ?? const {};
+        final entry = entries[e.key] as Map<String, dynamic>?;
+        if (entry == null) continue;
+        entry['status'] = e.value.status;
+        entry['kind'] = e.value.kind;
+        touched.add(name);
+        break;
+      }
     }
-    final tmp = File('$outDir/index.json.tmp');
-    tmp.writeAsStringSync(_encodeSorted(map));
-    tmp.renameSync(indexFile.path);
+    for (final name in touched) {
+      final file = File('$outDir/$name');
+      final tmp = File('$outDir/$name.tmp');
+      tmp.writeAsStringSync(_encodeSorted(loaded[name]!));
+      tmp.renameSync(file.path);
+    }
     for (final e in changes.entries) {
       _updateMirrorMeta(outDir, e.key, e.value.status, e.value.kind);
     }

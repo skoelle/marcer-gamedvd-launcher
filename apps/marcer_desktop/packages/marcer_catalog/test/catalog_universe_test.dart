@@ -49,11 +49,26 @@ void main() {
   });
 
   CatalogUniverse buildUniverse(Map<String, String> entries,
-      {String crackedGames = '[]', String pdGames = '[]'}) {
+      {String crackedGames = '[]',
+      String pdGames = '[]',
+      Map<String, String> pdEntries = const {},
+      Map<String, String> utilsEntries = const {}}) {
     File('$outDir/index.json').writeAsStringSync(jsonEncode({
       'version': 1,
       'entries': {
         for (final e in entries.entries) e.key: jsonDecode(e.value),
+      },
+    }));
+    File('$outDir/index-pd.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {
+        for (final e in pdEntries.entries) e.key: jsonDecode(e.value),
+      },
+    }));
+    File('$outDir/index-utils.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {
+        for (final e in utilsEntries.entries) e.key: jsonDecode(e.value),
       },
     }));
     File('$dataDir/games-cracked.json').writeAsStringSync(
@@ -62,9 +77,9 @@ void main() {
         jsonEncode({'schema_version': 1, 'kind': 'pd', 'games': jsonDecode(pdGames)}));
     File('$dataDir/games-utils.json')
         .writeAsStringSync(jsonEncode({'schema_version': 1, 'kind': 'utils', 'games': []}));
-    final index = ScreenshotIndex.load(outDir);
+    final index = ScreenshotIndices.load(outDir);
     final info = GameInfoIndex.load(dataDir);
-    return CatalogUniverse.build(index: index, info: info, outDir: outDir);
+    return CatalogUniverse.build(indices: index, info: info, outDir: outDir);
   }
 
   group('CatalogUniverse.build (cracked cards)', () {
@@ -219,6 +234,60 @@ void main() {
       expect(u.pd.first.layer, 'ROOT');
       expect(u.crackedWithScreenshot, 1); // relB9 has no preview basename
       expect(u.crackedVariants, 2);
+    });
+  });
+
+  group('CatalogUniverse.build (pd/utils from their own indices)', () {
+    const pdRel = 'Title Sorted/PD Games - Title Sorted/P/PacMan/pacman.zip';
+    const pdRel2 = 'Title Sorted/PD Games - Title Sorted/P/PacMan/pacman2.zip';
+
+    test('pd cards unite index groups (status/screenshots) and gameinfo', () {
+      const pd = '''
+      [{"letter": "P", "folder": "PacMan", "layers": ["ROOT"],
+        "matched_via": "exact", "matched_title": "Pac-Man",
+        "variants": [{"title": "Pac-Man", "publisher": "Atari"}]},
+       {"letter": "M", "folder": "MetaOnly", "layers": ["ROOT"],
+        "matched_via": "none", "matched_title": "",
+        "variants": []}]
+      ''';
+      final u = buildUniverse(
+        {},
+        pdGames: pd,
+        pdEntries: {
+          pdRel: entryJson(pdRel, 'done', 'ROOT', preview: 'pacman.png'),
+          pdRel2: entryJson(pdRel2, 'pending', 'ROOT'),
+        },
+      );
+      // PacMan from the pd index (status + variants), MetaOnly from gameinfo.
+      expect(u.pd.length, 2);
+      final pac = u.pd.firstWhere((c) => c.folder == 'PacMan');
+      expect(pac.kind, 'pd');
+      expect(pac.displayStatus, 'done');
+      expect(pac.variants.length, 2);
+      expect(pac.statusCounts, {'done': 1, 'pending': 1});
+      expect(pac.screenshots, isTrue);
+      final meta = u.pd.firstWhere((c) => c.folder == 'MetaOnly');
+      expect(meta.displayStatus, '');
+      expect(meta.variants, isEmpty);
+      expect(meta.screenshots, isFalse);
+      // Per-section counts: cracked stays empty, pd counts only index cards.
+      expect(u.statusCountsFor('pd'), {'done': 1});
+      expect(u.statusCountsFor('cracked'), isEmpty);
+      expect(u.statusCounts, isEmpty);
+    });
+
+    test('utils index groups feed the utils section independently', () {
+      const utilsRel =
+          'Title Sorted/Utilitys - Title Sorted/U/Util/util.zip';
+      final u = buildUniverse({}, utilsEntries: {
+        utilsRel: entryJson(utilsRel, 'desktop', 'ROOT', preview: 'util.png'),
+      });
+      expect(u.utils.length, 1);
+      expect(u.utils.single.kind, 'utils');
+      expect(u.utils.single.displayStatus, 'desktop');
+      expect(u.utils.single.screenshots, isTrue);
+      expect(u.withScreenshotFor('utils'), 1);
+      expect(u.statusCountsFor('utils'), {'desktop': 1});
     });
   });
 
