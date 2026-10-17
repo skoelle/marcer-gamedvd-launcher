@@ -8,10 +8,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_controller.dart';
 
-/// MISSING detection (app-only divergence): the catalog is built from the
-/// screenshot index + gameinfo without any filesystem scan, so an index
-/// entry can reference a ZIP the user has not synced yet. `variantMissing` /
-/// `cardMissing` flag exactly that on demand (lazy + cached, cleared on init).
+/// MISSING detection + local layer (app-only divergence): the catalog is built
+/// from the screenshot index + gameinfo without any filesystem scan, so an
+/// index entry can reference a ZIP the user has not synced yet. `variantMissing`
+/// / `cardMissing` flag exactly that on demand (lazy + cached, cleared on
+/// init), and `zipLayer`/`variantLayer`/`cardLayer` resolve the layer
+/// (`ROOT`/`PATCH`/`BOTH`) from the same local check instead of the published
+/// index layer.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -23,6 +26,11 @@ void main() {
   const relAlphaB = '$crackedTree/A/Alpha/a_v2.zip';
   const relBeta = '$crackedTree/B/Beta/beta.zip';
   const relGamma = '$crackedTree/C/Gamma/gamma.zip';
+  // Published as PATCH but physically present in ROOT (moved by the user).
+  const relDelta = '$crackedTree/D/Delta/delta.zip';
+  // One variant in root, one in patch → card layer BOTH.
+  const relEpsA = '$crackedTree/E/Epsilon/e.zip';
+  const relEpsB = '$crackedTree/E/Epsilon/e_v2.zip';
 
   Map<String, dynamic> entry(String rel, String status,
           {String layer = 'ROOT'}) =>
@@ -46,6 +54,17 @@ void main() {
     File('${tmp.path}/patch/$relGamma')
       ..parent.createSync(recursive: true)
       ..createSync();
+    // Delta: index says PATCH, but the file actually lives in root.
+    File('${tmp.path}/root/$relDelta')
+      ..parent.createSync(recursive: true)
+      ..createSync();
+    // Epsilon: one variant in root, one in patch.
+    File('${tmp.path}/root/$relEpsA')
+      ..parent.createSync(recursive: true)
+      ..createSync();
+    File('${tmp.path}/patch/$relEpsB')
+      ..parent.createSync(recursive: true)
+      ..createSync();
     // Beta: no file at all.
     Directory('${tmp.path}/data').createSync(recursive: true);
     Directory('${tmp.path}/out').createSync(recursive: true);
@@ -56,6 +75,9 @@ void main() {
         relAlphaB: entry(relAlphaB, 'pending'),
         relBeta: entry(relBeta, 'done'),
         relGamma: entry(relGamma, 'done', layer: 'PATCH'),
+        relDelta: entry(relDelta, 'done', layer: 'PATCH'),
+        relEpsA: entry(relEpsA, 'done'),
+        relEpsB: entry(relEpsB, 'done', layer: 'PATCH'),
       },
     }));
     // pd gameinfo-only folders: Ghosts exists on disk, PacMan does not.
@@ -118,6 +140,54 @@ void main() {
         reason: 'no beta.zip in either layer');
     expect(c.cardMissing(crackedCard('C', 'Gamma')), isFalse,
         reason: 'gamma.zip is present in the patch layer');
+  });
+
+  test('layer is resolved locally (not from the published index layer)',
+      () async {
+    await c.init();
+
+    // Alpha: a.zip in root, a_v2.zip absent.
+    final alpha = crackedCard('A', 'Alpha');
+    expect(
+        c.variantLayer(alpha.variants.firstWhere((v) => v.rel == relAlphaA)),
+        'ROOT');
+    expect(
+        c.variantLayer(alpha.variants.firstWhere((v) => v.rel == relAlphaB)),
+        '');
+    expect(c.cardLayer(alpha), 'ROOT');
+
+    // Gamma: patch-only.
+    expect(c.cardLayer(crackedCard('C', 'Gamma')), 'PATCH');
+
+    // Delta: published as PATCH but physically in root → local ROOT, not missing.
+    final delta = crackedCard('D', 'Delta');
+    expect(c.variantLayer(delta.variants.single), 'ROOT');
+    expect(c.cardLayer(delta), 'ROOT');
+    expect(c.cardMissing(delta), isFalse);
+
+    // Epsilon: variants split across layers → BOTH.
+    expect(c.cardLayer(crackedCard('E', 'Epsilon')), 'BOTH');
+
+    // Beta: absent everywhere → no layer badge (MISSING instead).
+    expect(c.cardLayer(crackedCard('B', 'Beta')), '');
+  });
+
+  test('zipLayer reports BOTH when a ZIP exists in both layers', () async {
+    await c.init();
+    expect(c.zipLayer(relAlphaA), 'ROOT');
+    File('${tmp.path}/patch/$relAlphaA')
+      ..parent.createSync(recursive: true)
+      ..createSync();
+    // Fresh controller: the caches are rebuilt on init.
+    c = CatalogController(DesktopConfig(
+      rootDirectory: '${tmp.path}/root',
+      patchDirectory: '${tmp.path}/patch',
+      screenshotDirectory: '${tmp.path}/out',
+      gameinfoDirectory: '${tmp.path}/data',
+    ));
+    await c.init();
+    expect(c.zipLayer(relAlphaA), 'BOTH');
+    expect(c.cardLayer(crackedCard('A', 'Alpha')), 'BOTH');
   });
 
   test('pd metadata-only cards reflect the folder presence', () async {

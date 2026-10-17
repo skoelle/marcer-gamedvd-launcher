@@ -120,6 +120,7 @@ class DetailPanel extends StatelessWidget {
 
   Widget _cardInfo(CatalogController c, GameCard card) {
     final variants = c.variantsOfCard(card);
+    final layer = c.cardLayer(card);
     // Gallery-style detail (no large preview — the lightbox shows the image).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -139,8 +140,7 @@ class DetailPanel extends StatelessWidget {
                 children: [
                   if (c.isFavoriteCard(card))
                     _badge('FAVORITE', Colors.amber),
-                  if (card.layer.isNotEmpty)
-                    _badge(card.layer, _layerColorName(card.layer)),
+                  if (layer.isNotEmpty) _badge(layer, _layerColorName(layer)),
                   if (c.cardMissing(card)) _badge('MISSING', Colors.redAccent),
                   if (card.displayStatus.isNotEmpty)
                     _badge(card.displayStatus, Colors.blueGrey),
@@ -193,7 +193,7 @@ class DetailPanel extends StatelessWidget {
       name: v.name,
       status: v.status,
       kind: v.kind,
-      layer: v.layer,
+      layer: controller.variantLayer(v),
       rel: v.rel,
       size: v.size,
       missing: controller.variantMissing(v),
@@ -202,7 +202,6 @@ class DetailPanel extends StatelessWidget {
 
   Color _layerColorName(String layer) => switch (layer) {
         'BOTH' => Colors.green,
-        'PTCH' => Colors.pink,
         _ => Colors.lightGreen,
       };
 

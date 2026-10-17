@@ -475,42 +475,71 @@ class CatalogController extends ChangeNotifier {
 
   // ------------------------------------------------------------------ launch
 
-  /// Absolute path of a catalog card's ZIP variant (patch wins; SPEC.md R14).
+  /// Absolute path of a catalog card's ZIP variant: the patch copy wins when
+  /// it exists (SPEC.md R14), otherwise the root copy. Driven by the local
+  /// filesystem (not the published index layer), so a ZIP moved between
+  /// layers is still launched from wherever it actually lives.
   String zipPathForVariant(CardVariant v) {
     final rel = v.rel;
     final patch = config.patchDirectory;
-    if (patch.isNotEmpty && (v.layer == 'PATCH' || v.layer == 'BOTH')) {
+    if (patch.isNotEmpty) {
       final patchPath = p.join(patch, rel);
       if (File(patchPath).existsSync()) return patchPath;
     }
     return p.join(config.rootDirectory, rel);
   }
 
-  // --------------------------------------------------------- missing (sync)
+  // ------------------------------------------------- missing / layer (sync)
 
-  /// Lazily cached ZIP existence per rel path (root or patch). The catalog is
-  /// built without any filesystem scan (`CatalogUniverse`), so an index/
-  /// gameinfo entry can reference a ZIP the user has not synced yet; these
-  /// helpers flag exactly that on demand (app-only divergence). The cache is
-  /// per controller; a settings reload builds a fresh controller
-  /// (`HomePage._applyConfig`), so files that appear or vanish while the app
-  /// runs are reflected after a reload.
-  final Map<String, bool> _zipExistsCache = {};
+  /// Lazily cached local layer per rel path (`ROOT`/`PATCH`/`BOTH`; empty when
+  /// the ZIP exists in neither layer). The catalog is built without any
+  /// filesystem scan (`CatalogUniverse`), so an index/gameinfo entry can
+  /// reference a ZIP the user has not synced yet; the layer and missing
+  /// helpers resolve that on demand from the actual files (app-only
+  /// divergence from the published index layer). The cache is per controller;
+  /// a settings reload builds a fresh controller (`HomePage._applyConfig`),
+  /// so files that appear or vanish while the app runs are reflected after a
+  /// reload.
+  final Map<String, String> _zipLayerCache = {};
 
-  /// True when the ZIP at overlay rel [rel] exists in either layer (patch and
-  /// root are both checked — unlike the launch path this does not depend on
-  /// the published layer field).
-  bool zipExists(String rel) {
-    if (rel.isEmpty) return false;
-    return _zipExistsCache.putIfAbsent(rel, () {
-      if (File(p.join(config.rootDirectory, rel)).existsSync()) return true;
+  /// Local overlay layer of the ZIP at [rel]: `BOTH` when present in root and
+  /// patch, `ROOT`/`PATCH` when present in only one, `''` when absent. Both
+  /// layers are checked regardless of the published layer field.
+  String zipLayer(String rel) {
+    if (rel.isEmpty) return '';
+    return _zipLayerCache.putIfAbsent(rel, () {
+      final inRoot = File(p.join(config.rootDirectory, rel)).existsSync();
       final patch = config.patchDirectory;
-      return patch.isNotEmpty && File(p.join(patch, rel)).existsSync();
+      final inPatch =
+          patch.isNotEmpty && File(p.join(patch, rel)).existsSync();
+      if (inRoot && inPatch) return 'BOTH';
+      if (inPatch) return 'PATCH';
+      if (inRoot) return 'ROOT';
+      return '';
     });
   }
 
+  /// True when the ZIP at overlay rel [rel] exists in either layer.
+  bool zipExists(String rel) => zipLayer(rel).isNotEmpty;
+
+  /// Local layer of a card's ZIP variant (`ROOT`/`PATCH`/`BOTH`, `''` missing).
+  String variantLayer(CardVariant v) => zipLayer(v.rel);
+
   /// True when a card's ZIP variant is not present locally (neither layer).
-  bool variantMissing(CardVariant v) => !zipExists(v.rel);
+  bool variantMissing(CardVariant v) => zipLayer(v.rel).isEmpty;
+
+  /// Aggregate local layer of [card]'s ZIP variants: the shared layer when all
+  /// present variants agree, `BOTH` when they are split across layers, and `''`
+  /// when no variant exists locally (the card then shows `MISSING`).
+  String cardLayer(GameCard card) {
+    final layers = <String>{};
+    for (final v in variantsOfCard(card)) {
+      final l = zipLayer(v.rel);
+      if (l.isNotEmpty) layers.add(l);
+    }
+    if (layers.isEmpty) return '';
+    return layers.length == 1 ? layers.first : 'BOTH';
+  }
 
   /// True when none of [card]'s ZIP variants exists locally. Cards without a
   /// resolvable ZIP (e.g. a gameinfo-only pd/utils folder missing on disk)

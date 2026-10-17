@@ -121,7 +121,7 @@ class _GameLightboxState extends State<GameLightbox> {
             title: variants[i].name,
             status: variants[i].status,
             kind: variants[i].kind,
-            layer: variants[i].layer,
+            layer: widget.controller.variantLayer(variants[i]),
             preview: variants[i].previewPath,
             candidates: variants[i].candidatePaths,
             size: variants[i].size,
@@ -175,7 +175,7 @@ class _GameLightboxState extends State<GameLightbox> {
 
   String? get _layer {
     final item = _item;
-    if (item is GameCard) return item.layer;
+    if (item is GameCard) return widget.controller.cardLayer(item);
     if (item is Entry) return item.layerStatus.name.toUpperCase();
     return null;
   }

@@ -66,6 +66,14 @@ Save, the manual screenshot curation described below.
   are ordered the same way (`done game` → other `done` → `desktop`), so a
   late-sorting game shot is never pushed out by textscreens (same rules
   as the gallery webapp).
+- **Local layer & missing ZIPs** — the card/variant layer badge
+  (`ROOT`/`PATCH`/`BOTH`) and the "This ZIP" **Layer** row are resolved from
+  the actual filesystem, not the published index: a ZIP moved from the patch
+  layer into the main folder shows `ROOT`, and `BOTH` when a card's variants
+  are split across layers. Launching still prefers the patch copy whenever it
+  exists. A card without any local ZIP gets a red `MISSING` badge, a single
+  absent variant is tagged in the lightbox filmstrip. The check is cached per
+  session — reload the settings to pick up files synced while the app runs.
 - **Gallery-style status bar** — section-aware coverage as separate games
   segments (`3287 folders`, `3211 with screenshot`), status counts as
   `done <games> (<zips> zips)`, gameinfo coverage (`gameinfo N folders` /
