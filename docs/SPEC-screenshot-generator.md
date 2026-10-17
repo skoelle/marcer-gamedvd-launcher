@@ -669,9 +669,15 @@ and the GEM gadget rendering differ between disks and monitor modes:
 Both gadgets react to a *single* click; Hatari 2.4.1 has no single-click
 control command (section 7.4 mechanics), so an *instant* XTest click is
 sent (holding the button on the title bar is read as a window move).
-*(verified: mono `Box - Mono` / `Brainbox - Mono` grow and graduate to
-`done`; colour `Bootiful Babe` (cracked) grows, scrolls once,
-`BOOTIFUL.PRG` becomes visible and the chain graduates it to `done`.)*
+Where the first box click is ignored until the GEM window has been
+activated (observed in a headless SDL setup, where the opened window is not
+the active one), the retry falls back to clicking the menu bar once and
+then the box twice — the first click dismisses the menu, the second grows.
+The fallback only runs when the first box click did not change the screen,
+so setups where the box already works are unaffected.
+*(verified: mono `Box - Mono` / `Brainbox - Mono` grow directly and
+graduate to `done`; colour `Bootiful Babe` (cracked) and `Der Motor v1.1`
+grow via the fallback, revealing `BOOTIFUL.PRG` / `MOTOR.PRG`.)*
 
 Notes:
 

@@ -196,10 +196,14 @@ title bar, just left of the right border — a few pixels right of centre
 misses the gadget; the mono profile opens folder views at ~half width) and
 then **scrolls down** by clicking the vertical scrollbar's down arrow, up
 to `click_retry.scroll_attempts` (default 4) times (the colour profile
-opens wide windows that show only the first rows). Both gadget positions
-are detected from the window frame (`find_fullsize_xy` / `find_scroll_down_xy`),
-not hard coded. This also stops an opened folder whose icons do not match
-(a child window that looks like its parent) from being mistaken for a game
+opens wide windows that show only the first rows). Where the first box
+click is ignored until the window is activated (headless SDL setups), it
+falls back to a menu-bar click followed by two box clicks (the first
+dismisses the menu, the second grows); this fallback only runs when the
+first click did not change the screen. Both gadget positions are detected
+from the window frame (`find_fullsize_xy` / `find_scroll_down_xy`), not
+hard coded. This also stops an opened folder whose icons do not match (a
+child window that looks like its parent) from being mistaken for a game
 that started.
 
 The attempt is recorded once per entry. `click_retried: true` marks that a

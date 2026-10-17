@@ -883,6 +883,49 @@ def scroll_window_down(P: dict, grab_png: Path, log, fifo: Path = None,
     return True
 
 
+def find_menubar_xy(img_path: Path):
+    """Screenshot pixel on the GEM menu bar (topmost row with menu text).
+
+    Used to activate the front window before clicking its "full size" box:
+    in some (headless SDL) setups the box only reacts once the window has
+    been activated by a menu bar click. Returns (x, y) or None.
+    """
+    import numpy as np
+    arr = load_gray(img_path)
+    dark = arr < 128
+    height, width = dark.shape
+    for y in range(2, min(height, 130)):
+        xs = np.nonzero(dark[y])[0]
+        if len(xs) >= 40:
+            return (int((int(xs.min()) + int(xs.max())) // 2), y)
+    return None
+
+
+def force_grow(P: dict, grab_png: Path, log, fifo: Path = None,
+               pid: int = None) -> bool:
+    """Grow the window when a plain box click was ignored by GEM.
+
+    Fallback for setups where the "full size" box only reacts after the GEM
+    window has been activated: click the menu bar to activate, then the box
+    twice (the first click dismisses the menu, the second grows). Returns
+    True when clicks were sent.
+    """
+    menu = find_menubar_xy(grab_png)
+    box = find_fullsize_xy(grab_png)
+    if menu is None or box is None:
+        return False
+    from PIL import Image
+    with Image.open(grab_png) as im:
+        shot_w, shot_h = im.size
+    wid, kv = find_hatari_window(P, grab_png, pid=pid)
+    log("box click had no effect, activating via menu bar and retrying")
+    for sx, sy in (menu, box, box):
+        click_window_xy(P, wid, kv, shot_w, shot_h, sx, sy, log,
+                        fifo=fifo, double=False)
+        time.sleep(1.0)
+    return True
+
+
 _GRAY_CACHE: dict = {}
 _GRAY_CACHE_ORDER: deque = deque()
 _GRAY_CACHE_MAX = 8
@@ -1247,10 +1290,18 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         # per entry: a second grow click would restore the window.
         if do_enlarge and not grew[0]:
             grew[0] = True
+            before = shot
             if enlarge_window(P, shot, log, fifo=fifo, pid=pid):
                 shot, target = grab(shot)
                 if target is not None:
                     return shot, target
+                # some setups ignore the first box click until the window is
+                # activated: retry via the menu bar when nothing changed
+                if not _screen_changed(before, shot) \
+                        and force_grow(P, shot, log, fifo=fifo, pid=pid):
+                    shot, target = grab(shot)
+                    if target is not None:
+                        return shot, target
         for _ in range(scroll_attempts):
             if not scroll_window_down(P, shot, log, fifo=fifo, pid=pid):
                 break
