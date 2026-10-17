@@ -37,4 +37,5 @@ desktop.config.json
 # Tool bytecode
 /tools/screenshot-gen/__pycache__/
 /tools/gameinfo-gen/__pycache__/
+/tools/atarilegend-gen/__pycache__/
 /tools/gallery/__pycache__
