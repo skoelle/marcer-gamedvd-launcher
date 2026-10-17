@@ -69,13 +69,22 @@ void main() {
     expect(parseCatalogLatest('not json'), isNull);
   });
 
-  test('assetNeedsUpdate compares archive + skip', () {
+  test('assetNeedsUpdate compares archive + skip + data presence', () {
     const remote = RemoteAsset(archive: 'screenshots-2.zip');
     expect(assetNeedsUpdate(remote: remote, local: null, skipped: null), isTrue);
     expect(
         assetNeedsUpdate(
             remote: remote, local: 'screenshots-2.zip', skipped: null),
         isFalse);
+    // Marker matches but the data was removed → still an update.
+    expect(
+        assetNeedsUpdate(
+            remote: remote,
+            local: 'screenshots-2.zip',
+            skipped: null,
+            dataPresent: false),
+        isTrue);
+    // Skipped remote → never an update.
     expect(
         assetNeedsUpdate(
             remote: remote, local: 'screenshots-1.zip', skipped: 'screenshots-2.zip'),
@@ -127,6 +136,37 @@ void main() {
 
     c.skip(CatalogAsset.gameinfo);
     expect(c.pendingAssets(), [CatalogAsset.screenshots]);
+  });
+
+  test('marker matches but data removed is still pending', () async {
+    final body = jsonEncode({
+      'screenshots': {'archive': 'screenshots-2.zip'},
+    });
+    final c = AssetUpdateController(fetcher: (_) async => body);
+    c.config = config();
+    await c.check(force: true);
+    writeAppliedAssetVersion(
+        '${tmp.path}/screens', CatalogAsset.screenshots, 'screenshots-2.zip');
+
+    // Applied marker but no extracted index → data gone → pending.
+    expect(c.isPending(CatalogAsset.screenshots), isTrue);
+    File('${tmp.path}/screens/index.json').writeAsStringSync('{}');
+    expect(c.isPending(CatalogAsset.screenshots), isFalse);
+  });
+
+  test('missing marker with data present is pending (version unknown)',
+      () async {
+    final body = jsonEncode({
+      'screenshots': {'archive': 'screenshots-2.zip'},
+    });
+    final c = AssetUpdateController(fetcher: (_) async => body);
+    c.config = config();
+    await c.check(force: true);
+    File('${tmp.path}/screens/index.json').writeAsStringSync('{}');
+
+    expect(c.dataPresentFor(CatalogAsset.screenshots), isTrue);
+    expect(c.localFor(CatalogAsset.screenshots), isNull);
+    expect(c.isPending(CatalogAsset.screenshots), isTrue);
   });
 
   test('update applies the asset, clears skip and forwards sha256', () async {

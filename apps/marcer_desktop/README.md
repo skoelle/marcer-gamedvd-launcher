@@ -337,10 +337,17 @@ screenshots** with the local and remote archive names and per asset:
 
 - **Update** (or **Install** when nothing is applied yet) — downloads the newest
   archive from the FTP and extracts it; progress and **Cancel** show inline.
+  When the extracted data is present but the applied version is unknown (no
+  `.marcer-assets.json`) the row shows **version unknown (data present)** and the
+  button is **Overwrite**.
 - **Skip this version** — the remote archive is recorded in
   `<targetDir>/.marcer-assets.json` under `skipped`, so you are only notified
   again when a newer archive appears (cleared automatically once applied).
 - **Close** at the bottom.
+
+An asset counts as up to date only when the recorded archive matches the remote
+**and** the extracted data is still present, so a deleted/emptied target
+directory is offered again.
 
 If the pointer provides a `sha256`, the downloaded archive is verified against
 it; a mismatch aborts the update. After a successful update the catalog reloads

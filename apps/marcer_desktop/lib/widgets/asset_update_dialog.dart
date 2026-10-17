@@ -110,6 +110,9 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
   Widget _row(AssetUpdateController c, CatalogAsset asset) {
     final remote = c.remoteFor(asset)!;
     final local = c.localFor(asset);
+    final dataPresent = c.dataPresentFor(asset);
+    final localLabel = local ??
+        (dataPresent ? 'version unknown (data present)' : 'not installed');
     final pending = c.isPending(asset);
     final updating = c.updatingAsset == asset;
     return Container(
@@ -137,7 +140,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('local:  ${local ?? 'not installed'}',
+                    Text('local:  $localLabel',
                         style:
                             const TextStyle(fontSize: 11, color: Colors.grey)),
                     Text('remote: ${remote.archive}',
@@ -181,7 +184,9 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: c.busy ? null : () => _update(asset),
-                  child: Text(local == null ? 'Install' : 'Update'),
+                  child: Text(local == null
+                      ? (dataPresent ? 'Overwrite' : 'Install')
+                      : 'Update'),
                 ),
               ],
             )

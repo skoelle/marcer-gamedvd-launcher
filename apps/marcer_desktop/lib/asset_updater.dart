@@ -59,12 +59,22 @@ CatalogLatest? parseCatalogLatest(String body) {
   }
 }
 
-/// True when [remote] is a newer archive than what is applied ([local]) and it
-/// was not skipped ([skipped]).
-bool assetNeedsUpdate({RemoteAsset? remote, String? local, String? skipped}) {
+/// True when [remote] should be offered as an update: not skipped and not
+/// already applied with its data present.
+///
+/// [dataPresent] is whether the extracted files for the asset are on disk; a
+/// marker whose data is gone (emptied directory) still counts as an update.
+/// A missing marker with data present (unknown version) also counts, so the
+/// dialog can offer an overwrite.
+bool assetNeedsUpdate({
+  RemoteAsset? remote,
+  String? local,
+  String? skipped,
+  bool dataPresent = true,
+}) {
   if (remote == null) return false;
-  if (remote.archive == local) return false;
   if (remote.archive == skipped) return false;
+  if (remote.archive == local && dataPresent) return false;
   return true;
 }
 
@@ -139,7 +149,15 @@ class AssetUpdateController extends ChangeNotifier {
         remote: remoteFor(asset),
         local: localFor(asset),
         skipped: skippedFor(asset),
+        dataPresent: dataPresentFor(asset),
       );
+
+  /// Whether the extracted files for [asset] are present in its target
+  /// directory (used to distinguish "not installed" from "version unknown").
+  bool dataPresentFor(CatalogAsset asset) {
+    final dir = _targetDirFor(asset);
+    return dir.isNotEmpty && assetDataPresent(dir, asset);
+  }
 
   /// Pending assets in dialog order: gameinfo first, then screenshots.
   List<CatalogAsset> pendingAssets() => const [

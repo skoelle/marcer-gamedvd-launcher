@@ -73,4 +73,55 @@ void main() {
     expect(find.text('up to date'), findsOneWidget);
     expect(find.text('Install'), findsOneWidget);
   });
+
+  testWidgets('shows version unknown + Overwrite when data is present',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tmp = Directory.systemTemp.createTempSync('asset_dialog_unknown');
+    addTearDown(() {
+      if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+    });
+    Directory('${tmp.path}/root').createSync();
+    Directory('${tmp.path}/screens').createSync();
+    Directory('${tmp.path}/data').createSync();
+    // Screenshots data present but no marker (version unknown); gameinfo absent.
+    File('${tmp.path}/screens/index.json').writeAsStringSync('{}');
+
+    final controller = AssetUpdateController(fetcher: (_) async {
+      return jsonEncode({
+        'screenshots': {'archive': 'screenshots-2.zip'},
+        'gameinfo': {'archive': 'gameinfo-2.zip'},
+      });
+    });
+    controller.config = DesktopConfig(
+      rootDirectory: '${tmp.path}/root',
+      screenshotDirectory: '${tmp.path}/screens',
+      gameinfoDirectory: '${tmp.path}/data',
+      ftpHost: 'ftp.example.com',
+    );
+    await controller.check(force: true);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () => showAssetUpdateDialog(context,
+                  controller: controller, onApplied: () {}),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('local:  version unknown (data present)'), findsOneWidget);
+    expect(find.text('Overwrite'), findsOneWidget); // screenshots
+    expect(find.text('Install'), findsOneWidget); // gameinfo (no data)
+  });
 }
