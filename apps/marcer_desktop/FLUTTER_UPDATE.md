@@ -12,7 +12,7 @@ Toolchain at time of writing: **Flutter 3.47.7 stable** / **Dart 3.13.5**
 
 `./run.sh` (`flutter pub get`) reports:
 
-> 16 packages have newer versions incompatible with dependency constraints.
+> 17 packages have newer versions incompatible with dependency constraints.
 
 This is **informational, not an error** — the app works. The goal of this plan
 is to reduce the debt *deliberately and in small, verified steps*, not to chase

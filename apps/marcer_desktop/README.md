@@ -133,7 +133,10 @@ bundled; the images are Atari-copyrighted and offered there for
 non-commercial use), the ROM is extracted and written as `TOS.IMG` into the
 app directory. The **STE** Play variant needs **TOS 1.62** (`TOS162.IMG`) and
 the **Low Res TOS 1.02** variant **TOS 1.02** (`TOS102.IMG`) — each offered
-filtered to that version when the file is missing.
+filtered to that version when the file is missing. The ⚙ settings editor's
+**TOS ROM** row reflects only `TOS.IMG`; the variant TOS files
+(`TOS162.IMG`/`TOS102.IMG`) are managed by the Play variants (a missing one is
+offered when that variant is launched).
 
 ## Favorites
 
