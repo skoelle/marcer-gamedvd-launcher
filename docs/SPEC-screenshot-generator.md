@@ -655,18 +655,21 @@ game). The gadget positions are detected from the window frame
 the window placement and the GEM gadget rendering differ between disks and
 monitor modes:
 
-1. **Grow** the window by single clicking its **"full size" box** (top
-   right of the title bar, left of the window's right border). The mono
-   high-res profile opens folder views at about half width, pushing the
-   program's column behind a horizontal scrollbar; growing reveals it.
+1. **Grow** the window by single clicking its **"full size" box**. The box
+   glyph sits in the title bar just left of the window's right border; the
+   click must land on the glyph's centre (a few pixels to the right, nearer
+   the border, misses the gadget), so the centre is detected from the dark
+   glyph block rather than a fixed offset. The mono high-res profile opens
+   folder views at about half width, pushing the program's column behind a
+   horizontal scrollbar; growing reveals it.
 2. **Scroll down** by clicking the **vertical scrollbar's down arrow**
    (innermost right column, just above the window's bottom border), up to
    `scroll_attempts` (default 4) times. The colour profile opens wide
    windows that show only the first icon rows, hiding the rest below.
 
-The "full size" box reacts to a single click; Hatari 2.4.1 has no
-single-click control command (section 7.4 mechanics), so both go through
-XTest.
+Both gadgets react to a *single* click; Hatari 2.4.1 has no single-click
+control command (section 7.4 mechanics), so an *instant* XTest click is
+sent (holding the button on the title bar is read as a window move).
 *(verified: mono `Box - Mono` / `Brainbox - Mono` grow and graduate to
 `done`; colour `Bootiful Babe` (cracked) grows, scrolls once,
 `BOOTIFUL.PRG` becomes visible and the chain graduates it to `done`.)*

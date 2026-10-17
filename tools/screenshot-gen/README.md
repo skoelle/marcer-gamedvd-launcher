@@ -191,16 +191,16 @@ arrow on it (~0.84).
 **Hidden icons (grow / scroll).** A window can show fewer icons than the
 folder contains, hiding the program behind a scrollbar. When an opened
 window shows no program or folder icon at all, the retry first **grows**
-the window by single clicking its "full size" box (top right of the title
-bar; the mono profile opens folder views at ~half width) and then
-**scrolls down** by clicking the vertical scrollbar's down arrow, up to
-`click_retry.scroll_attempts` (default 4) times (the colour profile opens
-wide windows that show only the first rows). Both gadget positions are
-detected from the window frame (`find_fullsize_xy` / `find_scroll_down_xy`),
-not hard coded, since window placement and the GEM gadget rendering differ
-between disks and monitor modes. This also stops an opened folder whose
-icons do not match (a child window that looks like its parent) from being
-mistaken for a game that started.
+the window by single clicking its "full size" box (its glyph centre in the
+title bar, just left of the right border — a few pixels right of centre
+misses the gadget; the mono profile opens folder views at ~half width) and
+then **scrolls down** by clicking the vertical scrollbar's down arrow, up
+to `click_retry.scroll_attempts` (default 4) times (the colour profile
+opens wide windows that show only the first rows). Both gadget positions
+are detected from the window frame (`find_fullsize_xy` / `find_scroll_down_xy`),
+not hard coded. This also stops an opened folder whose icons do not match
+(a child window that looks like its parent) from being mistaken for a game
+that started.
 
 The attempt is recorded once per entry. `click_retried: true` marks that a
 retry ran, and a new `click_result` field records how it ended:

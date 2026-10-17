@@ -697,10 +697,9 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
         elif not double:
             # no single-click control command in Hatari 2.4.1 (section 7.4):
             # a GEM gadget (full size box, scrollbar arrow) needs a single
-            # press/release, sent as a held XTest click
-            _xdotool(["mousedown", "1"], disp)
-            time.sleep(0.2)
-            _xdotool(["mouseup", "1"], disp)
+            # click; an instant XTest click must be used (holding the button
+            # on the title bar is read as a window move)
+            _xdotool(["click", "1"], disp)
         else:
             _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
         # GEM draws its mouse arrow into the framebuffer and it stays
@@ -743,39 +742,57 @@ def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
 
 
 def find_fullsize_xy(img_path: Path):
-    """Screenshot pixel of the active GEM window's "full size" box.
+    """Screenshot pixel at the centre of the active window's "full size" box.
 
-    The box sits inside the title bar at the window's top right corner and
-    its glyph rendering differs between GEM modes (mono high res vs colour
-    medium/low res), so the glyph is not matched as a template. Instead the
-    window frame is used, which is position independent: the rightmost long
-    vertical dark line is the window's right border and its top row is the
-    window top border; the box centre is a few pixels down and left of that
-    corner. Returns (x, y) or None when no window frame is found.
+    The box sits in the title bar at the window's top right. Its glyph
+    rendering differs between GEM modes (mono high res vs colour medium/low
+    res), so it is not matched as a template, but its centre is detected from
+    the window frame (position independent): the rightmost long vertical dark
+    line is the window's right border; the box glyph is the rightmost compact
+    dark block in the title bar band just left of that border. The click must
+    land on the glyph centre — a few pixels to the right (near the border)
+    misses the gadget. Returns (x, y) or None when no box glyph is found.
     """
     arr = load_gray(img_path)
     dark = arr < 128
     height, width = dark.shape
     min_run = max(60, height // 6)
+
+    def longest(vec):
+        best = best_start = cur = start = 0
+        for i, v in enumerate(vec):
+            if v:
+                if cur == 0:
+                    start = i
+                cur += 1
+                if cur > best:
+                    best, best_start = cur, start
+            else:
+                cur = 0
+        return best, best_start
+
     right_x = right_top = None
     for x in range(width - 1, -1, -1):
-        col = dark[:, x]
-        run = best_start = best_len = 0
-        for i, v in enumerate(col):
-            if v:
-                if run == 0:
-                    start = i
-                run += 1
-                if run > best_len:
-                    best_len, best_start = run, start
-            else:
-                run = 0
-        if best_len >= min_run:
-            right_x, right_top = x, best_start
+        length, start = longest(dark[:, x])
+        if length >= min_run:
+            right_x, right_top = x, start
             break
     if right_x is None:
         return None
-    return (max(1, right_x - 12), min(height - 1, right_top + 9))
+    x_hi = max(0, right_x - 6)
+    x_lo = max(0, right_x - 34)
+    y_lo = min(height - 1, right_top + 4)
+    y_hi = min(height, right_top + 16)
+    colsum = dark[y_lo:y_hi, x_lo:x_hi + 1].sum(axis=0)
+    cols = [i for i, c in enumerate(colsum) if c >= 3]
+    if not cols:
+        return None
+    colset = set(cols)
+    end = cols[-1]
+    start = end
+    while (start - 1) in colset:
+        start -= 1
+    return (x_lo + (start + end) // 2, (y_lo + y_hi) // 2)
 
 
 def enlarge_window(P: dict, grab_png: Path, log, fifo: Path = None,
