@@ -181,8 +181,9 @@ Download the ZIP for your platform from the [Releases](https://github.com/skoell
 The release ZIPs ship `desktop.config.example.json` **and** the bundled
 `MarcerGameDvd-Hatari.cfg` — copy the example next to the executable (or the
 `.app`), rename it to `desktop.config.json`, and set your absolute paths. For
-launching, also point `Hatari.Executable` at your Hatari binary and put
-`TOS.IMG` next to the app.
+launching, also point `Hatari.Executable` at your Hatari binary. If `TOS.IMG`
+is missing, the app offers to download it (TOS 1.02/1.04, English (UK) or
+German) from atariworld.org and install it next to the app.
 
 ### ⚙️ Configuration (`desktop.config.json`)
 
@@ -276,7 +277,9 @@ status/kind, `Esc` closes.
 
 > **Launching** needs `Hatari.Executable` in `desktop.config.json` and a TOS ROM
 > (`TOS.IMG`) next to the app — same convention as the console launcher; the
-> bundled `MarcerGameDvd-Hatari.cfg` looks for it in the working directory.
+> bundled `MarcerGameDvd-Hatari.cfg` looks for it in the working directory. If
+> `TOS.IMG` is missing, the app offers to download and install it (TOS
+> 1.02/1.04, English (UK) or German) from atariworld.org.
 
 ### 🛠️ Build & Run (developers)
 

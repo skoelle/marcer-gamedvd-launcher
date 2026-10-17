@@ -9,6 +9,8 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_assets.dart';
 import '../ftp_downloader.dart';
+import '../tos_rom.dart';
+import 'tos_rom_dialog.dart';
 
 /// Live validation state of a single path field, driving its trailing icon.
 enum FieldStatus {
@@ -83,6 +85,7 @@ class SettingsForm extends StatefulWidget {
     this.onChanged,
     this.onAssetDownloaded,
     this.assetDownloader = const FtpCatalogAssets(),
+    this.tosDownloader = const HttpTosRomDownloader(),
   });
 
   /// Values the fields start with (a default/empty config for first-run).
@@ -97,6 +100,9 @@ class SettingsForm extends StatefulWidget {
 
   /// Downloads the catalog asset archives (injectable for tests).
   final CatalogAssetDownloader assetDownloader;
+
+  /// Downloads the TOS ROM image (injectable for tests).
+  final TosRomDownloader tosDownloader;
 
   @override
   State<SettingsForm> createState() => _SettingsFormState();
@@ -322,6 +328,7 @@ class _SettingsFormState extends State<SettingsForm> {
           _fieldRow(field),
           const SizedBox(height: 8),
         ],
+        _tosRow(),
       ],
     );
   }
@@ -394,6 +401,62 @@ class _SettingsFormState extends State<SettingsForm> {
               ),
               if (field.download != null && _downloading == field.download)
                 _downloadStatus(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Downloads a TOS ROM image (or replaces the existing one) and refreshes the
+  /// section's status.
+  Future<void> _downloadTos() async {
+    final ok = await showTosRomDialog(context,
+        config: currentConfig, downloader: widget.tosDownloader);
+    if (ok && mounted) setState(() {});
+  }
+
+  /// TOS ROM row: status of `<appDir>/TOS.IMG` plus a download/replace button.
+  Widget _tosRow() {
+    final installed = tosInstalled(widget.initial);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: _labelWidth,
+          child: const Padding(
+            padding: EdgeInsets.only(top: 11),
+            child: Text('TOS ROM',
+                style: TextStyle(color: Colors.white, fontSize: 12)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Row(
+            children: [
+              Icon(
+                installed ? Icons.check : Icons.error_outline,
+                size: 18,
+                color: installed ? const Color(0xFF4CAF50) : Colors.redAccent,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  installed
+                      ? 'TOS.IMG installed next to the app'
+                      : 'TOS.IMG missing — Hatari needs it to boot',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 40,
+                child: OutlinedButton(
+                  onPressed: _downloadTos,
+                  child: Text(
+                      installed ? 'Replace TOS ROM…' : 'Download TOS ROM…'),
+                ),
+              ),
             ],
           ),
         ),

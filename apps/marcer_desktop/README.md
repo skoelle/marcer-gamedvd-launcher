@@ -102,8 +102,22 @@ detail sidebar to start the selected ZIP in Hatari. Arguments are built from
 same locations as the config) when `Hatari.ConfigFile` is empty. Launching is
 **non-blocking** — the status bar shows a "Hatari is running…" indicator and
 errors appear as a modal (missing executable, vanished ZIP, …). The bundled
-config expects a TOS ROM (`TOS.IMG`) next to the app, matching the console
-launcher.
+config expects a TOS ROM (`TOS.IMG`) next to the app (in the executable
+directory, which is Hatari's working directory), matching the console launcher.
+
+## TOS ROM
+
+When `TOS.IMG` is missing, the app offers to download it instead of failing at
+launch: before the first start the **TOS ROM** dialog appears (and the ⚙
+settings editor has a **TOS ROM** row in the Hatari section with the current
+status). It offers
+the TOS 1.02/1.04 **English (UK)** and **German** images — language first,
+English (UK) before Deutsch, newer version first; the default is
+**English (UK) — TOS 1.04**. The chosen ZIP is fetched on demand from
+[atariworld.org/tos-rom](https://www.atariworld.org/tos-rom/) (nothing is
+bundled; the images are Atari-copyrighted and offered there for
+non-commercial use), the ROM is extracted and written as `TOS.IMG` into the
+app directory.
 
 ## Favorites
 
@@ -243,6 +257,9 @@ from FTP** button next to *Browse…* on both `ScreenshotDirectory` and
 - `Ftp.Host` and the target directory are required (the target directory is
   created when missing); progress and **Cancel** show inline, failures as a
   SnackBar.
+- the download reports live byte progress, and the ZIP is extracted in a
+  **background isolate** with per-file progress (the screenshot archive holds
+  thousands of PNGs), so the UI stays responsive and the run can be cancelled.
 - `Ftp.AssetsRemote` defaults to `/Uploads/MarcerGameDVDLauncher-assets/` — set it
   in the form (or config) when the assets live elsewhere.
 

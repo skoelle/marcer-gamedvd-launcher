@@ -1,7 +1,9 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
 import 'package:ftpconnect/ftpconnect.dart';
@@ -28,7 +30,8 @@ extension CatalogAssetInfo on CatalogAsset {
 }
 
 /// Progress callback for an asset download: a coarse phase [message] plus
-/// byte progress when known (0/0 while unknown).
+/// progress when known (0/0 while unknown). During the download [done]/[total]
+/// are bytes, during extraction they are file counts.
 typedef AssetProgress = void Function(String message, int done, int total);
 
 /// Pluggable catalog asset downloader. The production implementation is
@@ -95,18 +98,29 @@ class FtpCatalogAssets implements CatalogAssetDownloader {
         throw const DownloadCancelledException();
       }
 
-      final size = newest.size ?? 0;
-      onProgress?.call('Downloading ${newest.name}…', 0, size);
       temp = File(p.join(Directory.systemTemp.path, newest.name));
-      await client.downloadFile(newest.name, temp);
+      onProgress?.call('Downloading ${newest.name}…', 0, newest.size ?? 0);
+      await client.downloadFile(
+        newest.name,
+        temp,
+        onProgress: (percent, done, total) =>
+            onProgress?.call('Downloading ${newest.name}…', done, total),
+      );
       if (isCancelled?.call() ?? false) {
         throw const DownloadCancelledException();
       }
 
       onProgress?.call('Extracting ${newest.name}…', 0, 0);
-      Directory(targetDir).createSync(recursive: true);
-      await extractFileToDisk(temp.path, targetDir);
-      onProgress?.call('${asset.label} updated.', size, size);
+      // Extraction runs in a background isolate (thousands of files) with
+      // per-file progress so the UI stays responsive.
+      await extractZipWithProgress(
+        archivePath: temp.path,
+        targetDir: targetDir,
+        onProgress: (done, total) =>
+            onProgress?.call('Extracting ${newest.name}…', done, total),
+        isCancelled: isCancelled,
+      );
+      onProgress?.call('${asset.label} updated.', 1, 1);
       return newest.name;
     } on DownloadCancelledException {
       rethrow;
@@ -172,4 +186,147 @@ String? newestAssetArchiveName(Iterable<String> names, CatalogAsset asset) {
     }
   }
   return best;
+}
+
+/// Extracts the ZIP at [archivePath] into [targetDir] in a **background
+/// isolate** (the archive holds thousands of PNGs), reporting per-file progress
+/// through [onProgress] (`done` out of `total` file entries). The UI isolate
+/// stays responsive; [isCancelled] is polled and aborts the extraction.
+///
+/// Throws [DownloadException] on I/O/archive errors and
+/// [DownloadCancelledException] when [isCancelled] reports cancellation.
+Future<void> extractZipWithProgress({
+  required String archivePath,
+  required String targetDir,
+  void Function(int done, int total)? onProgress,
+  bool Function()? isCancelled,
+}) async {
+  if (isCancelled?.call() ?? false) {
+    throw const DownloadCancelledException();
+  }
+
+  final receive = ReceivePort();
+  final errors = ReceivePort();
+  final completer = Completer<void>();
+  Isolate? isolate;
+  var cleanedUp = false;
+  Timer? cancelTimer;
+
+  void cleanup() {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    cancelTimer?.cancel();
+    receive.close();
+    errors.close();
+    isolate?.kill(priority: Isolate.immediate);
+  }
+
+  receive.listen((message) {
+    if (completer.isCompleted) return;
+    if (message is List && message.length == 2) {
+      onProgress?.call(message[0] as int, message[1] as int);
+    } else if (message == 'done') {
+      completer.complete();
+      cleanup();
+    } else if (message is String && message.startsWith('error:')) {
+      completer.completeError(DownloadException(message.substring(6)));
+      cleanup();
+    }
+  });
+  errors.listen((message) {
+    if (completer.isCompleted) return;
+    final text = message is List && message.isNotEmpty
+        ? '${message.first}'
+        : '$message';
+    completer.completeError(DownloadException(text));
+    cleanup();
+  });
+
+  if (isCancelled != null) {
+    cancelTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (completer.isCompleted) return;
+      if (isCancelled()) {
+        completer.completeError(const DownloadCancelledException());
+        cleanup();
+      }
+    });
+  }
+
+  try {
+    isolate = await Isolate.spawn(
+      _extractZipEntry,
+      _ExtractRequest(receive.sendPort, archivePath, targetDir),
+      onError: errors.sendPort,
+    );
+    await completer.future;
+  } finally {
+    cleanup();
+  }
+}
+
+/// Message sent to the extraction isolate.
+class _ExtractRequest {
+  const _ExtractRequest(this.port, this.archivePath, this.targetDir);
+
+  final SendPort port;
+  final String archivePath;
+  final String targetDir;
+}
+
+/// Isolate entry point: extracts the ZIP, streaming one file at a time so
+/// memory stays bounded, and sends `[done, total]` progress, then `done`, or
+/// `error:<message>` on failure.
+void _extractZipEntry(_ExtractRequest request) {
+  final send = request.port;
+  InputFileStream? input;
+  try {
+    final root = p.normalize(Directory(request.targetDir).absolute.path);
+    Directory(root).createSync(recursive: true);
+
+    input = InputFileStream(request.archivePath);
+    final archive = ZipDecoder().decodeBuffer(input);
+
+    // Create the explicit directory entries first (empty dirs in the archive).
+    for (final entry in archive.files) {
+      if (entry.isFile || entry.name.isEmpty) continue;
+      final dir = _safeOutputPath(root, entry.name);
+      if (dir != null) Directory(dir).createSync(recursive: true);
+    }
+
+    final files = archive.files.where((f) => f.isFile).toList(growable: false);
+    final total = files.length;
+    send.send(<int>[0, total]);
+
+    var done = 0;
+    for (final entry in files) {
+      final path = _safeOutputPath(root, entry.name);
+      if (path == null) {
+        done++;
+        send.send(<int>[done, total]);
+        continue;
+      }
+      final output = File(path);
+      output.parent.createSync(recursive: true);
+      final out = OutputFileStream(path);
+      try {
+        entry.writeContent(out);
+      } finally {
+        out.closeSync();
+      }
+      done++;
+      send.send(<int>[done, total]);
+    }
+    send.send('done');
+  } catch (e) {
+    send.send('error:$e');
+  } finally {
+    input?.closeSync();
+  }
+}
+
+/// Absolute output path for an archive entry, or `null` when the entry would
+/// escape [root] (zip-slip protection).
+String? _safeOutputPath(String root, String name) {
+  final full = p.normalize(p.join(root, name));
+  return p.isWithin(root, full) ? full : null;
 }

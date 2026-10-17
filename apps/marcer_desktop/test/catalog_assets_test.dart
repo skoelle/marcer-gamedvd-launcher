@@ -1,8 +1,21 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:io';
+
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_desktop/catalog_assets.dart';
+import 'package:marcer_desktop/ftp_downloader.dart';
+import 'package:path/path.dart' as p;
+
+List<int> _zipOf(Map<String, List<int>> entries) {
+  final archive = Archive();
+  entries.forEach((name, bytes) {
+    archive.addFile(ArchiveFile(name, bytes.length, bytes));
+  });
+  return ZipEncoder().encode(archive)!;
+}
 
 void main() {
   test('picks the newest screenshots archive by name timestamp', () {
@@ -37,5 +50,48 @@ void main() {
         newestAssetArchiveName(const ['other-20261017-080230.zip'],
             CatalogAsset.gameinfo),
         isNull);
+  });
+
+  test('extracts a ZIP in an isolate and reports per-file progress', () async {
+    final dir = Directory.systemTemp.createTempSync('catalog_assets_test');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    final zip = File(p.join(dir.path, 'screenshots-x.zip'))
+      ..writeAsBytesSync(_zipOf({
+        'a/one.png': List<int>.filled(10, 1),
+        'a/two.png': List<int>.filled(20, 2),
+        'root.png': List<int>.filled(5, 3),
+      }));
+
+    final out = Directory(p.join(dir.path, 'out'));
+    final progress = <int>[];
+    int? total;
+    await extractZipWithProgress(
+      archivePath: zip.path,
+      targetDir: out.path,
+      onProgress: (done, t) {
+        progress.add(done);
+        total = t;
+      },
+    );
+
+    expect(File(p.join(out.path, 'a/one.png')).lengthSync(), 10);
+    expect(File(p.join(out.path, 'a/two.png')).lengthSync(), 20);
+    expect(File(p.join(out.path, 'root.png')).lengthSync(), 5);
+    expect(total, 3);
+    expect(progress.first, 0);
+    expect(progress.last, 3);
+  });
+
+  test('extraction aborts when already cancelled', () {
+    expect(
+      () => extractZipWithProgress(
+        archivePath: '/does/not/matter.zip',
+        targetDir: '/tmp/out',
+        isCancelled: () => true,
+      ),
+      throwsA(isA<DownloadCancelledException>()),
+    );
   });
 }

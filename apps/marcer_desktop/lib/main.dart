@@ -13,6 +13,7 @@ import 'catalog_controller.dart';
 import 'config_locator.dart';
 import 'self_updater.dart';
 import 'theme.dart';
+import 'tos_rom.dart';
 import 'widgets/card_grid.dart';
 import 'widgets/detail_panel.dart';
 import 'widgets/entry_list.dart';
@@ -22,6 +23,7 @@ import 'widgets/game_lightbox.dart';
 import 'widgets/help_overlay.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/setup_page.dart';
+import 'widgets/tos_rom_dialog.dart';
 
 Future<void> main() async {
   final cwd = Directory.current.path;
@@ -310,6 +312,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _config = widget.config;
     _controller = CatalogController(_config);
+    _controller.beforeLaunch = _ensureTos;
     _controller.addListener(_onControllerChanged);
     _controller.init();
     _updater.addListener(_onUpdateChanged);
@@ -473,8 +476,19 @@ class _HomePageState extends State<HomePage> {
       _config = cfg;
       _controller = CatalogController(cfg);
     });
+    _controller.beforeLaunch = _ensureTos;
     _controller.addListener(_onControllerChanged);
     _controller.init();
+  }
+
+  /// Pre-launch guard: when `TOS.IMG` is missing next to the app, offer the
+  /// TOS ROM download dialog. Returns `true` when a TOS image is present (or
+  /// was just installed), `false` to abort the launch.
+  Future<bool> _ensureTos() async {
+    final cfg = _config;
+    if (tosInstalled(cfg)) return true;
+    if (!mounted) return false;
+    return showTosRomDialog(context, config: cfg);
   }
 
   void _toggleHelp() {

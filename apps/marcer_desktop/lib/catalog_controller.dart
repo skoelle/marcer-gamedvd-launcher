@@ -610,9 +610,14 @@ class CatalogController extends ChangeNotifier {
 
   final Map<GameCard, List<CardVariant>> _resolvedCardVariants = {};
 
+  /// Optional pre-launch guard (set by the UI): when it returns `false` the
+  /// launch is aborted. Used to offer a TOS ROM download before the first start.
+  Future<bool> Function()? beforeLaunch;
+
   /// Launches [zipPath] with Hatari (non-blocking). Sets [launchError] when the
   /// configuration or ZIP is invalid; [launching] while the process runs.
   Future<void> launchZip(String zipPath) async {
+    if (beforeLaunch != null && !await beforeLaunch!()) return;
     final result = await launchHatari(config, zipPath);
     if (result.error != null) {
       launchError = result.error;
