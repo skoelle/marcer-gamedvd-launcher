@@ -122,10 +122,15 @@ clicked. `detect` runs fully offline over all `desktop` entries: it
 matches templates of the standard GEM icons (`assets/icon-prg.png` for a
 program icon, `assets/icon-drive.png` for a DISKSTATION drive icon)
 against each existing preview PNG (FFT normalized cross correlation, also
-tries the inverted/selected icon). Hits are stored as `click` (strategy,
-screenshot pixel of the icon center, score) in the index; misses are
-marked `icon_found: false` and are never booted again (`detect --force`
-redoes them).
+tries the inverted/selected icon). Every template is tried at the 1x scale
+and as a binarized 0.5x variant, so the half-sized icons of native mono
+high-res captures (`- Mono` folders) are found too; the best variant wins
+(its `scale` is stored in `click`), but a smaller scale must beat the 1x
+match by a margin (0.02) before it takes over so weak color false
+positives keep their pixel. Hits are stored as `click` (strategy,
+screenshot pixel of the icon center, score, scale) in the index; misses
+are marked `icon_found: false` and are never booted again
+(`detect --force` redoes them).
 
 `run --retry-desktop` then selects only entries with `status: desktop`
 and a stored `click` that have not been clicked yet (`click_retried`).
@@ -149,8 +154,9 @@ the icon of the following window (same grid cell) during template
 matching. The park deliberately stays inside the window: a warp to the
 window/screen edge (e.g. the bottom-right corner) makes Hatari's relative
 mouse handling drift, after which every later click misses its icon.
-`click_retry.window_icon_min_score` (0.80) tolerates the arrow if it does
-end up on an icon.
+`click_retry.window_icon_min_score` (0.80, the same bar for the 0.5x mono
+variant — genuine mono icons score ~1.0 while a folder only reaches ~0.73
+on the program template) tolerates the arrow if it does end up on an icon.
 
 - `prg` — the desktop already shows the program icon: one double click
   starts the game.
@@ -181,6 +187,20 @@ match their templates near 1.0, so `click_retry.window_icon_min_score`
 (default 0.80) rejects the flat-region false positives that appear on
 white window areas while still accepting the program icon with the GEM
 arrow on it (~0.84).
+
+**Hidden icons (grow / scroll).** A window can show fewer icons than the
+folder contains, hiding the program behind a scrollbar. When an opened
+window shows no program or folder icon at all, the retry first **grows**
+the window by single clicking its "full size" box (its glyph centre in the
+title bar, just left of the right border — a few pixels right of centre
+misses the gadget; the mono profile opens folder views at ~half width) and
+then **scrolls down** by clicking the vertical scrollbar's down arrow, up
+to `click_retry.scroll_attempts` (default 4) times (the colour profile
+opens wide windows that show only the first rows). Both gadget positions
+are detected from the window frame (`find_fullsize_xy` / `find_scroll_down_xy`),
+not hard coded. This also stops an opened folder whose icons do not match
+(a child window that looks like its parent) from being mistaken for a game
+that started.
 
 The attempt is recorded once per entry. `click_retried: true` marks that a
 retry ran, and a new `click_result` field records how it ended:

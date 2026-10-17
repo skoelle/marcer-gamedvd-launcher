@@ -49,7 +49,9 @@
     "drive_max_depth": 2,
     "drive_attempts": 3,
     "prg_attempts": 3,
-    "folder_attempts": 3
+    "folder_attempts": 3,
+    "enlarge_window": true,
+    "scroll_attempts": 4
   },
   "tmp_dir": "/tmp/marcer-shotgen",
   "xvfb_screen": "1024x768x24",

@@ -111,6 +111,8 @@ DEFAULT_CONFIG = {
         "drive_attempts": 3,
         "prg_attempts": 3,
         "folder_attempts": 3,
+        "enlarge_window": True,
+        "scroll_attempts": 4,
     },
     "tmp_dir": "/tmp/marcer-shotgen",
     "xvfb_screen": "1024x768x24",
@@ -652,15 +654,19 @@ def find_hatari_window(P: dict, grab_png: Path, pid: int = None):
 
 
 def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
-                    icon_sx: int, icon_sy: int, log, fifo: Path = None) -> None:
-    """Double-click a screenshot pixel on a known Hatari window.
+                    icon_sx: int, icon_sy: int, log, fifo: Path = None,
+                    double: bool = True) -> None:
+    """Click a screenshot pixel on a known Hatari window.
 
     The real X pointer is positioned via XTest (xdotool mousemove), then
-    Hatari's own ``hatari-event doubleclick`` command is used for the
-    actual click: sending it through the emulator's input path is far more
+    Hatari's own ``hatari-event doubleclick`` command is used for a double
+    click: sending it through the emulator's input path is far more
     reliable than XTest clicks, which GEM often only registers as a single
-    selection (verified live). The pointer is serialized under CLICK_LOCK
-    across parallel workers because it is global per display.
+    selection (verified live). A single click (``double=False``, needed for
+    GEM gadgets such as the window "full size" box) has no FIFO control
+    command in Hatari 2.4.1 and goes through XTest. The pointer is
+    serialized under CLICK_LOCK across parallel workers because it is global
+    per display.
     """
     disp = P["display"]
     wx, wy = int(kv["X"]), int(kv["Y"])
@@ -686,8 +692,13 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
         except subprocess.TimeoutExpired:
             _xdotool(["mousemove", str(x), str(y)], disp)
         time.sleep(0.4)
-        if fifo is not None:
+        if double and fifo is not None:
             fifo_write(fifo, "hatari-event doubleclick")
+        elif not double:
+            # no single-click control command in Hatari 2.4.1 (section 7.4):
+            # a GEM gadget (full size box, scrollbar arrow) needs a single
+            # XTest click
+            _xdotool(["click", "1"], disp)
         else:
             _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
         # GEM draws its mouse arrow into the framebuffer and it stays
@@ -714,7 +725,8 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
 
 
 def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
-               log, fifo: Path = None, pid: int = None) -> None:
+               log, fifo: Path = None, pid: int = None,
+               double: bool = True) -> None:
     """Double-click the detected icon on Hatari's SDL window.
 
     The grab screenshot provides the window content size so that the
@@ -725,7 +737,184 @@ def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
         shot_w, shot_h = im.size
     wid, kv = find_hatari_window(P, grab_png, pid=pid)
     click_window_xy(P, wid, kv, shot_w, shot_h, icon_sx, icon_sy, log,
-                    fifo=fifo)
+                    fifo=fifo, double=double)
+
+
+def find_fullsize_xy(img_path: Path):
+    """Screenshot pixel at the centre of the active window's "full size" box.
+
+    The box sits in the title bar at the window's top right. Its glyph
+    rendering differs between GEM modes (mono high res vs colour medium/low
+    res), so it is not matched as a template, but its centre is detected from
+    the window frame (position independent): the rightmost long vertical dark
+    line is the window's right border; the box glyph is the rightmost compact
+    dark block in the title bar band just left of that border. The click must
+    land on the glyph centre — a few pixels to the right (near the border)
+    misses the gadget. Returns (x, y) or None when no box glyph is found.
+    """
+    arr = load_gray(img_path)
+    dark = arr < 128
+    height, width = dark.shape
+    min_run = max(60, height // 6)
+
+    def longest(vec):
+        best = best_start = cur = start = 0
+        for i, v in enumerate(vec):
+            if v:
+                if cur == 0:
+                    start = i
+                cur += 1
+                if cur > best:
+                    best, best_start = cur, start
+            else:
+                cur = 0
+        return best, best_start
+
+    right_x = right_top = None
+    for x in range(width - 1, -1, -1):
+        length, start = longest(dark[:, x])
+        if length >= min_run:
+            right_x, right_top = x, start
+            break
+    if right_x is None:
+        return None
+    x_hi = max(0, right_x - 6)
+    x_lo = max(0, right_x - 34)
+    y_lo = min(height - 1, right_top + 4)
+    y_hi = min(height, right_top + 16)
+    colsum = dark[y_lo:y_hi, x_lo:x_hi + 1].sum(axis=0)
+    cols = [i for i, c in enumerate(colsum) if c >= 3]
+    if not cols:
+        return None
+    colset = set(cols)
+    end = cols[-1]
+    start = end
+    while (start - 1) in colset:
+        start -= 1
+    return (x_lo + (start + end) // 2, (y_lo + y_hi) // 2)
+
+
+def enlarge_window(P: dict, grab_png: Path, log, fifo: Path = None,
+                   pid: int = None) -> bool:
+    """Grow a too narrow GEM window by clicking its "full size" box.
+
+    A folder view that shows more icons than fit its default width cuts
+    the rightmost ones off (behind a horizontal scrollbar); the program to
+    start can be among them, so the window is grown to the full work area
+    to reveal every icon before the scan gives up. The box reacts to a
+    *single* click; its position is detected from the window frame
+    (find_fullsize_xy). Returns True when a click was sent.
+    """
+    from PIL import Image
+    xy = find_fullsize_xy(grab_png)
+    if xy is None:
+        log("full size box not found, not enlarging")
+        return False
+    with Image.open(grab_png) as im:
+        shot_w, shot_h = im.size
+    wid, kv = find_hatari_window(P, grab_png, pid=pid)
+    click_window_xy(P, wid, kv, shot_w, shot_h, xy[0], xy[1], log,
+                    fifo=fifo, double=False)
+    return True
+
+
+def find_scroll_down_xy(img_path: Path):
+    """Screenshot pixel of the active window's vertical scrollbar down arrow.
+
+    A folder view shows far fewer icons than it contains, the rest hidden
+    below behind a vertical scrollbar; the program to start can be among
+    them. The down arrow sits in the innermost right column, one arrow
+    height above the window bottom border. Detected from the window frame
+    (position independent). Returns (x, y) or None.
+    """
+    arr = load_gray(img_path)
+    dark = arr < 128
+    height, width = dark.shape
+    min_run = max(60, height // 6)
+
+    def longest(vec):
+        best = best_start = cur = start = 0
+        for i, v in enumerate(vec):
+            if v:
+                if cur == 0:
+                    start = i
+                cur += 1
+                if cur > best:
+                    best, best_start = cur, start
+            else:
+                cur = 0
+        return best, best_start
+
+    right_x = right_top = None
+    for x in range(width - 1, -1, -1):
+        length, start = longest(dark[:, x])
+        if length >= min_run:
+            right_x, right_top = x, start
+            break
+    if right_x is None:
+        return None
+    bottom_y = None
+    for y in range(height - 1, right_top, -1):
+        length, start = longest(dark[y])
+        if length >= min_run and right_x - 8 <= start + length - 1 <= right_x + 2:
+            bottom_y = y
+            break
+    if bottom_y is None:
+        return None
+    return (max(1, right_x - 15), max(1, bottom_y - 30))
+
+
+def scroll_window_down(P: dict, grab_png: Path, log, fifo: Path = None,
+                       pid: int = None) -> bool:
+    """Scroll the active window one step down via its scrollbar down arrow.
+
+    Returns True when a click was sent.
+    """
+    from PIL import Image
+    xy = find_scroll_down_xy(grab_png)
+    if xy is None:
+        log("scrollbar down arrow not found, not scrolling")
+        return False
+    with Image.open(grab_png) as im:
+        shot_w, shot_h = im.size
+    wid, kv = find_hatari_window(P, grab_png, pid=pid)
+    click_window_xy(P, wid, kv, shot_w, shot_h, xy[0], xy[1], log,
+                    fifo=fifo, double=False)
+    return True
+
+
+_GRAY_CACHE: dict = {}
+_GRAY_CACHE_ORDER: deque = deque()
+_GRAY_CACHE_MAX = 8
+
+
+def load_gray(img_path: Path):
+    """Load a screenshot as a float64 grayscale array, cached by mtime/size.
+
+    find_icon probes several templates/variants against the same image and a
+    retry run revisits one preview across timepoints; re-decoding a ~832x552
+    PNG from the (often network) archive for every call dominated the detect
+    runtime, so the last few decoded images are kept (LRU, bounded).
+    """
+    import numpy as np
+    from PIL import Image
+
+    key = str(img_path)
+    try:
+        st = os.stat(key)
+        sig = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        sig = None
+    cached = _GRAY_CACHE.get(key)
+    if cached is not None and cached[0] == sig:
+        return cached[1]
+    with Image.open(img_path) as im:
+        arr = np.asarray(im.convert("L"), dtype=np.float64)
+    _GRAY_CACHE[key] = (sig, arr)
+    _GRAY_CACHE_ORDER.append(key)
+    while len(_GRAY_CACHE_ORDER) > _GRAY_CACHE_MAX:
+        _GRAY_CACHE.pop(_GRAY_CACHE_ORDER.popleft(), None)
+    return arr
 
 
 def find_template(img_path: Path, template, min_score: float):
@@ -735,10 +924,9 @@ def find_template(img_path: Path, template, min_score: float):
     still match. Returns (cx, cy, score) at the template center, or None.
     """
     import numpy as np
-    from PIL import Image
     from scipy.signal import fftconvolve
 
-    img = np.asarray(Image.open(img_path).convert("L"), dtype=np.float64)
+    img = load_gray(img_path)
     t_base = np.asarray(template, dtype=np.float64)
     best = None
     for t_img in (t_base, 255.0 - t_base):
@@ -775,29 +963,69 @@ ICON_TEMPLATE_FILES = {
     "folder": "icon-folder.png",    # folder icon inside a window
 }
 
+# Icon template variants, built once per process. Color screenshots render
+# the GEM screen at 2x (the templates were cut from them), so their icons
+# are twice the size of those in native mono high-res screenshots
+# (`--mono --tos-res high`, 640x400 at 1x). The 0.5x variant is binarized
+# so only the black/white structure matches: the drive template's green fill
+# (0,238,0 -> grey ~140) would otherwise correlate poorly against the
+# dithered mono background (binarizing maps it to white).
+_ICON_VARIANTS: dict = {}
+
+# A smaller-scale variant must beat the 1x match by this margin before it
+# takes over: on color screenshots the 0.5x binarized template can tie a
+# weak 1x false positive (~0.66) at a different pixel, which would silently
+# shift an established click point. A genuine mono icon wins by a wide
+# margin because its 1x match stays below icon_min_score.
+_VARIANT_MARGIN = 0.02
+
+
+def icon_variants(template: str):
+    """Return [(scale, PIL.Image)] candidates for a named icon template."""
+    if template not in _ICON_VARIANTS:
+        variants = []
+        tpl_name = ICON_TEMPLATE_FILES.get(template)
+        tpl_path = ASSETS_DIR / tpl_name if tpl_name else None
+        if tpl_path is not None and tpl_path.exists():
+            import numpy as np
+            from PIL import Image
+            with Image.open(tpl_path) as tpl:
+                gray = tpl.convert("L")
+                full = np.asarray(gray, dtype=np.float64)
+                half = np.asarray(gray.resize(
+                    (max(1, gray.width // 2), max(1, gray.height // 2)),
+                    Image.LANCZOS), dtype=np.float64)
+            variants.append((1.0, Image.fromarray(full.astype(np.uint8))))
+            variants.append((
+                0.5, Image.fromarray(
+                    np.where(half >= 128, 255.0, 0.0).astype(np.uint8))))
+        _ICON_VARIANTS[template] = variants
+    return _ICON_VARIANTS[template]
+
 
 def find_icon(path: Path, cfg: dict, template: str = "prg"):
     """Locate a GEM icon in a screenshot via NCC.
 
-    template: "prg" (program icon) or "drive" (disk drive icon).
-    Returns {"sx", "sy", "score"} (screenshot pixel, template center)
-    or None.
+    template: "prg" (program icon), "drive" (DISKSTATION drive icon) or
+    "folder" (folder icon inside a window). Every template is tried at the
+    1x color scale and as a 0.5x binarized variant (mono high-res); the
+    best-scoring variant wins, but a smaller scale must beat the larger one
+    by _VARIANT_MARGIN. Returns {"sx", "sy", "score", "scale"} (screenshot
+    pixel, template center) or None.
     """
-    tpl_name = ICON_TEMPLATE_FILES.get(template)
-    if tpl_name is None:
+    min_score = cfg["click_retry"]["icon_min_score"]
+    best = None
+    for scale, tpl in icon_variants(template):
+        res = find_template(path, tpl, min_score)
+        if res is None:
+            continue
+        cx, cy, score = res
+        if best is None or score > best[2] + _VARIANT_MARGIN:
+            best = (cx, cy, score, scale)
+    if best is None:
         return None
-    tpl_path = ASSETS_DIR / tpl_name
-    if not tpl_path.exists():
-        return None
-    from PIL import Image
-    with Image.open(tpl_path) as tpl:
-        grayscale = tpl.convert("L")
-        res = find_template(path, grayscale,
-                            cfg["click_retry"]["icon_min_score"])
-    if res is None:
-        return None
-    cx, cy, score = res
-    return {"sx": cx, "sy": cy, "score": round(score, 3)}
+    cx, cy, score, scale = best
+    return {"sx": cx, "sy": cy, "score": round(score, 3), "scale": scale}
 
 
 def find_desktop_click(path: Path, cfg: dict):
@@ -880,10 +1108,14 @@ def find_window_target(path: Path, cfg: dict):
     up; after descending into the folder the window is scanned again for
     a program icon. Window icons match their templates near 1.0, so a
     dedicated higher threshold rejects the flat-region false positives
-    (~0.55) that appear on white window areas. Returns
+    (~0.55) that appear on white window areas; the same bar applies to the
+    0.5x mono variant, whose genuine icons still score ~1.0 (a folder
+    lightly matching the program template only reaches ~0.73 and must not
+    override its own stronger folder match). Returns
     ("prg"|"folder", {sx, sy, score}) or None.
     """
     min_score = cfg["click_retry"].get("window_icon_min_score", 0.80)
+
     prg = find_icon(path, cfg, "prg")
     if prg and prg["score"] >= min_score:
         return "prg", prg
@@ -965,7 +1197,8 @@ def _folder_click_state(before: Path, after: Path, cfg: dict,
 
 
 def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
-                        grabs, log, pid: int = None):
+                        grabs, log, pid: int = None,
+                        allow_enlarge: bool = False):
     """Execute the click sequence for a desktop retry.
 
     prg: one double click on the program icon (game starts directly).
@@ -974,7 +1207,10 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
            open a folder and look again (bounded by drive_max_depth).
 
     ``pid`` is the running Hatari process, used to resolve its own window
-    when parallel workers share one X display.
+    when parallel workers share one X display. ``allow_enlarge`` enables the
+    "full size" fallback: when an opened window shows no usable icon, the
+    window is grown once so icons cut off at its right edge become visible
+    (section 7.4).
 
     returns (clicked, last_grab, chain_shots, result):
       clicked     - True when a program start was confirmed
@@ -985,6 +1221,43 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
     """
     strategy = click_info.get("strategy", "prg")
     chain_shots = list(grabs)
+
+    step_wait = float(click_cfg.get("step_wait", 2.0))
+    max_depth = int(click_cfg.get("drive_max_depth", 2))
+    do_enlarge = bool(allow_enlarge and click_cfg.get("enlarge_window", True))
+    scroll_attempts = int(click_cfg.get("scroll_attempts", 4))
+    grew = [False]
+
+    def _reveal_rescan(shot):
+        """Reveal hidden icons and rescan for a program/folder icon.
+
+        First grow a too narrow window (the mono high-res profile opens at
+        half width, pushing the program behind a horizontal scrollbar), then
+        scroll a window that hides icons below (the colour profile shows far
+        fewer icons than it contains behind a vertical scrollbar).
+        """
+        def grab(prev):
+            if not sleep_until(time.monotonic() + step_wait):
+                return prev, None
+            grown = _grab_now(fifo, outdir, 2.0) or prev
+            chain_shots.append(grown)
+            return grown, find_window_target(grown, cfg)
+
+        # GEM's "full size" box toggles, so it must be clicked exactly once
+        # per entry: a second grow click would restore the window.
+        if do_enlarge and not grew[0]:
+            grew[0] = True
+            if enlarge_window(P, shot, log, fifo=fifo, pid=pid):
+                shot, target = grab(shot)
+                if target is not None:
+                    return shot, target
+        for _ in range(scroll_attempts):
+            if not scroll_window_down(P, shot, log, fifo=fifo, pid=pid):
+                break
+            shot, target = grab(shot)
+            if target is not None:
+                return shot, target
+        return shot, None
 
     if strategy == "prg":
         before = grabs[-1]
@@ -1004,12 +1277,10 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         return False, chain_shots[-1], chain_shots, "click-failed"
 
     # strategy == "drive": open DISKSTATION A first
-    step_wait = float(click_cfg.get("step_wait", 2.0))
-    max_depth = int(click_cfg.get("drive_max_depth", 2))
-
     probe = grabs[-1]
     win_shot = probe
     target = None
+    drive_enlarged = False
     attempts = int(click_cfg.get("drive_attempts", 3))
     for attempt in range(1, attempts + 1):
         click_icon(P, win_shot, click_info["sx"], click_info["sy"], log,
@@ -1029,6 +1300,16 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         # just brings up the same window again, so only retry when the
         # click had no visible effect at all (screen unchanged)
         if _screen_changed(probe, win_shot):
+            # window is open but its icons are not usable: a too narrow
+            # default window may hide the program behind a scrollbar, so
+            # grow it once and rescan before giving up
+            if do_enlarge and not drive_enlarged:
+                drive_enlarged = True
+                log("window open but no icon matched, enlarging to reveal "
+                    "hidden icons")
+                win_shot, target = _reveal_rescan(win_shot)
+                if target is not None:
+                    break
             log("window opened but no program or folder icon matched")
             break
         log("drive click had no effect, retrying")
@@ -1037,6 +1318,7 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         return False, win_shot, chain_shots, "click-failed"
 
     for depth in range(1, max_depth + 1):
+        enlarged = False
         kind, hit = target
         if kind == "prg":
             # GEM occasionally registers the double click as a mere
@@ -1072,6 +1354,19 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
             chain_shots.append(new_shot)
             state = _folder_click_state(win_shot, new_shot, cfg,
                                         hit["sx"], hit["sy"])
+            if state != "opened" and do_enlarge and not enlarged \
+                    and find_window_target(new_shot, cfg) is None:
+                # No matchable icon at all: the opened folder window may
+                # just look like its parent (small pixel diff) and hide the
+                # program behind a scrollbar, so the click was misjudged as
+                # a mere selection or as an auto-started game. Grow the
+                # window once and rescan before retrying or believing it.
+                enlarged = True
+                log(f"depth {depth}: no icon after folder click, enlarging "
+                    f"to check for hidden icons")
+                new_shot, hidden = _reveal_rescan(new_shot)
+                if hidden is not None:
+                    state = "opened"
             if state == "program":
                 # the game started directly from the double click (the
                 # folder icon was already the program, or the click landed
@@ -1089,6 +1384,11 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
             return False, win_shot, chain_shots, "click-failed"
         win_shot = new_shot
         target = find_window_target(win_shot, cfg)
+        if target is None and do_enlarge and not enlarged:
+            enlarged = True
+            log(f"depth {depth}: no icon in window, enlarging to reveal "
+                f"hidden icons")
+            win_shot, target = _reveal_rescan(win_shot)
         if target is None:
             log(f"window depth {depth}: no further program or folder icon")
             return False, win_shot, chain_shots, "click-failed"
@@ -1242,7 +1542,8 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                         clicked, last_grab, chain_shots, click_result = \
                             perform_click_chain(
                                 P, cfg, click_cfg, click_info, fifo, outdir,
-                                grabs, log, pid=proc.pid)
+                                grabs, log, pid=proc.pid,
+                                allow_enlarge=True)
                     except Exception as ex:
                         log(f"click chain failed ({strategy}): {ex}")
                         clicked = False
