@@ -37,7 +37,11 @@ const List<HatariVariant> kHatariVariants = [
   HatariVariant(
     name: 'Mono',
     description: 'ST, TOS 1.04, monochrome high-res',
-    extraArgs: ['--mono', '--tos-res', 'high'],
+    // `--mono`/`--monitor mono` forces the mono monitor (ST boots to high-res
+    // 640x400). We use `--monitor mono` instead of `--mono --tos-res high`:
+    // `--tos-res high` crashes Hatari on Windows (v2.6.1-devel) and is
+    // redundant in mono mode.
+    extraArgs: ['--monitor', 'mono'],
   ),
   HatariVariant(
     name: 'STE',

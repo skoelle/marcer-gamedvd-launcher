@@ -44,10 +44,11 @@ void main() {
     expect(r.command!.arguments, isNot(contains('--tos')));
   });
 
-  test('mono variant adds --mono --tos-res high', () {
+  test('mono variant adds --monitor mono (no --tos-res)', () {
     final r = buildHatariCommand(config(), zip, variant: variant('Mono'));
-    expect(r.command!.arguments,
-        containsAllInOrder(['--mono', '--tos-res', 'high']));
+    expect(r.command!.arguments, containsAllInOrder(['--monitor', 'mono']));
+    expect(r.command!.arguments, isNot(contains('--tos-res')),
+        reason: '--tos-res high crashes Hatari on Windows');
   });
 
   test('STE variant adds --machine ste and --tos TOS162.IMG', () {

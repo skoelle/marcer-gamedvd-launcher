@@ -117,8 +117,8 @@ Save, the manual screenshot curation described below.
   detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
   bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking. The **PLAY** button
   is a split button: the main part launches the default variant, the arrow opens
-  a variant menu — **Standard** (ST, TOS 1.04), **Mono** (`--mono --tos-res
-  high`), **STE** (`--machine ste`, TOS 1.62 → `TOS162.IMG`) and **Low Res TOS
+  a variant menu — **Standard** (ST, TOS 1.04), **Mono** (`--monitor mono`),
+  **STE** (`--machine ste`, TOS 1.62 → `TOS162.IMG`) and **Low Res TOS
   1.02** (`TOS102.IMG`); a missing variant TOS is downloaded on demand.
 - **Favorites** (`*` on the selected ZIP/card, in the detail panel or on a
   filmstrip star) with `FAVORITE` badges, the virtual `Favorites` folder in

@@ -527,7 +527,7 @@ start process: executable = Hatari.Executable, arguments = args,
   (`TOS.IMG`) to be present in that directory (see README).
 - **Desktop extension (optional):** a desktop implementation may offer additional
   launch *variants* that append extra emulator arguments after the template (e.g.
-  `--mono --tos-res high`, `--machine ste`) and select a different TOS image
+  `--monitor mono`, `--machine ste`) and select a different TOS image
   (e.g. `TOS162.IMG`/`TOS102.IMG`); the base construction above is unchanged.
 
 ### 12.2 Blocking behavior

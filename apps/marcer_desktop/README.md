@@ -112,7 +112,7 @@ variant, the arrow opens a menu of variants (detail sidebar and lightbox; `P` /
 | Variant | Extra Hatari args | TOS |
 |---|---|---|
 | Standard | – | `TOS.IMG` (1.04) |
-| Mono | `--mono --tos-res high` | `TOS.IMG` (1.04) |
+| Mono | `--monitor mono` | `TOS.IMG` (1.04) |
 | STE | `--machine ste` | `TOS162.IMG` (1.62) |
 | Low Res TOS 1.02 | – | `TOS102.IMG` (1.02) |
 
