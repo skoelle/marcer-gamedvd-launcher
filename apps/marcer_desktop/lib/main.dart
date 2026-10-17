@@ -11,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'catalog_controller.dart';
 import 'config_locator.dart';
+import 'hatari_installer.dart';
 import 'self_updater.dart';
 import 'asset_updater.dart';
 import 'theme.dart';
@@ -23,6 +24,7 @@ import 'widgets/folder_tree.dart';
 import 'widgets/game_lightbox.dart';
 import 'widgets/help_overlay.dart';
 import 'widgets/asset_update_dialog.dart';
+import 'widgets/hatari_install_dialog.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/setup_page.dart';
 import 'widgets/tos_rom_dialog.dart';
@@ -325,7 +327,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _config = widget.config;
     _controller = CatalogController(_config);
-    _controller.beforeLaunch = _ensureTos;
+    _controller.beforeLaunch = _beforeLaunch;
     _controller.addListener(_onControllerChanged);
     _controller.init();
     _updater.addListener(_onUpdateChanged);
@@ -494,7 +496,7 @@ class _HomePageState extends State<HomePage> {
       _config = cfg;
       _controller = CatalogController(cfg);
     });
-    _controller.beforeLaunch = _ensureTos;
+    _controller.beforeLaunch = _beforeLaunch;
     _controller.addListener(_onControllerChanged);
     _controller.init();
     _assetUpdater.config = cfg;
@@ -509,6 +511,43 @@ class _HomePageState extends State<HomePage> {
       controller: _assetUpdater,
       onApplied: () => _applyConfig(_config),
     );
+  }
+
+  /// Pre-launch guard chain: ensure Hatari itself is installed first, then the
+  /// TOS ROM the run needs. Returns `false` to abort the launch.
+  Future<bool> _beforeLaunch(HatariVariant? variant) async {
+    if (!await _ensureHatari()) return false;
+    return _ensureTos(variant);
+  }
+
+  /// Pre-launch guard: when no Hatari executable is configured/installed,
+  /// offer to download the prebuilt release for this platform. Returns `true`
+  /// when Hatari is available (or was just installed), `false` to abort. On
+  /// platforms without a prebuilt binary (Linux) it is a no-op so the normal
+  /// launch error surfaces.
+  Future<bool> _ensureHatari() async {
+    if (hatariInstalled(_config)) return true;
+    if (hatariBuildFor() == null) return true;
+    if (!mounted) return false;
+    final exe = await showHatariInstallDialog(context, config: _config);
+    if (exe == null) return false;
+    final value =
+        hatariConfigExecutable(appDir: _config.appDir, exePath: exe);
+    final edited = _config.copyWith(hatariExecutable: value);
+    if (widget.configPath.isNotEmpty) {
+      try {
+        edited.save(widget.configPath);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Could not save desktop.config.json: $e'),
+              duration: const Duration(seconds: 5)));
+        }
+      }
+    }
+    setState(() => _config = edited);
+    _controller.replaceConfig(edited);
+    return true;
   }
 
   /// Pre-launch guard: when the TOS ROM the run needs (variant-specific, e.g.

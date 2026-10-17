@@ -35,7 +35,13 @@ class CatalogController extends ChangeNotifier {
     filter.status = config.defaultStatus;
   }
 
-  final DesktopConfig config;
+  DesktopConfig config;
+
+  /// Replaces the config in place without rebuilding the catalog. Intended for
+  /// changes that do **not** affect the catalog data (e.g. updating
+  /// `Hatari.Executable` after installing Hatari); data-root changes must go
+  /// through a fresh controller (see `HomePage._applyConfig`).
+  void replaceConfig(DesktopConfig cfg) => config = cfg;
 
   late final OverlayBrowser browser;
   late ScreenshotIndices screenshots;

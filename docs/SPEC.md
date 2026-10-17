@@ -529,6 +529,13 @@ start process: executable = Hatari.Executable, arguments = args,
   launch *variants* that append extra emulator arguments after the template (e.g.
   `--monitor mono`, `--machine ste`) and select a different TOS image
   (e.g. `TOS162.IMG`/`TOS102.IMG`); the base construction above is unchanged.
+- **Desktop extension (optional):** a desktop implementation may offer to obtain
+  the emulator itself and the required TOS ROM on demand (download a prebuilt
+  build for the current platform / a ROM image and install it into the
+  application directory) and persist the resulting `Hatari.Executable` path;
+  the launch construction above is unchanged. Where no prebuilt emulator binary
+  is offered for a platform, the implementation falls back to a manual / system
+  installation and the normal launch error applies (E3).
 
 ### 12.2 Blocking behavior
 

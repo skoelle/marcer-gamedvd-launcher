@@ -73,7 +73,8 @@ The setup/settings form lays the fields out as: **RootDirectory**,
 **PatchDirectory**, the **FTP** server (used both for game-folder downloads
 and for the catalog-data downloads), then **ScreenshotDirectory** and
 **GameinfoDirectory** — each with a **Download from FTP** button next to
-*Browse…* — and finally the Hatari settings.
+*Browse…* — and finally the Hatari settings plus the **Hatari installation**
+and **TOS ROM** rows (download/install on demand, see below).
 
 | Field | Required | Notes |
 |---|---|---|
@@ -118,6 +119,29 @@ variant, the arrow opens a menu of variants (detail sidebar and lightbox; `P` /
 
 The extra args are appended after `Hatari.ArgsTemplate` (Hatari CLI overrides
 the config file). Variants with a TOS file download it on demand (see below).
+
+## Hatari (download & install)
+
+When no Hatari executable is configured/found, the app offers to install a
+prebuilt Hatari instead of failing at launch: before the first start an install
+dialog appears (the ⚙ settings editor also has a **Hatari installation** row
+with the current status and an **Install Hatari…**/**Reinstall Hatari…**
+button). The pinned release (**2.6.1**) is downloaded from the official
+[SourceForge project](https://www.hatari-emu.org/) — prebuilt Windows (x64) and
+macOS (universal, x86-64 + arm64) archives — and unpacked into
+`<appDir>/hatari`; the executable is located inside the archive (Windows
+`hatari.exe` / macOS `Hatari.app/Contents/MacOS/hatari`), made executable and,
+on macOS, stripped of the download quarantine. The resulting path is written to
+`Hatari.Executable` (relative to the app directory, so the portable folder keeps
+working after being moved) and the running catalog updates in place.
+
+- **Linux has no official prebuilt binary** — the row/dialog point to a manual
+  (system package) install instead; the normal launch error surfaces until
+  `Hatari.Executable` is set.
+- Hatari is free software (GPL-2.0); nothing is bundled, only downloaded on
+  demand.
+- The install directory is not part of the release ZIP, so a self-update never
+  overwrites it.
 
 ## TOS ROM
 

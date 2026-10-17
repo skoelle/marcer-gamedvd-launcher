@@ -8,7 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_assets.dart';
+import 'package:marcer_desktop/hatari_installer.dart';
 import 'package:marcer_desktop/widgets/settings_form.dart';
+import 'package:path/path.dart' as p;
 
 /// Downloader whose future only completes when the test says so.
 class _HangingDownloader implements CatalogAssetDownloader {
@@ -26,6 +28,23 @@ class _HangingDownloader implements CatalogAssetDownloader {
     bool Function()? isCancelled,
   }) =>
       completer.future;
+}
+
+/// Fake Hatari downloader that writes a stand-in executable into the install
+/// directory and returns its path.
+class _FakeHatariDownloader implements HatariDownloader {
+  @override
+  Future<String> download(
+    HatariBuild build,
+    String installDir, {
+    HatariInstallProgress? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    Directory(installDir).createSync(recursive: true);
+    final exe = File(p.join(installDir, 'hatari.exe'))
+      ..writeAsBytesSync(List<int>.filled(8, 0x7F));
+    return exe.path;
+  }
 }
 
 Future<void> _pumpForm(WidgetTester tester, DesktopConfig initial,
@@ -181,5 +200,41 @@ void main() {
         archive: 'screenshots-20261017-080230.zip', upToDate: false));
     await tester.pumpAndSettle();
     expect(busy, isFalse);
+  });
+
+  testWidgets('installing Hatari fills the executable field', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final dir = Directory.systemTemp.createTempSync('settings_form_hatari');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    DesktopConfig? latest;
+    const build =
+        HatariBuild(os: 'test', label: 'Test', url: 'https://x/y.zip');
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: SettingsForm(
+            initial: DesktopConfig(rootDirectory: dir.path, appDir: dir.path),
+            onChanged: (c, _) => latest = c,
+            hatariDownloader: _FakeHatariDownloader(),
+            hatariBuild: build,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Install Hatari…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Install Hatari'));
+    await tester.pumpAndSettle();
+
+    expect(latest!.hatariExecutable, p.join('hatari', 'hatari.exe'));
+    expect(find.text('Hatari is installed'), findsOneWidget);
   });
 }

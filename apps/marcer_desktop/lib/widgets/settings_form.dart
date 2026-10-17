@@ -9,7 +9,9 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_assets.dart';
 import '../ftp_downloader.dart';
+import '../hatari_installer.dart';
 import '../tos_rom.dart';
+import 'hatari_install_dialog.dart';
 import 'tos_rom_dialog.dart';
 
 /// Live validation state of a single path field, driving its trailing icon.
@@ -87,6 +89,8 @@ class SettingsForm extends StatefulWidget {
     this.onBusyChanged,
     this.assetDownloader = const FtpCatalogAssets(),
     this.tosDownloader = const HttpTosRomDownloader(),
+    this.hatariDownloader = const HttpHatariDownloader(),
+    this.hatariBuild,
   });
 
   /// Values the fields start with (a default/empty config for first-run).
@@ -109,6 +113,13 @@ class SettingsForm extends StatefulWidget {
 
   /// Downloads the TOS ROM image (injectable for tests).
   final TosRomDownloader tosDownloader;
+
+  /// Downloads and unpacks the prebuilt Hatari (injectable for tests).
+  final HatariDownloader hatariDownloader;
+
+  /// Overrides the platform build lookup for the Hatari install row (tests);
+  /// `null` uses [hatariBuildFor] for the current platform.
+  final HatariBuild? hatariBuild;
 
   @override
   State<SettingsForm> createState() => _SettingsFormState();
@@ -368,6 +379,7 @@ class _SettingsFormState extends State<SettingsForm> {
           _fieldRow(field),
           const SizedBox(height: 8),
         ],
+        _hatariRow(),
         _tosRow(),
       ],
     );
@@ -441,6 +453,83 @@ class _SettingsFormState extends State<SettingsForm> {
               ),
               if (field.download != null && _downloading == field.download)
                 _downloadStatus(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Downloads and installs the prebuilt Hatari for this platform (or replaces
+  /// an existing install) and fills the executable field with the result.
+  Future<void> _installHatari() async {
+    final build = widget.hatariBuild ?? hatariBuildFor();
+    if (build == null) return;
+    final exe = await showHatariInstallDialog(context,
+        config: currentConfig,
+        downloader: widget.hatariDownloader,
+        build: build);
+    if (exe == null || !mounted) return;
+    final value =
+        hatariConfigExecutable(appDir: currentConfig.appDir, exePath: exe);
+    _fields
+        .firstWhere((f) => f.field == _Field.hatariExec)
+        .controller
+        .text = value;
+    setState(() {});
+  }
+
+  /// Hatari installation row: status of the configured executable plus an
+  /// install/replace button (downloads the prebuilt release). On platforms
+  /// without a prebuilt binary (Linux) it points to a manual install instead.
+  Widget _hatariRow() {
+    final build = widget.hatariBuild ?? hatariBuildFor();
+    final installed = hatariInstalled(currentConfig);
+    final supported = build != null;
+    final ok = supported && installed;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: _labelWidth,
+          child: const Padding(
+            padding: EdgeInsets.only(top: 11),
+            child: Text('Hatari installation',
+                style: TextStyle(color: Colors.white, fontSize: 12)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Row(
+            children: [
+              Icon(
+                ok ? Icons.check : Icons.error_outline,
+                size: 18,
+                color: ok ? const Color(0xFF4CAF50) : Colors.redAccent,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  !supported
+                      ? 'No automatic install on this platform — install '
+                          'Hatari manually'
+                      : installed
+                          ? 'Hatari is installed'
+                          : 'Hatari missing — download a prebuilt binary',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (supported)
+                SizedBox(
+                  height: 40,
+                  child: OutlinedButton(
+                    onPressed: _installHatari,
+                    child: Text(installed
+                        ? 'Reinstall Hatari…'
+                        : 'Install Hatari…'),
+                  ),
+                ),
             ],
           ),
         ),

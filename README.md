@@ -120,6 +120,12 @@ Save, the manual screenshot curation described below.
   a variant menu — **Standard** (ST, TOS 1.04), **Mono** (`--monitor mono`),
   **STE** (`--machine ste`, TOS 1.62 → `TOS162.IMG`) and **Low Res TOS
   1.02** (`TOS102.IMG`); a missing variant TOS is downloaded on demand.
+- **Download & install Hatari** — when no emulator is configured, the app offers
+  to download prebuilt Hatari **2.6.1** (Windows x64 / macOS universal from
+  [hatari-emu.org](https://www.hatari-emu.org/)) before launch or from the
+  settings **Hatari installation** row, unpacks it into `<appDir>/hatari` and
+  writes the relative `Hatari.Executable` path back to the config. Linux has no
+  official prebuilt binary (manual/system install).
 - **Favorites** (`*` on the selected ZIP/card, in the detail panel or on a
   filmstrip star) with `FAVORITE` badges, the virtual `Favorites` folder in
   the browser view and a **★ Favorites** filter that lists your favorite
@@ -196,10 +202,11 @@ Download the ZIP for your platform from the [Releases](https://github.com/skoell
 The release ZIPs ship `desktop.config.example.json` **and** the bundled
 `MarcerGameDvd-Hatari.cfg` — copy the example next to the executable (or the
 `.app`), rename it to `desktop.config.json`, and set your absolute paths. For
-launching, also point `Hatari.Executable` at your Hatari binary. If `TOS.IMG`
-is missing, the app offers to download it (TOS 1.04, English (UK) or German)
-from atariworld.org and install it next to the app (the STE / Low Res TOS 1.02
-Play variants download TOS 1.62 / 1.02 on demand).
+launching, point `Hatari.Executable` at your Hatari binary (or use the in-app
+**Install Hatari…** to download prebuilt Hatari 2.6.1 on Windows/macOS). If
+`TOS.IMG` is missing, the app offers to download it (TOS 1.04, English (UK) or
+German) from atariworld.org and install it next to the app (the STE / Low Res
+TOS 1.02 Play variants download TOS 1.62 / 1.02 on demand).
 
 ### ⚙️ Configuration (`desktop.config.json`)
 
@@ -226,7 +233,8 @@ directory/file pickers, plus the **FTP** fields for the downloads
 (`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase`,
 `Ftp.AssetsRemote` — free text, never block saving). The form is ordered
 **RootDirectory → PatchDirectory → FTP → ScreenshotDirectory /
-GameinfoDirectory → Hatari**; the two catalog-data fields each carry a
+GameinfoDirectory → Hatari** (with the **Hatari installation** and **TOS ROM**
+rows); the two catalog-data fields each carry a
 **Download from FTP** button next to *Browse…* that pulls the newest
 `screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
 into the target directory (the gameinfo directory has **no** implicit
