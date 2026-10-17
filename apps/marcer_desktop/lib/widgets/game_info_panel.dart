@@ -13,6 +13,7 @@ class ZipVariantView {
     required this.rel,
     this.kind,
     this.size,
+    this.missing = false,
   });
 
   final String name;
@@ -25,6 +26,10 @@ class ZipVariantView {
   final String layer;
   final String rel;
   final int? size;
+
+  /// True when this ZIP is not present locally (neither root nor patch);
+  /// shown as a dedicated red "Missing" row in the "This ZIP" table.
+  final bool missing;
 }
 
 /// Gallery-style detail panel (`SPEC-gallery-webapp.md` §6.5 `lb-side`):
@@ -336,6 +341,7 @@ class GameInfoPanel extends StatelessWidget {
       _kv('File', v.name),
       _kv('Status', v.status),
       _kv('Kind', kind),
+      if (v.missing) _kv('Missing', 'yes — not present locally'),
       if (v.layer.isNotEmpty) _kv('Layer', v.layer),
       if (v.size != null) _kv('Size', '${(v.size! / 1024).toStringAsFixed(0)} KB'),
       _kv('Path', v.rel),

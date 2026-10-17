@@ -127,6 +127,7 @@ class _GameLightboxState extends State<GameLightbox> {
             size: variants[i].size,
             rel: variants[i].rel,
             origIndex: i,
+            missing: widget.controller.variantMissing(variants[i]),
           ),
       ];
       // ZIPs without a screenshot sort to the very end (stable).
@@ -570,6 +571,8 @@ class _GameLightboxState extends State<GameLightbox> {
                 _badge('★ FAVORITE', Colors.amber),
               if (_layer != null && _layer!.isNotEmpty)
                 _badge(_layer!, Colors.green),
+              if (item is GameCard && widget.controller.cardMissing(item))
+                _badge('MISSING', Colors.redAccent),
               if (counts.isNotEmpty) _badge(counts, Colors.blueGrey),
               if (_year.isNotEmpty) _badge(_year, Colors.teal),
             ],
@@ -688,6 +691,25 @@ class _GameLightboxState extends State<GameLightbox> {
                                 child: Text('+$nCand',
                                     style: const TextStyle(
                                         fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        height: 1.2)),
+                              ),
+                            ),
+                          if (v.missing)
+                            Positioned(
+                              right: 3,
+                              top: 3,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xCCB3261E),
+                                  borderRadius: BorderRadius.circular(7),
+                                ),
+                                child: const Text('MISSING',
+                                    style: TextStyle(
+                                        fontSize: 8,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,
                                         height: 1.2)),
@@ -820,6 +842,7 @@ class _GameLightboxState extends State<GameLightbox> {
               layer: v.layer,
               rel: v.rel,
               size: v.size,
+              missing: v.missing,
             ),
       filter: widget.controller.filter,
       onPlay: v == null ? null : _launchCurrent,
@@ -960,6 +983,7 @@ class _Variant {
     required this.rel,
     required this.origIndex,
     this.kind,
+    this.missing = false,
   });
 
   final String title;
@@ -973,6 +997,10 @@ class _Variant {
   /// Preview classification (`game`/`desktop`/`textscreen`/`darkscreen`);
   /// feeds the "This ZIP" Kind row and the `C` dialog's current mark.
   final String? kind;
+
+  /// True when the variant's ZIP is not present locally (neither root nor
+  /// patch); marked in the filmstrip and the "This ZIP" table.
+  final bool missing;
 
   /// Index of this variant in the card's original `variants` order (used to
   /// map back for launch / focus; the display order groups previews first).

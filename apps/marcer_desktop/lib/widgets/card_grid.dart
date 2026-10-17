@@ -388,6 +388,7 @@ class _CenterGridState extends State<CenterGrid> {
       if (c.isFavoriteCard(card)) 'FAVORITE',
       if (card.variants.length > 1) '×${card.variants.length}',
       if (card.layer.isNotEmpty) card.layer,
+      if (c.cardMissing(card)) 'MISSING',
       if (card.displayStatus.isNotEmpty) card.displayStatus,
       if (card.year != 'unknown') card.year,
     ];

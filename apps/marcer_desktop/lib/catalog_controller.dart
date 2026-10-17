@@ -486,6 +486,41 @@ class CatalogController extends ChangeNotifier {
     return p.join(config.rootDirectory, rel);
   }
 
+  // --------------------------------------------------------- missing (sync)
+
+  /// Lazily cached ZIP existence per rel path (root or patch). The catalog is
+  /// built without any filesystem scan (`CatalogUniverse`), so an index/
+  /// gameinfo entry can reference a ZIP the user has not synced yet; these
+  /// helpers flag exactly that on demand (app-only divergence). The cache is
+  /// per controller; a settings reload builds a fresh controller
+  /// (`HomePage._applyConfig`), so files that appear or vanish while the app
+  /// runs are reflected after a reload.
+  final Map<String, bool> _zipExistsCache = {};
+
+  /// True when the ZIP at overlay rel [rel] exists in either layer (patch and
+  /// root are both checked — unlike the launch path this does not depend on
+  /// the published layer field).
+  bool zipExists(String rel) {
+    if (rel.isEmpty) return false;
+    return _zipExistsCache.putIfAbsent(rel, () {
+      if (File(p.join(config.rootDirectory, rel)).existsSync()) return true;
+      final patch = config.patchDirectory;
+      return patch.isNotEmpty && File(p.join(patch, rel)).existsSync();
+    });
+  }
+
+  /// True when a card's ZIP variant is not present locally (neither layer).
+  bool variantMissing(CardVariant v) => !zipExists(v.rel);
+
+  /// True when none of [card]'s ZIP variants exists locally. Cards without a
+  /// resolvable ZIP (e.g. a gameinfo-only pd/utils folder missing on disk)
+  /// count as missing too.
+  bool cardMissing(GameCard card) {
+    final variants = variantsOfCard(card);
+    if (variants.isEmpty) return true;
+    return variants.every(variantMissing);
+  }
+
   /// The ZIP a catalog card should launch: the crew/cracker-focused variant
   /// when a focus filter is active, otherwise the variant whose preview is the
   /// card preview (falling back to the first).

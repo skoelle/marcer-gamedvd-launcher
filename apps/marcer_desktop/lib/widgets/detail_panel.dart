@@ -141,6 +141,7 @@ class DetailPanel extends StatelessWidget {
                     _badge('FAVORITE', Colors.amber),
                   if (card.layer.isNotEmpty)
                     _badge(card.layer, _layerColorName(card.layer)),
+                  if (c.cardMissing(card)) _badge('MISSING', Colors.redAccent),
                   if (card.displayStatus.isNotEmpty)
                     _badge(card.displayStatus, Colors.blueGrey),
                   if (card.year != 'unknown') _badge(card.year, Colors.teal),
@@ -195,6 +196,7 @@ class DetailPanel extends StatelessWidget {
       layer: v.layer,
       rel: v.rel,
       size: v.size,
+      missing: controller.variantMissing(v),
     );
   }
 

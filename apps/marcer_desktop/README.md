@@ -168,6 +168,25 @@ the coverage `info N folders` / `N without info`):
   sections), `gameinfo: …` — active index mtime and gameinfo generation
   timestamp.
 
+## Missing ZIPs
+
+The catalog is built from the screenshot index + gameinfo **without any
+filesystem scan**, so it also lists games/ZIPs that are not synced locally
+yet (the displayed `ROOT`/`PATCH`/`BOTH` layer is the layer recorded in the
+published index, not the state of your own copy). The app therefore checks
+ZIP existence lazily (cached) and marks absent files:
+
+- **`MISSING` card badge** (grid tile, detail panel, lightbox header) when
+  **none** of the card's ZIPs exists in either `RootDirectory` or
+  `PatchDirectory` — such a card cannot be launched.
+- **Per-variant `MISSING`** in the lightbox filmstrip (red tag) and the
+  "This ZIP" table (`Missing` row) when that specific ZIP is absent, while
+  other variants of the same card are present.
+
+A card with at least one local ZIP is not marked, even if some variants are
+missing. The check is best-effort: files that appear or vanish while the app
+runs are only re-evaluated after a reload (settings change / restart).
+
 ## License
 
 MIT License — Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
