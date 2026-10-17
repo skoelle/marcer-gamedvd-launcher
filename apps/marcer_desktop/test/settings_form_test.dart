@@ -12,13 +12,15 @@ import 'package:marcer_desktop/widgets/settings_form.dart';
 
 /// Downloader whose future only completes when the test says so.
 class _HangingDownloader implements CatalogAssetDownloader {
-  final Completer<String> completer = Completer<String>();
+  final Completer<AssetDownloadResult> completer =
+      Completer<AssetDownloadResult>();
 
   @override
-  Future<String> download({
+  Future<AssetDownloadResult> download({
     required CatalogAsset asset,
     required DesktopConfig config,
     required String targetDir,
+    bool force = false,
     AssetProgress? onProgress,
     bool Function()? isCancelled,
   }) =>
@@ -174,7 +176,8 @@ void main() {
     await tester.pump();
     expect(busy, isTrue);
 
-    downloader.completer.complete('screenshots-20261017-080230.zip');
+    downloader.completer.complete(const AssetDownloadResult(
+        archive: 'screenshots-20261017-080230.zip', upToDate: false));
     await tester.pumpAndSettle();
     expect(busy, isFalse);
   });

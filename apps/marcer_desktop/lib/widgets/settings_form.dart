@@ -233,7 +233,7 @@ class _SettingsFormState extends State<SettingsForm> {
       ? _textOf(_Field.screenshot)
       : _textOf(_Field.gameinfo);
 
-  Future<void> _downloadAsset(CatalogAsset asset) async {
+  Future<void> _downloadAsset(CatalogAsset asset, {bool force = false}) async {
     if (_downloading != null) return;
     if (!currentConfig.ftpConfigured) {
       _snack('FTP host missing — enter the FTP server above first.');
@@ -253,11 +253,13 @@ class _SettingsFormState extends State<SettingsForm> {
       _cancelRequested = false;
     });
     widget.onBusyChanged?.call(true);
+    AssetDownloadResult? result;
     try {
-      final name = await widget.assetDownloader.download(
+      result = await widget.assetDownloader.download(
         asset: asset,
         config: currentConfig,
         targetDir: target,
+        force: force,
         onProgress: (message, done, total) {
           if (!mounted) return;
           setState(() {
@@ -268,10 +270,6 @@ class _SettingsFormState extends State<SettingsForm> {
         },
         isCancelled: () => _cancelRequested,
       );
-      if (!mounted) return;
-      _snack('${asset.label} updated from $name.');
-      widget.onAssetDownloaded?.call(asset);
-      _revalidate();
     } on DownloadCancelledException {
       if (mounted) _snack('${asset.label} download cancelled.');
     } catch (e) {
@@ -285,6 +283,40 @@ class _SettingsFormState extends State<SettingsForm> {
       }
       widget.onBusyChanged?.call(false);
     }
+
+    if (!mounted || result == null) return;
+    if (result.upToDate) {
+      final proceed = await _confirmRedownload(asset, result.archive);
+      if (proceed && mounted) await _downloadAsset(asset, force: true);
+      return;
+    }
+    _snack('${asset.label} updated from ${result.archive}.');
+    widget.onAssetDownloaded?.call(asset);
+    _revalidate();
+  }
+
+  /// Asks whether the already-applied (up-to-date) archive should be
+  /// downloaded again anyway.
+  Future<bool> _confirmRedownload(CatalogAsset asset, String archive) async {
+    final again = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Already up to date'),
+        content: Text('You already have the newest ${asset.label} ($archive). '
+            'Download it again anyway?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Download anyway'),
+          ),
+        ],
+      ),
+    );
+    return again ?? false;
   }
 
   void _snack(String message) {

@@ -257,6 +257,11 @@ from FTP** button next to *Browse…* on both `ScreenshotDirectory` and
 - uploads never overwrite, so the newest archive is picked by the
   `yyyyMMdd-HHmmss` timestamp in its name; the two archives must both be present
   in the asset directory.
+- after a successful download the applied archive is recorded in
+  `<targetDir>/.marcer-assets.json`; clicking **Download from FTP** again when
+  the newest archive is already applied (and its data is present) reports
+  **"Already up to date"** and offers a **Download anyway** dialog instead of
+  re-downloading.
 - `Ftp.Host` and the target directory are required (the target directory is
   created when missing); progress and **Cancel** show inline, failures as a
   SnackBar.

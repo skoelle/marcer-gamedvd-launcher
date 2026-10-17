@@ -110,4 +110,46 @@ void main() {
       throwsA(isA<DownloadException>()),
     );
   });
+
+  test('version marker round-trips per asset in one directory', () {
+    final dir = Directory.systemTemp.createTempSync('asset_marker');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    expect(readAppliedAssetVersion(dir.path, CatalogAsset.screenshots), isNull);
+    writeAppliedAssetVersion(
+        dir.path, CatalogAsset.screenshots, 'screenshots-1.zip');
+    writeAppliedAssetVersion(dir.path, CatalogAsset.gameinfo, 'gameinfo-1.zip');
+    // Both keys survive in the same directory.
+    expect(readAppliedAssetVersion(dir.path, CatalogAsset.screenshots),
+        'screenshots-1.zip');
+    expect(readAppliedAssetVersion(dir.path, CatalogAsset.gameinfo),
+        'gameinfo-1.zip');
+  });
+
+  test('corrupt marker is treated as no version', () {
+    final dir = Directory.systemTemp.createTempSync('asset_marker_bad');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    File(assetVersionFilePath(dir.path)).writeAsStringSync('not json');
+    expect(readAppliedAssetVersion(dir.path, CatalogAsset.screenshots), isNull);
+  });
+
+  test('isAssetUpToDate needs the marker and the extracted data', () {
+    final dir = Directory.systemTemp.createTempSync('asset_uptodate');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    writeAppliedAssetVersion(
+        dir.path, CatalogAsset.screenshots, 'screenshots-1.zip');
+    expect(isAssetUpToDate(dir.path, CatalogAsset.screenshots, 'screenshots-1.zip'),
+        isFalse, reason: 'marker alone is not enough');
+    File(p.join(dir.path, 'index.json')).writeAsStringSync('{}');
+    expect(isAssetUpToDate(dir.path, CatalogAsset.screenshots, 'screenshots-1.zip'),
+        isTrue);
+    expect(isAssetUpToDate(dir.path, CatalogAsset.screenshots, 'screenshots-2.zip'),
+        isFalse);
+  });
 }

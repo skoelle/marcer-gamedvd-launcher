@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -34,20 +35,94 @@ extension CatalogAssetInfo on CatalogAsset {
 /// are bytes, during extraction they are file counts.
 typedef AssetProgress = void Function(String message, int done, int total);
 
+/// Outcome of a catalog asset download: the newest [archive] on the FTP server
+/// and whether it was already applied locally ([upToDate], no download ran).
+class AssetDownloadResult {
+  const AssetDownloadResult({required this.archive, required this.upToDate});
+
+  final String archive;
+  final bool upToDate;
+}
+
+/// Name of the marker file written into the target directory after a
+/// successful download, recording which archive was applied.
+const String kAssetVersionFileName = '.marcer-assets.json';
+
+/// Absolute path of the version marker inside [targetDir].
+String assetVersionFilePath(String targetDir) =>
+    p.join(targetDir, kAssetVersionFileName);
+
+/// The archive name last applied for [asset] into [targetDir], or `null` when
+/// there is no (readable) marker yet.
+String? readAppliedAssetVersion(String targetDir, CatalogAsset asset) {
+  final file = File(assetVersionFilePath(targetDir));
+  if (!file.existsSync()) return null;
+  try {
+    final map = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+    return map[asset.archivePrefix] as String?;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Records [archive] as the applied version for [asset] in [targetDir],
+/// preserving the other asset's entry when both share a directory.
+void writeAppliedAssetVersion(
+    String targetDir, CatalogAsset asset, String archive) {
+  Directory(targetDir).createSync(recursive: true);
+  final file = File(assetVersionFilePath(targetDir));
+  var map = <String, dynamic>{};
+  if (file.existsSync()) {
+    try {
+      map = Map<String, dynamic>.from(
+          jsonDecode(file.readAsStringSync()) as Map);
+    } catch (_) {
+      map = <String, dynamic>{};
+    }
+  }
+  map[asset.archivePrefix] = archive;
+  file.writeAsStringSync(
+      '${const JsonEncoder.withIndent('  ').convert(map)}\n');
+}
+
+/// True when [targetDir] actually holds extracted data for [asset] (so a stale
+/// marker on an emptied directory does not report "up to date").
+bool assetDataPresent(String targetDir, CatalogAsset asset) {
+  bool exists(String name) => File(p.join(targetDir, name)).existsSync();
+  switch (asset) {
+    case CatalogAsset.screenshots:
+      return exists('index.json');
+    case CatalogAsset.gameinfo:
+      return exists('games-cracked.json') ||
+          exists('games-pd.json') ||
+          exists('games-utils.json') ||
+          exists('manifest.json');
+  }
+}
+
+/// True when [newestArchive] was already applied into [targetDir] and the data
+/// is still present.
+bool isAssetUpToDate(
+        String targetDir, CatalogAsset asset, String newestArchive) =>
+    readAppliedAssetVersion(targetDir, asset) == newestArchive &&
+    assetDataPresent(targetDir, asset);
+
 /// Pluggable catalog asset downloader. The production implementation is
 /// [FtpCatalogAssets]; the settings form accepts a fake for unit tests.
 abstract class CatalogAssetDownloader {
   /// Downloads the newest `<asset>-<timestamp>.zip` from
   /// `config.ftpAssetsRemote` on the configured FTP server and extracts it
   /// into [targetDir] (created when missing). Existing files are overwritten.
-  /// Returns the archive file name that was applied.
+  /// Returns the [AssetDownloadResult] (`upToDate` when the newest archive was
+  /// already applied and [force] is false — no download runs then).
   ///
   /// Throws [DownloadException] on any failure and
   /// [DownloadCancelledException] when [isCancelled] reports cancellation.
-  Future<String> download({
+  Future<AssetDownloadResult> download({
     required CatalogAsset asset,
     required DesktopConfig config,
     required String targetDir,
+    bool force = false,
     AssetProgress? onProgress,
     bool Function()? isCancelled,
   });
@@ -59,10 +134,11 @@ class FtpCatalogAssets implements CatalogAssetDownloader {
   const FtpCatalogAssets();
 
   @override
-  Future<String> download({
+  Future<AssetDownloadResult> download({
     required CatalogAsset asset,
     required DesktopConfig config,
     required String targetDir,
+    bool force = false,
     AssetProgress? onProgress,
     bool Function()? isCancelled,
   }) async {
@@ -101,6 +177,12 @@ class FtpCatalogAssets implements CatalogAssetDownloader {
         throw const DownloadCancelledException();
       }
 
+      // Already have the newest version (and the data is still present): do not
+      // download unless explicitly forced.
+      if (!force && isAssetUpToDate(targetDir, asset, newest.name)) {
+        return AssetDownloadResult(archive: newest.name, upToDate: true);
+      }
+
       temp = File(p.join(Directory.systemTemp.path, newest.name));
       onProgress?.call('Downloading ${newest.name}…', 0, newest.size ?? 0);
       await client.downloadFile(
@@ -127,7 +209,8 @@ class FtpCatalogAssets implements CatalogAssetDownloader {
         isCancelled: isCancelled,
       );
       onProgress?.call('${asset.label} updated.', 1, 1);
-      return newest.name;
+      writeAppliedAssetVersion(targetDir, asset, newest.name);
+      return AssetDownloadResult(archive: newest.name, upToDate: false);
     } on DownloadCancelledException {
       rethrow;
     } on DownloadException {
