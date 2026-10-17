@@ -1226,6 +1226,7 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
     max_depth = int(click_cfg.get("drive_max_depth", 2))
     do_enlarge = bool(allow_enlarge and click_cfg.get("enlarge_window", True))
     scroll_attempts = int(click_cfg.get("scroll_attempts", 4))
+    grew = [False]
 
     def _reveal_rescan(shot):
         """Reveal hidden icons and rescan for a program/folder icon.
@@ -1242,10 +1243,14 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
             chain_shots.append(grown)
             return grown, find_window_target(grown, cfg)
 
-        if enlarge_window(P, shot, log, fifo=fifo, pid=pid):
-            shot, target = grab(shot)
-            if target is not None:
-                return shot, target
+        # GEM's "full size" box toggles, so it must be clicked exactly once
+        # per entry: a second grow click would restore the window.
+        if do_enlarge and not grew[0]:
+            grew[0] = True
+            if enlarge_window(P, shot, log, fifo=fifo, pid=pid):
+                shot, target = grab(shot)
+                if target is not None:
+                    return shot, target
         for _ in range(scroll_attempts):
             if not scroll_window_down(P, shot, log, fifo=fifo, pid=pid):
                 break

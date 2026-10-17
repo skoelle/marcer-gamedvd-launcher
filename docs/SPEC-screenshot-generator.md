@@ -646,14 +646,13 @@ PRG; mono drive -> folder -> PRG chain executes at scale 0.5.)*
 **Revealing hidden icons** (`click_retry.enlarge_window`, plus
 `click_retry.scroll_attempts`). A window can show fewer icons than the
 folder contains, hiding the program behind a scrollbar. Two position
-independent steps are tried once per window before the drive window is
-written off and before an opened folder is misread as a directly started
-game (a folder window that looks like its parent changes too few pixels
-for the diff test and, with no matchable icon, was previously taken for a
-game). The gadget positions are detected from the window frame
-(`find_fullsize_xy`, `find_scroll_down_xy`), not hard coded, because both
-the window placement and the GEM gadget rendering differ between disks and
-monitor modes:
+independent steps are tried before the drive window is written off and
+before an opened folder is misread as a directly started game (a folder
+window that looks like its parent changes too few pixels for the diff test
+and, with no matchable icon, was previously taken for a game). The gadget
+positions are detected from the window frame (`find_fullsize_xy`,
+`find_scroll_down_xy`), not hard coded, because both the window placement
+and the GEM gadget rendering differ between disks and monitor modes:
 
 1. **Grow** the window by single clicking its **"full size" box**. The box
    glyph sits in the title bar just left of the window's right border; the
