@@ -131,6 +131,37 @@ void main() {
       expect(info!.folder, 'Alpha Game');
       expect(idx.lookupByRel('too/short.zip'), isNull);
     });
+
+    test('malformed games file is skipped with a warning (no throw)', () {
+      final data = '${tmp.path}/data-broken';
+      Directory(data).createSync();
+      // Truncated JSON must not abort the whole catalog load.
+      File('$data/games-cracked.json').writeAsStringSync('{"games": [ {"folder"');
+      File('$data/games-pd.json').writeAsStringSync('''
+        {"games": [
+          {"folder": "PacMan", "letter": "P", "layers": ["ROOT"],
+           "matched_via": "folder", "matched_title": "Pac-Man",
+           "variants": []}
+        ]}''');
+      final idx = GameInfoIndex.load(data);
+      expect(idx.byKind('cracked'), isEmpty);
+      expect(idx.byKind('pd'), hasLength(1));
+      expect(idx.warnings.any((w) => w.contains('games-cracked.json')), isTrue);
+    });
+
+    test('a single broken game entry is skipped, the rest is kept', () {
+      final data = '${tmp.path}/data-partial';
+      Directory(data).createSync();
+      File('$data/games-cracked.json').writeAsStringSync('''
+        {"games": [
+          {"folder": "Broken", "letter": 42},
+          {"folder": "Good", "letter": "G", "layers": ["ROOT"],
+           "matched_via": "folder", "matched_title": "Good", "variants": []}
+        ]}''');
+      final idx = GameInfoIndex.load(data);
+      expect(idx.byKind('cracked'), hasLength(1));
+      expect(idx.byKind('cracked').single.folder, 'Good');
+    });
   });
 
   group('DesktopConfig', () {

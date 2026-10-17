@@ -82,72 +82,85 @@ class CatalogController extends ChangeNotifier {
   // ---------------------------------------------------------------- loading
 
   Future<void> init() async {
+    initError = null;
     progress = 'Loading catalog…';
     notifyListeners();
-    // Capture a plain config value (not `this`) so the loader stays independent
-    // of the controller's listeners. The bundle is loaded in a background
-    // isolate that streams coarse phase messages (sources + catalog build) back
-    // for the loading screen.
-    final cfg = config;
-    final bundle = await CatalogBundle.load(
-      screenshotDir: cfg.screenshotDirectory,
-      gameinfoDir: cfg.resolveGameinfoDirectory(),
-      onProgress: (message) {
-        progress = message;
-        notifyListeners();
-      },
-    );
-    notices.addAll(bundle.warnings);
-    screenshots = bundle.index;
-    gameinfo = bundle.info;
-    universe = bundle.universe;
+    try {
+      // Capture a plain config value (not `this`) so the loader stays
+      // independent of the controller's listeners. The bundle is loaded in a
+      // background isolate that streams coarse phase messages (sources +
+      // catalog build) back for the loading screen.
+      final cfg = config;
+      final bundle = await CatalogBundle.load(
+        screenshotDir: cfg.screenshotDirectory,
+        gameinfoDir: cfg.resolveGameinfoDirectory(),
+        onProgress: (message) {
+          progress = message;
+          notifyListeners();
+        },
+      );
+      notices.addAll(bundle.warnings);
+      screenshots = bundle.index;
+      gameinfo = bundle.info;
+      universe = bundle.universe;
 
-    if (!Directory(config.rootDirectory).existsSync()) {
-      notices.add('RootDirectory missing: ${config.rootDirectory}');
+      if (!Directory(config.rootDirectory).existsSync()) {
+        notices.add('RootDirectory missing: ${config.rootDirectory}');
+      }
+
+      browser = OverlayBrowser(
+        rootDir: config.rootDirectory,
+        patchDir: config.patchDirectory.isEmpty ? null : config.patchDirectory,
+      );
+
+      // Section trees (`Title Sorted/Cracked…`, `PD…`, `Util…`) — they define
+      // where the per-section favorites files live (console layout) and the
+      // folder rel of every card (favorite matching, pd/utils ZIP resolution).
+      sectionTrees = discoverSectionTrees(browser);
+
+      // SPEC §11.1: one favorites file per section tree (console layout), plus
+      // the legacy/unknown-section file resolved patchDir → appDir → CWD so a
+      // single `favorites.txt` written by an older build or the console
+      // launcher is still honored.
+      final patch = config.patchDirectory;
+      final appDir = File(Platform.resolvedExecutable).parent.path;
+      final cwd = Directory.current.path;
+      favorites = FavoritesService.load(
+        fileForSection: {
+          for (final section in kSections)
+            if (patch.isEmpty)
+              section: p.join(appDir, favoritesSectionFileName(section))
+            else if (sectionTrees[section] != null)
+              section:
+                  p.join(patch, sectionTrees[section]!, kFavoritesFileName),
+          kMiscFavoritesSection: resolveFavoritesPath(
+            patchDir: patch.isEmpty ? null : patch,
+            appDir: appDir,
+            cwd: cwd,
+            exists: (path) => File(path).existsSync(),
+          ),
+        },
+        extraFiles: [
+          p.join(appDir, kFavoritesFileName),
+          p.join(cwd, kFavoritesFileName),
+        ],
+        sectionOfPath: _sectionOfFavoritePath,
+      );
+
+      ready = true;
+      progress = '';
+    } catch (e) {
+      // Never leave the app stuck on the loading screen: surface the failure
+      // with a retry option instead.
+      initError = '$e';
+      progress = '';
     }
-
-    browser = OverlayBrowser(
-      rootDir: config.rootDirectory,
-      patchDir: config.patchDirectory.isEmpty ? null : config.patchDirectory,
-    );
-
-    // Section trees (`Title Sorted/Cracked…`, `PD…`, `Util…`) — they define
-    // where the per-section favorites files live (console layout) and the
-    // folder rel of every card (favorite matching, pd/utils ZIP resolution).
-    sectionTrees = discoverSectionTrees(browser);
-
-    // SPEC §11.1: one favorites file per section tree (console layout), plus
-    // the legacy/unknown-section file resolved patchDir → appDir → CWD so a
-    // single `favorites.txt` written by an older build or the console
-    // launcher is still honored.
-    final patch = config.patchDirectory;
-    final appDir = File(Platform.resolvedExecutable).parent.path;
-    final cwd = Directory.current.path;
-    favorites = FavoritesService.load(
-      fileForSection: {
-        for (final section in kSections)
-          if (patch.isEmpty)
-            section: p.join(appDir, favoritesSectionFileName(section))
-          else if (sectionTrees[section] != null)
-            section: p.join(patch, sectionTrees[section]!, kFavoritesFileName),
-        kMiscFavoritesSection: resolveFavoritesPath(
-          patchDir: patch.isEmpty ? null : patch,
-          appDir: appDir,
-          cwd: cwd,
-          exists: (path) => File(path).existsSync(),
-        ),
-      },
-      extraFiles: [
-        p.join(appDir, kFavoritesFileName),
-        p.join(cwd, kFavoritesFileName),
-      ],
-      sectionOfPath: _sectionOfFavoritePath,
-    );
-
-    ready = true;
-    progress = '';
     notifyListeners();
   }
+
+  /// Human-readable message when the last [init] failed, else `null`. While it
+  /// is set the UI shows an error/retry screen instead of the catalog.
+  String? initError;
 
   // ------------------------------------------------------- catalog (global)
 
@@ -882,6 +895,26 @@ class CatalogController extends ChangeNotifier {
       parts.add('gameinfo unavailable — screenshots only');
     }
     return parts;
+  }
+
+  /// Actionable hint shown as a banner when the active section has **no**
+  /// catalog cards at all because the screenshot index and/or the gameinfo
+  /// data is missing (the catalog is artifact-driven). `null` when there is
+  /// data.
+  String? get catalogDataNotice {
+    if (!catalogMode) return null;
+    final section = filter.section;
+    if (universe.cardsFor(section).isNotEmpty) return null;
+    final noIndex = screenshots.forSection(section).loadError != null;
+    final noInfo = gameinfo.length == 0;
+    if (!noIndex && !noInfo) return null;
+    final missing = <String>[
+      if (noIndex) 'the screenshot index (${screenshots.indexNameFor(section)})',
+      if (noInfo) 'the game metadata',
+    ].join(' and ');
+    return 'No catalog data loaded — missing $missing. Open Settings (⚙) and '
+        'use “Download from FTP” to fetch it, then set the status filter to '
+        '“any” to show games without screenshots.';
   }
 
   static String _fmtTime(DateTime t) {

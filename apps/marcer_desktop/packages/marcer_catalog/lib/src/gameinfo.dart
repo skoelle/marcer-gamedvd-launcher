@@ -12,18 +12,20 @@ import 'dart:io';
 ///
 /// Degrades gracefully (DECISION §7): missing files yield empty results.
 class GameInfoIndex {
-  GameInfoIndex._(
-      this._byLetterFolder, this._byKind, this._byKindKey, this.manifest);
+  GameInfoIndex._(this._byLetterFolder, this._byKind, this._byKindKey,
+      this.manifest, this.warnings);
 
   /// Loads all `games-<kind>.json` files found in [gameinfoDir] (may be empty).
   factory GameInfoIndex.load(String gameinfoDir) {
     final byLetterFolder = <String, GameInfo>{};
     final byKind = <String, List<GameInfo>>{};
     final byKindKey = <String, Map<String, GameInfo>>{};
+    final warnings = <String>[];
     var manifest = <String, dynamic>{};
     final dir = Directory(gameinfoDir);
     if (!dir.existsSync()) {
-      return GameInfoIndex._(byLetterFolder, byKind, byKindKey, manifest);
+      return GameInfoIndex._(
+          byLetterFolder, byKind, byKindKey, manifest, warnings);
     }
     final manifestFile = File('$gameinfoDir/manifest.json');
     if (manifestFile.existsSync()) {
@@ -37,12 +39,29 @@ class GameInfoIndex {
     for (final kind in ['cracked', 'pd', 'utils']) {
       final file = File('$gameinfoDir/games-$kind.json');
       if (!file.existsSync()) continue;
-      final map = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      final games = (map['games'] as List<dynamic>?) ?? const [];
+      // A malformed/truncated file must never abort the whole catalog load
+      // (it would otherwise leave the app stuck on the loading screen) —
+      // skip it with a warning and keep the other sections.
+      final List<dynamic> games;
+      try {
+        final map = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+        games = (map['games'] as List<dynamic>?) ?? const [];
+      } catch (e) {
+        warnings.add(
+            'Game metadata: games-$kind.json could not be read ($e)');
+        byKind[kind] = const [];
+        byKindKey[kind] = const {};
+        continue;
+      }
       final list = <GameInfo>[];
       final keyed = <String, GameInfo>{};
       for (final g in games) {
-        final game = GameInfo.fromJson(g as Map<String, dynamic>, kind);
+        final GameInfo game;
+        try {
+          game = GameInfo.fromJson(g as Map<String, dynamic>, kind);
+        } catch (_) {
+          continue; // skip a single broken entry, keep the rest
+        }
         list.add(game);
         final key = '${game.letter.toLowerCase()}|${game.folder.toLowerCase()}';
         byLetterFolder[key] ??= game;
@@ -51,7 +70,8 @@ class GameInfoIndex {
       byKind[kind] = list;
       byKindKey[kind] = keyed;
     }
-    return GameInfoIndex._(byLetterFolder, byKind, byKindKey, manifest);
+    return GameInfoIndex._(
+        byLetterFolder, byKind, byKindKey, manifest, warnings);
   }
 
   final Map<String, GameInfo> _byLetterFolder;
@@ -60,6 +80,9 @@ class GameInfoIndex {
 
   /// Raw `manifest.json` content (gallery footer/status), possibly empty.
   final Map<String, dynamic> manifest;
+
+  /// Load warnings (unreadable/malformed `games-*.json`); surfaced as notices.
+  final List<String> warnings;
 
   int get length => _byLetterFolder.length;
 

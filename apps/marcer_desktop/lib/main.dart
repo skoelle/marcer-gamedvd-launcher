@@ -92,6 +92,7 @@ Future<void> main() async {
     configError: configError,
     configPath: configPath,
     saveDirs: saveDirs,
+    searchDirs: searchDirs,
   ));
   if (maximized) {
     // Windows safeguard: the runner reveals the window on the first frame
@@ -119,6 +120,7 @@ class MarcerDesktopApp extends StatelessWidget {
     this.configError,
     this.configPath,
     this.saveDirs = const [],
+    this.searchDirs = const [],
   });
 
   final DesktopConfig? config;
@@ -131,6 +133,10 @@ class MarcerDesktopApp extends StatelessWidget {
   /// Candidate directories for a first-run config file (see [configSaveDirs]).
   final List<String> saveDirs;
 
+  /// Directories searched for an existing `desktop.config.json` (shown on the
+  /// first-run setup page).
+  final List<String> searchDirs;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -142,6 +148,7 @@ class MarcerDesktopApp extends StatelessWidget {
         configError: configError,
         configPath: configPath,
         saveDirs: saveDirs,
+        searchDirs: searchDirs,
       ),
     );
   }
@@ -157,12 +164,14 @@ class _AppRoot extends StatefulWidget {
     required this.configError,
     required this.configPath,
     required this.saveDirs,
+    this.searchDirs = const [],
   });
 
   final DesktopConfig? config;
   final String? configError;
   final String? configPath;
   final List<String> saveDirs;
+  final List<String> searchDirs;
 
   @override
   State<_AppRoot> createState() => _AppRootState();
@@ -235,6 +244,7 @@ class _AppRootState extends State<_AppRoot> {
     }
     return SetupPage(
       saveDirs: widget.saveDirs,
+      searchDirs: widget.searchDirs,
       onConfigured: _onConfigured,
     );
   }
@@ -521,15 +531,62 @@ class _HomePageState extends State<HomePage> {
       builder: (context, _) {
         final c = _controller;
         if (!c.ready) {
+          final err = c.initError;
+          if (err == null) {
+            return Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(c.progress,
+                        style: const TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ),
+            );
+          }
+          // Loading failed: never leave the app stuck on the spinner — show
+          // the error with a retry (and a shortcut to the settings editor).
           return Scaffold(
             body: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(c.progress, style: const TextStyle(color: Colors.grey)),
-                ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          color: Colors.orangeAccent, size: 36),
+                      const SizedBox(height: 12),
+                      const Text('Could not load the catalog',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      SelectableText(err,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.grey)),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OutlinedButton(
+                            onPressed: _openSettings,
+                            child: const Text('Settings…'),
+                          ),
+                          const SizedBox(width: 12),
+                          FilledButton(
+                            onPressed: () => _controller.init(),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           );
@@ -545,6 +602,27 @@ class _HomePageState extends State<HomePage> {
                 updater: _updater,
               ),
               const Divider(height: 1),
+              if (c.catalogDataNotice != null) ...[
+                Container(
+                  width: double.infinity,
+                  color: const Color(0xFF3A2E12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline,
+                          size: 16, color: Colors.orangeAccent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(c.catalogDataNotice!,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.orangeAccent)),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+              ],
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

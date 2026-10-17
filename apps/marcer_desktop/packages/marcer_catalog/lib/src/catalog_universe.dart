@@ -404,6 +404,7 @@ class CatalogBundle {
       warnings.add('Game metadata: GameinfoDirectory not configured');
     } else {
       info = GameInfoIndex.load(gameinfoDir);
+      warnings.addAll(info.warnings);
       if (info.length == 0) {
         warnings.add('Game metadata: no games found in $gameinfoDir');
       }

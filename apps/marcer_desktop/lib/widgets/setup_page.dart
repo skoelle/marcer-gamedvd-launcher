@@ -22,6 +22,7 @@ class SetupPage extends StatefulWidget {
     super.key,
     required this.onConfigured,
     required this.saveDirs,
+    this.searchDirs = const [],
     this.initial,
     this.configPath,
   });
@@ -30,6 +31,10 @@ class SetupPage extends StatefulWidget {
 
   /// Directories tried (in order) for the new config file.
   final List<String> saveDirs;
+
+  /// Directories searched for an existing `desktop.config.json` (shown so the
+  /// user can also drop the file there by hand).
+  final List<String> searchDirs;
 
   /// Prefilled values; defaults to an empty config.
   final DesktopConfig? initial;
@@ -109,6 +114,13 @@ class _SetupPageState extends State<SetupPage> {
                   'Saves to: $target',
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
+                if (widget.searchDirs.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Searched in: ${widget.searchDirs.join('  ·  ')}',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 SettingsForm(
                   initial: widget.initial ?? DesktopConfig(rootDirectory: ''),

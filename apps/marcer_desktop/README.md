@@ -277,6 +277,13 @@ displayed `ROOT`/`PATCH`/`BOTH` layer is always resolved from your own copy
 (see above), never from the published index. See
 [`docs/DECISION-catalog-data-source.md`](../../docs/DECISION-catalog-data-source.md).
 
+When a section has **no** cards because the artifacts are missing, a banner
+explains what is missing and points to the settings **Download from FTP** (and
+the status filter `any`). Loading is robust: a malformed/truncated
+`games-*.json` is skipped with a warning instead of aborting the whole catalog,
+and a load failure shows an error screen with **Retry**/**Settings…** instead of
+hanging on the loading spinner.
+
 ## License
 
 MIT License — Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
