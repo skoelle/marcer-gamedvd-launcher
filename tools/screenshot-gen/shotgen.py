@@ -112,7 +112,7 @@ DEFAULT_CONFIG = {
         "prg_attempts": 3,
         "folder_attempts": 3,
         "enlarge_window": True,
-        "enlarge_box": [310, 184],
+        "scroll_attempts": 4,
     },
     "tmp_dir": "/tmp/marcer-shotgen",
     "xvfb_screen": "1024x768x24",
@@ -696,8 +696,11 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
             fifo_write(fifo, "hatari-event doubleclick")
         elif not double:
             # no single-click control command in Hatari 2.4.1 (section 7.4):
-            # a GEM gadget reacts to a single click, an XTest click is enough
-            _xdotool(["click", "1"], disp)
+            # a GEM gadget (full size box, scrollbar arrow) needs a single
+            # press/release, sent as a held XTest click
+            _xdotool(["mousedown", "1"], disp)
+            time.sleep(0.2)
+            _xdotool(["mouseup", "1"], disp)
         else:
             _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
         # GEM draws its mouse arrow into the framebuffer and it stays
@@ -739,24 +742,129 @@ def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
                     fifo=fifo, double=double)
 
 
+def find_fullsize_xy(img_path: Path):
+    """Screenshot pixel of the active GEM window's "full size" box.
+
+    The box sits inside the title bar at the window's top right corner and
+    its glyph rendering differs between GEM modes (mono high res vs colour
+    medium/low res), so the glyph is not matched as a template. Instead the
+    window frame is used, which is position independent: the rightmost long
+    vertical dark line is the window's right border and its top row is the
+    window top border; the box centre is a few pixels down and left of that
+    corner. Returns (x, y) or None when no window frame is found.
+    """
+    arr = load_gray(img_path)
+    dark = arr < 128
+    height, width = dark.shape
+    min_run = max(60, height // 6)
+    right_x = right_top = None
+    for x in range(width - 1, -1, -1):
+        col = dark[:, x]
+        run = best_start = best_len = 0
+        for i, v in enumerate(col):
+            if v:
+                if run == 0:
+                    start = i
+                run += 1
+                if run > best_len:
+                    best_len, best_start = run, start
+            else:
+                run = 0
+        if best_len >= min_run:
+            right_x, right_top = x, best_start
+            break
+    if right_x is None:
+        return None
+    return (max(1, right_x - 12), min(height - 1, right_top + 9))
+
+
 def enlarge_window(P: dict, grab_png: Path, log, fifo: Path = None,
-                   pid: int = None, box=(310, 184)) -> None:
-    """Grow a too narrow GEM window by clicking its "full size" gadget.
+                   pid: int = None) -> bool:
+    """Grow a too narrow GEM window by clicking its "full size" box.
 
     A folder view that shows more icons than fit its default width cuts
     the rightmost ones off (behind a horizontal scrollbar); the program to
     start can be among them, so the window is grown to the full work area
-    to reveal every icon before the scan gives up. The "full size" gadget
-    sits at the top right of the title bar and reacts to a *single* click;
-    ``box`` is its center in screenshot pixels (mono 640x400 profile, see
-    ``click_retry.enlarge_box``).
+    to reveal every icon before the scan gives up. The box reacts to a
+    *single* click; its position is detected from the window frame
+    (find_fullsize_xy). Returns True when a click was sent.
     """
     from PIL import Image
+    xy = find_fullsize_xy(grab_png)
+    if xy is None:
+        log("full size box not found, not enlarging")
+        return False
     with Image.open(grab_png) as im:
         shot_w, shot_h = im.size
     wid, kv = find_hatari_window(P, grab_png, pid=pid)
-    click_window_xy(P, wid, kv, shot_w, shot_h, box[0], box[1], log,
+    click_window_xy(P, wid, kv, shot_w, shot_h, xy[0], xy[1], log,
                     fifo=fifo, double=False)
+    return True
+
+
+def find_scroll_down_xy(img_path: Path):
+    """Screenshot pixel of the active window's vertical scrollbar down arrow.
+
+    A folder view shows far fewer icons than it contains, the rest hidden
+    below behind a vertical scrollbar; the program to start can be among
+    them. The down arrow sits in the innermost right column, one arrow
+    height above the window bottom border. Detected from the window frame
+    (position independent). Returns (x, y) or None.
+    """
+    arr = load_gray(img_path)
+    dark = arr < 128
+    height, width = dark.shape
+    min_run = max(60, height // 6)
+
+    def longest(vec):
+        best = best_start = cur = start = 0
+        for i, v in enumerate(vec):
+            if v:
+                if cur == 0:
+                    start = i
+                cur += 1
+                if cur > best:
+                    best, best_start = cur, start
+            else:
+                cur = 0
+        return best, best_start
+
+    right_x = right_top = None
+    for x in range(width - 1, -1, -1):
+        length, start = longest(dark[:, x])
+        if length >= min_run:
+            right_x, right_top = x, start
+            break
+    if right_x is None:
+        return None
+    bottom_y = None
+    for y in range(height - 1, right_top, -1):
+        length, start = longest(dark[y])
+        if length >= min_run and right_x - 8 <= start + length - 1 <= right_x + 2:
+            bottom_y = y
+            break
+    if bottom_y is None:
+        return None
+    return (max(1, right_x - 15), max(1, bottom_y - 30))
+
+
+def scroll_window_down(P: dict, grab_png: Path, log, fifo: Path = None,
+                       pid: int = None) -> bool:
+    """Scroll the active window one step down via its scrollbar down arrow.
+
+    Returns True when a click was sent.
+    """
+    from PIL import Image
+    xy = find_scroll_down_xy(grab_png)
+    if xy is None:
+        log("scrollbar down arrow not found, not scrolling")
+        return False
+    with Image.open(grab_png) as im:
+        shot_w, shot_h = im.size
+    wid, kv = find_hatari_window(P, grab_png, pid=pid)
+    click_window_xy(P, wid, kv, shot_w, shot_h, xy[0], xy[1], log,
+                    fifo=fifo, double=False)
+    return True
 
 
 _GRAY_CACHE: dict = {}
@@ -1084,9 +1192,9 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
 
     ``pid`` is the running Hatari process, used to resolve its own window
     when parallel workers share one X display. ``allow_enlarge`` enables the
-    "full size" fallback (currently mono only): when an opened window shows
-    no usable icon, the window is grown once so icons cut off at its right
-    edge become visible (section 7.4).
+    "full size" fallback: when an opened window shows no usable icon, the
+    window is grown once so icons cut off at its right edge become visible
+    (section 7.4).
 
     returns (clicked, last_grab, chain_shots, result):
       clicked     - True when a program start was confirmed
@@ -1100,17 +1208,35 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
 
     step_wait = float(click_cfg.get("step_wait", 2.0))
     max_depth = int(click_cfg.get("drive_max_depth", 2))
-    enlarge_box = click_cfg.get("enlarge_box", [310, 184])
     do_enlarge = bool(allow_enlarge and click_cfg.get("enlarge_window", True))
+    scroll_attempts = int(click_cfg.get("scroll_attempts", 4))
 
-    def _enlarge_rescan(shot):
-        """Grow the window once and rescan for a program/folder icon."""
-        enlarge_window(P, shot, log, fifo=fifo, pid=pid, box=enlarge_box)
-        if not sleep_until(time.monotonic() + step_wait):
-            return shot, None
-        grown = _grab_now(fifo, outdir, 2.0) or shot
-        chain_shots.append(grown)
-        return grown, find_window_target(grown, cfg)
+    def _reveal_rescan(shot):
+        """Reveal hidden icons and rescan for a program/folder icon.
+
+        First grow a too narrow window (the mono high-res profile opens at
+        half width, pushing the program behind a horizontal scrollbar), then
+        scroll a window that hides icons below (the colour profile shows far
+        fewer icons than it contains behind a vertical scrollbar).
+        """
+        def grab(prev):
+            if not sleep_until(time.monotonic() + step_wait):
+                return prev, None
+            grown = _grab_now(fifo, outdir, 2.0) or prev
+            chain_shots.append(grown)
+            return grown, find_window_target(grown, cfg)
+
+        if enlarge_window(P, shot, log, fifo=fifo, pid=pid):
+            shot, target = grab(shot)
+            if target is not None:
+                return shot, target
+        for _ in range(scroll_attempts):
+            if not scroll_window_down(P, shot, log, fifo=fifo, pid=pid):
+                break
+            shot, target = grab(shot)
+            if target is not None:
+                return shot, target
+        return shot, None
 
     if strategy == "prg":
         before = grabs[-1]
@@ -1160,7 +1286,7 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
                 drive_enlarged = True
                 log("window open but no icon matched, enlarging to reveal "
                     "hidden icons")
-                win_shot, target = _enlarge_rescan(win_shot)
+                win_shot, target = _reveal_rescan(win_shot)
                 if target is not None:
                     break
             log("window opened but no program or folder icon matched")
@@ -1217,7 +1343,7 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
                 enlarged = True
                 log(f"depth {depth}: no icon after folder click, enlarging "
                     f"to check for hidden icons")
-                new_shot, hidden = _enlarge_rescan(new_shot)
+                new_shot, hidden = _reveal_rescan(new_shot)
                 if hidden is not None:
                     state = "opened"
             if state == "program":
@@ -1241,7 +1367,7 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
             enlarged = True
             log(f"depth {depth}: no icon in window, enlarging to reveal "
                 f"hidden icons")
-            win_shot, target = _enlarge_rescan(win_shot)
+            win_shot, target = _reveal_rescan(win_shot)
         if target is None:
             log(f"window depth {depth}: no further program or folder icon")
             return False, win_shot, chain_shots, "click-failed"
@@ -1396,7 +1522,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                             perform_click_chain(
                                 P, cfg, click_cfg, click_info, fifo, outdir,
                                 grabs, log, pid=proc.pid,
-                                allow_enlarge=is_mono)
+                                allow_enlarge=True)
                     except Exception as ex:
                         log(f"click chain failed ({strategy}): {ex}")
                         clicked = False

@@ -188,16 +188,19 @@ match their templates near 1.0, so `click_retry.window_icon_min_score`
 white window areas while still accepting the program icon with the GEM
 arrow on it (~0.84).
 
-**Too narrow windows (mono).** GEM opens a folder view at a default width
-that may be smaller than the icon grid, hiding the rightmost icons (the
-program among them) behind a horizontal scrollbar. When an opened window
-shows no program or folder icon at all, the retry grows the window by
-single clicking its "full size" box at the top right of the title bar
-(`click_retry.enlarge_box`, screenshot pixel center, default `[310, 184]`
-for the mono 640x400 profile), then rescans once (`click_retry.enlarge_window`,
-default `true`). This also stops an opened folder whose icons do not match
-(a child window that looks like its parent) from being mistaken for a game
-that started. Enabled for mono entries only for now (no color sample yet).
+**Hidden icons (grow / scroll).** A window can show fewer icons than the
+folder contains, hiding the program behind a scrollbar. When an opened
+window shows no program or folder icon at all, the retry first **grows**
+the window by single clicking its "full size" box (top right of the title
+bar; the mono profile opens folder views at ~half width) and then
+**scrolls down** by clicking the vertical scrollbar's down arrow, up to
+`click_retry.scroll_attempts` (default 4) times (the colour profile opens
+wide windows that show only the first rows). Both gadget positions are
+detected from the window frame (`find_fullsize_xy` / `find_scroll_down_xy`),
+not hard coded, since window placement and the GEM gadget rendering differ
+between disks and monitor modes. This also stops an opened folder whose
+icons do not match (a child window that looks like its parent) from being
+mistaken for a game that started.
 
 The attempt is recorded once per entry. `click_retried: true` marks that a
 retry ran, and a new `click_result` field records how it ended:
