@@ -697,8 +697,7 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
         elif not double:
             # no single-click control command in Hatari 2.4.1 (section 7.4):
             # a GEM gadget (full size box, scrollbar arrow) needs a single
-            # click; an instant XTest click must be used (holding the button
-            # on the title bar is read as a window move)
+            # XTest click
             _xdotool(["click", "1"], disp)
         else:
             _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
