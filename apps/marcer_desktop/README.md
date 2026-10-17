@@ -187,6 +187,17 @@ A card with at least one local ZIP is not marked, even if some variants are
 missing. The check is best-effort: files that appear or vanish while the app
 runs are only re-evaluated after a reload (settings change / restart).
 
+## Catalog coverage
+
+Conversely, a ZIP that exists in your `RootDirectory`/`PatchDirectory` but is
+in **neither** the screenshot index nor gameinfo does **not** appear in the
+catalog at all — the catalog is artifact-driven, not a tree listing. Such files
+are only reachable in the folder browser (`T`); regenerate the artifacts
+(`shotgen index`, `gameinfo-gen extract`) to bring them into the catalog. The
+displayed `ROOT`/`PATCH`/`BOTH` layer is always the layer recorded in the
+published index/gameinfo, never a probe of your own copy. See
+[`docs/DECISION-catalog-data-source.md`](../../docs/DECISION-catalog-data-source.md).
+
 ## License
 
 MIT License — Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

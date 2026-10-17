@@ -400,6 +400,11 @@ Playnite-inspired master-detail layout, hybrid model:
   `desktop-v*` tags; CI build+test via `.github/workflows/ci-desktop.yml`
   (`apps/marcer_desktop/**` paths). See README "Release Process".
 - Optional: pre-joined `catalog.json` (ANALYSIS M6) instead of runtime join.
+- **Local index (idea):** optional per-user filesystem index/scan to surface
+  ZIPs missing from the artifacts and to show the *real* local layer instead of
+  the published one — rationale, trade-offs and current decision (keep the
+  index/gameinfo-only catalog) in
+  [`docs/DECISION-catalog-data-source.md`](../../docs/DECISION-catalog-data-source.md) §4.
 
 ---
 
