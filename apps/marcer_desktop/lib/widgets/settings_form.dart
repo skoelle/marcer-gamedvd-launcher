@@ -144,7 +144,7 @@ class _SettingsFormState extends State<SettingsForm> {
         ..controller.text = c.ftpRemoteBase,
       _PathField(_Field.ftpAssets, 'FTP asset dir (screenshots + gameinfo)',
           _PickerKind.text,
-          optionalHint: 'default $kDefaultFtpAssetsRemote')
+          optionalHint: kDefaultFtpAssetsRemote)
         ..controller.text = c.ftpAssetsRemote,
       _PathField(_Field.screenshot, 'ScreenshotDirectory', _PickerKind.directory,
           sectionHeader: 'Catalog data (download missing from FTP)',
@@ -343,7 +343,7 @@ class _SettingsFormState extends State<SettingsForm> {
       );
 
   /// Width of the left label column.
-  static const double _labelWidth = 220;
+  static const double _labelWidth = 260;
 
   Widget _fieldRow(_PathField field) {
     final isText = field.kind == _PickerKind.text;
