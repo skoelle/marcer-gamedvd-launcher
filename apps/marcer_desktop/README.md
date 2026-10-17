@@ -105,19 +105,35 @@ errors appear as a modal (missing executable, vanished ZIP, …). The bundled
 config expects a TOS ROM (`TOS.IMG`) next to the app (in the executable
 directory, which is Hatari's working directory), matching the console launcher.
 
+The **PLAY** button is a split button: the main part launches the default
+variant, the arrow opens a menu of variants (detail sidebar and lightbox; `P` /
+`Space` use the default). Built-in variants:
+
+| Variant | Extra Hatari args | TOS |
+|---|---|---|
+| Standard | – | `TOS.IMG` (1.04) |
+| Mono | `--mono --tos-res high` | `TOS.IMG` (1.04) |
+| STE | `--machine ste` | `TOS162.IMG` (1.62) |
+| Low Res TOS 1.02 | – | `TOS102.IMG` (1.02) |
+
+The extra args are appended after `Hatari.ArgsTemplate` (Hatari CLI overrides
+the config file). Variants with a TOS file download it on demand (see below).
+
 ## TOS ROM
 
 When `TOS.IMG` is missing, the app offers to download it instead of failing at
 launch: before the first start the **TOS ROM** dialog appears (and the ⚙
 settings editor has a **TOS ROM** row in the Hatari section with the current
 status). It offers
-the TOS 1.02/1.04 **English (UK)** and **German** images — language first,
-English (UK) before Deutsch, newer version first; the default is
-**English (UK) — TOS 1.04**. The chosen ZIP is fetched on demand from
+the TOS **1.04** **English (UK)** and **German** images — English (UK) before
+Deutsch; the default is **English (UK) — TOS 1.04**. The chosen ZIP is fetched
+on demand from
 [atariworld.org/tos-rom](https://www.atariworld.org/tos-rom/) (nothing is
 bundled; the images are Atari-copyrighted and offered there for
 non-commercial use), the ROM is extracted and written as `TOS.IMG` into the
-app directory.
+app directory. The **STE** Play variant needs **TOS 1.62** (`TOS162.IMG`) and
+the **Low Res TOS 1.02** variant **TOS 1.02** (`TOS102.IMG`) — each offered
+filtered to that version when the file is missing.
 
 ## Favorites
 

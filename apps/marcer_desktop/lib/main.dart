@@ -511,14 +511,20 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Pre-launch guard: when `TOS.IMG` is missing next to the app, offer the
-  /// TOS ROM download dialog. Returns `true` when a TOS image is present (or
-  /// was just installed), `false` to abort the launch.
-  Future<bool> _ensureTos() async {
+  /// Pre-launch guard: when the TOS ROM the run needs (variant-specific, e.g.
+  /// `TOS162.IMG` for STE / `TOS102.IMG` for Low Res) is missing next to the
+  /// app, offer the matching TOS ROM download dialog. Returns `true` when the
+  /// image is present (or was just installed), `false` to abort the launch.
+  Future<bool> _ensureTos(HatariVariant? variant) async {
     final cfg = _config;
-    if (tosInstalled(cfg)) return true;
+    final fileName = variant?.tosFileName ?? kTosImageFileName;
+    final versions = (variant == null || variant.tosVersions.isEmpty)
+        ? kDefaultTosVersions
+        : variant.tosVersions;
+    if (File(tosImagePath(cfg, fileName: fileName)).existsSync()) return true;
     if (!mounted) return false;
-    return showTosRomDialog(context, config: cfg);
+    return showTosRomDialog(context,
+        config: cfg, versions: versions, fileName: fileName);
   }
 
   void _toggleHelp() {

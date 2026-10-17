@@ -624,14 +624,15 @@ class CatalogController extends ChangeNotifier {
   final Map<GameCard, List<CardVariant>> _resolvedCardVariants = {};
 
   /// Optional pre-launch guard (set by the UI): when it returns `false` the
-  /// launch is aborted. Used to offer a TOS ROM download before the first start.
-  Future<bool> Function()? beforeLaunch;
+  /// launch is aborted. Used to offer a TOS ROM download before the first start
+  /// (the [HatariVariant] selects which TOS the run needs).
+  Future<bool> Function(HatariVariant? variant)? beforeLaunch;
 
   /// Launches [zipPath] with Hatari (non-blocking). Sets [launchError] when the
   /// configuration or ZIP is invalid; [launching] while the process runs.
-  Future<void> launchZip(String zipPath) async {
-    if (beforeLaunch != null && !await beforeLaunch!()) return;
-    final result = await launchHatari(config, zipPath);
+  Future<void> launchZip(String zipPath, {HatariVariant? variant}) async {
+    if (beforeLaunch != null && !await beforeLaunch!(variant)) return;
+    final result = await launchHatari(config, zipPath, variant: variant);
     if (result.error != null) {
       launchError = result.error;
       notifyListeners();
@@ -648,22 +649,23 @@ class CatalogController extends ChangeNotifier {
 
   /// Launches the ZIP of a catalog card's variant [index] — an index into
   /// [variantsOfCard] (lightbox "Play").
-  Future<void> launchCardVariant(GameCard card, int index) async {
+  Future<void> launchCardVariant(GameCard card, int index,
+      {HatariVariant? variant}) async {
     final variants = variantsOfCard(card);
     if (index < 0 || index >= variants.length) return;
-    await launchZip(zipPathForVariant(variants[index]));
+    await launchZip(zipPathForVariant(variants[index]), variant: variant);
   }
 
   /// Launches the current selection: a ZIP in browse mode, the card's ZIP in
   /// catalog mode. A card with exactly one favorited variant launches that
   /// favorited ZIP (user decision 2026-10-15), otherwise [launchVariantForCard].
-  Future<void> launchSelected() async {
+  Future<void> launchSelected({HatariVariant? variant}) async {
     if (catalogMode) {
       final card = selectedCard;
       if (card == null) return;
       final favoriteKeys = favoriteKeysOfCard(card);
       if (favoriteKeys.length == 1) {
-        await launchZip(favoriteKeys.first);
+        await launchZip(favoriteKeys.first, variant: variant);
         return;
       }
       final v = launchVariantForCard(card);
@@ -672,14 +674,14 @@ class CatalogController extends ChangeNotifier {
         notifyListeners();
         return;
       }
-      await launchZip(zipPathForVariant(v));
+      await launchZip(zipPathForVariant(v), variant: variant);
       return;
     }
     final e = selectedEntry;
     if (e == null || e.kind != EntryKind.zip) return;
     final path = e.effectivePath;
     if (path == null) return;
-    await launchZip(path);
+    await launchZip(path, variant: variant);
   }
 
   void clearLaunchError() {

@@ -18,27 +18,34 @@ List<int> _zipWith(Map<String, List<int>> entries) {
 }
 
 void main() {
-  test('offers the four TOS options in the agreed order', () {
-    expect(kTosRomOptions, hasLength(4));
+  test('offers the TOS options in the agreed order', () {
+    expect(kTosRomOptions, hasLength(6));
     expect(kTosRomOptions.map((o) => o.label).toList(), [
       'English (UK) — TOS 1.04',
       'English (UK) — TOS 1.02',
       'Deutsch — TOS 1.04',
       'Deutsch — TOS 1.02',
+      'English (UK) — TOS 1.62',
+      'Deutsch — TOS 1.62',
     ]);
     expect(kTosRomOptions.map((o) => o.url).toList(), [
       'https://www.atariworld.org/files/images/tos104uk.zip',
       'https://www.atariworld.org/files/images/tos102uk.zip',
       'https://www.atariworld.org/files/images/tos104de.zip',
       'https://www.atariworld.org/files/images/tos102de.zip',
+      'https://www.atariworld.org/files/images/tos162uk.zip',
+      'https://www.atariworld.org/files/images/tos162de.zip',
     ]);
     expect(kDefaultTosRomOption.label, 'English (UK) — TOS 1.04');
+    expect(kDefaultTosVersions, ['1.04']);
   });
 
   test('resolves the TOS image next to the app directory', () {
     final cfg = DesktopConfig(rootDirectory: '/r', appDir: '/apps/launcher');
     expect(tosTargetDirectory(cfg), '/apps/launcher');
     expect(tosImagePath(cfg), '/apps/launcher/TOS.IMG');
+    expect(tosImagePath(cfg, fileName: 'TOS162.IMG'),
+        '/apps/launcher/TOS162.IMG');
   });
 
   test('pickTosRomEntry prefers a ROM extension over a larger text file', () {

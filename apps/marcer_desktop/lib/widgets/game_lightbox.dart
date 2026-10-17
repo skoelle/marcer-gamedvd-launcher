@@ -846,6 +846,9 @@ class _GameLightboxState extends State<GameLightbox> {
             ),
       filter: widget.controller.filter,
       onPlay: v == null ? null : _launchCurrent,
+      variants: kHatariVariants,
+      onPlayVariant:
+          v == null ? null : (variant) => _launchCurrent(variant: variant),
       // Group click: switch to that crew's/cracker's variant; no matching
       // ZIP ("not found") jumps to variant 0 (the header shows the
       // "… ZIP not found —" prefix when a focus filter missed).
@@ -862,16 +865,16 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 
   /// Launches the currently shown ZIP with Hatari (the selected variant of a
-  /// catalog card, or the browse-mode entry).
-  void _launchCurrent() {
+  /// catalog card, or the browse-mode entry) using [variant] (default Standard).
+  void _launchCurrent({HatariVariant? variant}) {
     final item = _item;
     if (item is GameCard) {
       final vs = _variants;
       final orig = _variantIdx < vs.length ? vs[_variantIdx].origIndex : 0;
-      widget.controller.launchCardVariant(item, orig);
+      widget.controller.launchCardVariant(item, orig, variant: variant);
     } else if (item is Entry) {
       final path = item.effectivePath;
-      if (path != null) widget.controller.launchZip(path);
+      if (path != null) widget.controller.launchZip(path, variant: variant);
     }
   }
 }

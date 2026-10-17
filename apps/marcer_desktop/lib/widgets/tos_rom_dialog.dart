@@ -7,44 +7,73 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import '../tos_rom.dart';
 
 /// Shows the TOS ROM download dialog and returns `true` when a TOS image was
-/// successfully installed as `TOS.IMG` next to the app.
+/// successfully installed as [fileName] (default `TOS.IMG`) next to the app.
 Future<bool> showTosRomDialog(
   BuildContext context, {
   required DesktopConfig config,
   TosRomDownloader downloader = const HttpTosRomDownloader(),
+  List<String>? versions,
+  String fileName = kTosImageFileName,
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    builder: (_) => TosRomDialog(config: config, downloader: downloader),
+    builder: (_) => TosRomDialog(
+      config: config,
+      downloader: downloader,
+      versions: versions,
+      fileName: fileName,
+    ),
   );
   return result ?? false;
 }
 
-/// Dialog offering the TOS 1.02/1.04 English (UK) and German ROM images for
-/// download. Pops `true` after the ROM was written as `TOS.IMG` into the app
-/// directory.
+/// Dialog offering the TOS 1.02/1.04 (and, when filtered, 1.62) English (UK)
+/// and German ROM images for download. Pops `true` after the ROM was written as
+/// [fileName] into the app directory.
 class TosRomDialog extends StatefulWidget {
   const TosRomDialog({
     super.key,
     required this.config,
     this.downloader = const HttpTosRomDownloader(),
+    this.versions,
+    this.fileName = kTosImageFileName,
   });
 
   final DesktopConfig config;
   final TosRomDownloader downloader;
+
+  /// TOS versions offered (e.g. `['1.62']`); `null` offers the default set
+  /// ([kDefaultTosVersions]).
+  final List<String>? versions;
+
+  /// File the ROM is written to next to the app.
+  final String fileName;
 
   @override
   State<TosRomDialog> createState() => _TosRomDialogState();
 }
 
 class _TosRomDialogState extends State<TosRomDialog> {
-  TosRomOption _selected = kDefaultTosRomOption;
+  late final List<TosRomOption> _options;
+  late TosRomOption _selected;
   bool _downloading = false;
   bool _cancelRequested = false;
   String _message = '';
   int _done = 0;
   int _total = 0;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final wanted = widget.versions ?? kDefaultTosVersions;
+    var options =
+        kTosRomOptions.where((o) => wanted.contains(o.version)).toList();
+    if (options.isEmpty) options = List<TosRomOption>.of(kTosRomOptions);
+    _options = options;
+    _selected = _options.firstWhere((o) => o == kDefaultTosRomOption,
+        orElse: () => _options.first);
+  }
 
   Future<void> _download() async {
     setState(() {
@@ -59,6 +88,7 @@ class _TosRomDialogState extends State<TosRomDialog> {
       await widget.downloader.download(
         _selected,
         tosTargetDirectory(widget.config),
+        fileName: widget.fileName,
         onProgress: (message, done, total) {
           if (!mounted) return;
           setState(() {
@@ -91,7 +121,7 @@ class _TosRomDialogState extends State<TosRomDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Hatari needs a TOS ROM image ($kTosImageFileName) next to the '
+              'Hatari needs a TOS ROM image (${widget.fileName}) next to the '
               'app. Choose a version and it will be downloaded and installed '
               'into ${tosTargetDirectory(widget.config)}.',
               style: const TextStyle(fontSize: 12, color: Colors.white70),
@@ -106,7 +136,7 @@ class _TosRomDialogState extends State<TosRomDialog> {
                 labelText: 'TOS version',
               ),
               items: [
-                for (final option in kTosRomOptions)
+                for (final option in _options)
                   DropdownMenuItem(
                     value: option,
                     child: Text(option.label),

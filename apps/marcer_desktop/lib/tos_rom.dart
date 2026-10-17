@@ -40,7 +40,17 @@ const List<TosRomOption> kTosRomOptions = [
       'https://www.atariworld.org/files/images/tos104de.zip'),
   TosRomOption('1.02', 'Deutsch',
       'https://www.atariworld.org/files/images/tos102de.zip'),
+  // TOS 1.62 (STE) — used by the STE Play variant.
+  TosRomOption('1.62', 'English (UK)',
+      'https://www.atariworld.org/files/images/tos162uk.zip'),
+  TosRomOption('1.62', 'Deutsch',
+      'https://www.atariworld.org/files/images/tos162de.zip'),
 ];
+
+/// The TOS versions the default (`TOS.IMG`) download dialog offers: only
+/// TOS 1.04 (ST). TOS 1.02/1.62 are offered by the matching Play variants
+/// (`TOS102.IMG` / `TOS162.IMG`) instead.
+const List<String> kDefaultTosVersions = ['1.04'];
 
 /// Default selection of the TOS dropdown.
 const TosRomOption kDefaultTosRomOption = TosRomOption(
@@ -61,9 +71,10 @@ const String kTosImageFileName = 'TOS.IMG';
 String tosTargetDirectory(DesktopConfig config) =>
     config.appDir.isNotEmpty ? config.appDir : Directory.current.path;
 
-/// Absolute path of the TOS image Hatari looks for: `<appDir>/TOS.IMG`.
-String tosImagePath(DesktopConfig config) =>
-    p.join(tosTargetDirectory(config), kTosImageFileName);
+/// Absolute path of a TOS image next to the app:
+/// `<appDir>/<fileName>` (default `TOS.IMG`).
+String tosImagePath(DesktopConfig config, {String fileName = kTosImageFileName}) =>
+    p.join(tosTargetDirectory(config), fileName);
 
 /// True when the TOS image exists next to the app.
 bool tosInstalled(DesktopConfig config) => File(tosImagePath(config)).existsSync();
@@ -103,10 +114,12 @@ typedef TosRomProgress = void Function(String message, int done, int total);
   return (name: entry.name, bytes: bytes);
 }
 
-/// Extracts the ROM from [zipBytes] and writes it as `<targetDir>/TOS.IMG`
-/// (the target directory is created when missing). Returns the source entry
-/// name. Throws [TosRomException] when the ZIP is invalid or has no ROM file.
-String writeTosImageFromZip(List<int> zipBytes, String targetDir) {
+/// Extracts the ROM from [zipBytes] and writes it as `<targetDir>/<fileName>`
+/// (default `TOS.IMG`; the target directory is created when missing). Returns
+/// the source entry name. Throws [TosRomException] when the ZIP is invalid or
+/// has no ROM file.
+String writeTosImageFromZip(List<int> zipBytes, String targetDir,
+    {String fileName = kTosImageFileName}) {
   final Archive archive;
   try {
     archive = ZipDecoder().decodeBytes(zipBytes);
@@ -118,19 +131,20 @@ String writeTosImageFromZip(List<int> zipBytes, String targetDir) {
     throw const TosRomException('No ROM file found in the downloaded archive.');
   }
   Directory(targetDir).createSync(recursive: true);
-  File(p.join(targetDir, kTosImageFileName)).writeAsBytesSync(entry.bytes);
+  File(p.join(targetDir, fileName)).writeAsBytesSync(entry.bytes);
   return entry.name;
 }
 
 /// Pluggable TOS ROM downloader (the production implementation is
 /// [HttpTosRomDownloader]; the dialog accepts a fake for unit tests).
 abstract class TosRomDownloader {
-  /// Downloads [option] and writes it as `<targetDir>/TOS.IMG`. Throws
-  /// [TosRomException] on failure and [TosRomCancelledException] when
-  /// [isCancelled] reports cancellation.
+  /// Downloads [option] and writes it as `<targetDir>/<fileName>` (default
+  /// `TOS.IMG`). Throws [TosRomException] on failure and
+  /// [TosRomCancelledException] when [isCancelled] reports cancellation.
   Future<void> download(
     TosRomOption option,
     String targetDir, {
+    String fileName = kTosImageFileName,
     TosRomProgress? onProgress,
     bool Function()? isCancelled,
   });
@@ -145,6 +159,7 @@ class HttpTosRomDownloader implements TosRomDownloader {
   Future<void> download(
     TosRomOption option,
     String targetDir, {
+    String fileName = kTosImageFileName,
     TosRomProgress? onProgress,
     bool Function()? isCancelled,
   }) async {
@@ -171,7 +186,7 @@ class HttpTosRomDownloader implements TosRomDownloader {
         throw const TosRomCancelledException();
       }
       onProgress?.call('Extracting…', 0, 0);
-      writeTosImageFromZip(bytes, targetDir);
+      writeTosImageFromZip(bytes, targetDir, fileName: fileName);
       onProgress?.call('TOS ROM installed.', 0, 0);
     } on TosRomException {
       rethrow;

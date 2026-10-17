@@ -15,12 +15,13 @@ class _FakeTosRomDownloader implements TosRomDownloader {
   Future<void> download(
     TosRomOption option,
     String targetDir, {
+    String fileName = kTosImageFileName,
     TosRomProgress? onProgress,
     bool Function()? isCancelled,
   }) async {
     onProgress?.call('Downloading…', 0, 0);
     Directory(targetDir).createSync(recursive: true);
-    File(p.join(targetDir, kTosImageFileName))
+    File(p.join(targetDir, fileName))
         .writeAsBytesSync(List<int>.filled(8, 0xAB));
   }
 }
@@ -53,7 +54,7 @@ Future<bool?> _openDialog(
 }
 
 void main() {
-  testWidgets('shows the default option and all four choices', (tester) async {
+  testWidgets('offers only TOS 1.04 by default', (tester) async {
     tester.view.physicalSize = const Size(1000, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -67,9 +68,10 @@ void main() {
 
     await tester.tap(find.byType(DropdownButtonFormField<TosRomOption>));
     await tester.pumpAndSettle();
-    expect(find.text('English (UK) — TOS 1.02'), findsOneWidget);
     expect(find.text('Deutsch — TOS 1.04'), findsOneWidget);
-    expect(find.text('Deutsch — TOS 1.02'), findsOneWidget);
+    // 1.02 is only offered by the matching Play variant, not the default.
+    expect(find.text('English (UK) — TOS 1.02'), findsNothing);
+    expect(find.text('Deutsch — TOS 1.02'), findsNothing);
   });
 
   testWidgets('download installs TOS.IMG and closes with true', (tester) async {

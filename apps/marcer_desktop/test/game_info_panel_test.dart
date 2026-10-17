@@ -1,0 +1,49 @@
+// Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+// Licensed under the MIT License. See LICENSE file in project root for details.
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:marcer_catalog/marcer_catalog.dart';
+import 'package:marcer_desktop/widgets/game_info_panel.dart';
+
+void main() {
+  testWidgets('play split button lists variants and reports the selection',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    HatariVariant? selected;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 400,
+          child: GameInfoPanel(
+            info: null,
+            variant: const ZipVariantView(
+              name: 'a.zip',
+              status: 'done',
+              layer: 'ROOT',
+              rel: 'x/a.zip',
+            ),
+            variants: kHatariVariants,
+            onPlay: () {},
+            onPlayVariant: (v) => selected = v,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PLAY'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_drop_down));
+    await tester.pumpAndSettle();
+    for (final v in kHatariVariants) {
+      expect(find.text(v.name), findsWidgets, reason: v.name);
+    }
+
+    await tester.tap(find.text('Mono').last);
+    await tester.pumpAndSettle();
+    expect(selected?.name, 'Mono');
+  });
+}

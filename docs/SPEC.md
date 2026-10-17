@@ -525,6 +525,10 @@ start process: executable = Hatari.Executable, arguments = args,
   is the fallback whenever `Hatari.ConfigFile` is empty; it is resolved relative to
   the launcher's current working directory. The bundled file expects the TOS ROM
   (`TOS.IMG`) to be present in that directory (see README).
+- **Desktop extension (optional):** a desktop implementation may offer additional
+  launch *variants* that append extra emulator arguments after the template (e.g.
+  `--mono --tos-res high`, `--machine ste`) and select a different TOS image
+  (e.g. `TOS162.IMG`/`TOS102.IMG`); the base construction above is unchanged.
 
 ### 12.2 Blocking behavior
 

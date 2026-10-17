@@ -5,6 +5,55 @@ import 'dart:io';
 
 import 'config.dart';
 
+/// A named Hatari launch variant (the split Play button's dropdown): extra
+/// command-line arguments appended after the args template, plus an optional
+/// TOS ROM file (resolved against the app directory) the variant requires.
+class HatariVariant {
+  const HatariVariant({
+    required this.name,
+    required this.description,
+    this.extraArgs = const [],
+    this.tosFileName,
+    this.tosVersions = const [],
+  });
+
+  final String name;
+  final String description;
+  final List<String> extraArgs;
+
+  /// TOS image file name next to the app (e.g. `TOS162.IMG`); `null` uses the
+  /// bundled config's `TOS.IMG`.
+  final String? tosFileName;
+
+  /// TOS versions offered when this variant's [tosFileName] must be downloaded
+  /// (e.g. `['1.62']`).
+  final List<String> tosVersions;
+}
+
+/// The built-in Play variants (fixed in code, user decision 2026-10-17):
+/// Standard (ST, TOS 1.04), Mono, STE (TOS 1.62) and Low Res TOS 1.02.
+const List<HatariVariant> kHatariVariants = [
+  HatariVariant(name: 'Standard', description: 'ST, TOS 1.04, color'),
+  HatariVariant(
+    name: 'Mono',
+    description: 'ST, TOS 1.04, monochrome high-res',
+    extraArgs: ['--mono', '--tos-res', 'high'],
+  ),
+  HatariVariant(
+    name: 'STE',
+    description: 'STE, TOS 1.62',
+    extraArgs: ['--machine', 'ste'],
+    tosFileName: 'TOS162.IMG',
+    tosVersions: ['1.62'],
+  ),
+  HatariVariant(
+    name: 'Low Res TOS 1.02',
+    description: 'ST, TOS 1.02, low-res',
+    tosFileName: 'TOS102.IMG',
+    tosVersions: ['1.02'],
+  ),
+];
+
 /// Builds the Hatari command for one ZIP (SPEC.md §12.1).
 ///
 /// `{cfg}` → the Hatari config file (`Hatari.ConfigFile`, or the bundled
@@ -90,8 +139,11 @@ String? validateHatariConfig(DesktopConfig config) {
 /// Builds the full Hatari command for [zipPath], or returns an error message.
 ///
 /// [zipPath] must exist (SPEC.md E7 handles the vanished-ZIP case as a modal).
+/// [variant] appends its extra arguments and, when it requires a TOS ROM,
+/// `--tos <appDir/file>` (error when that file is missing).
 ({HatariCommand? command, String? error}) buildHatariCommand(
-    DesktopConfig config, String zipPath) {
+    DesktopConfig config, String zipPath,
+    {HatariVariant? variant}) {
   final validation = validateHatariConfig(config);
   if (validation != null) return (command: null, error: validation);
   if (zipPath.trim().isEmpty || !File(zipPath).existsSync()) {
@@ -99,6 +151,24 @@ String? validateHatariConfig(DesktopConfig config) {
   }
   final args = hatariArguments(
       config.hatariArgsTemplate, config.resolveHatariConfigFile(), zipPath);
+  if (variant != null) {
+    args.addAll(variant.extraArgs);
+    final tosFile = variant.tosFileName;
+    if (tosFile != null && tosFile.isNotEmpty) {
+      final tosPath =
+          config.appDir.isEmpty ? tosFile : '${config.appDir}/$tosFile';
+      if (!File(tosPath).existsSync()) {
+        return (
+          command: null,
+          error: '${variant.name} needs the TOS ROM $tosFile '
+              '(not found next to the app).'
+        );
+      }
+      args
+        ..add('--tos')
+        ..add(tosPath);
+    }
+  }
   return (
     command: HatariCommand(config.resolveHatariExecutable(), args,
         config.appDir.isEmpty ? Directory.current.path : config.appDir),

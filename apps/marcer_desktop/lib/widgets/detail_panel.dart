@@ -162,7 +162,9 @@ class DetailPanel extends StatelessWidget {
             info: card.info,
             variant: _primaryVariant(card),
             filter: c.filter,
+            variants: kHatariVariants,
             onPlay: () => c.launchSelected(),
+            onPlayVariant: (variant) => c.launchSelected(variant: variant),
             // Group click: open the lightbox on that crew's/cracker's ZIP;
             // no matching ZIP ("not found") opens variant 0, which shows the
             // "… ZIP not found —" prefix in the lightbox header.
