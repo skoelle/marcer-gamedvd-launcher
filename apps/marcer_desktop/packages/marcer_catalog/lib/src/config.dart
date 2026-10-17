@@ -8,6 +8,11 @@ import 'dart:io';
 /// used automatically when `Hatari.ConfigFile` is empty.
 const String kBundledHatariConfig = 'MarcerGameDvd-Hatari.cfg';
 
+/// Default remote directory holding the catalog asset archives
+/// (`screenshots-<timestamp>.zip` / `gameinfo-<timestamp>.zip`) on the FTP
+/// server (user decision 2026-10-17). Overridable via `Ftp.AssetsRemote`.
+const String kDefaultFtpAssetsRemote = '/Uploads/MarcerGameDVDLauncher-assets/';
+
 /// Configuration model for `desktop.config.json` (see PLAN.md §3).
 class DesktopConfig {
   DesktopConfig({
@@ -22,6 +27,7 @@ class DesktopConfig {
     this.ftpUser = '',
     this.ftpPassword = '',
     this.ftpRemoteBase = '/GameDVD/',
+    this.ftpAssetsRemote = kDefaultFtpAssetsRemote,
     this.showCandidates = true,
     this.defaultStatus = 'with_screenshot',
     this.appDir = '',
@@ -50,6 +56,13 @@ class DesktopConfig {
   final String ftpUser;
   final String ftpPassword;
   final String ftpRemoteBase;
+
+  /// Remote directory holding the catalog asset archives
+  /// (`screenshots-*.zip`, `gameinfo-*.zip`), default
+  /// [kDefaultFtpAssetsRemote]. Downloaded by the setup/settings
+  /// "Download from FTP" buttons into [screenshotDirectory] /
+  /// [gameinfoDirectory].
+  final String ftpAssetsRemote;
 
   /// Application directory (the executable's directory): base for resolving
   /// relative Hatari paths and the bundled config (SPEC.md R10).
@@ -107,6 +120,8 @@ class DesktopConfig {
       ftpUser: (ftp['User'] ?? '') as String,
       ftpPassword: (ftp['Password'] ?? '') as String,
       ftpRemoteBase: (ftp['RemoteBase'] ?? '/GameDVD/') as String,
+      ftpAssetsRemote:
+          (ftp['AssetsRemote'] ?? kDefaultFtpAssetsRemote) as String,
       showCandidates: (map['ShowCandidates'] ?? true) as bool,
       defaultStatus: (map['DefaultStatus'] ?? 'with_screenshot') as String,
       appDir: resolvedAppDir,
@@ -132,6 +147,7 @@ class DesktopConfig {
     String? ftpUser,
     String? ftpPassword,
     String? ftpRemoteBase,
+    String? ftpAssetsRemote,
     bool? showCandidates,
     String? defaultStatus,
     String? appDir,
@@ -152,6 +168,7 @@ class DesktopConfig {
       ftpUser: ftpUser ?? this.ftpUser,
       ftpPassword: ftpPassword ?? this.ftpPassword,
       ftpRemoteBase: ftpRemoteBase ?? this.ftpRemoteBase,
+      ftpAssetsRemote: ftpAssetsRemote ?? this.ftpAssetsRemote,
       showCandidates: showCandidates ?? this.showCandidates,
       defaultStatus: defaultStatus ?? this.defaultStatus,
       appDir: appDir ?? this.appDir,
@@ -179,6 +196,7 @@ class DesktopConfig {
           'User': ftpUser,
           'Password': ftpPassword,
           'RemoteBase': ftpRemoteBase,
+          'AssetsRemote': ftpAssetsRemote,
         },
         'ShowCandidates': showCandidates,
         'DefaultStatus': defaultStatus,
@@ -235,18 +253,10 @@ class DesktopConfig {
   String get downloadTargetDirectory =>
       patchDirectory.trim().isNotEmpty ? patchDirectory : rootDirectory;
 
-  /// Default gameinfo directory convention `<PatchDirectory>/../Data`
-  /// (ANALYSIS-game-data.md §5.5) when [gameinfoDirectory] is empty.
-  String resolveGameinfoDirectory() {
-    if (gameinfoDirectory.isNotEmpty) return gameinfoDirectory;
-    if (patchDirectory.isEmpty) return '';
-    final dir = Directory('$patchDirectory/../Data');
-    try {
-      return dir.resolveSymbolicLinksSync();
-    } catch (_) {
-      return dir.path;
-    }
-  }
+  /// The configured gameinfo directory (or empty when not set). There is no
+  /// implicit fallback: gameinfo data must be fetched explicitly (user
+  /// decision 2026-10-17, see "Download from FTP" in the setup/settings form).
+  String resolveGameinfoDirectory() => gameinfoDirectory;
 
   /// Absolute Hatari executable (`Hatari.Executable`), resolved against
   /// [appDir] when relative (SPEC.md R10); empty when not configured.

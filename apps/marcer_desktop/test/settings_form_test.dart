@@ -105,11 +105,12 @@ void main() {
       latest = c;
       valid = v;
     });
-    // Fields 6..9 are the FTP fields (host/user/password/remote base).
-    await tester.enterText(find.byType(TextField).at(6), 'ftp.example.com');
-    await tester.enterText(find.byType(TextField).at(7), 'anon');
-    await tester.enterText(find.byType(TextField).at(8), 'secret');
-    await tester.enterText(find.byType(TextField).at(9), 'not/a/real/path');
+    // Fields 2..6 are the FTP fields (host/user/password/remote base/assets).
+    await tester.enterText(find.byType(TextField).at(2), 'ftp.example.com');
+    await tester.enterText(find.byType(TextField).at(3), 'anon');
+    await tester.enterText(find.byType(TextField).at(4), 'secret');
+    await tester.enterText(find.byType(TextField).at(5), 'not/a/real/path');
+    await tester.enterText(find.byType(TextField).at(6), '/upload/assets');
     await tester.pump();
 
     expect(valid, isTrue, reason: 'FTP fields are never path-validated');
@@ -118,5 +119,6 @@ void main() {
     expect(latest!.ftpUser, 'anon');
     expect(latest!.ftpPassword, 'secret');
     expect(latest!.ftpRemoteBase, 'not/a/real/path');
+    expect(latest!.ftpAssetsRemote, '/upload/assets');
   });
 }

@@ -79,7 +79,7 @@ class FtpDownloader implements Downloader {
       if (!connected) throw const DownloadException('FTP login failed.');
 
       final loginDir = await client.currentDirectory();
-      final absRemote = _absoluteRemote(loginDir, remoteDir);
+      final absRemote = absoluteRemoteDir(loginDir, remoteDir);
       if (!await client.changeDirectory(absRemote)) {
         throw DownloadException('Remote directory not found: $remoteDir');
       }
@@ -149,16 +149,16 @@ class FtpDownloader implements Downloader {
       }
     }
   }
+}
 
-  /// Joins the FTP login directory [loginDir] and the configured [remoteDir]
-  /// into an absolute remote path (so the client can always reset to it
-  /// regardless of how deep a nested transfer navigated).
-  static String _absoluteRemote(String loginDir, String remoteDir) {
-    var base = loginDir.trim();
-    if (base.isEmpty) base = '/';
-    if (base.length > 1) base = base.replaceAll(RegExp(r'/+$'), '');
-    final rel = remoteDir.trim().replaceAll(RegExp(r'^/+'), '');
-    if (rel.isEmpty) return base;
-    return base == '/' ? '/$rel' : '$base/$rel';
-  }
+/// Joins the FTP login directory [loginDir] and a [remoteDir] into an absolute
+/// remote path (used by both the recursive game-folder downloader and the
+/// catalog asset fetcher).
+String absoluteRemoteDir(String loginDir, String remoteDir) {
+  var base = loginDir.trim();
+  if (base.isEmpty) base = '/';
+  if (base.length > 1) base = base.replaceAll(RegExp(r'/+$'), '');
+  final rel = remoteDir.trim().replaceAll(RegExp(r'^/+'), '');
+  if (rel.isEmpty) return base;
+  return base == '/' ? '/$rel' : '$base/$rel';
 }

@@ -67,21 +67,27 @@ The app looks for `desktop.config.json` in this order (first existing wins):
 
 The release ZIPs ship `desktop.config.example.json` — copy it next to the
 executable (or the `.app`), rename it to `desktop.config.json`, and set your
-absolute paths. Without a config the app shows a page listing the searched
-locations.
+absolute paths. Without a config the app opens the first-run setup page.
+
+The setup/settings form lays the fields out as: **RootDirectory**,
+**PatchDirectory**, the **FTP** server (used both for game-folder downloads
+and for the catalog-data downloads), then **ScreenshotDirectory** and
+**GameinfoDirectory** — each with a **Download from FTP** button next to
+*Browse…* — and finally the Hatari settings.
 
 | Field | Required | Notes |
 |---|---|---|
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
-| `GameinfoDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
+| `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
 | `Hatari.ConfigFile` | no | empty ⇒ bundled `MarcerGameDvd-Hatari.cfg` |
 | `Hatari.ArgsTemplate` | no | must contain `{cfg}` and `{zip}` |
-| `Ftp.Host` | for download | FTP server for "Download missing"; `host` or `host:port` (default port 21) |
+| `Ftp.Host` | for download | FTP server for "Download missing" and the catalog assets; `host` or `host:port` (default port 21) |
 | `Ftp.User` / `Ftp.Password` | no | FTP credentials (empty user ⇒ `anonymous`; password stored in plaintext) |
-| `Ftp.RemoteBase` | no | remote directory prefix (default `/GameDVD/`; empty ⇒ FTP login root) |
+| `Ftp.RemoteBase` | no | remote prefix of the game folders (default `/GameDVD/`; empty ⇒ FTP login root) |
+| `Ftp.AssetsRemote` | no | remote dir of the catalog asset archives, `screenshots-*.zip` / `gameinfo-*.zip` (default `/Uploads/MarcerGameDVDLauncher-assets/`) |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset for the cracked section (default `with_screenshot`; pd/utils default `any`) |
 | `Window.width/height` | no | initial/restore window size (default 1280×800) |
@@ -220,6 +226,28 @@ Existing local files are skipped, so an interrupted run can simply be repeated.
 The sidebar and the status bar show progress and a **Cancel** button; failures
 appear as a modal. The download runs in the background (non-blocking, one at a
 time), so browsing stays responsive.
+
+## Catalog data (Download from FTP)
+
+The catalog is built from the screenshot index and the gameinfo JSONs; without
+them the catalog is empty. The setup/settings form therefore puts a **Download
+from FTP** button next to *Browse…* on both `ScreenshotDirectory` and
+`GameinfoDirectory`:
+
+- the newest `screenshots-*.zip` is fetched from `Ftp.AssetsRemote` and
+  extracted into `ScreenshotDirectory`, the newest `gameinfo-*.zip` into
+  `GameinfoDirectory`.
+- uploads never overwrite, so the newest archive is picked by the
+  `yyyyMMdd-HHmmss` timestamp in its name; the two archives must both be present
+  in the asset directory.
+- `Ftp.Host` and the target directory are required (the target directory is
+  created when missing); progress and **Cancel** show inline, failures as a
+  SnackBar.
+- `Ftp.AssetsRemote` defaults to `/Uploads/MarcerGameDVDLauncher-assets/` — set it
+  in the form (or config) when the assets live elsewhere.
+
+`GameinfoDirectory` has **no implicit fallback**: if it is empty no gameinfo is
+loaded.
 
 ## Catalog coverage
 

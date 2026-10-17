@@ -50,8 +50,8 @@ void main() {
     await _openDialog(tester, original, (r) => result = r);
 
     expect(find.text('Settings'), findsOneWidget);
-    // 6 path fields + 4 FTP fields (host/user/password/remote base).
-    expect(find.byType(TextField), findsNWidgets(10));
+    // 7 path fields + 5 FTP fields (host/user/password/remote base/assets).
+    expect(find.byType(TextField), findsNWidgets(11));
     // Invalid mandatory root + optional fields empty: Save is disabled.
     expect(_saveButton(tester).onPressed, isNull);
 

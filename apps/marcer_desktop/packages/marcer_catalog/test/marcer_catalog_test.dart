@@ -176,9 +176,22 @@ void main() {
       expect(c.ftpPassword, '');
       expect(c.ftpRemoteBase, '/GameDVD/',
           reason: 'default remote base directory');
+      expect(c.ftpAssetsRemote, '/Uploads/MarcerGameDVDLauncher-assets/',
+          reason: 'default catalog asset directory');
       expect(c.downloadTargetDirectory, '/r',
           reason: 'no PatchDirectory → root layer');
       expect(c.copyWith(patchDirectory: '/p').downloadTargetDirectory, '/p');
+    });
+
+    test('resolveGameinfoDirectory has no implicit fallback', () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync(
+            '{"RootDirectory": "/r", "PatchDirectory": "/p"}');
+      final c = DesktopConfig.load(f.path);
+      expect(c.resolveGameinfoDirectory(), '',
+          reason: 'no <Patch>/../Data fallback anymore');
+      expect(c.copyWith(gameinfoDirectory: '/data').resolveGameinfoDirectory(),
+          '/data');
     });
 
     test('Ftp.Host parses an optional :port (default 21)', () {
@@ -257,6 +270,7 @@ void main() {
         ftpUser: 'anonymous',
         ftpPassword: 'secret',
         ftpRemoteBase: '/dvd',
+        ftpAssetsRemote: '/upload/assets',
         showCandidates: false,
         defaultStatus: 'done',
         windowWidth: 1600,
@@ -276,6 +290,7 @@ void main() {
       expect(reloaded.ftpUser, 'anonymous');
       expect(reloaded.ftpPassword, 'secret');
       expect(reloaded.ftpRemoteBase, '/dvd');
+      expect(reloaded.ftpAssetsRemote, '/upload/assets');
       expect(reloaded.showCandidates, isFalse);
       expect(reloaded.defaultStatus, 'done');
       expect(reloaded.windowWidth, 1600);

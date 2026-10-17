@@ -205,12 +205,17 @@ but cannot be read shows an error page with a **Setup…** button. Template: [`a
 The ⚙ gear button in the top bar opens an in-app **settings editor** for all
 path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
 `GameinfoDirectory`, `Hatari.Executable`, `Hatari.ConfigFile`) with native
-directory/file pickers, plus the **FTP** fields for "Download missing"
-(`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase` — free text, never
-block saving). **Save** writes them back to the same
-`desktop.config.json` and reloads the catalog in place, so new paths apply
-without restarting the app; window settings and the remaining fields stay
-untouched.
+directory/file pickers, plus the **FTP** fields for the downloads
+(`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase`,
+`Ftp.AssetsRemote` — free text, never block saving). The form is ordered
+**RootDirectory → PatchDirectory → FTP → ScreenshotDirectory /
+GameinfoDirectory → Hatari**; the two catalog-data fields each carry a
+**Download from FTP** button next to *Browse…* that pulls the newest
+`screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
+into the target directory (the gameinfo directory has **no** implicit
+fallback). **Save** writes them back to the same `desktop.config.json` and
+reloads the catalog in place, so new paths apply without restarting the app;
+window settings and the remaining fields stay untouched.
 
 Every path field is validated live with a status icon: a green ✓ when the
 directory/file exists, a red ✗ when it does not (or a required field is empty),
@@ -224,13 +229,14 @@ optional (needed to launch, not to browse).
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
-| `GameinfoDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
+| `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
 | `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
 | `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
-| `Ftp.Host` | for download | FTP server for "Download missing"; `host` or `host:port` (default port 21) |
+| `Ftp.Host` | for download | FTP server for "Download missing" and the catalog assets; `host` or `host:port` (default port 21) |
 | `Ftp.User` / `Ftp.Password` | no | FTP credentials (empty user ⇒ `anonymous`; password stored in plaintext) |
-| `Ftp.RemoteBase` | no | remote directory prefix (default `/GameDVD/`; empty ⇒ FTP login root) |
+| `Ftp.RemoteBase` | no | remote directory prefix of the game folders (default `/GameDVD/`; empty ⇒ FTP login root) |
+| `Ftp.AssetsRemote` | no | remote dir of the catalog asset archives `screenshots-*.zip` / `gameinfo-*.zip` (default `/Uploads/MarcerGameDVDLauncher-assets/`) |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
 | `Window.width/height` | no | initial window size and restore size (default 1280×800) |

@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
@@ -87,7 +89,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
             child: GestureDetector(
               onTap: () {}, // keep taps on the dialog itself
               child: Container(
-                width: 620,
+                width: math.min(
+                    1100, MediaQuery.sizeOf(context).width - 64),
                 constraints: BoxConstraints(
                     maxHeight: MediaQuery.sizeOf(context).height - 80),
                 padding: const EdgeInsets.all(16),
