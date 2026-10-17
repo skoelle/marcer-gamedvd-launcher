@@ -515,9 +515,22 @@ phase workflow:
   tried as well so inverted (selected) icons still match. Template geometry
   is 60x54 px (program icon) and 64x60 px (drive icon) at the verified
   832x552 capture size.
+- **Multi-scale match.** Color captures render the GEM screen 2x (the
+  templates were cut from them), so their icons are twice as large as those
+  in native mono high-res captures (`--mono --tos-res high`, 640x400 at 1x,
+  section 4.6). Every template is therefore tried at the 1x scale and as a
+  0.5x variant; the 0.5x variant is binarized (>=128 -> white) so only the
+  black/white structure matches — the drive template's green fill
+  (0,238,0) would otherwise correlate poorly against the dithered mono
+  background. The best-scoring variant wins, but a smaller scale must beat
+  the larger one by a margin (0.02) before it takes over, so a weak 1x
+  false positive on a color screen keeps its established pixel. The winning
+  scale is stored as `scale` in the `click` object (1.0 or 0.5).
+  *(verified: mono drive icons match at scale 0.5, score ~0.83)*.
 - Strategy choice: a real program icon always wins; otherwise a drive icon
   selects the drive strategy. Hit: entry gets
-  `click` = `{strategy, sx, sy, score, source}` and `icon_found: true`.
+  `click` = `{strategy, sx, sy, score, scale, source}` and
+  `icon_found: true`.
   Score threshold default 0.5 (config `click_retry.icon_min_score`); true
   positives scored 0.53 to 1.0 in the pilot *(verified)*, a drive icon
   reaches 1.0.
@@ -622,10 +635,13 @@ early shows a half-drawn window with no recognizable icon). Window icons
 match their templates near 1.0, so `click_retry.window_icon_min_score`
 (default 0.80) rejects the flat-region false positives (~0.55) seen on
 white window areas while still accepting the program icon with the GEM
-arrow on it (~0.84).
+arrow on it (~0.84). The same bar applies to the 0.5x mono variant: its
+genuine icons still score ~1.0, while a folder only matches the program
+template at ~0.73 and is rejected there in favour of its own (much
+stronger, ~0.90) folder match.
 *(verified: Bank It - Hotline starts via drive -> folder -> PRG; 10th
 Frame - Tsunoo Rhilty v2 and 10th Frame - Elsi via drive -> folder ->
-PRG.)*
+PRG; mono drive -> folder -> PRG chain executes at scale 0.5.)*
 
 Notes:
 
@@ -1018,7 +1034,7 @@ sections 8 and 8.4.1),
 null when no image exists at all), `candidates` (list of `_cNN` names,
 disjoint from the preview, section 8.6), and for the
 click retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
-source}` or absent), `icon_found` (true/false after `detect`),
+scale, source}` or absent), `icon_found` (true/false after `detect`),
 `click_retried` (true after an attempt), `click_result`
 (`click-icon-prg` | `click-icon-drive` | `click-failed` |
 `click-not-needed` | null). For drive-LED cleanup (section 8.7): `drive_led`
@@ -1243,9 +1259,13 @@ Resolved decisions:
   desktop of `123 Jumble - Mono`). Most pd entries end `desktop` (program
   menus / GEM desktop without auto-boot) — expected for the pilot window,
   same shape as the utils pilot; follow-up is `detect` + click retry.
-  The color-click-retry templates (`icon-prg.png`, `icon-drive.png`) are
-  2–3-color black/white images, so detection on mono GEM desktops is
-  expected to work.
+  The color-click-retry templates (`icon-prg.png`, `icon-drive.png`) were
+  cut from the 2x-scaled color screens, so at 1x they do **not** match the
+  half-sized icons of native mono captures (initial `detect` found 0/6 mono
+  icons). Detection therefore tries a 0.5x binarized variant as well
+  (section 7.4); with it a 25-entry mono sample recovers 24/25 drive hits
+  at scale 0.5, score ~0.83, and the color sample keeps its strategies
+  unchanged *(verified offline)*.
 
 ### 14.2 Adjustment
 
@@ -1272,6 +1292,17 @@ Resolved decisions:
   `click_retried: true` and `click_result: click-icon-drive`; the newer
   screenshots and the intermediate chain shots were kept as preview and
   candidates *(verified)*.
+- Mono (`monitor: mono`, section 4.6): the 2x color templates do not match
+  the half-sized mono icons at 1x, so `detect` tries a 0.5x binarized
+  variant (section 7.4). A 25-entry mono desktop sample recovers 24/25
+  `drive` hits at scale 0.5 (score ~0.83, pixel 36,36 = floppy A), while a
+  25-entry color sample keeps all its strategies and, with the 0.02 margin,
+  its 1x pixels *(verified offline)*. A live `run --retry-desktop` on
+  `Defend the Earth 2 - Mono` executes the full chain — drive double click
+  at the scale-0.5 hit, window scan finds the program icon at scale 0.5
+  and double clicks it, `click_result` is recorded; the title itself ends
+  `desktop`/`textscreen` because its disk has no auto-startable game
+  *(verified live)*.
 
 ### 14.4 Full run
 
@@ -1344,7 +1375,9 @@ A conforming implementation satisfies all of the following.
 - [ ] P5 Per-entry timeout is enforced and the run continues after it.
 - [ ] P6 `detect` finds the GEM program or drive icon in existing desktop
       previews offline, selects the `prg`/`drive` strategy, stores
-      `click`/`icon_found`; misses are never booted.
+      `click`/`icon_found`; each template is matched at the 1x color scale
+      and as a 0.5x binarized variant (mono high-res) with a 0.02 margin in
+      favor of the larger scale; misses are never booted.
 - [ ] P7 `run --retry-desktop` boots only unclicked entries with a stored
       hit and runs the strategy: `prg` double clicks the program icon,
       `drive` opens DISKSTATION A and descends up to

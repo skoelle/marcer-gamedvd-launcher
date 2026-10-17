@@ -728,6 +728,40 @@ def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
                     fifo=fifo)
 
 
+_GRAY_CACHE: dict = {}
+_GRAY_CACHE_ORDER: deque = deque()
+_GRAY_CACHE_MAX = 8
+
+
+def load_gray(img_path: Path):
+    """Load a screenshot as a float64 grayscale array, cached by mtime/size.
+
+    find_icon probes several templates/variants against the same image and a
+    retry run revisits one preview across timepoints; re-decoding a ~832x552
+    PNG from the (often network) archive for every call dominated the detect
+    runtime, so the last few decoded images are kept (LRU, bounded).
+    """
+    import numpy as np
+    from PIL import Image
+
+    key = str(img_path)
+    try:
+        st = os.stat(key)
+        sig = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        sig = None
+    cached = _GRAY_CACHE.get(key)
+    if cached is not None and cached[0] == sig:
+        return cached[1]
+    with Image.open(img_path) as im:
+        arr = np.asarray(im.convert("L"), dtype=np.float64)
+    _GRAY_CACHE[key] = (sig, arr)
+    _GRAY_CACHE_ORDER.append(key)
+    while len(_GRAY_CACHE_ORDER) > _GRAY_CACHE_MAX:
+        _GRAY_CACHE.pop(_GRAY_CACHE_ORDER.popleft(), None)
+    return arr
+
+
 def find_template(img_path: Path, template, min_score: float):
     """Zero-mean normalized cross correlation (FFT) against a template.
 
@@ -735,10 +769,9 @@ def find_template(img_path: Path, template, min_score: float):
     still match. Returns (cx, cy, score) at the template center, or None.
     """
     import numpy as np
-    from PIL import Image
     from scipy.signal import fftconvolve
 
-    img = np.asarray(Image.open(img_path).convert("L"), dtype=np.float64)
+    img = load_gray(img_path)
     t_base = np.asarray(template, dtype=np.float64)
     best = None
     for t_img in (t_base, 255.0 - t_base):
@@ -775,29 +808,69 @@ ICON_TEMPLATE_FILES = {
     "folder": "icon-folder.png",    # folder icon inside a window
 }
 
+# Icon template variants, built once per process. Color screenshots render
+# the GEM screen at 2x (the templates were cut from them), so their icons
+# are twice the size of those in native mono high-res screenshots
+# (`--mono --tos-res high`, 640x400 at 1x). The 0.5x variant is binarized
+# so only the black/white structure matches: the drive template's green fill
+# (0,238,0 -> grey ~140) would otherwise correlate poorly against the
+# dithered mono background (binarizing maps it to white).
+_ICON_VARIANTS: dict = {}
+
+# A smaller-scale variant must beat the 1x match by this margin before it
+# takes over: on color screenshots the 0.5x binarized template can tie a
+# weak 1x false positive (~0.66) at a different pixel, which would silently
+# shift an established click point. A genuine mono icon wins by a wide
+# margin because its 1x match stays below icon_min_score.
+_VARIANT_MARGIN = 0.02
+
+
+def icon_variants(template: str):
+    """Return [(scale, PIL.Image)] candidates for a named icon template."""
+    if template not in _ICON_VARIANTS:
+        variants = []
+        tpl_name = ICON_TEMPLATE_FILES.get(template)
+        tpl_path = ASSETS_DIR / tpl_name if tpl_name else None
+        if tpl_path is not None and tpl_path.exists():
+            import numpy as np
+            from PIL import Image
+            with Image.open(tpl_path) as tpl:
+                gray = tpl.convert("L")
+                full = np.asarray(gray, dtype=np.float64)
+                half = np.asarray(gray.resize(
+                    (max(1, gray.width // 2), max(1, gray.height // 2)),
+                    Image.LANCZOS), dtype=np.float64)
+            variants.append((1.0, Image.fromarray(full.astype(np.uint8))))
+            variants.append((
+                0.5, Image.fromarray(
+                    np.where(half >= 128, 255.0, 0.0).astype(np.uint8))))
+        _ICON_VARIANTS[template] = variants
+    return _ICON_VARIANTS[template]
+
 
 def find_icon(path: Path, cfg: dict, template: str = "prg"):
     """Locate a GEM icon in a screenshot via NCC.
 
-    template: "prg" (program icon) or "drive" (disk drive icon).
-    Returns {"sx", "sy", "score"} (screenshot pixel, template center)
-    or None.
+    template: "prg" (program icon), "drive" (DISKSTATION drive icon) or
+    "folder" (folder icon inside a window). Every template is tried at the
+    1x color scale and as a 0.5x binarized variant (mono high-res); the
+    best-scoring variant wins, but a smaller scale must beat the larger one
+    by _VARIANT_MARGIN. Returns {"sx", "sy", "score", "scale"} (screenshot
+    pixel, template center) or None.
     """
-    tpl_name = ICON_TEMPLATE_FILES.get(template)
-    if tpl_name is None:
+    min_score = cfg["click_retry"]["icon_min_score"]
+    best = None
+    for scale, tpl in icon_variants(template):
+        res = find_template(path, tpl, min_score)
+        if res is None:
+            continue
+        cx, cy, score = res
+        if best is None or score > best[2] + _VARIANT_MARGIN:
+            best = (cx, cy, score, scale)
+    if best is None:
         return None
-    tpl_path = ASSETS_DIR / tpl_name
-    if not tpl_path.exists():
-        return None
-    from PIL import Image
-    with Image.open(tpl_path) as tpl:
-        grayscale = tpl.convert("L")
-        res = find_template(path, grayscale,
-                            cfg["click_retry"]["icon_min_score"])
-    if res is None:
-        return None
-    cx, cy, score = res
-    return {"sx": cx, "sy": cy, "score": round(score, 3)}
+    cx, cy, score, scale = best
+    return {"sx": cx, "sy": cy, "score": round(score, 3), "scale": scale}
 
 
 def find_desktop_click(path: Path, cfg: dict):
@@ -880,10 +953,14 @@ def find_window_target(path: Path, cfg: dict):
     up; after descending into the folder the window is scanned again for
     a program icon. Window icons match their templates near 1.0, so a
     dedicated higher threshold rejects the flat-region false positives
-    (~0.55) that appear on white window areas. Returns
+    (~0.55) that appear on white window areas; the same bar applies to the
+    0.5x mono variant, whose genuine icons still score ~1.0 (a folder
+    lightly matching the program template only reaches ~0.73 and must not
+    override its own stronger folder match). Returns
     ("prg"|"folder", {sx, sy, score}) or None.
     """
     min_score = cfg["click_retry"].get("window_icon_min_score", 0.80)
+
     prg = find_icon(path, cfg, "prg")
     if prg and prg["score"] >= min_score:
         return "prg", prg
