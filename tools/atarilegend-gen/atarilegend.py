@@ -11,18 +11,29 @@ Implements the first milestone of the AtariLegend integration:
            name index, match it against the screenshot-index folders
            (index.json / index-pd.json / index-utils.json) and write a
            match report (text + JSON) into MARCER_ATARILEGEND_DIR
+  extract  mirror ALL dump tables into a queryable SQLite database
+           (atarilegend.sqlite) and store the folder->game match mapping;
+           this is a tool-side analysis artifact (not shipped by the app)
+  index    write the compact runtime index the app builds itself
+           (folder->game mapping + developer/author/genre facets)
+  detail   assemble the "AtariLegend details" payload for one game
+           (reference for the app's detail panel)
+  fixtures write detail fixtures for a few known games (diff harness)
   report   print a table inventory (row counts) of the relevant tables
 
-The MariaDB dump is parsed with the Python standard library only; no extra
-dependencies are required. Paths come exclusively from environment variables
-(see run.sh and local/paths.env). This file contains no real data paths.
+The MariaDB dump is parsed with the Python standard library only (the SQLite
+build uses the bundled ``sqlite3`` module); no extra dependencies are
+required. Paths come exclusively from environment variables (see run.sh and
+local/paths.env). This file contains no real data paths.
 """
 import argparse
 import difflib
 import gzip
+import hashlib
 import json
 import os
 import re
+import sqlite3
 import sys
 import tempfile
 import time
@@ -35,6 +46,7 @@ TOOL_VERSION = "0.1.0"
 SCHEMA_VERSION = 1
 
 BASE_URL = "https://www.atarilegend.com/data/database-dumps/"
+SITE = "https://www.atarilegend.com"
 DUMP_RE = re.compile(r"(\d{4}-\d{2}-\d{2})\.sql\.gz")
 
 KINDS = ("cracked", "pd", "utils")
@@ -63,6 +75,71 @@ RELEVANT_TABLES = (
     "crews",
     "dumps",
 )
+
+# Facet tables: what the app needs for the developer/author/genre filters.
+FACET_TABLES = (
+    "games",
+    "game_akas",
+    "game_releases",
+    "game_release_akas",
+    "genres",
+    "game_genre",
+    "game_developer",
+    "companies",
+    "developer_roles",
+    "game_individual",
+    "individuals",
+    "individual_roles",
+)
+
+# Detail tables: everything the "AtariLegend details" panel assembles.
+DETAIL_TABLES = FACET_TABLES + (
+    "screenshots",
+    "game_screenshot",
+    "game_release_scans",
+    "game_series",
+    "ports",
+    "game_progress_systems",
+    "game_engine",
+    "engines",
+    "game_programming_language",
+    "programming_languages",
+    "game_control",
+    "controls",
+    "game_sound_hardware",
+    "sound_hardware",
+    "memories",
+    "game_release_memory_minimum",
+    "resolutions",
+    "game_release_resolution",
+    "languages",
+    "game_release_language",
+    "locations",
+    "game_release_location",
+    "game_release_distributor",
+    "game_release_copy_protection",
+    "copy_protections",
+    "game_release_disk_protection",
+    "disk_protections",
+    "game_release_tos_incompatibilities",
+    "tos",
+    "crews",
+    "game_release_crew",
+    "sndh_archives",
+    "sndhs",
+    "game_sndh",
+    "game_votes",
+    "reviews",
+    "magazine_indices",
+    "magazine_issues",
+    "magazines",
+    "game_videos",
+    "game_galleries",
+    "game_facts",
+)
+
+# Default games for `fixtures` (slug + a folder that resolves to it).
+FIXTURE_GAMES = ("buggy-boy", "arkanoid", "dungeon-master", "lemmings")
 
 DEFAULT_CONFIG = {
     "fuzzy_cutoff": 0.90,
@@ -234,6 +311,19 @@ def latest_cached_dump(dump_dir: Path) -> Path | None:
     return dumps[-1] if dumps else None
 
 
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _dump_date(path: Path) -> str:
+    m = DUMP_RE.search(path.name)
+    return m.group(1) if m else ""
+
+
 # --------------------------------------------------------------------------
 # normalization / name index
 # --------------------------------------------------------------------------
@@ -370,6 +460,442 @@ def parse_relevant_tables(text: str, cfg: dict, tables=RELEVANT_TABLES) -> dict:
 
 
 # --------------------------------------------------------------------------
+# full dump -> SQLite mirror
+# --------------------------------------------------------------------------
+
+def _sql_kind(mariadb_type: str) -> str:
+    t = mariadb_type.lower()
+    if t in ("int", "bigint", "smallint", "tinyint", "mediumint"):
+        return "INTEGER"
+    if t in ("decimal", "float", "double", "numeric", "real"):
+        return "REAL"
+    return "TEXT"
+
+
+def _key_cols(expr: str) -> list:
+    return re.findall(r"`([^`]+)`", expr)
+
+
+def parse_table_defs(text: str) -> dict:
+    """Return {table: {columns: [(name, kind)], pk: [cols], indexes: [(unique, [cols])]}}.
+
+    Only line-start ``CREATE TABLE`` statements are matched, so the DDL that
+    is embedded as text inside ``database_changes`` is ignored.
+    """
+    defs = {}
+    for m in re.finditer(r"^CREATE TABLE `([^`]+)` \((.*?)\n\) ENGINE=",
+                         text, re.S | re.M):
+        name, body = m.group(1), m.group(2)
+        columns = []
+        indexes = []
+        pk = None
+        for line in body.split("\n"):
+            line = line.strip()
+            cm = re.match(r"`([^`]+)`\s+([a-zA-Z]+)", line)
+            if cm:
+                columns.append((cm.group(1), _sql_kind(cm.group(2))))
+                continue
+            if re.match(r"PRIMARY KEY", line, re.I):
+                mk = re.search(r"PRIMARY KEY \(([^)]*)\)", line, re.I)
+                if mk:
+                    pk = _key_cols(mk.group(1))
+                continue
+            mu = re.match(r"UNIQUE(?: KEY)? (?:`[^`]*`\s*)?\(([^)]*)\)", line, re.I)
+            if mu:
+                indexes.append((True, _key_cols(mu.group(1))))
+                continue
+            mkey = re.match(r"KEY (?:`[^`]*`\s*)?\(([^)]*)\)", line, re.I)
+            if mkey:
+                indexes.append((False, _key_cols(mkey.group(1))))
+        defs[name] = {"columns": columns, "pk": pk, "indexes": indexes}
+    return defs
+
+
+def _coerce(value, kind):
+    if value is None:
+        return None
+    if kind == "INTEGER":
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return value
+    if kind == "REAL":
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return value
+    return value
+
+
+def _quote_ident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def build_sqlite(db_path: Path, text: str, defs: dict, cfg: dict,
+                 folder_rows: list, meta: dict, tables_filter=None) -> dict:
+    """Write all tables into a SQLite database. Returns {table: row_count}."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(db_path.parent), prefix=".tmp-",
+                               suffix=".sqlite")
+    os.close(fd)
+    counts = {}
+    con = sqlite3.connect(tmp)
+    try:
+        con.execute("PRAGMA journal_mode=OFF")
+        con.execute("PRAGMA synchronous=OFF")
+        con.execute("PRAGMA temp_store=MEMORY")
+        for name, info in defs.items():
+            if tables_filter and name not in tables_filter:
+                continue
+            cols = info["columns"]
+            if not cols:
+                continue
+            colnames = [c for c, _ in cols]
+            col_defs = [f"{_quote_ident(c)} {k}" for c, k in cols]
+            if info["pk"]:
+                col_defs.append("PRIMARY KEY (%s)"
+                                % ", ".join(_quote_ident(c) for c in info["pk"]))
+            con.execute(f"CREATE TABLE {_quote_ident(name)} ({', '.join(col_defs)})")
+
+            placeholders = ", ".join("?" for _ in cols)
+            insert = (f"INSERT INTO {_quote_ident(name)} "
+                      f"({', '.join(_quote_ident(c) for c in colnames)}) "
+                      f"VALUES ({placeholders})")
+            kinds = [k for _, k in cols]
+            batch = []
+            n = 0
+            for row in iter_insert_rows(text, name, cfg["unescape"]):
+                if len(row) != len(cols):
+                    row = (list(row) + [None] * len(cols))[:len(cols)]
+                batch.append(tuple(_coerce(v, k) for v, k in zip(row, kinds)))
+                n += 1
+                if len(batch) >= 2000:
+                    con.executemany(insert, batch)
+                    batch.clear()
+            if batch:
+                con.executemany(insert, batch)
+            counts[name] = n
+
+            seen = set()
+            for i, (_unique, cols_) in enumerate(info["indexes"]):
+                if not cols_:
+                    continue
+                sig = tuple(cols_)
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                idx = f"idx_{name}_{i}"
+                con.execute(f"CREATE INDEX {_quote_ident(idx)} "
+                            f"ON {_quote_ident(name)} "
+                            f"({', '.join(_quote_ident(c) for c in cols_)})")
+
+        if folder_rows:
+            con.execute("CREATE TABLE folders ("
+                        "section TEXT, letter TEXT, folder TEXT, "
+                        "al_game_id INTEGER, al_game_name TEXT, "
+                        "matched_via TEXT, confidence REAL, "
+                        "PRIMARY KEY (section, letter, folder))")
+            con.executemany(
+                "INSERT INTO folders VALUES (?,?,?,?,?,?,?)", folder_rows)
+
+        con.execute("CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT)")
+        for k, v in meta.items():
+            con.execute("INSERT INTO _meta VALUES (?,?)",
+                        (k, v if isinstance(v, str) else json.dumps(v)))
+
+        con.execute("CREATE TABLE _table_stats ("
+                    "table_name TEXT PRIMARY KEY, columns INTEGER, rows INTEGER)")
+        for name, info in defs.items():
+            if name in counts:
+                con.execute("INSERT INTO _table_stats VALUES (?,?,?)",
+                            (name, len(info["columns"]), counts[name]))
+
+        con.commit()
+    finally:
+        con.close()
+    os.replace(tmp, db_path)
+    return counts
+
+
+# --------------------------------------------------------------------------
+# AtariLegend URL conventions (derived from ids/slugs, see ANALYSIS-atarilegend.md)
+# --------------------------------------------------------------------------
+
+def game_url(slug) -> str:
+    return f"{SITE}/games/{slug}"
+
+
+def review_url(review_id) -> str:
+    return f"{SITE}/reviews/{review_id}"
+
+
+def screenshot_url(slug, screenshot_id, ext) -> str:
+    return f"{SITE}/games/{slug}/screenshot-{screenshot_id}.{ext}"
+
+
+def boxscan_url(scan_id, ext) -> str:
+    return f"{SITE}/storage/images/game_release_scans/{scan_id}.{ext}"
+
+
+def company_logo_url(company_id, ext) -> str:
+    return f"{SITE}/storage/images/company_logos/{company_id}.{ext}"
+
+
+def magazine_url(magazine_id, issue_id=None) -> str:
+    base = f"{SITE}/magazines/{magazine_id}"
+    return f"{base}#magazine-issue-{issue_id}" if issue_id else base
+
+
+def load_tables_dicts(text: str, defs: dict, cfg: dict, tables) -> dict:
+    """Parse `tables` into {table: [ {column: value}, ... ]}.
+
+    Values are coerced by the declared dump column type (int/real/text), so
+    numeric ids/counts/scores come out as numbers and NULLs as None.
+    """
+    out = {}
+    for t in tables:
+        defcols = defs.get(t, {}).get("columns", [])
+        cols = [c for c, _ in defcols]
+        kinds = [k for _, k in defcols]
+        rows = []
+        for r in iter_insert_rows(text, t, cfg["unescape"]):
+            if len(r) != len(cols):
+                r = (list(r) + [None] * len(cols))[:len(cols)]
+            rows.append({c: _coerce(v, k) for c, v, k in zip(cols, r, kinds)})
+        out[t] = rows
+    return out
+
+
+def _by_id(table_rows, key="id") -> dict:
+    return {r[key]: r for r in table_rows if key in r}
+
+
+def _years_of(releases) -> list:
+    years = []
+    for r in releases:
+        d = r.get("date") or ""
+        if len(d) >= 4 and d[:4].isdigit():
+            years.append(int(d[:4]))
+    return years
+
+
+def game_facets(T: dict, game_id) -> dict | None:
+    """Name/slug/year + genre/developer/author facets for the filter dropdowns."""
+    gid = _as_id(game_id)
+    games = _by_id(T.get("games", []))
+    g = games.get(gid)
+    if not g:
+        return None
+    genres = {r["id"]: r["name"] for r in T.get("genres", [])}
+    comps = _by_id(T.get("companies", []))
+    inds = _by_id(T.get("individuals", []))
+
+    def uniq(seq):
+        seen = []
+        for x in seq:
+            if x and x not in seen:
+                seen.append(x)
+        return seen
+
+    gen = [genres.get(r.get("genre_id")) for r in T.get("game_genre", [])
+           if r.get("game_id") == gid]
+    devs = [comps.get(r.get("company_id"), {}).get("name")
+            for r in T.get("game_developer", []) if r.get("game_id") == gid]
+    auths = [inds.get(r.get("individual_id"), {}).get("name")
+             for r in T.get("game_individual", []) if r.get("game_id") == gid]
+    releases = [r for r in T.get("game_releases", []) if r.get("game_id") == gid]
+    years = _years_of(releases)
+    return {
+        "name": g.get("name"),
+        "slug": g.get("slug"),
+        "year": min(years) if years else None,
+        "genres": uniq(gen),
+        "developers": uniq(devs),
+        "authors": uniq(auths),
+    }
+
+
+def assemble_detail(T: dict, game_id) -> dict | None:
+    """Assemble the full 'AtariLegend details' payload for one game."""
+    gid = _as_id(game_id)
+    games = _by_id(T.get("games", []))
+    g = games.get(gid)
+    if not g:
+        return None
+    slug = g.get("slug") or ""
+
+    names = {
+        "genres": {r["id"]: r["name"] for r in T.get("genres", [])},
+        "series": {r["id"]: r["name"] for r in T.get("game_series", [])},
+        "ports": {r["id"]: r["name"] for r in T.get("ports", [])},
+        "progress": {r["id"]: r["name"] for r in T.get("game_progress_systems", [])},
+        "engines": {r["id"]: r["name"] for r in T.get("engines", [])},
+        "prog": {r["id"]: r["name"] for r in T.get("programming_languages", [])},
+        "controls": {r["id"]: r["name"] for r in T.get("controls", [])},
+        "sound": {r["id"]: r["name"] for r in T.get("sound_hardware", [])},
+        "droles": {r["id"]: r["name"] for r in T.get("developer_roles", [])},
+        "iroles": {r["id"]: r["name"] for r in T.get("individual_roles", [])},
+        "memories": {r["id"]: r["name"] for r in T.get("memories", [])},
+        "resolutions": {r["id"]: r["name"] for r in T.get("resolutions", [])},
+        "languages": {r["id"]: r["name"] for r in T.get("languages", [])},
+        "locations": {r["id"]: r["name"] for r in T.get("locations", [])},
+        "tos": {r["id"]: r["name"] for r in T.get("tos", [])},
+        "copy": {r["id"]: r["name"] for r in T.get("copy_protections", [])},
+        "disk": {r["id"]: r["name"] for r in T.get("disk_protections", [])},
+    }
+    comps = _by_id(T.get("companies", []))
+    inds = _by_id(T.get("individuals", []))
+    crews = _by_id(T.get("crews", []))
+    mags = _by_id(T.get("magazines", []))
+    issues = _by_id(T.get("magazine_issues", []))
+    screenshots = _by_id(T.get("screenshots", []))
+    sndh_archives = _by_id(T.get("sndh_archives", []))
+
+    def uniq(seq):
+        out = []
+        for x in seq:
+            if x and x not in out:
+                out.append(x)
+        return out
+
+    def names_for(table, idkey, ref) -> list:
+        return uniq(names[ref].get(r.get(idkey))
+                    for r in T.get(table, []) if r.get("game_id") == gid)
+
+    releases = [r for r in T.get("game_releases", []) if r.get("game_id") == gid]
+    rel_by_id = {r["id"]: r for r in releases}
+
+    def rel_rows(table, key="game_release_id"):
+        return [r for r in T.get(table, []) if r.get(key) in rel_by_id]
+
+    out_releases = []
+    for r in releases:
+        rid = r["id"]
+        out_releases.append({
+            "id": rid,
+            "date": r.get("date"),
+            "type": r.get("type"),
+            "license": r.get("license"),
+            "status": r.get("status"),
+            "hd_installable": r.get("hd_installable"),
+            "publisher": comps.get(r.get("company_id"), {}).get("name"),
+            "distributor": uniq(comps.get(x.get("company_id"), {}).get("name")
+                                for x in rel_rows("game_release_distributor") if x.get("game_release_id") == rid),
+            "locations": uniq(names["locations"].get(x.get("location_id"))
+                              for x in rel_rows("game_release_location") if x.get("game_release_id") == rid),
+            "languages": uniq(names["languages"].get(x.get("language_id"))
+                              for x in rel_rows("game_release_language") if x.get("game_release_id") == rid),
+            "memory_minimum": uniq(names["memories"].get(x.get("memory_id"))
+                                   for x in rel_rows("game_release_memory_minimum") if x.get("game_release_id") == rid),
+            "resolutions": uniq(names["resolutions"].get(x.get("resolution_id"))
+                                for x in rel_rows("game_release_resolution") if x.get("game_release_id") == rid),
+            "copy_protection": uniq(names["copy"].get(x.get("copy_protection_id"))
+                                    for x in rel_rows("game_release_copy_protection") if x.get("game_release_id") == rid),
+            "disk_protection": uniq(names["disk"].get(x.get("disk_protection_id"))
+                                    for x in rel_rows("game_release_disk_protection") if x.get("game_release_id") == rid),
+            "tos_incompatible": uniq(names["tos"].get(x.get("tos_id"))
+                                     for x in rel_rows("game_release_tos_incompatibilities") if x.get("game_release_id") == rid),
+            "crews": uniq(crews.get(x.get("crew_id"), {}).get("name")
+                          for x in rel_rows("game_release_crew") if x.get("game_release_id") == rid),
+            "boxscans": [
+                {"id": x["id"], "type": x.get("type"), "imgext": x.get("imgext"),
+                 "url": boxscan_url(x["id"], x.get("imgext")), "notes": x.get("notes")}
+                for x in rel_rows("game_release_scans") if x.get("game_release_id") == rid
+            ],
+        })
+
+    screens = [
+        {"id": x.get("screenshot_id"),
+         "imgext": screenshots.get(x.get("screenshot_id"), {}).get("imgext"),
+         "url": screenshot_url(slug, x.get("screenshot_id"),
+                               screenshots.get(x.get("screenshot_id"), {}).get("imgext"))}
+        for x in T.get("game_screenshot", []) if x.get("game_id") == gid
+    ]
+
+    # sndh_id is an archive-path key; ids may also appear with a leading slash
+    sndhs = T.get("sndhs", [])
+    music = []
+    for link in T.get("game_sndh", []):
+        if link.get("game_id") != gid:
+            continue
+        sid = link.get("sndh_id")
+        for s in sndhs:
+            if s.get("id") in (sid, "/" + str(sid)):
+                arch = sndh_archives.get(s.get("sndh_archive_id"), {})
+                music.append({
+                    "id": s.get("id"), "title": s.get("title"),
+                    "composer": s.get("composer"), "ripper": s.get("ripper"),
+                    "subtunes": s.get("subtunes"), "year": s.get("year"),
+                    "archive": s.get("sndh_archive_id"),
+                    "download_url": arch.get("download_url"),
+                })
+
+    reviews = [
+        {"id": r["id"], "url": review_url(r["id"]),
+         "published_at": r.get("published_at"),
+         "graphics": r.get("graphics"), "sound": r.get("sound"),
+         "gameplay": r.get("gameplay"), "overall": r.get("overall")}
+        for r in T.get("reviews", []) if r.get("game_id") == gid
+    ]
+
+    magazine_refs = []
+    for m in T.get("magazine_indices", []):
+        if m.get("game_id") != gid:
+            continue
+        iss = issues.get(m.get("magazine_issue_id"), {})
+        magazine_refs.append({
+            "magazine": mags.get(iss.get("magazine_id"), {}).get("name"),
+            "issue": iss.get("issue"), "published": iss.get("published"),
+            "page": m.get("page"), "score": m.get("score"),
+            "url": magazine_url(iss.get("magazine_id"), m.get("magazine_issue_id")),
+            "archive_url": iss.get("archiveorg_url") or iss.get("alternate_url"),
+        })
+
+    return {
+        "game": {"id": g["id"], "name": g.get("name"), "slug": slug,
+                 "url": game_url(slug)},
+        "akas": [r.get("name") for r in T.get("game_akas", []) if r.get("game_id") == gid],
+        "genres": [names["genres"].get(r.get("genre_id"))
+                   for r in T.get("game_genre", []) if r.get("game_id") == gid],
+        "series": names["series"].get(g.get("game_series_id")),
+        "port": names["ports"].get(g.get("port_id")),
+        "progress": names["progress"].get(g.get("game_progress_system_id")),
+        "players": {
+            "same_machine": g.get("players_same_machine"),
+            "multiple_machines": g.get("players_multiple_machines"),
+            "multiplayer_type": g.get("multiplayer_type"),
+            "multiplayer_hardware": g.get("multiplayer_hardware"),
+        },
+        "developers": [
+            {"name": comps.get(r.get("company_id"), {}).get("name"),
+             "role": names["droles"].get(r.get("developer_role_id")),
+             "logo_url": company_logo_url(r.get("company_id"), comps.get(r.get("company_id"), {}).get("imgext"))
+             if comps.get(r.get("company_id"), {}).get("imgext") else None}
+            for r in T.get("game_developer", []) if r.get("game_id") == gid
+        ],
+        "authors": [
+            {"name": inds.get(r.get("individual_id"), {}).get("name"),
+             "role": names["iroles"].get(r.get("individual_role_id"))}
+            for r in T.get("game_individual", []) if r.get("game_id") == gid
+        ],
+        "engine": names_for("game_engine", "engine_id", "engines"),
+        "programming_language": names_for("game_programming_language",
+                                           "programming_language_id", "prog"),
+        "controls": names_for("game_control", "control_id", "controls"),
+        "sound_hardware": names_for("game_sound_hardware", "sound_hardware_id", "sound"),
+        "releases": out_releases,
+        "screenshots": screens,
+        "music": music,
+        "reviews": reviews,
+        "magazines": magazine_refs,
+        "videos": [{"title": r.get("title"), "youtube_id": r.get("youtube_id"),
+                    "author": r.get("author")}
+                   for r in T.get("game_videos", []) if r.get("game_id") == gid],
+        "facts": [r.get("fact") for r in T.get("game_facts", []) if r.get("game_id") == gid],
+    }
+
+
+# --------------------------------------------------------------------------
 # atomic writes
 # --------------------------------------------------------------------------
 
@@ -477,18 +1003,8 @@ def cmd_report(args) -> int:
     return 0
 
 
-def cmd_match(args) -> int:
-    cfg = load_config()
-    d = out_dir(args.dir)
-    d.mkdir(parents=True, exist_ok=True)
-    dump = _resolve_dump_path(args, d)
-    log(f"reading dump: {dump}")
-    text = read_dump(dump)
-
-    idir = index_dir_optional(args.index_dir)
-    if idir is None:
-        sys.exit("error: set MARCER_OUT_DIR (local/paths.env) or pass --index-dir")
-
+def compute_match(cfg: dict, text: str, idir: Path, sections) -> tuple:
+    """Return (folder_map, result_sections, total_games, matched_ids)."""
     log("parsing tables")
     t0 = time.time()
     rows = parse_relevant_tables(text, cfg)
@@ -497,12 +1013,9 @@ def cmd_match(args) -> int:
     log(f"AtariLegend games: {total_games}, distinct name keys: {len(key_index)} "
         f"({time.time() - t0:.1f}s)")
 
-    sections = KINDS if args.section == "all" else (args.section,)
     result_sections = {}
     folder_map = {}
     matched_ids = set()
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
     for kind in sections:
         idx = idir / INDEX_FILES[kind]
         if not idx.is_file():
@@ -543,6 +1056,25 @@ def cmd_match(args) -> int:
         log(f"[{kind}] folders={stats['folders']} exact={stats['exact']} "
             f"prefix={stats['prefix']} fuzzy={stats['fuzzy']} "
             f"unmatched={stats['none']} -> {pct:.1f}%")
+    return folder_map, result_sections, total_games, matched_ids
+
+
+def cmd_match(args) -> int:
+    cfg = load_config()
+    d = out_dir(args.dir)
+    d.mkdir(parents=True, exist_ok=True)
+    dump = _resolve_dump_path(args, d)
+    log(f"reading dump: {dump}")
+    text = read_dump(dump)
+
+    idir = index_dir_optional(args.index_dir)
+    if idir is None:
+        sys.exit("error: set MARCER_OUT_DIR (local/paths.env) or pass --index-dir")
+
+    sections = KINDS if args.section == "all" else (args.section,)
+    folder_map, result_sections, total_games, matched_ids = compute_match(
+        cfg, text, idir, sections)
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     payload = {
         "schema_version": SCHEMA_VERSION,
@@ -604,6 +1136,204 @@ def build_text_report(payload: dict, sections: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def cmd_extract(args) -> int:
+    cfg = load_config()
+    d = out_dir(args.dir)
+    d.mkdir(parents=True, exist_ok=True)
+    dump = _resolve_dump_path(args, d)
+    log(f"reading dump: {dump}")
+    text = read_dump(dump)
+
+    defs = parse_table_defs(text)
+    log(f"discovered {len(defs)} tables")
+
+    folder_rows = []
+    match_meta = {}
+    idir = index_dir_optional(args.index_dir)
+    if args.no_match:
+        log("match mapping disabled (--no-match)")
+    elif idir is None:
+        log("MARCER_OUT_DIR not set -> skipping match mapping")
+    else:
+        folder_map, _sections, _total, matched_ids = compute_match(
+            cfg, text, idir, KINDS)
+        for key, v in folder_map.items():
+            section, letter, folder = key.split("|", 2)
+            folder_rows.append((section, letter, folder, v["al_game_id"],
+                                v["al_name"], v["matched_via"], v["confidence"]))
+        match_meta = {"matched_folders": len(folder_rows),
+                      "matched_atarilegend_games": len(matched_ids)}
+
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    meta = {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "generator": f"tools/atarilegend-gen {TOOL_VERSION}",
+        "source_file": dump.name,
+        "source_sha256": _sha256(dump),
+        "dump_date": _dump_date(dump),
+        "tables": len(defs),
+    }
+    meta.update(match_meta)
+
+    db = d / "atarilegend.sqlite"
+    counts = build_sqlite(db, text, defs, cfg, folder_rows, meta)
+    total = sum(counts.values())
+    size_mb = db.stat().st_size / 1e6
+    log(f"wrote {db} ({len(counts)} tables, {total} rows, {size_mb:.1f} MB)")
+    if folder_rows:
+        log(f"folders table: {len(folder_rows)} matches")
+    return 0
+
+
+def _resolve_detail_gid(args, cfg, text, defs, T, d) -> str:
+    if args.game_id is not None:
+        return str(args.game_id)
+    if args.slug:
+        for r in T.get("games", []):
+            if r.get("slug") == args.slug:
+                return r["id"]
+        sys.exit(f"error: slug not found: {args.slug}")
+    if args.folder:
+        idir = index_dir_optional(args.index_dir)
+        if idir is None:
+            sys.exit("error: --folder needs MARCER_OUT_DIR or --index-dir")
+        parts = args.folder.split("/", 2)
+        if len(parts) != 3:
+            sys.exit("error: --folder must be kind/letter/folder")
+        kind, letter, folder = parts
+        if kind not in KINDS:
+            sys.exit(f"error: kind must be one of {KINDS}")
+        folder_map, _s, _t, _m = compute_match(cfg, text, idir, (kind,))
+        key = f"{kind}|{letter}|{folder}"
+        if key not in folder_map:
+            sys.exit(f"error: folder not matched: {key}")
+        return str(folder_map[key]["al_game_id"])
+    sys.exit("error: give --slug, --game-id or --folder")
+
+
+def cmd_detail(args) -> int:
+    cfg = load_config()
+    d = out_dir_optional(args.dir)
+    dump = _resolve_dump_path(args, d)
+    log(f"reading dump: {dump}")
+    text = read_dump(dump)
+    defs = parse_table_defs(text)
+    T = load_tables_dicts(text, defs, cfg, DETAIL_TABLES)
+    gid = _resolve_detail_gid(args, cfg, text, defs, T, d)
+    detail = assemble_detail(T, gid)
+    if detail is None:
+        sys.exit(f"error: game id not found: {gid}")
+    if args.json:
+        atomic_write_json(Path(args.json), detail)
+        log(f"wrote {args.json}")
+    else:
+        print(format_detail_text(detail))
+    return 0
+
+
+def cmd_index(args) -> int:
+    cfg = load_config()
+    d = out_dir(args.dir)
+    d.mkdir(parents=True, exist_ok=True)
+    dump = _resolve_dump_path(args, d)
+    log(f"reading dump: {dump}")
+    text = read_dump(dump)
+    idir = index_dir_optional(args.index_dir)
+    if idir is None:
+        sys.exit("error: set MARCER_OUT_DIR (local/paths.env) or pass --index-dir")
+
+    defs = parse_table_defs(text)
+    folder_map, _sections, total_games, matched_ids = compute_match(
+        cfg, text, idir, KINDS)
+    T = load_tables_dicts(text, defs, cfg, FACET_TABLES)
+    games = {}
+    for gid in sorted({v["al_game_id"] for v in folder_map.values()}):
+        facets = game_facets(T, gid)
+        if facets:
+            games[str(gid)] = facets
+
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generator": f"tools/atarilegend-gen {TOOL_VERSION}",
+        "source": {"file": dump.name, "dump_date": _dump_date(dump)},
+        "totals": {"games": total_games, "matched_games": len(matched_ids),
+                   "folders": len(folder_map)},
+        "folders": {k: {"al_game_id": v["al_game_id"],
+                        "matched_via": v["matched_via"],
+                        "confidence": v["confidence"]}
+                    for k, v in folder_map.items()},
+        "games": games,
+    }
+    out = Path(args.out) if args.out else d / "atarilegend-index.json"
+    atomic_write_json(out, payload)
+    log(f"wrote {out} ({len(folder_map)} folders, {len(games)} games)")
+    return 0
+
+
+def cmd_fixtures(args) -> int:
+    cfg = load_config()
+    d = out_dir(args.dir)
+    d.mkdir(parents=True, exist_ok=True)
+    dump = _resolve_dump_path(args, d)
+    text = read_dump(dump)
+    defs = parse_table_defs(text)
+    T = load_tables_dicts(text, defs, cfg, DETAIL_TABLES)
+    outdir = Path(args.out) if args.out else d / "fixtures"
+    outdir.mkdir(parents=True, exist_ok=True)
+    slugs = args.slugs.split(",") if args.slugs else list(FIXTURE_GAMES)
+    by_slug = {r.get("slug"): r["id"] for r in T.get("games", [])}
+    n = 0
+    for slug in slugs:
+        gid = by_slug.get(slug)
+        if gid is None:
+            log(f"skip {slug}: not found")
+            continue
+        detail = assemble_detail(T, gid)
+        p = outdir / f"detail-{slug}.json"
+        atomic_write_json(p, detail)
+        n += 1
+    log(f"wrote {n} fixtures to {outdir}")
+    return 0
+
+
+def format_detail_text(detail: dict) -> str:
+    g = detail["game"]
+    L = [f"{g['name']}  (id {g['id']}, slug {g['slug']})",
+         f"  {g['url']}"]
+    if detail["akas"]:
+        L.append(f"  AKA: {', '.join(detail['akas'])}")
+    if detail["genres"]:
+        L.append(f"  Genres: {', '.join(detail['genres'])}")
+    for d_ in detail["developers"]:
+        L.append(f"  Developer: {d_['name']}"
+                 + (f" ({d_['role']})" if d_["role"] else ""))
+    for a in detail["authors"]:
+        L.append(f"  Author: {a['name']}"
+                 + (f" ({a['role']})" if a["role"] else ""))
+    if detail["series"]:
+        L.append(f"  Series: {detail['series']}")
+    if detail["port"]:
+        L.append(f"  Original system: {detail['port']}")
+    for key in ("screenshots", "music", "reviews", "magazines", "videos", "facts"):
+        items = detail.get(key) or []
+        if items:
+            L.append(f"  {key}: {len(items)}")
+    for r in detail["releases"]:
+        L.append(f"  Release {r['date']} "
+                 f"[{r['license']}/{r['type']}] publisher={r['publisher']} "
+                 f"boxscans={len(r['boxscans'])}")
+    for s in detail["screenshots"]:
+        L.append(f"    screenshot {s['id']}: {s['url']}")
+    for m in detail["music"]:
+        L.append(f"    music {m['title']!r} by {m['composer']} -> {m['download_url']}")
+    for rv in detail["reviews"]:
+        L.append(f"    review {rv['id']}: {rv['url']} "
+                 f"({rv['graphics']}/{rv['sound']}/{rv['gameplay']}/{rv['overall']})")
+    return "\n".join(L)
+
+
 # --------------------------------------------------------------------------
 # cli
 # --------------------------------------------------------------------------
@@ -629,6 +1359,45 @@ def main() -> int:
     p_m.add_argument("--section", choices=("all",) + KINDS, default="all")
     p_m.add_argument("--json", help="also write the JSON report to this path")
     p_m.set_defaults(func=cmd_match)
+
+    p_e = sub.add_parser(
+        "extract", help="mirror all tables into atarilegend.sqlite (+ match)")
+    p_e.add_argument("--dir", help="output dir (default MARCER_ATARILEGEND_DIR)")
+    p_e.add_argument("--dump", help="dump file to use (default: newest cached)")
+    p_e.add_argument("--index-dir",
+                     help="screenshot index dir (default MARCER_OUT_DIR)")
+    p_e.add_argument("--no-match", action="store_true",
+                     help="skip building the folder->game match mapping")
+    p_e.set_defaults(func=cmd_extract)
+
+    p_d = sub.add_parser("detail",
+                         help="assemble the AtariLegend detail payload for one game")
+    p_d.add_argument("--dir", help="output dir (default MARCER_ATARILEGEND_DIR)")
+    p_d.add_argument("--dump", help="dump file to use (default: newest cached)")
+    p_d.add_argument("--index-dir",
+                     help="screenshot index dir (default MARCER_OUT_DIR)")
+    p_d.add_argument("--slug", help="game slug (e.g. buggy-boy)")
+    p_d.add_argument("--game-id", help="AtariLegend game id")
+    p_d.add_argument("--folder", help="kind/letter/folder (resolved via the match)")
+    p_d.add_argument("--json", help="write the detail payload JSON to this path")
+    p_d.set_defaults(func=cmd_detail)
+
+    p_i = sub.add_parser("index",
+                         help="write the runtime index (folders + filter facets)")
+    p_i.add_argument("--dir", help="output dir (default MARCER_ATARILEGEND_DIR)")
+    p_i.add_argument("--dump", help="dump file to use (default: newest cached)")
+    p_i.add_argument("--index-dir",
+                     help="screenshot index dir (default MARCER_OUT_DIR)")
+    p_i.add_argument("--out", help="output JSON path (default atarilegend-index.json)")
+    p_i.set_defaults(func=cmd_index)
+
+    p_x = sub.add_parser("fixtures",
+                         help="write detail fixtures for a few known games (diff harness)")
+    p_x.add_argument("--dir", help="output dir (default MARCER_ATARILEGEND_DIR)")
+    p_x.add_argument("--dump", help="dump file to use (default: newest cached)")
+    p_x.add_argument("--out", help="fixture output dir (default <dir>/fixtures)")
+    p_x.add_argument("--slugs", help="comma-separated slugs (default known set)")
+    p_x.set_defaults(func=cmd_fixtures)
 
     p_r = sub.add_parser("report", help="print a table inventory of the dump")
     p_r.add_argument("--dir", help="output dir (default MARCER_ATARILEGEND_DIR)")
