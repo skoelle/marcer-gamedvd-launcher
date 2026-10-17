@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -85,13 +84,19 @@ class CatalogController extends ChangeNotifier {
   Future<void> init() async {
     progress = 'Loading catalog…';
     notifyListeners();
-    // Capture a plain config value (not `this`) so the isolate closure stays
-    // sendable even when listeners are attached to the controller.
+    // Capture a plain config value (not `this`) so the loader stays independent
+    // of the controller's listeners. The bundle is loaded in a background
+    // isolate that streams coarse phase messages (sources + catalog build) back
+    // for the loading screen.
     final cfg = config;
-    final bundle = await Isolate.run(() => CatalogBundle.loadSync(
-          screenshotDir: cfg.screenshotDirectory,
-          gameinfoDir: cfg.resolveGameinfoDirectory(),
-        ));
+    final bundle = await CatalogBundle.load(
+      screenshotDir: cfg.screenshotDirectory,
+      gameinfoDir: cfg.resolveGameinfoDirectory(),
+      onProgress: (message) {
+        progress = message;
+        notifyListeners();
+      },
+    );
     notices.addAll(bundle.warnings);
     screenshots = bundle.index;
     gameinfo = bundle.info;

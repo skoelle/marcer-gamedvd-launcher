@@ -20,7 +20,10 @@ Plan: [`PLAN.md`](PLAN.md). Architecture decision:
   join, screenshot index, `GameCard` universe + facets + filter/sort engine,
   config). No Flutter dependency; unit-tested via `dart test`.
 - `lib/` — Flutter app (gallery catalog grid, optional folder browser,
-  list/grid entry views, lightbox with a gallery-style status bar).
+  list/grid entry views, lightbox with a gallery-style status bar). The
+  catalog loads in a background isolate that reports progress on the loading
+  screen (`Loading screenshot index…`, `Loading game metadata…`,
+  `Building catalog — cracked 1200/8000…`, `Finalizing…`).
 - `assets/icon/app_icon.png` — master app icon; `tool/generate_icons.py`
   regenerates the platform icon sets from the gallery favicon.
 - `desktop.config.example.json` — config template (absolute paths).
