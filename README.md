@@ -74,6 +74,17 @@ Save, the manual screenshot curation described below.
   exists. A card without any local ZIP gets a red `MISSING` badge, a single
   absent variant is tagged in the lightbox filmstrip. The check is cached per
   session — reload the settings to pick up files synced while the app runs.
+- **Download missing game folders (FTP)** — a `MISSING` catalog card shows a
+  **Download folder** button in the detail sidebar that pulls the card's whole
+  folder (all ZIP variants + subdirectories) recursively from the Marcer FTP
+  server into the patch layer (the root directory when no `PatchDirectory` is
+  set) and then clears the `MISSING`/layer badges in place. Plain FTP (port 21,
+  or `host:port` for a non-standard port); the connection settings
+  (`Ftp.Host`/`Ftp.User`/`Ftp.Password`, optional `Ftp.RemoteBase`, default
+  `/GameDVD/`) are edited in the settings editor.
+  Existing local files are skipped, progress + **Cancel** show in the sidebar
+  and status bar, failures appear as a modal, and an unconfigured host shows a
+  hint instead of downloading.
 - **Gallery-style status bar** — section-aware coverage as separate games
   segments (`3287 folders`, `3211 with screenshot`), status counts as
   `done <games> (<zips> zips)`, gameinfo coverage (`gameinfo N folders` /
@@ -194,7 +205,9 @@ but cannot be read shows an error page with a **Setup…** button. Template: [`a
 The ⚙ gear button in the top bar opens an in-app **settings editor** for all
 path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
 `GameinfoDirectory`, `Hatari.Executable`, `Hatari.ConfigFile`) with native
-directory/file pickers. **Save** writes them back to the same
+directory/file pickers, plus the **FTP** fields for "Download missing"
+(`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase` — free text, never
+block saving). **Save** writes them back to the same
 `desktop.config.json` and reloads the catalog in place, so new paths apply
 without restarting the app; window settings and the remaining fields stay
 untouched.
@@ -215,6 +228,9 @@ optional (needed to launch, not to browse).
 | `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
 | `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
+| `Ftp.Host` | for download | FTP server for "Download missing"; `host` or `host:port` (default port 21) |
+| `Ftp.User` / `Ftp.Password` | no | FTP credentials (empty user ⇒ `anonymous`; password stored in plaintext) |
+| `Ftp.RemoteBase` | no | remote directory prefix (default `/GameDVD/`; empty ⇒ FTP login root) |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
 | `Window.width/height` | no | initial window size and restore size (default 1280×800) |

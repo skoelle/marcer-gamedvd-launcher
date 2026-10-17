@@ -87,4 +87,36 @@ void main() {
     expect(valid, isTrue);
     expect(find.byIcon(Icons.cancel), findsNothing);
   });
+
+  testWidgets('FTP fields are free text, never block and round-trip',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final dir = Directory.systemTemp.createTempSync('settings_form_ftp');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    DesktopConfig? latest;
+    bool? valid;
+    await _pumpForm(tester, DesktopConfig(rootDirectory: dir.path), (c, v) {
+      latest = c;
+      valid = v;
+    });
+    // Fields 6..9 are the FTP fields (host/user/password/remote base).
+    await tester.enterText(find.byType(TextField).at(6), 'ftp.example.com');
+    await tester.enterText(find.byType(TextField).at(7), 'anon');
+    await tester.enterText(find.byType(TextField).at(8), 'secret');
+    await tester.enterText(find.byType(TextField).at(9), 'not/a/real/path');
+    await tester.pump();
+
+    expect(valid, isTrue, reason: 'FTP fields are never path-validated');
+    expect(find.byIcon(Icons.cancel), findsNothing);
+    expect(latest!.ftpHost, 'ftp.example.com');
+    expect(latest!.ftpUser, 'anon');
+    expect(latest!.ftpPassword, 'secret');
+    expect(latest!.ftpRemoteBase, 'not/a/real/path');
+  });
 }

@@ -10,6 +10,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
 import 'favorites_service.dart';
+import 'ftp_downloader.dart';
 import 'hatari_launcher.dart';
 import 'index_editor.dart';
 
@@ -662,6 +663,112 @@ class CatalogController extends ChangeNotifier {
     if (launchError == null) return;
     launchError = null;
     notifyListeners();
+  }
+
+  // --------------------------------------------------- missing (FTP download)
+
+  /// Pluggable downloader (FTP in production, a fake in tests).
+  Downloader downloader = const FtpDownloader();
+
+  /// True while a "download missing" run transfers a card's folder; the
+  /// DetailPanel shows progress + Cancel for [downloadingCard] then.
+  bool downloading = false;
+
+  /// The card whose folder is currently being downloaded (null when idle).
+  GameCard? downloadingCard;
+
+  /// Human-readable download progress ("Connecting…", "12/34 files").
+  String downloadProgress = '';
+
+  /// Last download error, surfaced as a modal and cleared on acknowledgement.
+  String? downloadError;
+
+  VoidCallback? _cancelDownload;
+
+  /// True when the FTP connection settings are present (host set).
+  bool get ftpConfigured => config.ftpConfigured;
+
+  /// Requests cancellation of the running download (best effort; the run stops
+  /// between file transfers).
+  void cancelDownload() => _cancelDownload?.call();
+
+  void clearDownloadError() {
+    if (downloadError == null) return;
+    downloadError = null;
+    notifyListeners();
+  }
+
+  /// Downloads [card]'s whole folder (all ZIP variants + subdirectories) from
+  /// the configured FTP server into the patch layer (or root when no patch
+  /// directory is set) and refreshes the local layer/missing caches so the
+  /// badges clear without a full reload. No-op while another run is active.
+  Future<void> downloadMissing(GameCard card) async {
+    if (downloading) return;
+    final folder = cardFolderRel(card);
+    if (folder == null || folder.isEmpty) {
+      downloadError = 'No folder to download for this card.';
+      notifyListeners();
+      return;
+    }
+    if (!config.ftpConfigured) {
+      downloadError =
+          'FTP not configured — set Host/User/Password in Settings.';
+      notifyListeners();
+      return;
+    }
+
+    var cancelled = false;
+    _cancelDownload = () => cancelled = true;
+    downloading = true;
+    downloadingCard = card;
+    downloadProgress = 'Connecting…';
+    downloadError = null;
+    notifyListeners();
+
+    try {
+      await downloader.downloadDirectory(
+        host: config.ftpHostName,
+        port: config.ftpPort,
+        user: config.ftpUser,
+        password: config.ftpPassword,
+        remoteDir: _remoteDirFor(folder),
+        localDir: p.join(config.downloadTargetDirectory, folder),
+        onProgress: (done, total) {
+          downloadProgress =
+              total <= 0 ? 'Downloading…' : 'Downloading $done/$total files';
+          notifyListeners();
+        },
+        isCancelled: () => cancelled,
+      );
+      downloadProgress = 'Download finished.';
+      _refreshAfterDownload(folder);
+    } on DownloadCancelledException {
+      downloadProgress = 'Download cancelled.';
+      _refreshAfterDownload(folder);
+    } catch (e) {
+      downloadError = 'Download failed: $e';
+    } finally {
+      downloading = false;
+      downloadingCard = null;
+      _cancelDownload = null;
+      notifyListeners();
+    }
+  }
+
+  /// Remote path of [folder] (relative to the catalog root), prefixed with the
+  /// configured `Ftp.RemoteBase` when set.
+  String _remoteDirFor(String folder) {
+    final base = config.ftpRemoteBase.trim().replaceAll(RegExp(r'/+$'), '');
+    return base.isEmpty ? folder : '$base/$folder';
+  }
+
+  /// Drops the cached local-layer state for [folder] (and clears the lazily
+  /// resolved pd/utils variants) so the next `cardMissing`/`cardLayer` call
+  /// re-reads the freshly downloaded files from disk.
+  void _refreshAfterDownload(String folder) {
+    _zipLayerCache
+        .removeWhere((rel, _) => rel == folder || rel.startsWith('$folder/'));
+    _resolvedCardVariants.clear();
   }
 
   // ------------------------------------------------------------- navigation

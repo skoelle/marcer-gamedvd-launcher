@@ -17,6 +17,7 @@ dependencies:
     path: packages/marcer_catalog
   window_manager: ^0.5.2
   file_picker: ^11.0.3
+  ftpconnect: ^3.0.0
 
 dev_dependencies:
   flutter_test:

@@ -76,6 +76,9 @@ locations.
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
 | `Hatari.ConfigFile` | no | empty ⇒ bundled `MarcerGameDvd-Hatari.cfg` |
 | `Hatari.ArgsTemplate` | no | must contain `{cfg}` and `{zip}` |
+| `Ftp.Host` | for download | FTP server for "Download missing"; `host` or `host:port` (default port 21) |
+| `Ftp.User` / `Ftp.Password` | no | FTP credentials (empty user ⇒ `anonymous`; password stored in plaintext) |
+| `Ftp.RemoteBase` | no | remote directory prefix (default `/GameDVD/`; empty ⇒ FTP login root) |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset for the cracked section (default `with_screenshot`; pd/utils default `any`) |
 | `Window.width/height` | no | initial/restore window size (default 1280×800) |
@@ -172,9 +175,10 @@ the coverage `info N folders` / `N without info`):
 
 The catalog is built from the screenshot index + gameinfo **without any
 filesystem scan**, so it also lists games/ZIPs that are not synced locally
-yet (the displayed `ROOT`/`PATCH`/`BOTH` layer is the layer recorded in the
-published index, not the state of your own copy). The app therefore checks
-ZIP existence lazily (cached) and marks absent files:
+yet. The app therefore resolves ZIP existence **and** the displayed
+`ROOT`/`PATCH`/`BOTH` layer on demand from the actual filesystem (cached), so
+a ZIP moved between layers still shows where it really lives, and it marks
+absent files:
 
 - **`MISSING` card badge** (grid tile, detail panel, lightbox header) when
   **none** of the card's ZIPs exists in either `RootDirectory` or
@@ -184,8 +188,35 @@ ZIP existence lazily (cached) and marks absent files:
   other variants of the same card are present.
 
 A card with at least one local ZIP is not marked, even if some variants are
-missing. The check is best-effort: files that appear or vanish while the app
-runs are only re-evaluated after a reload (settings change / restart).
+missing. The check is cached per session; files that appear or vanish while
+the app runs are re-evaluated after a download or a settings reload.
+
+## Download missing (FTP)
+
+A card that has no local ZIP (red `MISSING` badge) can be pulled from the
+Marcer FTP server without leaving the app: the detail sidebar shows a
+**Download folder** button next to the `MISSING` badge that downloads the
+card's whole folder recursively (all ZIP variants and subdirectories) into the
+patch layer — or the root directory when `PatchDirectory` is empty — and then
+re-checks the local layer so the `MISSING` badge disappears.
+
+Connection settings live in the same `desktop.config.json` under `Ftp` and are
+edited in the ⚙ settings editor:
+
+- `Ftp.Host` — FTP server as `host` or `host:port` (port 21 by default, so a
+  non-standard port is given inline, e.g. `ftp.example.com:2121`). While the
+  host is empty the button shows a "FTP not configured" hint instead of
+  downloading.
+- `Ftp.User` / `Ftp.Password` — credentials (an empty user connects as
+  `anonymous`; the password is stored in plaintext in the config file).
+- `Ftp.RemoteBase` — remote directory prefix, default `/GameDVD/` (the game
+  folders are looked up as `<RemoteBase>/<section tree>/<letter>/<folder>`).
+  Leave it empty when the FTP login directory is already the catalog root.
+
+Existing local files are skipped, so an interrupted run can simply be repeated.
+The sidebar and the status bar show progress and a **Cancel** button; failures
+appear as a modal. The download runs in the background (non-blocking, one at a
+time), so browsing stays responsive.
 
 ## Catalog coverage
 
@@ -194,8 +225,8 @@ in **neither** the screenshot index nor gameinfo does **not** appear in the
 catalog at all — the catalog is artifact-driven, not a tree listing. Such files
 are only reachable in the folder browser (`T`); regenerate the artifacts
 (`shotgen index`, `gameinfo-gen extract`) to bring them into the catalog. The
-displayed `ROOT`/`PATCH`/`BOTH` layer is always the layer recorded in the
-published index/gameinfo, never a probe of your own copy. See
+displayed `ROOT`/`PATCH`/`BOTH` layer is always resolved from your own copy
+(see above), never from the published index. See
 [`docs/DECISION-catalog-data-source.md`](../../docs/DECISION-catalog-data-source.md).
 
 ## License

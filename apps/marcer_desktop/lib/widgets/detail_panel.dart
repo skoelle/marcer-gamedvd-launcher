@@ -149,6 +149,10 @@ class DetailPanel extends StatelessWidget {
                     _badge('${variants.length} variants', Colors.indigo),
                 ],
               ),
+              if (c.cardMissing(card)) ...[
+                const SizedBox(height: 8),
+                _downloadButton(c, card),
+              ],
             ],
           ),
         ),
@@ -172,6 +176,65 @@ class DetailPanel extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Button (or live progress + Cancel) for downloading a MISSING card's whole
+  /// folder from the configured FTP server into the patch/root layer. When FTP
+  /// is not configured the click surfaces a hint instead of downloading.
+  Widget _downloadButton(CatalogController c, GameCard card) {
+    if (c.downloadingCard == card) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(c.downloadProgress,
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: c.cancelDownload,
+            child: const Text('Cancel', style: TextStyle(fontSize: 12)),
+          ),
+        ],
+      );
+    }
+    final busy = c.downloading;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Builder(
+        builder: (context) => OutlinedButton.icon(
+          onPressed: busy ? null : () => _startDownload(context, c, card),
+          icon: const Icon(Icons.download, size: 16),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.redAccent,
+            side: const BorderSide(color: Colors.redAccent),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          label: Text(
+            c.ftpConfigured ? 'Download folder' : 'Download folder (FTP not set)',
+            style: const TextStyle(fontSize: 12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _startDownload(BuildContext context, CatalogController c, GameCard card) {
+    if (!c.ftpConfigured) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+        content: Text(
+            'FTP not configured — set Host/User/Password in Settings (gear icon).'),
+        duration: Duration(seconds: 4),
+      ));
+      return;
+    }
+    c.downloadMissing(card);
   }
 
   /// The ZIP shown in the "This ZIP" table: the crew/cracker-focused variant

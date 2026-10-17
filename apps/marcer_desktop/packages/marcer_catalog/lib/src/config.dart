@@ -18,6 +18,10 @@ class DesktopConfig {
     this.hatariExecutable = '',
     this.hatariConfigFile = '',
     this.hatariArgsTemplate = r'-c "{cfg}" --disk-a "{zip}"',
+    this.ftpHost = '',
+    this.ftpUser = '',
+    this.ftpPassword = '',
+    this.ftpRemoteBase = '/GameDVD/',
     this.showCandidates = true,
     this.defaultStatus = 'with_screenshot',
     this.appDir = '',
@@ -34,6 +38,18 @@ class DesktopConfig {
   final String hatariExecutable;
   final String hatariConfigFile;
   final String hatariArgsTemplate;
+
+  /// FTP download of missing game folders (DetailPanel "Download missing").
+  /// Plain FTP; [ftpHost] is `host` or `host:port` (the port defaults to 21,
+  /// resolved by [ftpHostName]/[ftpPort]; user decision 2026-10-17). The
+  /// feature is considered unconfigured while the host part is empty
+  /// ([ftpConfigured]). [ftpRemoteBase] is the remote directory prefix
+  /// (default `/GameDVD/`); empty = the FTP login directory is the catalog
+  /// root. The password is stored in plaintext in the config file.
+  final String ftpHost;
+  final String ftpUser;
+  final String ftpPassword;
+  final String ftpRemoteBase;
 
   /// Application directory (the executable's directory): base for resolving
   /// relative Hatari paths and the bundled config (SPEC.md R10).
@@ -74,6 +90,7 @@ class DesktopConfig {
     final map = jsonDecode(raw) as Map<String, dynamic>;
     final hatari = (map['Hatari'] as Map<String, dynamic>?) ?? const {};
     final window = (map['Window'] as Map<String, dynamic>?) ?? const {};
+    final ftp = (map['Ftp'] as Map<String, dynamic>?) ?? const {};
     final resolvedAppDir = appDir.isNotEmpty
         ? appDir
         : File(configPath).parent.path;
@@ -86,6 +103,10 @@ class DesktopConfig {
       hatariConfigFile: (hatari['ConfigFile'] ?? '') as String,
       hatariArgsTemplate:
           (hatari['ArgsTemplate'] ?? r'-c "{cfg}" --disk-a "{zip}"') as String,
+      ftpHost: (ftp['Host'] ?? '') as String,
+      ftpUser: (ftp['User'] ?? '') as String,
+      ftpPassword: (ftp['Password'] ?? '') as String,
+      ftpRemoteBase: (ftp['RemoteBase'] ?? '/GameDVD/') as String,
       showCandidates: (map['ShowCandidates'] ?? true) as bool,
       defaultStatus: (map['DefaultStatus'] ?? 'with_screenshot') as String,
       appDir: resolvedAppDir,
@@ -107,6 +128,10 @@ class DesktopConfig {
     String? hatariExecutable,
     String? hatariConfigFile,
     String? hatariArgsTemplate,
+    String? ftpHost,
+    String? ftpUser,
+    String? ftpPassword,
+    String? ftpRemoteBase,
     bool? showCandidates,
     String? defaultStatus,
     String? appDir,
@@ -123,6 +148,10 @@ class DesktopConfig {
       hatariExecutable: hatariExecutable ?? this.hatariExecutable,
       hatariConfigFile: hatariConfigFile ?? this.hatariConfigFile,
       hatariArgsTemplate: hatariArgsTemplate ?? this.hatariArgsTemplate,
+      ftpHost: ftpHost ?? this.ftpHost,
+      ftpUser: ftpUser ?? this.ftpUser,
+      ftpPassword: ftpPassword ?? this.ftpPassword,
+      ftpRemoteBase: ftpRemoteBase ?? this.ftpRemoteBase,
       showCandidates: showCandidates ?? this.showCandidates,
       defaultStatus: defaultStatus ?? this.defaultStatus,
       appDir: appDir ?? this.appDir,
@@ -145,6 +174,12 @@ class DesktopConfig {
           'ConfigFile': hatariConfigFile,
           'ArgsTemplate': hatariArgsTemplate,
         },
+        'Ftp': {
+          'Host': ftpHost,
+          'User': ftpUser,
+          'Password': ftpPassword,
+          'RemoteBase': ftpRemoteBase,
+        },
         'ShowCandidates': showCandidates,
         'DefaultStatus': defaultStatus,
         'Window': {
@@ -160,6 +195,45 @@ class DesktopConfig {
     final text = '${const JsonEncoder.withIndent('  ').convert(toJson())}\n';
     File(path).writeAsStringSync(text);
   }
+
+  /// True when the FTP download of missing game folders is configured (only
+  /// the host is required; user/password may be empty for anonymous-ish
+  /// setups).
+  bool get ftpConfigured => ftpHostName.isNotEmpty;
+
+  /// FTP host without the optional `:port` suffix. Supports a bracketed IPv6
+  /// literal (`[::1]` / `[::1]:2121`, brackets stripped for the socket) and a
+  /// plain `host` / `host:port`; a trailing/invalid port part is ignored.
+  String get ftpHostName {
+    final raw = ftpHost.trim();
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('[')) {
+      final end = raw.indexOf(']');
+      if (end > 0) return raw.substring(1, end);
+    }
+    final colon = raw.lastIndexOf(':');
+    if (colon <= 0) return colon == 0 ? '' : raw;
+    final portPart = raw.substring(colon + 1);
+    if (portPart.isEmpty) return raw.substring(0, colon);
+    return int.tryParse(portPart) == null ? raw : raw.substring(0, colon);
+  }
+
+  /// FTP port parsed from the optional `host:port` form; defaults to the
+  /// standard port 21 when absent or invalid.
+  int get ftpPort {
+    final raw = ftpHost.trim();
+    if (raw.isEmpty) return 21;
+    final colon = raw.lastIndexOf(':');
+    if (colon < 0 || colon == raw.length - 1) return 21;
+    // Skip the colons of a bracketed IPv6 literal (`[::1]`, `[::1]:21`).
+    if (raw.startsWith('[') && colon < raw.indexOf(']')) return 21;
+    return int.tryParse(raw.substring(colon + 1)) ?? 21;
+  }
+
+  /// Directory a "download missing" run writes into: the [patchDirectory] when
+  /// set, otherwise the [rootDirectory] (user decision 2026-10-17).
+  String get downloadTargetDirectory =>
+      patchDirectory.trim().isNotEmpty ? patchDirectory : rootDirectory;
 
   /// Default gameinfo directory convention `<PatchDirectory>/../Data`
   /// (ANALYSIS-game-data.md §5.5) when [gameinfoDirectory] is empty.

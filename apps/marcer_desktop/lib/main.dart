@@ -297,6 +297,7 @@ class _HomePageState extends State<HomePage> {
   final SelfUpdateController _updater = SelfUpdateController();
   bool _showHelp = false;
   bool _showingLaunchError = false;
+  bool _showingDownloadError = false;
   bool _showingUpdateError = false;
 
   /// Running app version (release builds: stamped from the git tag via
@@ -393,29 +394,54 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  /// Surfaces launch errors (SPEC.md E3/E4/E7) as a modal, once per error.
+  /// Surfaces launch errors (SPEC.md E3/E4/E7) and download failures as a
+  /// modal, once per error.
   void _onControllerChanged() {
+    if (!mounted) return;
     final err = _controller.launchError;
-    if (err == null || _showingLaunchError || !mounted) return;
-    _showingLaunchError = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Cannot launch'),
-          content: Text(err),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      _controller.clearLaunchError();
-      _showingLaunchError = false;
-    });
+    if (err != null && !_showingLaunchError) {
+      _showingLaunchError = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Cannot launch'),
+            content: Text(err),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        _controller.clearLaunchError();
+        _showingLaunchError = false;
+      });
+    }
+    final derr = _controller.downloadError;
+    if (derr != null && !_showingDownloadError) {
+      _showingDownloadError = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Download failed'),
+            content: Text(derr),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        _controller.clearDownloadError();
+        _showingDownloadError = false;
+      });
+    }
   }
 
   /// Opens the settings editor, persists the edited paths back to
@@ -584,6 +610,18 @@ class _StatusBar extends StatelessWidget {
             const SizedBox(width: 6),
             const Text('Hatari is running…',
                 style: TextStyle(fontSize: 11, color: Colors.lightGreen)),
+            const SizedBox(width: 16),
+          ],
+          if (c.downloading) ...[
+            const SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(strokeWidth: 1.5),
+            ),
+            const SizedBox(width: 6),
+            Text('Downloading… ${c.downloadProgress}',
+                style: const TextStyle(
+                    fontSize: 11, color: Colors.orangeAccent)),
             const SizedBox(width: 16),
           ],
           Text(messages.join('  ·  '),

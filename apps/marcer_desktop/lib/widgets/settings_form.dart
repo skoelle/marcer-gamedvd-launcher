@@ -19,19 +19,31 @@ enum FieldStatus {
   invalid,
 }
 
-enum _PickerKind { directory, executable, configFile }
+enum _PickerKind { directory, executable, configFile, text }
 
-enum _Field { root, patch, screenshot, gameinfo, hatariExec, hatariCfg }
+enum _Field {
+  root,
+  patch,
+  screenshot,
+  gameinfo,
+  hatariExec,
+  hatariCfg,
+  ftpHost,
+  ftpUser,
+  ftpPass,
+  ftpBase,
+}
 
 class _PathField {
   _PathField(this.field, this.label, this.kind,
-      {this.required = false, this.optionalHint});
+      {this.required = false, this.optionalHint, this.obscure = false});
 
   final _Field field;
   final String label;
   final _PickerKind kind;
   final bool required;
   final String? optionalHint;
+  final bool obscure;
   final TextEditingController controller = TextEditingController();
 }
 
@@ -81,6 +93,17 @@ class _SettingsFormState extends State<SettingsForm> {
       _PathField(_Field.hatariCfg, 'Hatari config file', _PickerKind.configFile,
           optionalHint: 'empty → bundled MarcerGameDvd-Hatari.cfg')
         ..controller.text = c.hatariConfigFile,
+      _PathField(_Field.ftpHost, 'FTP host', _PickerKind.text,
+          optionalHint: 'host or host:port — for "Download missing"')
+        ..controller.text = c.ftpHost,
+      _PathField(_Field.ftpUser, 'FTP user', _PickerKind.text)
+        ..controller.text = c.ftpUser,
+      _PathField(_Field.ftpPass, 'FTP password', _PickerKind.text,
+          obscure: true)
+        ..controller.text = c.ftpPassword,
+      _PathField(_Field.ftpBase, 'FTP remote base dir', _PickerKind.text,
+          optionalHint: 'empty → FTP login root')
+        ..controller.text = c.ftpRemoteBase,
     ];
     for (final f in _fields) {
       f.controller.addListener(_revalidate);
@@ -119,6 +142,10 @@ class _SettingsFormState extends State<SettingsForm> {
       gameinfoDirectory: textOf(_Field.gameinfo),
       hatariExecutable: textOf(_Field.hatariExec),
       hatariConfigFile: textOf(_Field.hatariCfg),
+      ftpHost: textOf(_Field.ftpHost),
+      ftpUser: textOf(_Field.ftpUser),
+      ftpPassword: textOf(_Field.ftpPass),
+      ftpRemoteBase: textOf(_Field.ftpBase),
     );
   }
 
@@ -128,6 +155,8 @@ class _SettingsFormState extends State<SettingsForm> {
       _fields.every((f) => _statusOf(f) != FieldStatus.invalid);
 
   FieldStatus _statusOf(_PathField f) {
+    // Free-text fields (FTP) are never validated: any value (or none) is fine.
+    if (f.kind == _PickerKind.text) return FieldStatus.none;
     final v = f.controller.text.trim();
     if (v.isEmpty) return f.required ? FieldStatus.invalid : FieldStatus.none;
     final ok = f.kind == _PickerKind.directory
@@ -160,6 +189,8 @@ class _SettingsFormState extends State<SettingsForm> {
           );
           final path = result?.files.single.path;
           if (path != null) field.controller.text = path;
+        case _PickerKind.text:
+          break;
       }
     } catch (e) {
       if (mounted) {
@@ -176,6 +207,8 @@ class _SettingsFormState extends State<SettingsForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final field in _fields) ...[
+          if (field.field == _Field.ftpHost) _sectionHeader(
+              'FTP — download missing game folders (optional)'),
           _fieldRow(field),
           const SizedBox(height: 10),
         ],
@@ -183,7 +216,17 @@ class _SettingsFormState extends State<SettingsForm> {
     );
   }
 
+  Widget _sectionHeader(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(text,
+            style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.bold)),
+      );
+
   Widget _fieldRow(_PathField field) {
+    final isText = field.kind == _PickerKind.text;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -210,6 +253,7 @@ class _SettingsFormState extends State<SettingsForm> {
             Expanded(
               child: TextField(
                 controller: field.controller,
+                obscureText: field.obscure,
                 style: const TextStyle(fontSize: 12),
                 decoration: InputDecoration(
                   isDense: true,
@@ -223,14 +267,16 @@ class _SettingsFormState extends State<SettingsForm> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 40,
-              child: OutlinedButton(
-                onPressed: () => _browse(field),
-                child: const Text('Browse…'),
+            if (!isText) ...[
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 40,
+                child: OutlinedButton(
+                  onPressed: () => _browse(field),
+                  child: const Text('Browse…'),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ],
