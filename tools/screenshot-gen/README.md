@@ -188,6 +188,17 @@ match their templates near 1.0, so `click_retry.window_icon_min_score`
 white window areas while still accepting the program icon with the GEM
 arrow on it (~0.84).
 
+**Too narrow windows (mono).** GEM opens a folder view at a default width
+that may be smaller than the icon grid, hiding the rightmost icons (the
+program among them) behind a horizontal scrollbar. When an opened window
+shows no program or folder icon at all, the retry grows the window by
+single clicking its "full size" box at the top right of the title bar
+(`click_retry.enlarge_box`, screenshot pixel center, default `[310, 184]`
+for the mono 640x400 profile), then rescans once (`click_retry.enlarge_window`,
+default `true`). This also stops an opened folder whose icons do not match
+(a child window that looks like its parent) from being mistaken for a game
+that started. Enabled for mono entries only for now (no color sample yet).
+
 The attempt is recorded once per entry. `click_retried: true` marks that a
 retry ran, and a new `click_result` field records how it ended:
 

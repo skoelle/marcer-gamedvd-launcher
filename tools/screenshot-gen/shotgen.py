@@ -111,6 +111,8 @@ DEFAULT_CONFIG = {
         "drive_attempts": 3,
         "prg_attempts": 3,
         "folder_attempts": 3,
+        "enlarge_window": True,
+        "enlarge_box": [310, 184],
     },
     "tmp_dir": "/tmp/marcer-shotgen",
     "xvfb_screen": "1024x768x24",
@@ -652,15 +654,19 @@ def find_hatari_window(P: dict, grab_png: Path, pid: int = None):
 
 
 def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
-                    icon_sx: int, icon_sy: int, log, fifo: Path = None) -> None:
-    """Double-click a screenshot pixel on a known Hatari window.
+                    icon_sx: int, icon_sy: int, log, fifo: Path = None,
+                    double: bool = True) -> None:
+    """Click a screenshot pixel on a known Hatari window.
 
     The real X pointer is positioned via XTest (xdotool mousemove), then
-    Hatari's own ``hatari-event doubleclick`` command is used for the
-    actual click: sending it through the emulator's input path is far more
+    Hatari's own ``hatari-event doubleclick`` command is used for a double
+    click: sending it through the emulator's input path is far more
     reliable than XTest clicks, which GEM often only registers as a single
-    selection (verified live). The pointer is serialized under CLICK_LOCK
-    across parallel workers because it is global per display.
+    selection (verified live). A single click (``double=False``, needed for
+    GEM gadgets such as the window "full size" box) has no FIFO control
+    command in Hatari 2.4.1 and goes through XTest. The pointer is
+    serialized under CLICK_LOCK across parallel workers because it is global
+    per display.
     """
     disp = P["display"]
     wx, wy = int(kv["X"]), int(kv["Y"])
@@ -686,8 +692,12 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
         except subprocess.TimeoutExpired:
             _xdotool(["mousemove", str(x), str(y)], disp)
         time.sleep(0.4)
-        if fifo is not None:
+        if double and fifo is not None:
             fifo_write(fifo, "hatari-event doubleclick")
+        elif not double:
+            # no single-click control command in Hatari 2.4.1 (section 7.4):
+            # a GEM gadget reacts to a single click, an XTest click is enough
+            _xdotool(["click", "1"], disp)
         else:
             _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
         # GEM draws its mouse arrow into the framebuffer and it stays
@@ -714,7 +724,8 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
 
 
 def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
-               log, fifo: Path = None, pid: int = None) -> None:
+               log, fifo: Path = None, pid: int = None,
+               double: bool = True) -> None:
     """Double-click the detected icon on Hatari's SDL window.
 
     The grab screenshot provides the window content size so that the
@@ -725,7 +736,27 @@ def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
         shot_w, shot_h = im.size
     wid, kv = find_hatari_window(P, grab_png, pid=pid)
     click_window_xy(P, wid, kv, shot_w, shot_h, icon_sx, icon_sy, log,
-                    fifo=fifo)
+                    fifo=fifo, double=double)
+
+
+def enlarge_window(P: dict, grab_png: Path, log, fifo: Path = None,
+                   pid: int = None, box=(310, 184)) -> None:
+    """Grow a too narrow GEM window by clicking its "full size" gadget.
+
+    A folder view that shows more icons than fit its default width cuts
+    the rightmost ones off (behind a horizontal scrollbar); the program to
+    start can be among them, so the window is grown to the full work area
+    to reveal every icon before the scan gives up. The "full size" gadget
+    sits at the top right of the title bar and reacts to a *single* click;
+    ``box`` is its center in screenshot pixels (mono 640x400 profile, see
+    ``click_retry.enlarge_box``).
+    """
+    from PIL import Image
+    with Image.open(grab_png) as im:
+        shot_w, shot_h = im.size
+    wid, kv = find_hatari_window(P, grab_png, pid=pid)
+    click_window_xy(P, wid, kv, shot_w, shot_h, box[0], box[1], log,
+                    fifo=fifo, double=False)
 
 
 _GRAY_CACHE: dict = {}
@@ -1042,7 +1073,8 @@ def _folder_click_state(before: Path, after: Path, cfg: dict,
 
 
 def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
-                        grabs, log, pid: int = None):
+                        grabs, log, pid: int = None,
+                        allow_enlarge: bool = False):
     """Execute the click sequence for a desktop retry.
 
     prg: one double click on the program icon (game starts directly).
@@ -1051,7 +1083,10 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
            open a folder and look again (bounded by drive_max_depth).
 
     ``pid`` is the running Hatari process, used to resolve its own window
-    when parallel workers share one X display.
+    when parallel workers share one X display. ``allow_enlarge`` enables the
+    "full size" fallback (currently mono only): when an opened window shows
+    no usable icon, the window is grown once so icons cut off at its right
+    edge become visible (section 7.4).
 
     returns (clicked, last_grab, chain_shots, result):
       clicked     - True when a program start was confirmed
@@ -1062,6 +1097,20 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
     """
     strategy = click_info.get("strategy", "prg")
     chain_shots = list(grabs)
+
+    step_wait = float(click_cfg.get("step_wait", 2.0))
+    max_depth = int(click_cfg.get("drive_max_depth", 2))
+    enlarge_box = click_cfg.get("enlarge_box", [310, 184])
+    do_enlarge = bool(allow_enlarge and click_cfg.get("enlarge_window", True))
+
+    def _enlarge_rescan(shot):
+        """Grow the window once and rescan for a program/folder icon."""
+        enlarge_window(P, shot, log, fifo=fifo, pid=pid, box=enlarge_box)
+        if not sleep_until(time.monotonic() + step_wait):
+            return shot, None
+        grown = _grab_now(fifo, outdir, 2.0) or shot
+        chain_shots.append(grown)
+        return grown, find_window_target(grown, cfg)
 
     if strategy == "prg":
         before = grabs[-1]
@@ -1081,12 +1130,10 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         return False, chain_shots[-1], chain_shots, "click-failed"
 
     # strategy == "drive": open DISKSTATION A first
-    step_wait = float(click_cfg.get("step_wait", 2.0))
-    max_depth = int(click_cfg.get("drive_max_depth", 2))
-
     probe = grabs[-1]
     win_shot = probe
     target = None
+    drive_enlarged = False
     attempts = int(click_cfg.get("drive_attempts", 3))
     for attempt in range(1, attempts + 1):
         click_icon(P, win_shot, click_info["sx"], click_info["sy"], log,
@@ -1106,6 +1153,16 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         # just brings up the same window again, so only retry when the
         # click had no visible effect at all (screen unchanged)
         if _screen_changed(probe, win_shot):
+            # window is open but its icons are not usable: a too narrow
+            # default window may hide the program behind a scrollbar, so
+            # grow it once and rescan before giving up
+            if do_enlarge and not drive_enlarged:
+                drive_enlarged = True
+                log("window open but no icon matched, enlarging to reveal "
+                    "hidden icons")
+                win_shot, target = _enlarge_rescan(win_shot)
+                if target is not None:
+                    break
             log("window opened but no program or folder icon matched")
             break
         log("drive click had no effect, retrying")
@@ -1114,6 +1171,7 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         return False, win_shot, chain_shots, "click-failed"
 
     for depth in range(1, max_depth + 1):
+        enlarged = False
         kind, hit = target
         if kind == "prg":
             # GEM occasionally registers the double click as a mere
@@ -1149,6 +1207,19 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
             chain_shots.append(new_shot)
             state = _folder_click_state(win_shot, new_shot, cfg,
                                         hit["sx"], hit["sy"])
+            if state != "opened" and do_enlarge and not enlarged \
+                    and find_window_target(new_shot, cfg) is None:
+                # No matchable icon at all: the opened folder window may
+                # just look like its parent (small pixel diff) and hide the
+                # program behind a scrollbar, so the click was misjudged as
+                # a mere selection or as an auto-started game. Grow the
+                # window once and rescan before retrying or believing it.
+                enlarged = True
+                log(f"depth {depth}: no icon after folder click, enlarging "
+                    f"to check for hidden icons")
+                new_shot, hidden = _enlarge_rescan(new_shot)
+                if hidden is not None:
+                    state = "opened"
             if state == "program":
                 # the game started directly from the double click (the
                 # folder icon was already the program, or the click landed
@@ -1166,6 +1237,11 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
             return False, win_shot, chain_shots, "click-failed"
         win_shot = new_shot
         target = find_window_target(win_shot, cfg)
+        if target is None and do_enlarge and not enlarged:
+            enlarged = True
+            log(f"depth {depth}: no icon in window, enlarging to reveal "
+                f"hidden icons")
+            win_shot, target = _enlarge_rescan(win_shot)
         if target is None:
             log(f"window depth {depth}: no further program or folder icon")
             return False, win_shot, chain_shots, "click-failed"
@@ -1319,7 +1395,8 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                         clicked, last_grab, chain_shots, click_result = \
                             perform_click_chain(
                                 P, cfg, click_cfg, click_info, fifo, outdir,
-                                grabs, log, pid=proc.pid)
+                                grabs, log, pid=proc.pid,
+                                allow_enlarge=is_mono)
                     except Exception as ex:
                         log(f"click chain failed ({strategy}): {ex}")
                         clicked = False

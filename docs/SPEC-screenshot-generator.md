@@ -643,6 +643,26 @@ stronger, ~0.90) folder match.
 Frame - Tsunoo Rhilty v2 and 10th Frame - Elsi via drive -> folder ->
 PRG; mono drive -> folder -> PRG chain executes at scale 0.5.)*
 
+**Enlarging a too narrow window** (`click_retry.enlarge_window`, mono
+only for now). GEM opens a folder view at a default width that can be
+smaller than the icon grid: the rightmost icons end up behind a
+horizontal scrollbar, the program among them. When an opened window shows
+no program or folder icon at all, the retry single clicks the window's
+**"full size" box** (top right of the title bar, `click_retry.enlarge_box`
+= screenshot pixel center, default `[310, 184]` in the mono 640x400
+profile), waits `step_wait`, grabs again and rescans. This is tried once
+per window, before the drive window is written off and before an opened
+folder is misread as a directly started game (a folder window that looks
+like its parent changes too few pixels for the diff test and, with no
+matchable icon, was previously taken for a game). The "full size" box
+reacts to a single click; Hatari 2.4.1 has no single-click control
+command (section 7.4 mechanics), so this click goes through XTest.
+*(verified: `Box - Mono` was `desktop` before and graduates to `done`
+after the window is enlarged — `THE_BOX.PRG` becomes visible and starts;
+`Formel 1 ST v0.1` reveals `FORMEL_1.PRG` too, but the default GEM program
+icon template matches the `LIESMICH` file instead, a separate
+wrong-icon-selection limitation.)*
+
 Notes:
 
 - Hatari 2.4.1 has no `mousemove` control command (section 2), therefore
@@ -1387,7 +1407,9 @@ A conforming implementation satisfies all of the following.
       and the attempt is recorded (`click_retried`, `clicked`,
       `click_result`). Each worker resolves its own Hatari window by process
       id, so `--jobs N` is safe, and all intermediate chain screenshots are
-      kept as `_cNN` candidates.
+      kept as `_cNN` candidates. With `click_retry.enlarge_window` (mono),
+      a window that shows no program/folder icon is grown once via its
+      "full size" box (`click_retry.enlarge_box`) and rescanned.
 - [ ] P8 Directories ending with `mono_dir_suffix` (case-insensitive, the
       ZIP's parent directory) are booted with `--mono --tos-res high`, and
       `monitor: mono` is recorded in index and metadata (section 4.6).
