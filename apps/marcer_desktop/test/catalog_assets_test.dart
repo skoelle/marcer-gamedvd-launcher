@@ -94,4 +94,20 @@ void main() {
       throwsA(isA<DownloadCancelledException>()),
     );
   });
+
+  test('downloadSizeError flags truncated/corrupted transfers', () {
+    expect(downloadSizeError(100, 100), isNull);
+    expect(downloadSizeError(100, 0), isNull, reason: 'unknown size not checked');
+    expect(downloadSizeError(90, 100), contains('incomplete'));
+  });
+
+  test('a missing archive fails instead of hanging', () {
+    expect(
+      () => extractZipWithProgress(
+        archivePath: '/definitely/missing.zip',
+        targetDir: '/tmp/out',
+      ),
+      throwsA(isA<DownloadException>()),
+    );
+  });
 }

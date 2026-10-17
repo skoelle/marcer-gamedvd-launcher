@@ -84,6 +84,7 @@ class SettingsForm extends StatefulWidget {
     required this.initial,
     this.onChanged,
     this.onAssetDownloaded,
+    this.onBusyChanged,
     this.assetDownloader = const FtpCatalogAssets(),
     this.tosDownloader = const HttpTosRomDownloader(),
   });
@@ -97,6 +98,11 @@ class SettingsForm extends StatefulWidget {
   /// Called after a catalog asset (screenshots / gameinfo) was downloaded and
   /// extracted, so the owner can reload the catalog.
   final void Function(CatalogAsset asset)? onAssetDownloaded;
+
+  /// Called with `true` while a download/extraction is running and `false`
+  /// when it finishes, so the owner can disable Save/Cancel and block
+  /// dismissal (the running transfer must not be interrupted).
+  final ValueChanged<bool>? onBusyChanged;
 
   /// Downloads the catalog asset archives (injectable for tests).
   final CatalogAssetDownloader assetDownloader;
@@ -246,6 +252,7 @@ class _SettingsFormState extends State<SettingsForm> {
       _downloadTotal = 0;
       _cancelRequested = false;
     });
+    widget.onBusyChanged?.call(true);
     try {
       final name = await widget.assetDownloader.download(
         asset: asset,
@@ -276,6 +283,7 @@ class _SettingsFormState extends State<SettingsForm> {
           _downloadMessage = '';
         });
       }
+      widget.onBusyChanged?.call(false);
     }
   }
 

@@ -1,12 +1,29 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
+import 'package:marcer_desktop/catalog_assets.dart';
 import 'package:marcer_desktop/widgets/settings_form.dart';
+
+/// Downloader whose future only completes when the test says so.
+class _HangingDownloader implements CatalogAssetDownloader {
+  final Completer<String> completer = Completer<String>();
+
+  @override
+  Future<String> download({
+    required CatalogAsset asset,
+    required DesktopConfig config,
+    required String targetDir,
+    AssetProgress? onProgress,
+    bool Function()? isCancelled,
+  }) =>
+      completer.future;
+}
 
 Future<void> _pumpForm(WidgetTester tester, DesktopConfig initial,
     void Function(DesktopConfig config, bool valid) onChanged) async {
@@ -120,5 +137,45 @@ void main() {
     expect(latest!.ftpPassword, 'secret');
     expect(latest!.ftpRemoteBase, 'not/a/real/path');
     expect(latest!.ftpAssetsRemote, '/upload/assets');
+  });
+
+  testWidgets('reports busy while a download/extraction runs', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final dir = Directory.systemTemp.createTempSync('settings_form_busy');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    final downloader = _HangingDownloader();
+    bool? busy;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: SettingsForm(
+            initial: DesktopConfig(
+              rootDirectory: dir.path,
+              ftpHost: 'ftp.example.com',
+              screenshotDirectory: dir.path,
+            ),
+            onChanged: (_, _) {},
+            onBusyChanged: (b) => busy = b,
+            assetDownloader: downloader,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(busy, isNot(true));
+
+    await tester.tap(find.text('Download from FTP').first);
+    await tester.pump();
+    expect(busy, isTrue);
+
+    downloader.completer.complete('screenshots-20261017-080230.zip');
+    await tester.pumpAndSettle();
+    expect(busy, isFalse);
   });
 }

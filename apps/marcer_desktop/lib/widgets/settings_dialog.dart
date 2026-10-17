@@ -13,7 +13,8 @@ import 'settings_form.dart';
 /// gear button in the filter bar, or the "Setup" button on the config error
 /// page). Returns the edited [DesktopConfig] on save, or `null` on cancel
 /// (ESC / barrier tap / Cancel). Save stays disabled until every field is
-/// valid (see [SettingsForm]).
+/// valid (see [SettingsForm]); while a download/extraction runs, Save, Cancel
+/// and dismissal are blocked so the transfer is not interrupted.
 Future<DesktopConfig?> showSettingsDialog(
   BuildContext context, {
   required DesktopConfig config,
@@ -22,7 +23,7 @@ Future<DesktopConfig?> showSettingsDialog(
 }) {
   return showDialog<DesktopConfig>(
     context: context,
-    barrierDismissible: true,
+    barrierDismissible: false,
     builder: (_) =>
         SettingsDialog(config: config, title: title, subtitle: subtitle),
   );
@@ -49,6 +50,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
   DesktopConfig? _latest;
   bool _valid = false;
 
+  /// True while a download/extraction runs in the form (blocks Save/Cancel/
+  /// dismissal so the running transfer is not interrupted).
+  bool _busy = false;
+
   @override
   void initState() {
     super.initState();
@@ -63,8 +68,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   void _save() {
     final edited = _latest;
-    if (edited == null || !_valid) return;
+    if (edited == null || !_valid || _busy) return;
     Navigator.of(context).pop(edited);
+  }
+
+  void _cancel() {
+    if (_busy) return;
+    Navigator.of(context).pop();
   }
 
   @override
@@ -76,13 +86,17 @@ class _SettingsDialogState extends State<SettingsDialog> {
         onKeyEvent: (node, event) {
           if (event is KeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.escape) {
+            if (_busy) return KeyEventResult.handled;
             Navigator.of(context).pop();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
         },
         child: GestureDetector(
-          onTap: () => Navigator.of(context).pop(),
+          onTap: () {
+            if (_busy) return;
+            Navigator.of(context).pop();
+          },
           child: Container(
             color: Colors.black.withValues(alpha: 0.6),
             alignment: Alignment.center,
@@ -126,6 +140,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
                             _valid = valid;
                             setState(() {});
                           },
+                          onBusyChanged: (busy) {
+                            if (mounted) setState(() => _busy = busy);
+                          },
                         ),
                       ),
                     ),
@@ -134,12 +151,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: _busy ? null : _cancel,
                           child: const Text('Cancel'),
                         ),
                         const SizedBox(width: 8),
                         FilledButton(
-                          onPressed: _valid ? _save : null,
+                          onPressed: (_valid && !_busy) ? _save : null,
                           child: const Text('Save'),
                         ),
                       ],

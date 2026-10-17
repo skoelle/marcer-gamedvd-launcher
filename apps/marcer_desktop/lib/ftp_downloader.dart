@@ -77,6 +77,9 @@ class FtpDownloader implements Downloader {
     try {
       connected = await client.connect();
       if (!connected) throw const DownloadException('FTP login failed.');
+      // Binary transfer is required for the ZIP files: `connect()` resets the
+      // transfer type to ASCII and RETR in ASCII mode corrupts binary data.
+      await client.setTransferType(TransferType.binary);
 
       final loginDir = await client.currentDirectory();
       final absRemote = absoluteRemoteDir(loginDir, remoteDir);

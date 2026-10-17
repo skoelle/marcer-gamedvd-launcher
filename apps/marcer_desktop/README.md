@@ -236,6 +236,9 @@ edited in the ⚙ settings editor:
   folders are looked up as `<RemoteBase>/<section tree>/<letter>/<folder>`).
   Leave it empty when the FTP login directory is already the catalog root.
 
+The transfer always runs in **binary FTP** mode (ASCII would corrupt the ZIP
+files).
+
 Existing local files are skipped, so an interrupted run can simply be repeated.
 The sidebar and the status bar show progress and a **Cancel** button; failures
 appear as a modal. The download runs in the background (non-blocking, one at a
@@ -257,9 +260,15 @@ from FTP** button next to *Browse…* on both `ScreenshotDirectory` and
 - `Ftp.Host` and the target directory are required (the target directory is
   created when missing); progress and **Cancel** show inline, failures as a
   SnackBar.
-- the download reports live byte progress, and the ZIP is extracted in a
-  **background isolate** with per-file progress (the screenshot archive holds
-  thousands of PNGs), so the UI stays responsive and the run can be cancelled.
+- the transfer forces **binary FTP** mode (ASCII would corrupt the ZIPs) and a
+  post-download size check rejects truncated transfers.
+- the ZIP is extracted in a **background isolate** showing file-count progress
+  (`Extracting 1234/8000 files…`, the screenshot archive holds thousands of
+  PNGs), so the UI stays responsive and the run can be cancelled; a crashed
+  extractor fails with an error instead of hanging.
+- while a download/extraction runs, **Save**, **Cancel** and **Exit** are
+  disabled (and the dialog cannot be dismissed) so the transfer is not
+  interrupted; use the inline **Cancel** in the progress row to stop it.
 - `Ftp.AssetsRemote` defaults to `/Uploads/MarcerGameDVDLauncher-assets/` — set it
   in the form (or config) when the assets live elsewhere.
 

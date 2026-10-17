@@ -80,6 +80,9 @@ class FtpCatalogAssets implements CatalogAssetDownloader {
       onProgress?.call('Connecting…', 0, 0);
       connected = await client.connect();
       if (!connected) throw const DownloadException('FTP login failed.');
+      // Binary transfer is mandatory for the ZIP archives: `connect()` resets
+      // the transfer type to ASCII, and RETR in ASCII mode corrupts binary data.
+      await client.setTransferType(TransferType.binary);
 
       final loginDir = await client.currentDirectory();
       final assetsDir = absoluteRemoteDir(loginDir, config.ftpAssetsRemote);
@@ -109,15 +112,18 @@ class FtpCatalogAssets implements CatalogAssetDownloader {
       if (isCancelled?.call() ?? false) {
         throw const DownloadCancelledException();
       }
+      final sizeError = downloadSizeError(temp.lengthSync(), newest.size ?? 0);
+      if (sizeError != null) throw DownloadException(sizeError);
 
       onProgress?.call('Extracting ${newest.name}…', 0, 0);
       // Extraction runs in a background isolate (thousands of files) with
-      // per-file progress so the UI stays responsive.
+      // per-file progress so the UI stays responsive. The message carries the
+      // file counter (numbers only for the extraction phase).
       await extractZipWithProgress(
         archivePath: temp.path,
         targetDir: targetDir,
-        onProgress: (done, total) =>
-            onProgress?.call('Extracting ${newest.name}…', done, total),
+        onProgress: (done, total) => onProgress?.call(
+            'Extracting $done/$total files…', done, total),
         isCancelled: isCancelled,
       );
       onProgress?.call('${asset.label} updated.', 1, 1);
@@ -188,6 +194,16 @@ String? newestAssetArchiveName(Iterable<String> names, CatalogAsset asset) {
   return best;
 }
 
+/// Returns an error message when a downloaded file's [actual] byte count does
+/// not match the FTP-reported [expected] size (0 = unknown, not checked), or
+/// `null` when it matches. Catches truncated/corrupted transfers before the
+/// archive is extracted.
+String? downloadSizeError(int actual, int expected) {
+  if (expected <= 0 || actual == expected) return null;
+  return 'Download incomplete or corrupted '
+      '(got $actual of $expected bytes). Please retry.';
+}
+
 /// Extracts the ZIP at [archivePath] into [targetDir] in a **background
 /// isolate** (the archive holds thousands of PNGs), reporting per-file progress
 /// through [onProgress] (`done` out of `total` file entries). The UI isolate
@@ -207,6 +223,7 @@ Future<void> extractZipWithProgress({
 
   final receive = ReceivePort();
   final errors = ReceivePort();
+  final exited = ReceivePort();
   final completer = Completer<void>();
   Isolate? isolate;
   var cleanedUp = false;
@@ -218,6 +235,7 @@ Future<void> extractZipWithProgress({
     cancelTimer?.cancel();
     receive.close();
     errors.close();
+    exited.close();
     isolate?.kill(priority: Isolate.immediate);
   }
 
@@ -241,6 +259,17 @@ Future<void> extractZipWithProgress({
     completer.completeError(DownloadException(text));
     cleanup();
   });
+  // Safety net: if the isolate dies without sending `done`/`error`, fail
+  // instead of waiting forever. The delay lets a pending `done`/`error`
+  // message arrive first (ports are not ordered relative to each other).
+  exited.listen((_) {
+    Future<void>.delayed(const Duration(milliseconds: 100), () {
+      if (completer.isCompleted) return;
+      completer.completeError(const DownloadException(
+          'Extraction stopped unexpectedly (the extractor crashed).'));
+      cleanup();
+    });
+  });
 
   if (isCancelled != null) {
     cancelTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
@@ -257,6 +286,7 @@ Future<void> extractZipWithProgress({
       _extractZipEntry,
       _ExtractRequest(receive.sendPort, archivePath, targetDir),
       onError: errors.sendPort,
+      onExit: exited.sendPort,
     );
     await completer.future;
   } finally {
@@ -297,12 +327,23 @@ void _extractZipEntry(_ExtractRequest request) {
     final total = files.length;
     send.send(<int>[0, total]);
 
+    // Throttle progress messages (thousands of small files would otherwise
+    // flood the UI isolate with one setState per file); the last update is
+    // always sent.
     var done = 0;
+    var lastSent = 0;
+    void report() {
+      if (done == total || done - lastSent >= 25) {
+        lastSent = done;
+        send.send(<int>[done, total]);
+      }
+    }
+
     for (final entry in files) {
       final path = _safeOutputPath(root, entry.name);
       if (path == null) {
         done++;
-        send.send(<int>[done, total]);
+        report();
         continue;
       }
       final output = File(path);
@@ -314,7 +355,7 @@ void _extractZipEntry(_ExtractRequest request) {
         out.closeSync();
       }
       done++;
-      send.send(<int>[done, total]);
+      report();
     }
     send.send('done');
   } catch (e) {

@@ -52,9 +52,13 @@ class _SetupPageState extends State<SetupPage> {
   bool _valid = false;
   String? _error;
 
+  /// True while a download/extraction runs in the form (blocks Save/Exit so
+  /// the running transfer is not interrupted).
+  bool _busy = false;
+
   void _save() {
     final cfg = _latest;
-    if (cfg == null || !_valid) return;
+    if (cfg == null || !_valid || _busy) return;
 
     final known = widget.configPath;
     if (known != null) {
@@ -130,6 +134,9 @@ class _SetupPageState extends State<SetupPage> {
                     if (_error != null) _error = null;
                     setState(() {});
                   },
+                  onBusyChanged: (busy) {
+                    if (mounted) setState(() => _busy = busy);
+                  },
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 4),
@@ -142,12 +149,12 @@ class _SetupPageState extends State<SetupPage> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed: () => exit(0),
+                      onPressed: _busy ? null : () => exit(0),
                       child: const Text('Exit'),
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
-                      onPressed: _valid ? _save : null,
+                      onPressed: (_valid && !_busy) ? _save : null,
                       child: const Text('Save'),
                     ),
                   ],
