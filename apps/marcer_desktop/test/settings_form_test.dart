@@ -21,6 +21,7 @@ class _HangingDownloader implements CatalogAssetDownloader {
     required DesktopConfig config,
     required String targetDir,
     bool force = false,
+    String? expectedSha256,
     AssetProgress? onProgress,
     bool Function()? isCancelled,
   }) =>

@@ -12,6 +12,7 @@ import 'package:window_manager/window_manager.dart';
 import 'catalog_controller.dart';
 import 'config_locator.dart';
 import 'self_updater.dart';
+import 'asset_updater.dart';
 import 'theme.dart';
 import 'tos_rom.dart';
 import 'widgets/card_grid.dart';
@@ -21,6 +22,7 @@ import 'widgets/filter_bar.dart';
 import 'widgets/folder_tree.dart';
 import 'widgets/game_lightbox.dart';
 import 'widgets/help_overlay.dart';
+import 'widgets/asset_update_dialog.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/setup_page.dart';
 import 'widgets/tos_rom_dialog.dart';
@@ -307,6 +309,7 @@ class _HomePageState extends State<HomePage> {
   /// back to the center panel.
   final FocusNode _centerFocus = FocusNode(debugLabel: 'center');
   final SelfUpdateController _updater = SelfUpdateController();
+  final AssetUpdateController _assetUpdater = AssetUpdateController();
   bool _showHelp = false;
   bool _showingLaunchError = false;
   bool _showingDownloadError = false;
@@ -326,6 +329,7 @@ class _HomePageState extends State<HomePage> {
     _controller.addListener(_onControllerChanged);
     _controller.init();
     _updater.addListener(_onUpdateChanged);
+    _assetUpdater.config = _config;
     _loadAppVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initSelfUpdate());
   }
@@ -348,12 +352,15 @@ class _HomePageState extends State<HomePage> {
     _searchFocus.dispose();
     _centerFocus.dispose();
     _updater.dispose();
+    _assetUpdater.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   /// Silent update check after startup (release builds only; the version
-  /// is stamped from the git tag via `--build-name` in the workflow).
+  /// is stamped from the git tag via `--build-name` in the workflow). Then the
+  /// catalog-data (screenshots/gameinfo) asset check — which only fetches the
+  /// small `latest.json` from GitHub, never the FTP.
   Future<void> _initSelfUpdate() async {
     if (!SelfUpdateController.enabled) return;
     try {
@@ -363,6 +370,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
     await _updater.check();
+    await _assetUpdater.check();
   }
 
   /// Surfaces failed update installs as a modal, once per error.
@@ -489,6 +497,18 @@ class _HomePageState extends State<HomePage> {
     _controller.beforeLaunch = _ensureTos;
     _controller.addListener(_onControllerChanged);
     _controller.init();
+    _assetUpdater.config = cfg;
+    _assetUpdater.check();
+  }
+
+  /// Opens the catalog-data update dialog (green badge); a successful update
+  /// reloads the catalog.
+  Future<void> _openAssetUpdates() async {
+    await showAssetUpdateDialog(
+      context,
+      controller: _assetUpdater,
+      onApplied: () => _applyConfig(_config),
+    );
   }
 
   /// Pre-launch guard: when `TOS.IMG` is missing next to the app, offer the
@@ -600,6 +620,8 @@ class _HomePageState extends State<HomePage> {
                 onExitSearch: () => _centerFocus.requestFocus(),
                 onOpenSettings: _openSettings,
                 updater: _updater,
+                assetUpdater: _assetUpdater,
+                onOpenAssetUpdates: _openAssetUpdates,
               ),
               const Divider(height: 1),
               if (c.catalogDataNotice != null) ...[

@@ -13,6 +13,7 @@ dependencies:
   path: ^1.9.1
   package_info_plus: ^9.0.0
   archive: ^3.6.1
+  crypto: ^3.0.3
   marcer_catalog:
     path: packages/marcer_catalog
   window_manager: ^0.5.2

@@ -280,6 +280,29 @@ from FTP** button next to *Browse…* on both `ScreenshotDirectory` and
 `GameinfoDirectory` has **no implicit fallback**: if it is empty no gameinfo is
 loaded.
 
+## Catalog-data update check
+
+After the (release-only) app self-update check, a silent startup check fetches
+the small `latest.json` pointer published by `tools/asset-manifest` from the
+GitHub `catalog-latest` prerelease — **GitHub only, never the FTP** (the FTP is
+contacted only when you actually update). A gray **dataset** icon button sits in
+the top bar (always available, right of the version badge) and shows a small
+green count badge when updates are pending.
+
+Clicking it opens the **Catalog data** dialog, listing **game info first, then
+screenshots** with the local and remote archive names and per asset:
+
+- **Update** (or **Install** when nothing is applied yet) — downloads the newest
+  archive from the FTP and extracts it; progress and **Cancel** show inline.
+- **Skip this version** — the remote archive is recorded in
+  `<targetDir>/.marcer-assets.json` under `skipped`, so you are only notified
+  again when a newer archive appears (cleared automatically once applied).
+- **Close** at the bottom.
+
+If the pointer provides a `sha256`, the downloaded archive is verified against
+it; a mismatch aborts the update. After a successful update the catalog reloads
+in place.
+
 ## Catalog coverage
 
 Conversely, a ZIP that exists in your `RootDirectory`/`PatchDirectory` but is

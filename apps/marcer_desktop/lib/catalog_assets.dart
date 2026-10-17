@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
+import 'package:crypto/crypto.dart';
 import 'package:ftpconnect/ftpconnect.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
@@ -107,6 +108,59 @@ bool isAssetUpToDate(
     readAppliedAssetVersion(targetDir, asset) == newestArchive &&
     assetDataPresent(targetDir, asset);
 
+/// Reads the marker JSON of [targetDir] (empty map when missing/unreadable).
+Map<String, dynamic> _readMarker(String targetDir) {
+  final file = File(assetVersionFilePath(targetDir));
+  if (!file.existsSync()) return <String, dynamic>{};
+  try {
+    return Map<String, dynamic>.from(
+        jsonDecode(file.readAsStringSync()) as Map);
+  } catch (_) {
+    return <String, dynamic>{};
+  }
+}
+
+void _writeMarker(String targetDir, Map<String, dynamic> map) {
+  Directory(targetDir).createSync(recursive: true);
+  File(assetVersionFilePath(targetDir)).writeAsStringSync(
+      '${const JsonEncoder.withIndent('  ').convert(map)}\n');
+}
+
+/// The archive name the user chose to skip for [asset] in [targetDir], or
+/// `null`. Stored under a `skipped` key so the applied-version entries stay
+/// unchanged (backward compatible).
+String? readSkippedAsset(String targetDir, CatalogAsset asset) {
+  final skipped = _readMarker(targetDir)['skipped'];
+  if (skipped is Map) return skipped[asset.archivePrefix] as String?;
+  return null;
+}
+
+/// Records [archive] as the skipped version for [asset] in [targetDir].
+void writeSkippedAsset(
+    String targetDir, CatalogAsset asset, String archive) {
+  final map = _readMarker(targetDir);
+  final skipped = (map['skipped'] is Map)
+      ? Map<String, dynamic>.from(map['skipped'] as Map)
+      : <String, dynamic>{};
+  skipped[asset.archivePrefix] = archive;
+  map['skipped'] = skipped;
+  _writeMarker(targetDir, map);
+}
+
+/// Clears the skipped version for [asset] (e.g. after it was applied).
+void clearSkippedAsset(String targetDir, CatalogAsset asset) {
+  final map = _readMarker(targetDir);
+  if (map['skipped'] is! Map) return;
+  final skipped = Map<String, dynamic>.from(map['skipped'] as Map);
+  skipped.remove(asset.archivePrefix);
+  if (skipped.isEmpty) {
+    map.remove('skipped');
+  } else {
+    map['skipped'] = skipped;
+  }
+  _writeMarker(targetDir, map);
+}
+
 /// Pluggable catalog asset downloader. The production implementation is
 /// [FtpCatalogAssets]; the settings form accepts a fake for unit tests.
 abstract class CatalogAssetDownloader {
@@ -123,6 +177,7 @@ abstract class CatalogAssetDownloader {
     required DesktopConfig config,
     required String targetDir,
     bool force = false,
+    String? expectedSha256,
     AssetProgress? onProgress,
     bool Function()? isCancelled,
   });
@@ -139,6 +194,7 @@ class FtpCatalogAssets implements CatalogAssetDownloader {
     required DesktopConfig config,
     required String targetDir,
     bool force = false,
+    String? expectedSha256,
     AssetProgress? onProgress,
     bool Function()? isCancelled,
   }) async {
@@ -204,6 +260,7 @@ class FtpCatalogAssets implements CatalogAssetDownloader {
       await extractZipWithProgress(
         archivePath: temp.path,
         targetDir: targetDir,
+        expectedSha256: expectedSha256,
         onProgress: (done, total) => onProgress?.call(
             'Extracting $done/$total files…', done, total),
         isCancelled: isCancelled,
@@ -297,6 +354,7 @@ String? downloadSizeError(int actual, int expected) {
 Future<void> extractZipWithProgress({
   required String archivePath,
   required String targetDir,
+  String? expectedSha256,
   void Function(int done, int total)? onProgress,
   bool Function()? isCancelled,
 }) async {
@@ -367,7 +425,7 @@ Future<void> extractZipWithProgress({
   try {
     isolate = await Isolate.spawn(
       _extractZipEntry,
-      _ExtractRequest(receive.sendPort, archivePath, targetDir),
+      _ExtractRequest(receive.sendPort, archivePath, targetDir, expectedSha256),
       onError: errors.sendPort,
       onExit: exited.sendPort,
     );
@@ -379,20 +437,33 @@ Future<void> extractZipWithProgress({
 
 /// Message sent to the extraction isolate.
 class _ExtractRequest {
-  const _ExtractRequest(this.port, this.archivePath, this.targetDir);
+  const _ExtractRequest(
+      this.port, this.archivePath, this.targetDir, this.expectedSha256);
 
   final SendPort port;
   final String archivePath;
   final String targetDir;
+  final String? expectedSha256;
 }
 
-/// Isolate entry point: extracts the ZIP, streaming one file at a time so
-/// memory stays bounded, and sends `[done, total]` progress, then `done`, or
-/// `error:<message>` on failure.
-void _extractZipEntry(_ExtractRequest request) {
+/// Isolate entry point: optionally verifies the archive's sha256, then extracts
+/// the ZIP, streaming one file at a time so memory stays bounded, and sends
+/// `[done, total]` progress, then `done`, or `error:<message>` on failure.
+Future<void> _extractZipEntry(_ExtractRequest request) async {
   final send = request.port;
   InputFileStream? input;
   try {
+    final expected = request.expectedSha256;
+    if (expected != null && expected.isNotEmpty) {
+      final digest =
+          await sha256.bind(File(request.archivePath).openRead()).first;
+      if (digest.toString().toLowerCase() != expected.toLowerCase()) {
+        send.send('error:Checksum mismatch — the downloaded archive is corrupt '
+            '(expected ${expected.toLowerCase()}, got $digest).');
+        return;
+      }
+    }
+
     final root = p.normalize(Directory(request.targetDir).absolute.path);
     Directory(root).createSync(recursive: true);
 
