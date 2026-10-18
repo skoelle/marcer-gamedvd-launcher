@@ -173,6 +173,10 @@ def _build_indexed_cards(entries, games, kind, union_gameinfo):
                 "candidates": [_full_png(rel, c)
                                for c in (e.get("candidates") or [])],
                 "size": e.get("size"),
+                # non-default TOS version the screenshot generator needed
+                # (e.g. "1.02"); absent/null = default TOS
+                # (SPEC-screenshot-generator §7.5)
+                "tos": e.get("tos"),
             })
         display_status = next((s for s in STATUS_ORDER if scounts.get(s)),
                               "pending")

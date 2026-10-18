@@ -653,13 +653,28 @@ class CatalogController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Default launch variant for [card] when none is chosen explicitly: old
+  /// titles the screenshot generator could only capture with a non-default
+  /// TOS (index marker `tos`, e.g. `1.02`) preselect the matching Play
+  /// variant (`SPEC-screenshot-generator.md` §7.5), so the primary Play
+  /// action does not fail on the default TOS. Null for the default TOS.
+  HatariVariant? defaultVariantForCard(GameCard card) {
+    final tos = card.tosVersion;
+    if (tos == null || tos.isEmpty) return null;
+    for (final v in kHatariVariants) {
+      if (v.tosVersions.contains(tos)) return v;
+    }
+    return null;
+  }
+
   /// Launches the ZIP of a catalog card's variant [index] — an index into
   /// [variantsOfCard] (lightbox "Play").
   Future<void> launchCardVariant(GameCard card, int index,
       {HatariVariant? variant}) async {
     final variants = variantsOfCard(card);
     if (index < 0 || index >= variants.length) return;
-    await launchZip(zipPathForVariant(variants[index]), variant: variant);
+    await launchZip(zipPathForVariant(variants[index]),
+        variant: variant ?? defaultVariantForCard(card));
   }
 
   /// Launches the current selection: a ZIP in browse mode, the card's ZIP in
@@ -669,9 +684,10 @@ class CatalogController extends ChangeNotifier {
     if (catalogMode) {
       final card = selectedCard;
       if (card == null) return;
+      final effective = variant ?? defaultVariantForCard(card);
       final favoriteKeys = favoriteKeysOfCard(card);
       if (favoriteKeys.length == 1) {
-        await launchZip(favoriteKeys.first, variant: variant);
+        await launchZip(favoriteKeys.first, variant: effective);
         return;
       }
       final v = launchVariantForCard(card);
@@ -680,7 +696,7 @@ class CatalogController extends ChangeNotifier {
         notifyListeners();
         return;
       }
-      await launchZip(zipPathForVariant(v), variant: variant);
+      await launchZip(zipPathForVariant(v), variant: effective);
       return;
     }
     final e = selectedEntry;

@@ -302,6 +302,7 @@ function renderGrid(cards) {
     const nzip = c.variants.length;
     const chip = nzip > 1 ? `<span class="chip">×${nzip}</span>` : "";
     const layer = c.layer ? `<span class="layer">${esc(c.layer)}</span>` : "";
+    const tos = cardTos(c) ? `<span class="chip chip-tos">TOS ${esc(cardTos(c))}</span>` : "";
     const fv = (c.focus_variant != null && c.focus_variant >= 0)
       ? c.focus_variant : 0;
     const focusActive = c.focus_variant != null;
@@ -334,7 +335,7 @@ function renderGrid(cards) {
       body = `<div class="ph"></div>`;
     }
     return `<div class="card" data-idx="${i}" data-v="${fv}" tabindex="-1">` +
-      `${badgeFor(c)}${chip}${layer}` +
+      `${badgeFor(c)}${chip}${layer}${tos}` +
       `<div class="name">${esc(c.name)}</div>${body}</div>`;
   }).join("");
   $("pager").hidden = false;
@@ -343,6 +344,16 @@ function renderGrid(cards) {
 // count variants that have a screenshot
 function countPreviews(card) {
   return card.variants.reduce((n, vv) => n + (vv.preview ? 1 : 0), 0);
+}
+
+// Non-default TOS version the screenshot generator needed for this card
+// (first variant that carries one, e.g. "1.02"); null/"" for the default TOS
+// (`SPEC-screenshot-generator.md` §7.5, desktop `GameCard.tosVersion`).
+function cardTos(card) {
+  for (const vv of card.variants || []) {
+    if (vv.tos) return vv.tos;
+  }
+  return null;
 }
 
 // Variant indices shown as clickable thumbs, best first: status tier
@@ -619,6 +630,7 @@ function renderLightbox() {
   // (desktop `_header`; the FAVORITE badge has no gallery counterpart)
   const badgeRow = [];
   if (card.layer) badgeRow.push(`<span class="badge b-layer">${esc(card.layer)}</span>`);
+  if (v && v.tos) badgeRow.push(`<span class="badge b-tos">TOS ${esc(v.tos)}</span>`);
   const hist = Object.entries(card.status_counts || {})
     .map(([k, n]) => `${n}× ${k}`).join("  ");
   if (hist) badgeRow.push(`<span class="badge b-hist">${esc(hist)}</span>`);
@@ -749,6 +761,7 @@ function renderLightbox() {
       html += `<h3>This ZIP</h3><table>` +
         `<tr><td>File</td><td>${esc(v.name)}</td></tr>` +
         `<tr><td>Status</td><td>${esc(v.status)}</td></tr>` +
+        (v.tos ? `<tr><td>TOS</td><td>${esc(v.tos)}</td></tr>` : "") +
         (v.layer ? `<tr><td>Layer</td><td>${esc(v.layer)}</td></tr>` : "") +
         (v.size ? `<tr><td>Size</td><td>${(v.size / 1024).toFixed(0)} KB</td></tr>` : "") +
         `<tr><td>Path</td><td>${esc(v.rel)}</td></tr></table>`;
@@ -759,6 +772,7 @@ function renderLightbox() {
     if (v) {
       html += `<table><tr><td>File</td><td>${esc(v.name)}</td></tr>` +
         `<tr><td>Status</td><td>${esc(v.status)}</td></tr>` +
+        (v.tos ? `<tr><td>TOS</td><td>${esc(v.tos)}</td></tr>` : "") +
         (v.layer ? `<tr><td>Layer</td><td>${esc(v.layer)}</td></tr>` : "") +
         `<tr><td>Path</td><td>${esc(v.rel)}</td></tr></table>`;
     }

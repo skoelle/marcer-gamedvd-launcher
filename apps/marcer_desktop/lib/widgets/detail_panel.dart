@@ -142,6 +142,8 @@ class DetailPanel extends StatelessWidget {
                     _badge('FAVORITE', Colors.amber),
                   if (layer.isNotEmpty) _badge(layer, _layerColorName(layer)),
                   if (c.cardMissing(card)) _badge('MISSING', Colors.redAccent),
+                  if (card.tosVersion != null && card.tosVersion!.isNotEmpty)
+                    _badge('TOS ${card.tosVersion}', Colors.deepOrange),
                   if (card.displayStatus.isNotEmpty)
                     _badge(card.displayStatus, Colors.blueGrey),
                   if (card.year != 'unknown') _badge(card.year, Colors.teal),
@@ -262,6 +264,7 @@ class DetailPanel extends StatelessWidget {
       rel: v.rel,
       size: v.size,
       missing: controller.variantMissing(v),
+      tos: v.tos,
     );
   }
 
@@ -375,6 +378,9 @@ class DetailPanel extends StatelessWidget {
     final shots = c.screenshotFor(e);
     if (shots != null) {
       badges.add(_badge(shots.status, Colors.blueGrey));
+      if (shots.tos != null && shots.tos!.isNotEmpty) {
+        badges.add(_badge('TOS ${shots.tos}', Colors.deepOrange));
+      }
     }
     final section = c.sectionOf(e);
     if (section.isNotEmpty) badges.add(_badge(section, Colors.teal));

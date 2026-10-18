@@ -84,6 +84,16 @@ DEFAULT_CONFIG = {
     "timepoints": [10, 25, 45],
     "entry_timeout_s": 90,
     "keep_candidates": True,
+    # TOS selection (section 7.5): the version used for a normal run is
+    # `tos_default`; `tos_images` maps a version label to the environment
+    # variable holding its ROM image. `run --tos <version>` boots with that
+    # version instead, used to retry `no_usable_shots` entries that hang on
+    # the default TOS (e.g. old titles that require TOS 1.02).
+    "tos_default": "1.04",
+    "tos_images": {
+        "1.04": "MARCER_TOS_IMG",
+        "1.02": "MARCER_TOS102_IMG",
+    },
     "disk_skip_regex": (
         r"(?i)(?:^|[\s\-_.])(?:disk|side|disc)[\s\-_.]*"
         r"(?:[2-9]|b|ii|iii)(?:$|[\s\-_.])"
@@ -205,6 +215,22 @@ def paths() -> dict:
         "hatari": os.environ.get("MARCER_HATARI_BIN", "").strip() or "hatari",
         "display": os.environ.get("MARCER_DISPLAY", "").strip() or ":99",
     }
+
+
+def tos_image_for(cfg: dict, P: dict, version: str) -> str:
+    """Resolve the ROM image path for a TOS [version] label (section 7.5).
+
+    The default version's image is the already-resolved ``MARCER_TOS_IMG``;
+    every other version is read lazily from its configured environment
+    variable, so a missing alternative TOS only aborts a run that uses it.
+    """
+    images = cfg.get("tos_images") or {}
+    if version not in images:
+        sys.exit(f"error: unknown TOS version {version!r} "
+                 f"(known: {', '.join(sorted(images))})")
+    if version == (cfg.get("tos_default") or "1.04"):
+        return P["tos"]
+    return require_env(images[version])
 
 
 # --------------------------------------------------------------------------
@@ -1449,7 +1475,8 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
 
 def process_entry(cfg: dict, P: dict, entry: dict, log,
                   state_lock=None, click_retry: bool = False,
-                  force: bool = False) -> None:
+                  force: bool = False, tos_version: str = "",
+                  tos_image: str = "") -> None:
     def commit(fn):
         # With parallel jobs, entry mutation must be serialized against
         # index saves performed by other workers (avoids torn index state).
@@ -1519,9 +1546,12 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             zip_contents = []
 
         prof = cfg["profile"]
+        tos_version = (tos_version or cfg.get("tos_default") or "1.04").strip()
+        tos_image = tos_image or P["tos"]
+        log(f"tos {tos_version}: {tos_image}")
         cmd = [
             P["hatari"],
-            "--tos", P["tos"],
+            "--tos", tos_image,
             "--machine", prof["machine"],
             "--memsize", prof["memsize"],
             "--sound", "off",
@@ -1772,6 +1802,21 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             entry["zip_contents"] = zip_contents
             entry["capture_method"] = "cmd-fifo"
             entry["monitor"] = monitor
+            # TOS marker (section 7.5/10.4): only a successful capture with a
+            # non-default TOS is recorded (sparse; absent = the default TOS).
+            # A failed attempt remembers its version in `tos_tried` so a
+            # later `--retry-no-usable --tos <version>` skips it.
+            default_tos = cfg.get("tos_default") or "1.04"
+            if status in ("done", "desktop") and tos_version != default_tos:
+                entry["tos"] = tos_version
+                entry.pop("tos_tried", None)
+            else:
+                entry.pop("tos", None)
+                if tos_version != default_tos:
+                    tried = list(entry.get("tos_tried") or [])
+                    if tos_version not in tried:
+                        tried.append(tos_version)
+                    entry["tos_tried"] = tried
             if preview:
                 # a fresh preview supersedes the drive-LED reset state
                 entry.pop("drive_led", None)
@@ -1789,6 +1834,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "profile": prof["name"],
             "machine": prof["machine"],
             "monitor": monitor,
+            "tos": tos_version,
             "status": status,
             "kind": kind,
             "preview_is_desktop": bool(kind in
@@ -1849,7 +1895,8 @@ def release_lock(lock: Path) -> None:
 def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   pending: list, jobs: int, t_start: float,
                   done_counts: dict, displays: list,
-                  index_name: str = INDEX_NAME):
+                  index_name: str = INDEX_NAME, tos_version: str = "",
+                  tos_image: str = ""):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
@@ -1912,7 +1959,8 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                 process_entry(cfg, Pw, e, make_log(e, wid),
                               state_lock=state_lock,
                               click_retry=args.retry_desktop,
-                              force=args.force)
+                              force=args.force,
+                              tos_version=tos_version, tos_image=tos_image)
                 with state_lock:
                     save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
@@ -1956,6 +2004,11 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
             print(f"Xvfb started on {disp} (pid {xv.pid})", flush=True)
             xvfbs.append(xv)
 
+    tos_version = (args.tos or cfg.get("tos_default") or "1.04").strip()
+    tos_image = tos_image_for(cfg, P, tos_version)
+    if tos_version != (cfg.get("tos_default") or "1.04"):
+        print(f"TOS override: {tos_version}", flush=True)
+
     idx = load_index(out, scope["index"])
     entries = idx["entries"]
     pending = []
@@ -1972,6 +2025,10 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 continue
         elif args.retry_no_usable:
             if e["status"] != "no_usable_shots":
+                continue
+            # skip versions already attempted on this entry (e.g. a 1.02
+            # pass that did not help), unless --force
+            if not args.force and tos_version in (e.get("tos_tried") or []):
                 continue
         elif args.retry_drive_led:
             # drive-LED resets (section 8.7): re-capture the bootable ones
@@ -2004,7 +2061,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
         if jobs > 1:
             interrupted, processed = _run_parallel(
                 cfg, P, args, out, idx, pending, jobs, t_start, done_counts,
-                displays, index_name=scope["index"])
+                displays, index_name=scope["index"],
+                tos_version=tos_version, tos_image=tos_image)
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -2034,7 +2092,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                       f"{e['rel']}", flush=True)
                 process_entry(cfg, P, e, log,
                               click_retry=args.retry_desktop,
-                              force=args.force)
+                              force=args.force,
+                              tos_version=tos_version, tos_image=tos_image)
                 save_index(out, idx, scope["index"])
                 done_counts[e["status"]] = done_counts.get(e["status"], 0) + 1
                 if STOP_EVENT.is_set():
@@ -2512,6 +2571,11 @@ def main() -> int:
     p_run.add_argument("--retry-no-usable", action="store_true",
                        help="retry only entries that ended as no_usable_shots "
                             "(not reprocessed by a normal run)")
+    p_run.add_argument("--tos", type=str, default="",
+                       help="TOS version label to boot with (default: config "
+                            "tos_default, e.g. 1.04). Use e.g. "
+                            "'--retry-no-usable --tos 1.02' for old titles "
+                            "that hang on TOS 1.04")
     p_run.add_argument("--retry-drive-led", action="store_true",
                        help="retry the bootable drive-LED resets "
                             "(status desktop + drive_led_refetch): capture "
