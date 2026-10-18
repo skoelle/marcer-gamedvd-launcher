@@ -210,10 +210,14 @@ TOS 1.02 Play variants download TOS 1.62 / 1.02 on demand).
 
 > **macOS:** the build is ad-hoc signed and not notarized, so macOS quarantines
 > the download. Open it once via **right-click → Open**, or run
-> `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`. The app is
-> not sandboxed (it reads game folders you configure and launches Hatari);
-> protected folders like `~/Downloads` still trigger a one-time macOS permission
-> prompt. See [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md#macos).
+> `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`. Also
+> **drag the `.app` individually in Finder** out of the unzipped folder into a
+> normal folder (e.g. `~/Applications`; not Downloads/Documents) — otherwise
+> macOS runs it from a temporary read-only copy (App Translocation) and
+> self-update/favorites cannot be saved. The app is not sandboxed (it reads game
+> folders you configure and launches Hatari); protected folders like
+> `~/Downloads` still trigger a one-time macOS permission prompt. See
+> [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md#macos).
 
 ### ⚙️ Configuration (`desktop.config.json`)
 
@@ -222,9 +226,12 @@ The app looks for `desktop.config.json` in this order (first existing wins):
 1. current working directory
 2. the directory of the executable (portable ZIP release)
 3. macOS only: the folder containing the `.app` bundle
+4. macOS only: `~/Library/Application Support/MarcerGameDVDLauncher` (last-resort
+   writable fallback — a config is written to the first **writable** of these, so
+   a read-only/translocated `.app` still works)
 
 When no config is found the app opens the **first-run setup page** (it lists
-the searched locations and the target file it will write). A config that exists
+the searched locations and the candidate save locations). A config that exists
 but cannot be read shows an error page with a **Setup…** button. Template: [`apps/marcer_desktop/desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json).
 
 > **Upgrading:** the config keys were renamed (`OutDirectory` →

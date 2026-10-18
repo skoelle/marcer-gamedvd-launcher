@@ -75,12 +75,18 @@ user-selected entitlement. See
 - **Gatekeeper:** the release build is ad-hoc signed and **not notarized**, so a
   downloaded ZIP is quarantined. Open it once via **right-click → Open**, or run
   `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`.
-- **Downloaded artifacts live outside the bundle:** Hatari and the TOS ROM are
-  installed into `~/Library/Application Support/MarcerGameDVDLauncher/` (not
-  inside the `.app`), because a quarantined app runs from a randomized read-only
-  **App Translocation** path where writes inside the bundle do not survive. If
-  the app detects it is running translocated it shows a hint to move it to a
-  normal folder.
+- **App Translocation:** if you run the app straight from the unzipped folder
+  while it is still quarantined, macOS runs it from a randomized read-only copy.
+  Quit it, then **drag the `.app` individually in Finder** out of the unzipped
+  folder into a normal folder (e.g. `~/Applications` or your home folder — not
+  Downloads/Documents/Desktop) and reopen it. Only a Finder move (not `mv`, not
+  moving the whole folder) ends translocation. The app shows a hint when it
+  detects this.
+- **Downloaded artifacts and the config live outside the bundle:** Hatari, the
+  TOS ROM **and** a fallback `desktop.config.json` are written into
+  `~/Library/Application Support/MarcerGameDVDLauncher/` (not inside the `.app`),
+  so the app stays usable even while translocated. Self-update and favorites
+  without a `PatchDirectory` still need the app moved to a writable location.
 
 ## Config (`desktop.config.json`)
 
@@ -89,6 +95,11 @@ The app looks for `desktop.config.json` in this order (first existing wins):
 1. current working directory
 2. the directory of the executable (portable ZIP release)
 3. macOS only: the folder containing the `.app` bundle
+4. macOS only: `~/Library/Application Support/MarcerGameDVDLauncher`
+
+A new config (first-run setup) is written to the first **writable** of those
+locations, so on a read-only/translocated `.app` it falls back to the per-user
+data directory. The setup page shows the candidate locations.
 
 The release ZIPs ship `desktop.config.example.json` — copy it next to the
 executable (or the `.app`), rename it to `desktop.config.json`, and set your

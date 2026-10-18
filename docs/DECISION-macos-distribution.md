@@ -66,9 +66,12 @@ container plus security-scoped bookmarks from the native open panel.
   `~/Library/Application Support/MarcerGameDVDLauncher` (`downloadedDataDir`,
   `lib/app_paths.dart`), **not** inside the `.app` bundle, and Hatari runs with
   that directory as its working directory
-  (`DesktopConfig.hatariWorkingDirectory`). An App-Translocation check
-  (`isAppTranslocated`) shows a startup hint when the app runs from the
-  randomized read-only path.
+  (`DesktopConfig.hatariWorkingDirectory`). The same per-user directory is the
+  **last** config search/save location (`config_locator.dart` `extraDir`), so the
+  first-run setup can write `desktop.config.json` even when the `.app` is
+  read-only and the next launch finds it. An App-Translocation check
+  (`isAppTranslocated`) shows a non-blocking startup hint with the Finder-move
+  instruction.
 
 ## 3. Consequences
 
@@ -84,13 +87,22 @@ Both work: the native picker returns a path, and a hand-typed path in the config
 is reachable as long as TCC allows the location.
 
 ### 3.3 App Translocation
-A quarantined, not-notarized app launched straight from `~/Downloads` is run by
-macOS from a randomized, read-only **App Translocation** path
+A quarantined, not-notarized app launched straight from its unzipped folder is
+run by macOS from a randomized, read-only **App Translocation** path
 (`/private/var/folders/…/AppTranslocation/…`). Writing inside the `.app` bundle
 there is blocked or lands in a location that disappears, and the bundle path
-changes on every launch. The app therefore keeps downloaded artifacts outside the
-bundle (§2) and, when it detects translocation, shows a startup hint to move the
-app to a normal folder.
+changes on every launch. Because of that the app keeps downloaded artifacts **and
+a fallback config** outside the bundle (§2) — so browsing, launching and
+downloads work even while translocated. Two things still need a real move:
+
+- **Self-update** cannot replace a read-only translocated bundle.
+- **Favorites without a `PatchDirectory`** are written next to the executable
+  (`favorites-<section>.txt`) and fail silently there.
+
+Ending translocation requires moving the `.app` **individually in Finder** to a
+different folder (`mv` in Terminal or moving the whole folder does **not**
+count); removing `com.apple.quarantine` also works. The app shows a non-blocking
+hint when it detects translocation.
 
 ### 3.4 Gatekeeper / notarization (open)
 The release build is **ad-hoc signed and not notarized** (`CODE_SIGN_IDENTITY =

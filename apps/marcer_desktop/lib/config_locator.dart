@@ -11,7 +11,10 @@ const String kConfigFileName = 'desktop.config.json';
 /// 1. current working directory — developer convenience (`run.sh`, tests)
 /// 2. directory of the executable — portable ZIP release (Windows/Linux)
 /// 3. macOS only: the folder *containing* the `.app` bundle, since the
-///    executable itself lives inside `Foo.app/Contents/MacOS`.
+///    executable itself lives inside `Foo.app/Contents/MacOS`
+/// 4. [extraDir] (when non-empty) — a stable writable fallback, e.g. the
+///    macOS per-user data directory, so a config saved while the app runs
+///    translocated is still found
 ///
 /// Duplicates (e.g. CWD == exe dir when double-clicked) are removed while
 /// preserving order.
@@ -19,11 +22,13 @@ List<String> configSearchDirs({
   required String cwd,
   required String exeDir,
   bool isMacOS = false,
+  String extraDir = '',
 }) {
   final dirs = <String>[cwd, exeDir];
   if (isMacOS) {
     dirs.add(macAppParent(exeDir));
   }
+  if (extraDir.isNotEmpty) dirs.add(extraDir);
   final seen = <String>{};
   return [
     for (final d in dirs)
@@ -38,22 +43,26 @@ String macAppParent(String exeDir) =>
 
 /// Ordered directories for writing a **new** `desktop.config.json` when none
 /// exists (first-run setup), most portable first, current working directory
-/// as a writability fallback:
+/// as a writability fallback, and [extraDir] last:
 ///
-/// - macOS: the folder containing the `.app` bundle, then CWD
-/// - Windows/Linux: the executable's directory, then CWD
+/// - macOS: the folder containing the `.app` bundle, then CWD, then [extraDir]
+/// - Windows/Linux: the executable's directory, then CWD, then [extraDir]
+///
+/// [extraDir] (e.g. the macOS per-user data directory) is the last-resort
+/// fallback for a read-only install (App Translocation).
 ///
 /// Duplicates are removed while preserving order.
 List<String> configSaveDirs({
   required String cwd,
   required String exeDir,
   bool isMacOS = false,
+  String extraDir = '',
 }) {
   final primary = isMacOS ? macAppParent(exeDir) : exeDir;
   final seen = <String>{};
   return [
-    for (final d in [primary, cwd])
-      if (seen.add(d)) d,
+    for (final d in [primary, cwd, extraDir])
+      if (d.isNotEmpty && seen.add(d)) d,
   ];
 }
 

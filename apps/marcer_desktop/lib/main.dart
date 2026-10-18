@@ -34,17 +34,31 @@ import 'widgets/tos_rom_dialog.dart';
 Future<void> main() async {
   final cwd = Directory.current.path;
   final exeDir = File(Platform.resolvedExecutable).parent.path;
+  // Stable, writable fallback on macOS (`~/Library/Application Support/…`):
+  // the only place a config can be written while the app runs translocated
+  // from a read-only path. Empty on Windows/Linux.
+  final appDataDir = marcerAppDataDir();
+  if (appDataDir.isNotEmpty) {
+    try {
+      Directory(appDataDir).createSync(recursive: true);
+    } catch (_) {
+      // Best effort — a missing/unwritable dir just drops the fallback.
+    }
+  }
   final searchDirs = configSearchDirs(
     cwd: cwd,
     exeDir: exeDir,
     isMacOS: Platform.isMacOS,
+    extraDir: appDataDir,
   );
   // Where a new config is written by the first-run setup (portable location
-  // next to the executable / .app, CWD as writability fallback).
+  // next to the executable / .app, CWD and the per-user data dir as
+  // writability fallbacks).
   final saveDirs = configSaveDirs(
     cwd: cwd,
     exeDir: exeDir,
     isMacOS: Platform.isMacOS,
+    extraDir: appDataDir,
   );
   final configPath = resolveConfigPath(
     dirs: searchDirs,
@@ -355,16 +369,18 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// macOS runs a quarantined, unsigned app from a randomized read-only
-  /// App-Translocation path; downloads, favorites and the self-update cannot
-  /// work reliably there. Tell the user once how to fix it.
+  /// App-Translocation path; config, downloads and the self-update should
+  /// live outside the bundle. Tell the user once how to fix it.
   void _warnIfTranslocated() {
     if (!mounted || !isAppTranslocated()) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
       content: Text(
-          'macOS runs this app from a temporary read-only location. Move it to '
-          'a normal folder (e.g. Applications) and reopen it, so downloads, '
-          'favorites and updates keep working.'),
-      duration: Duration(seconds: 15),
+          'macOS runs this app from a temporary read-only copy. Quit it, then '
+          'drag the .app individually in Finder out of the unzipped folder into '
+          'a normal folder (e.g. ~/Applications) and reopen it — not '
+          'Downloads/Documents. Otherwise updates and favorites cannot be '
+          'saved.'),
+      duration: Duration(seconds: 20),
     ));
   }
 

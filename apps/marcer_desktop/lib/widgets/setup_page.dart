@@ -88,8 +88,10 @@ class _SetupPageState extends State<SetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    final target = widget.configPath ??
-        '${widget.saveDirs.first}${Platform.pathSeparator}$kConfigFileName';
+    final knownTarget = widget.configPath;
+    final saveCandidates = widget.saveDirs
+        .map((d) => '$d${Platform.pathSeparator}$kConfigFileName')
+        .join('  ·  ');
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
@@ -115,7 +117,9 @@ class _SetupPageState extends State<SetupPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Saves to: $target',
+                  knownTarget != null
+                      ? 'Saves to: $knownTarget'
+                      : 'Saves to the first writable of: $saveCandidates',
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
                 if (widget.searchDirs.isNotEmpty) ...[
