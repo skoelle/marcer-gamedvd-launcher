@@ -673,8 +673,11 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
     navigation follow this; the underlying variant index (URL, side panel,
     `↑`/`↓` target mapping) is unchanged (desktop-app parity).
   - **Header badges** under the title line: layer (`ROOT`/`PATCH`/`BOTH`),
-    a status histogram of the folder (`2× done  1× pending`) and the year
-    when known.
+    a `TOS <version>` badge when the shown variant carries a non-default
+    `tos` (e.g. `1.02`; section 7.5 of the generator spec), a status
+    histogram of the folder (`2× done  1× pending`) and the year when
+    known. The grid card gets the same `TOS 1.02` chip and the "This ZIP"
+    table a `TOS` row.
 - **Candidate strip**: preview + all `_cNN` images of the *selected*
   variant selectable. The strip always reserves a fixed height (~56 px)
   so the layout does not jump when candidates appear/disappear between

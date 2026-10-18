@@ -120,6 +120,13 @@ variant, the arrow opens a menu of variants (detail sidebar and lightbox; `P` /
 The extra args are appended after `Hatari.ArgsTemplate` (Hatari CLI overrides
 the config file). Variants with a TOS file download it on demand (see below).
 
+A card whose index variant carries a non-default `tos` (e.g. `1.02`, written by
+the screenshot generator's TOS retry for old titles that hang on TOS 1.04)
+shows a **`TOS 1.02`** badge (grid tile, detail panel, lightbox header) and a
+**TOS** row in "This ZIP". The primary Play action (`P` / `Space` / Play button)
+then **preselects the matching variant** (Low Res TOS 1.02), so the default
+Standard attempt is skipped; the dropdown still lets you choose another variant.
+
 ## Hatari (download & install)
 
 When no Hatari executable is configured/found, the app offers to install a

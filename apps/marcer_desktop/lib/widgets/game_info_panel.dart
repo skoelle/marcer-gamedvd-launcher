@@ -14,6 +14,7 @@ class ZipVariantView {
     this.kind,
     this.size,
     this.missing = false,
+    this.tos,
   });
 
   final String name;
@@ -26,6 +27,10 @@ class ZipVariantView {
   final String layer;
   final String rel;
   final int? size;
+
+  /// Non-default TOS version that captured this ZIP (e.g. `1.02`); shown as a
+  /// dedicated "TOS" row. Null means the default TOS (`SPEC-screenshot-generator.md` §7.5).
+  final String? tos;
 
   /// True when this ZIP is not present locally (neither root nor patch);
   /// shown as a dedicated red "Missing" row in the "This ZIP" table.
@@ -384,6 +389,7 @@ class GameInfoPanel extends StatelessWidget {
       _kv('File', v.name),
       _kv('Status', v.status),
       _kv('Kind', kind),
+      if (v.tos != null && v.tos!.isNotEmpty) _kv('TOS', v.tos!),
       if (v.missing) _kv('Missing', 'yes — not present locally'),
       if (v.layer.isNotEmpty) _kv('Layer', v.layer),
       if (v.size != null) _kv('Size', '${(v.size! / 1024).toStringAsFixed(0)} KB'),

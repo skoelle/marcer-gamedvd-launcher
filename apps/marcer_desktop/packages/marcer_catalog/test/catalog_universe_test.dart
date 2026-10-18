@@ -21,7 +21,8 @@ void main() {
           {String? preview,
           List<String> candidates = const [],
           int? size,
-          String? kindOverride}) =>
+          String? kindOverride,
+          String? tos}) =>
       jsonEncode({
         'rel': rel,
         'name': rel.split('/').last,
@@ -31,6 +32,7 @@ void main() {
         'preview': preview,
         'candidates': candidates,
         'size': size ?? 1000,
+        'tos': ?tos,
       });
 
   setUp(() {
@@ -150,6 +152,23 @@ void main() {
             kindOverride: 'game'),
       });
       expect(u.cracked.single.thumbIndices(), [0, 1]);
+    });
+
+    test('non-default TOS marker flows to variant and card (tosVersion)', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png', tos: '1.02'),
+      });
+      final card = u.cracked.single;
+      expect(card.variants.single.tos, '1.02');
+      expect(card.tosVersion, '1.02');
+    });
+
+    test('default TOS (no index field) leaves tosVersion null', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+      });
+      expect(u.cracked.single.variants.single.tos, isNull);
+      expect(u.cracked.single.tosVersion, isNull);
     });
 
     test('display status priority: no_usable_shots beats pending', () {
