@@ -21,6 +21,7 @@ per-app/per-tool READMEs stay next to their code.
 | [`DECISION-app-architecture.md`](DECISION-app-architecture.md) | Why the desktop app is Flutter, the gallery webapp is Python + HTML, and the couch surface is planned. |
 | [`DECISION-catalog-data-source.md`](DECISION-catalog-data-source.md) | Why the catalog is built from the screenshot index + gameinfo without a filesystem scan; published vs. local layer, untracked ZIPs, and the deferred "local index" idea. |
 | [`DECISION-hatari-download.md`](DECISION-hatari-download.md) | How the desktop app downloads/installs Hatari when missing (prebuilt Windows/macOS from SourceForge), the Linux gap, and the deferred self-hosted mirror. |
+| [`DECISION-macos-distribution.md`](DECISION-macos-distribution.md) | Why the desktop app is not sandboxed on macOS, the entitlements/picker bootstrap, TCC-protected folders and the deferred notarization. |
 
 ## Housekeeping
 
