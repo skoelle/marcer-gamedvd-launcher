@@ -12,6 +12,7 @@ full specification.
   (`Pillow`, `imagehash`, `numpy`, `scipy`)
 - Environment in `local/paths.env` (git-ignored):
   `MARCER_ROOT_DIR`, `MARCER_PATCH_DIR`, `MARCER_OUT_DIR`, `MARCER_TOS_IMG`
+  (default TOS 1.04) and, for the TOS-1.02 retry, `MARCER_TOS102_IMG`
 
 ## Usage
 
@@ -23,6 +24,14 @@ tools/screenshot-gen/run.sh run --limit 3  # small test batch
 tools/screenshot-gen/run.sh run --only Xevious   # only matching paths
 tools/screenshot-gen/run.sh run --jobs 8   # parallel workers (e.g. night runs)
 tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
+
+# Old titles that hang on TOS 1.04 (black screen -> no_usable_shots) but run
+# on TOS 1.02: boot the no_usable entries with a non-default TOS. A successful
+# capture records `tos: "1.02"` in the index/metadata (shown as a `TOS 1.02`
+# badge in the gallery and desktop app, which then preselect the TOS 1.02
+# Play variant); failed attempts are remembered in `tos_tried`.
+tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.02
+tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.02 --only Bellum
 
 # Scopes: every command works on exactly one scope per invocation
 # (default: the configured scope_default, see "Scopes" below).
@@ -58,7 +67,9 @@ Interrupt with Ctrl+C at any time. Progress is saved after every entry.
 A later `run` skips completed entries (`done`, `desktop`, `no_usable_shots`)
 and retries unfinished or failed ones (`pending`, `interrupted`, `timeout`,
 `error`). The `no_usable_shots` entries are not retried by a normal run;
-repeat them explicitly with `run --retry-no-usable`.
+repeat them explicitly with `run --retry-no-usable`. A TOS version already
+attempted via `--tos` is skipped on the next `run --retry-no-usable --tos`
+invocation (recorded in `tos_tried`); `--force` retries it anyway.
 
 ## Scopes
 

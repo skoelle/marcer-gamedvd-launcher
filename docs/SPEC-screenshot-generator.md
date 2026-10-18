@@ -336,9 +336,12 @@ files are invisible to them until a future join step.
 [3] select pending entries (status != done, or --force;
          with --retry-desktop: only status == desktop with a stored
          icon hit that has not been clicked yet, section 7.4;
-         with --retry-no-usable: only status == no_usable_shots;
+         with --retry-no-usable: only status == no_usable_shots (skipping
+         a TOS version already in tos_tried unless --force);
          with --retry-drive-led: only status == desktop with the
-         drive_led_refetch flag set and kind != no_game_image, section 8.7)
+         drive_led_refetch flag set and kind != no_game_image, section 8.7;
+         --tos <version> overrides the TOS image for the whole run, e.g.
+         --retry-no-usable --tos 1.02, section 7.5)
         |
 [4] per entry:
       a. copy ZIP from NAS to local staging dir     (NAS is read-only)
@@ -699,6 +702,37 @@ Notes:
   not retried again automatically; the updated preview and candidates
   show the newer state.
 
+### 7.5 TOS override and the `no_usable_shots` TOS retry (user decision)
+
+Many old Atari titles never boot under TOS 1.04 but run fine under
+TOS 1.02. Such a title hangs on a black screen, so every capture is
+classified `black` (section 8.1) and the entry ends as
+`no_usable_shots` even though it is a working game.
+
+- **TOS map.** The config maps a version label to the environment
+  variable holding its ROM image (section 11.2 `tos_images`): `1.04`
+  (default, `MARCER_TOS_IMG`) and `1.02` (`MARCER_TOS102_IMG`). The
+  alternative image is resolved lazily, so a run that does not use it
+  does not require its variable to be set.
+- **`run --tos <version>`.** Boots every pending entry with the given
+  version instead of `tos_default`. The override combines with any
+  selection flag, so the intended use is
+  `run --retry-no-usable --tos 1.02` — only `no_usable_shots` entries,
+  booted with TOS 1.02.
+- **Marker.** A capture that succeeds with a non-default TOS records the
+  version in the index entry (`tos`, section 10.4) and metadata
+  (`tos`, section 10.3): `"tos": "1.02"`. The field is **sparse**:
+  absent means the default TOS. Consumers (gallery, desktop app) show a
+  `TOS 1.02` marker and preselect the matching Hatari launch variant.
+- **Failed attempts.** A 1.02 run that still yields no usable shot keeps
+  `status: no_usable_shots` and records the version in the `tos_tried`
+  list (section 10.4), so a later `run --retry-no-usable --tos 1.02`
+  skips it (`--force` retries anyway). On a successful capture `tos_tried`
+  is cleared.
+- `--tos` accepts any version label defined in `tos_images`; an unknown
+  label aborts with a clear message. A missing ROM image aborts with the
+  usual `require_env` message.
+
 ---
 
 ## 8. Image Filtering and Selection
@@ -1020,7 +1054,7 @@ deleted by the one-off data repair that accompanies the merge change
   "profile": "st",
   "machine": "st",
   "monitor": "color",
-  "tos": "TOS104GE.IMG",
+  "tos": "1.04",
   "status": "done",
   "kind": "game",
   "preview_is_desktop": false,
@@ -1052,7 +1086,9 @@ Allowed values for `kind` (section 8): `game`, `desktop`, `textscreen`,
 preview, e.g. after a drive-LED reset, and for every `no_usable_shots`
 entry — that status never carries a kind, section 8.5). `status` stays
 `desktop` for all three desktop sub-kinds. `monitor` is `mono` when the
-entry was booted in mono mode (section 4.6), otherwise `color`.
+entry was booted in mono mode (section 4.6), otherwise `color`. `tos` is
+the version label the entry was booted with (`1.04`, `1.02`, …; section
+7.5); it is always written in the metadata.
 
 The file is written only for entries that end as `done` or `desktop`.
 An entry ending as `no_usable_shots` (section 8.5) can have a preview but
@@ -1073,7 +1109,12 @@ click retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
 scale, source}` or absent), `icon_found` (true/false after `detect`),
 `click_retried` (true after an attempt), `click_result`
 (`click-icon-prg` | `click-icon-drive` | `click-failed` |
-`click-not-needed` | null). For drive-LED cleanup (section 8.7): `drive_led`
+`click-not-needed` | null). For the TOS override (section 7.5): `tos`
+(the non-default TOS version that produced a successful capture, e.g.
+`"1.02"`; **absent** = default TOS) and `tos_tried` (list of non-default
+versions already attempted on a still-`no_usable_shots` entry, so a repeat
+`--retry-no-usable --tos <version>` skips them; cleared on success). For
+drive-LED cleanup (section 8.7): `drive_led`
 (true when a blank LED-white preview/candidate was found and removed) and
 `drive_led_refetch` (true when a bootable `drive_led` entry should be
 re-captured later; cleared again by `run --retry-drive-led` once that entry
@@ -1142,7 +1183,8 @@ specs, logs or examples):
 | `MARCER_ROOT_DIR` | yes | game root layer, read-only |
 | `MARCER_PATCH_DIR` | yes | patch layer, read-only (empty disables patch layer) |
 | `MARCER_OUT_DIR` | yes | output root for screenshots, index, logs |
-| `MARCER_TOS_IMG` | yes | TOS ROM image for Hatari |
+| `MARCER_TOS_IMG` | yes | default TOS 1.04 ROM image for Hatari |
+| `MARCER_TOS102_IMG` | no | TOS 1.02 ROM image, required only by `run --tos 1.02` (section 7.5) |
 | `MARCER_HATARI_BIN` | no | Hatari executable, default `hatari` from PATH |
 | `MARCER_DISPLAY` | no | fixed X display number, default `:99` |
 
@@ -1156,6 +1198,7 @@ this spec):
 ```
 MARCER_OUT_DIR=...
 MARCER_TOS_IMG=...
+MARCER_TOS102_IMG=...
 MARCER_HATARI_BIN=...
 MARCER_DISPLAY=...
 ```
@@ -1167,7 +1210,9 @@ MARCER_DISPLAY=...
 name; the default scope maps to `index.json`, every other scope to
 `index-<name>.json`, section 4.4; legacy `scope_trees` is still accepted
 when no `scopes` entry exists), `mono_dir_suffix` (folder suffix that
-triggers `--mono --tos-res high`, section 4.6), `exclude_dirs` (sub-directory names never
+triggers `--mono --tos-res high`, section 4.6), `tos_default` +
+`tos_images` (version label → environment variable of its ROM image,
+section 7.5), `exclude_dirs` (sub-directory names never
 scanned, section 4.4), time points, timeouts, filter thresholds (the
 black/empty thresholds `black_mean_max`, `black_std_max`,
 `black_std_content_min` of section 8.1 and the desktop sub-kind thresholds
@@ -1431,6 +1476,10 @@ A conforming implementation satisfies all of the following.
 - [ ] P8 Directories ending with `mono_dir_suffix` (case-insensitive, the
       ZIP's parent directory) are booted with `--mono --tos-res high`, and
       `monitor: mono` is recorded in index and metadata (section 4.6).
+- [ ] P9 `run --tos <version>` boots with the mapped ROM image; a successful
+      non-default capture records `tos` (sparse, index + metadata), a failed
+      one records the version in `tos_tried`; `run --retry-no-usable` skips a
+      version already in `tos_tried` unless `--force` (section 7.5).
 
 **Filtering**
 - [ ] F1 Black or empty shots are rejected by configurable thresholds.
