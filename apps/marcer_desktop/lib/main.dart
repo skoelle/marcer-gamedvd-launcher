@@ -11,6 +11,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'catalog_controller.dart';
+import 'app_paths.dart';
 import 'config_locator.dart';
 import 'hatari_installer.dart';
 import 'self_updater.dart';
@@ -57,6 +58,10 @@ Future<void> main() async {
       // the bundled config is searched in CWD → exe dir → (macOS) .app parent.
       config = DesktopConfig.load(configPath,
           appDir: exeDir, searchDirs: searchDirs);
+      // Downloaded artifacts (Hatari, TOS) live outside the bundle on macOS;
+      // Hatari runs with that directory as its working dir.
+      config = config.copyWith(
+          hatariWorkingDirectory: downloadedDataDir(config));
     } catch (e) {
       configError = '$configPath: $e';
     }
@@ -205,7 +210,8 @@ class _AppRootState extends State<_AppRoot> {
 
   void _onConfigured(DesktopConfig config, String path) {
     setState(() {
-      _config = config;
+      _config = config.copyWith(
+          hatariWorkingDirectory: downloadedDataDir(config));
       _configPath = path;
     });
   }
@@ -345,6 +351,21 @@ class _HomePageState extends State<HomePage> {
     _assetUpdater.config = _config;
     _loadAppVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initSelfUpdate());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _warnIfTranslocated());
+  }
+
+  /// macOS runs a quarantined, unsigned app from a randomized read-only
+  /// App-Translocation path; downloads, favorites and the self-update cannot
+  /// work reliably there. Tell the user once how to fix it.
+  void _warnIfTranslocated() {
+    if (!mounted || !isAppTranslocated()) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text(
+          'macOS runs this app from a temporary read-only location. Move it to '
+          'a normal folder (e.g. Applications) and reopen it, so downloads, '
+          'favorites and updates keep working.'),
+      duration: Duration(seconds: 15),
+    ));
   }
 
   /// Reads the version for the status bar (always — unlike the self-update
@@ -501,16 +522,17 @@ class _HomePageState extends State<HomePage> {
   /// Rebuilds the catalog controller with [cfg] (overlay, screenshots,
   /// gameinfo and favorites are all re-read by `init`).
   void _applyConfig(DesktopConfig cfg) {
+    final config = cfg.copyWith(hatariWorkingDirectory: downloadedDataDir(cfg));
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     setState(() {
-      _config = cfg;
-      _controller = CatalogController(cfg);
+      _config = config;
+      _controller = CatalogController(config);
     });
     _controller.beforeLaunch = _beforeLaunch;
     _controller.addListener(_onControllerChanged);
     _controller.init();
-    _assetUpdater.config = cfg;
+    _assetUpdater.config = config;
     _assetUpdater.check();
   }
 

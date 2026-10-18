@@ -159,8 +159,10 @@ String? validateHatariConfig(DesktopConfig config) {
     args.addAll(variant.extraArgs);
     final tosFile = variant.tosFileName;
     if (tosFile != null && tosFile.isNotEmpty) {
-      final tosPath =
-          config.appDir.isEmpty ? tosFile : '${config.appDir}/$tosFile';
+      final tosBase = config.hatariWorkingDirectory.isNotEmpty
+          ? config.hatariWorkingDirectory
+          : config.appDir;
+      final tosPath = tosBase.isEmpty ? tosFile : '$tosBase/$tosFile';
       if (!File(tosPath).existsSync()) {
         return (
           command: null,
@@ -173,9 +175,12 @@ String? validateHatariConfig(DesktopConfig config) {
         ..add(tosPath);
     }
   }
+  final workingDirectory = config.hatariWorkingDirectory.isNotEmpty
+      ? config.hatariWorkingDirectory
+      : (config.appDir.isEmpty ? Directory.current.path : config.appDir);
   return (
-    command: HatariCommand(config.resolveHatariExecutable(), args,
-        config.appDir.isEmpty ? Directory.current.path : config.appDir),
+    command: HatariCommand(
+        config.resolveHatariExecutable(), args, workingDirectory),
     error: null,
   );
 }

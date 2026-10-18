@@ -76,6 +76,26 @@ void main() {
     expect(r.command!.arguments[i + 1], '${tmp.path}/TOS102.IMG');
   });
 
+  test('hatariWorkingDirectory overrides working dir and --tos base', () {
+    final work = Directory.systemTemp.createTempSync('hatari_work');
+    addTearDown(() {
+      if (work.existsSync()) work.deleteSync(recursive: true);
+    });
+    File('${work.path}/TOS162.IMG').createSync();
+    final cfg = DesktopConfig(
+      rootDirectory: '${tmp.path}/root',
+      hatariExecutable: exe,
+      hatariConfigFile: cfgFile,
+      appDir: tmp.path,
+      hatariWorkingDirectory: work.path,
+    );
+    final r = buildHatariCommand(cfg, zip, variant: variant('STE'));
+    expect(r.error, isNull);
+    expect(r.command!.workingDirectory, work.path);
+    final i = r.command!.arguments.indexOf('--tos');
+    expect(r.command!.arguments[i + 1], '${work.path}/TOS162.IMG');
+  });
+
   test('built-in variants are Standard, Mono, STE, Low Res TOS 1.02', () {
     expect(kHatariVariants.map((v) => v.name).toList(), [
       'Standard',

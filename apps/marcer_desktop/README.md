@@ -75,6 +75,12 @@ user-selected entitlement. See
 - **Gatekeeper:** the release build is ad-hoc signed and **not notarized**, so a
   downloaded ZIP is quarantined. Open it once via **right-click → Open**, or run
   `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`.
+- **Downloaded artifacts live outside the bundle:** Hatari and the TOS ROM are
+  installed into `~/Library/Application Support/MarcerGameDVDLauncher/` (not
+  inside the `.app`), because a quarantined app runs from a randomized read-only
+  **App Translocation** path where writes inside the bundle do not survive. If
+  the app detects it is running translocated it shows a hint to move it to a
+  normal folder.
 
 ## Config (`desktop.config.json`)
 
@@ -154,12 +160,15 @@ dialog appears (the ⚙ settings editor also has a **Hatari installation** row
 with the current status and an **Install Hatari…**/**Reinstall Hatari…**
 button). The pinned release (**2.6.1**) is downloaded from the official
 [SourceForge project](https://www.hatari-emu.org/) — prebuilt Windows (x64) and
-macOS (universal, x86-64 + arm64) archives — and unpacked into
-`<appDir>/hatari`; the executable is located inside the archive (Windows
-`hatari.exe` / macOS `Hatari.app/Contents/MacOS/hatari`), made executable and,
-on macOS, stripped of the download quarantine. The resulting path is written to
-`Hatari.Executable` (relative to the app directory, so the portable folder keeps
-working after being moved) and the running catalog updates in place.
+macOS (universal, x86-64 + arm64) archives — and unpacked into `<appDir>/hatari`
+(Windows/Linux) or `~/Library/Application Support/MarcerGameDVDLauncher/hatari`
+(macOS, outside the `.app` bundle); the executable is located inside the archive
+(Windows `hatari.exe` / macOS `Hatari.app/Contents/MacOS/Hatari`), made
+executable and, on macOS, stripped of the download quarantine. The resulting
+path is written to `Hatari.Executable` — relative to the app directory on the
+portable Windows/Linux layout (so the folder keeps working after being moved),
+absolute on macOS (where it lives outside the bundle) — and the running catalog
+updates in place.
 
 - **Linux has no official prebuilt binary** — the row/dialog point to a manual
   (system package) install instead; the normal launch error surfaces until
@@ -181,7 +190,10 @@ on demand from
 [atariworld.org/tos-rom](https://www.atariworld.org/tos-rom/) (nothing is
 bundled; the images are Atari-copyrighted and offered there for
 non-commercial use), the ROM is extracted and written as `TOS.IMG` into the
-app directory. The **STE** Play variant needs **TOS 1.62** (`TOS162.IMG`) and
+data directory — `<appDir>` on Windows/Linux,
+`~/Library/Application Support/MarcerGameDVDLauncher` on macOS — which is
+Hatari's working directory (the bundled config looks for `TOS.IMG` there). The
+**STE** Play variant needs **TOS 1.62** (`TOS162.IMG`) and
 the **Low Res TOS 1.02** variant **TOS 1.02** (`TOS102.IMG`) — each offered
 filtered to that version when the file is missing. The ⚙ settings editor's
 **TOS ROM** row reflects only `TOS.IMG`; the variant TOS files

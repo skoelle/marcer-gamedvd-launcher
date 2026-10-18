@@ -62,6 +62,13 @@ container plus security-scoped bookmarks from the native open panel.
   `NSDesktopFolderUsageDescription`, `NSRemovableVolumesUsageDescription`,
   `NSNetworkVolumesUsageDescription`) so the system prompts for the protected
   folders are labelled.
+- Downloaded artifacts (**Hatari**, the **TOS ROM**) are installed into
+  `~/Library/Application Support/MarcerGameDVDLauncher` (`downloadedDataDir`,
+  `lib/app_paths.dart`), **not** inside the `.app` bundle, and Hatari runs with
+  that directory as its working directory
+  (`DesktopConfig.hatariWorkingDirectory`). An App-Translocation check
+  (`isAppTranslocated`) shows a startup hint when the app runs from the
+  randomized read-only path.
 
 ## 3. Consequences
 
@@ -76,7 +83,16 @@ This is expected macOS behaviour, not an app bug.
 Both work: the native picker returns a path, and a hand-typed path in the config
 is reachable as long as TCC allows the location.
 
-### 3.3 Gatekeeper / notarization (open)
+### 3.3 App Translocation
+A quarantined, not-notarized app launched straight from `~/Downloads` is run by
+macOS from a randomized, read-only **App Translocation** path
+(`/private/var/folders/…/AppTranslocation/…`). Writing inside the `.app` bundle
+there is blocked or lands in a location that disappears, and the bundle path
+changes on every launch. The app therefore keeps downloaded artifacts outside the
+bundle (§2) and, when it detects translocation, shows a startup hint to move the
+app to a normal folder.
+
+### 3.4 Gatekeeper / notarization (open)
 The release build is **ad-hoc signed and not notarized** (`CODE_SIGN_IDENTITY =
 "-"` in `Runner.xcodeproj`, no notary step in `desktop-release.yml`). Users who
 download the ZIP must clear the quarantine (right-click → Open, or
@@ -84,9 +100,10 @@ download the ZIP must clear the quarantine (right-click → Open, or
 Notarization (Apple Developer ID + `notarytool` in CI + secrets) is a deferred
 follow-up.
 
-### 3.4 Self-update and external launch work
+### 3.5 Self-update and external launch work
 Disabling the sandbox also unblocks the in-process `swapInstall` of the `.app`
-bundle (`self_updater.dart`) and launching Hatari installed next to the app.
+bundle (`self_updater.dart`) and launching Hatari installed in the per-user data
+directory.
 
 ## 4. Deferred / Follow-up Ideas
 

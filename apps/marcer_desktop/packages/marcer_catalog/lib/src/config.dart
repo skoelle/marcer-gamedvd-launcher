@@ -31,6 +31,7 @@ class DesktopConfig {
     this.showCandidates = true,
     this.defaultStatus = 'with_screenshot',
     this.appDir = '',
+    this.hatariWorkingDirectory = '',
     this.searchDirs = const [],
     this.windowWidth = 1280,
     this.windowHeight = 800,
@@ -67,6 +68,12 @@ class DesktopConfig {
   /// Application directory (the executable's directory): base for resolving
   /// relative Hatari paths and the bundled config (SPEC.md R10).
   final String appDir;
+
+  /// Runtime-only working directory Hatari is started in (and where the
+  /// bundled config's `TOS.IMG` is expected). Empty falls back to [appDir]
+  /// (or the CWD). On macOS the app sets this to the per-user data directory,
+  /// since downloaded artifacts live outside the `.app` bundle.
+  final String hatariWorkingDirectory;
 
   /// Directories searched for the bundled Hatari config (in order) when
   /// `Hatari.ConfigFile` is empty; typically CWD → exe dir → macOS `.app`
@@ -151,6 +158,7 @@ class DesktopConfig {
     bool? showCandidates,
     String? defaultStatus,
     String? appDir,
+    String? hatariWorkingDirectory,
     List<String>? searchDirs,
     int? windowWidth,
     int? windowHeight,
@@ -172,6 +180,8 @@ class DesktopConfig {
       showCandidates: showCandidates ?? this.showCandidates,
       defaultStatus: defaultStatus ?? this.defaultStatus,
       appDir: appDir ?? this.appDir,
+      hatariWorkingDirectory:
+          hatariWorkingDirectory ?? this.hatariWorkingDirectory,
       searchDirs: searchDirs ?? this.searchDirs,
       windowWidth: windowWidth ?? this.windowWidth,
       windowHeight: windowHeight ?? this.windowHeight,

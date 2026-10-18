@@ -44,9 +44,16 @@ to a manual/system install.**
   (`hatari.exe` / macOS `*.app/Contents/MacOS/*` / plain `hatari`), `chmod +x`,
   and on macOS the download quarantine is stripped (`xattr -dr
   com.apple.quarantine`).
-- The resulting path is stored **relative to the app directory** in
-  `Hatari.Executable` (via `DesktopConfig.copyWith` + `save`), so the portable
-  folder keeps working after being moved (`DesktopConfig.resolveHatariExecutable`).
+- Install target (`downloadedDataDir`, `lib/app_paths.dart`): `<appDir>/hatari`
+  on Windows/Linux (portable) and
+  `~/Library/Application Support/MarcerGameDVDLauncher/hatari` on macOS — **never
+  inside the `.app` bundle**, which is read-only/unstable under App Translocation
+  and replaced by self-updates (see `DECISION-macos-distribution.md`).
+- The resulting path is stored in `Hatari.Executable` — **relative to the app
+  directory** on the portable Windows/Linux layout (so the folder keeps working
+  after being moved), **absolute** on macOS where it lives outside the bundle
+  (`hatariConfigExecutable`); `DesktopConfig.resolveHatariExecutable` handles
+  both.
 - Two entry points:
   1. the chained pre-launch guard `HomePage._beforeLaunch` → `_ensureHatari` (then
      `_ensureTos`), and
@@ -64,16 +71,22 @@ the normal launch error (SPEC E3) applies until `Hatari.Executable` is set.
 SourceForge publishes no SHA-256, so `HatariBuild.sha256` stays `null` and the
 verification is skipped. The hook exists for a future self-hosted mirror.
 
-### 3.3 macOS bundle location
-Hatari is installed into `config.appDir`, which on macOS is the executable
-directory **inside** `MarcerGameDVDLauncher.app/Contents/MacOS` — consistent
-with where `TOS.IMG` is already written. The unsigned bundle makes this workable;
-a future signed/notarized bundle would need the install to move next to the
-`.app` instead.
+### 3.3 macOS installs outside the `.app` bundle
+On macOS Hatari (and the TOS ROM) are installed into
+`~/Library/Application Support/MarcerGameDVDLauncher`, **not** into
+`config.appDir` (which is `…/MarcerGameDVDLauncher.app/Contents/MacOS`).
+Writing inside the bundle is unreliable: a quarantined, unsigned app runs from a
+randomized read-only App-Translocation path, the bundle is replaced by
+self-updates and may live on a read-only volume. Hatari therefore runs with that
+per-user directory as its working directory (`DesktopConfig.hatariWorkingDirectory`),
+where the bundled config's `TOS.IMG` lives. See
+`DECISION-macos-distribution.md`. On Windows/Linux the portable `<appDir>/hatari`
+layout is unchanged.
 
 ### 3.4 Not part of the release ZIP / self-update
-`<appDir>/hatari` is not shipped in the release archive, so the self-update swap
-(`swapInstall`) never touches an installed Hatari.
+`<appDir>/hatari` (Windows/Linux) and the macOS per-user directory are not part
+of the release archive, so the self-update swap (`swapInstall`) never touches an
+installed Hatari.
 
 ## 4. Deferred / Follow-up Ideas
 

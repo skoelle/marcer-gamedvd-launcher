@@ -7,6 +7,8 @@ import 'package:archive/archive.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
+import 'app_paths.dart';
+
 /// One downloadable TOS ROM image, offered when `TOS.IMG` (expected by the
 /// bundled `MarcerGameDvd-Hatari.cfg`) is missing.
 class TosRomOption {
@@ -65,11 +67,10 @@ const String kTosRomSourceUrl = 'https://www.atariworld.org/tos-rom/';
 /// directory = the executable directory).
 const String kTosImageFileName = 'TOS.IMG';
 
-/// Directory Hatari looks for the TOS image in: the executable directory
-/// (`config.appDir`), falling back to the current working directory when unset
-/// (e.g. a dev run).
-String tosTargetDirectory(DesktopConfig config) =>
-    config.appDir.isNotEmpty ? config.appDir : Directory.current.path;
+/// Directory Hatari looks for the TOS image in: the shared per-user data
+/// directory ([downloadedDataDir]) — on macOS `~/Library/Application Support/…`
+/// (never inside the `.app` bundle), elsewhere the app directory / CWD.
+String tosTargetDirectory(DesktopConfig config) => downloadedDataDir(config);
 
 /// Absolute path of a TOS image next to the app:
 /// `<appDir>/<fileName>` (default `TOS.IMG`).

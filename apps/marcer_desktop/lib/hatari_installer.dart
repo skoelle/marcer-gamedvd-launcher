@@ -9,6 +9,8 @@ import 'package:crypto/crypto.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
+import 'app_paths.dart';
+
 /// Pinned Hatari release the installer offers (Stufe 1: prebuilt Windows and
 /// macOS binaries taken from the official SourceForge project). Linux has no
 /// official prebuilt binary, so [hatariBuildFor] returns `null` there and the
@@ -78,11 +80,10 @@ HatariBuild? hatariBuildFor({String? os}) {
   return null;
 }
 
-/// Base directory Hatari is installed relative to: the application directory
-/// (`config.appDir`), falling back to the current working directory when unset
-/// (e.g. a dev run) — same rule as `TOS.IMG` (see `tosTargetDirectory`).
-String hatariBaseDir(DesktopConfig config) =>
-    config.appDir.isNotEmpty ? config.appDir : Directory.current.path;
+/// Base directory Hatari is installed relative to: the shared per-user data
+/// directory ([downloadedDataDir]) — on macOS `~/Library/Application Support/…`
+/// (never inside the `.app` bundle), elsewhere the app directory / CWD.
+String hatariBaseDir(DesktopConfig config) => downloadedDataDir(config);
 
 /// Absolute directory the prebuilt Hatari is unpacked into.
 String hatariInstallDir(DesktopConfig config) =>
@@ -95,11 +96,12 @@ bool hatariInstalled(DesktopConfig config) {
 }
 
 /// Value to store in `Hatari.Executable` for an installed [exePath]: relative
-/// to the app directory when one is known (so the portable folder keeps
-/// working after being moved), otherwise the absolute path.
+/// to the app directory when the executable lives inside it (portable
+/// Windows/Linux layout, survives moving the folder), otherwise the absolute
+/// path (macOS installs into the per-user data directory outside the bundle).
 String hatariConfigExecutable(
     {required String appDir, required String exePath}) {
-  if (appDir.isEmpty) return exePath;
+  if (appDir.isEmpty || !p.isWithin(appDir, exePath)) return exePath;
   return p.relative(exePath, from: appDir);
 }
 
@@ -140,6 +142,8 @@ String? findHatariExecutable(String root) {
   var bestRank = 1 << 30;
   var bestDepth = 1 << 30;
   for (final f in files) {
+    // Never pick an empty placeholder or a directory stub.
+    if (f.lengthSync() == 0) continue;
     final segs = p.split(p.normalize(f.path));
     final lower = p.basename(f.path).toLowerCase();
     int? rank;

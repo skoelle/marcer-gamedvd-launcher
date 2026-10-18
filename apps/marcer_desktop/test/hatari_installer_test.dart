@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
+import 'package:marcer_desktop/app_paths.dart';
 import 'package:marcer_desktop/hatari_installer.dart';
 import 'package:path/path.dart' as p;
 
@@ -38,6 +39,17 @@ void main() {
     expect(hatariInstallDir(cfg), p.join('/apps/launcher', 'hatari'));
   });
 
+  test('downloadedDataDir keeps the app dir on non-macOS', () {
+    final cfg = DesktopConfig(rootDirectory: '/r', appDir: '/apps/launcher');
+    if (Platform.isMacOS) {
+      // macOS installs outside the .app bundle, in the per-user data dir.
+      expect(downloadedDataDir(cfg), contains('MarcerGameDVDLauncher'));
+      expect(downloadedDataDir(cfg), contains('Application Support'));
+    } else {
+      expect(downloadedDataDir(cfg), '/apps/launcher');
+    }
+  });
+
   test('hatariInstalled reflects the configured executable', () {
     final dir = Directory.systemTemp.createTempSync('hatari_installed');
     addTearDown(() {
@@ -61,6 +73,13 @@ void main() {
     expect(
         hatariConfigExecutable(appDir: '', exePath: '/opt/hatari/hatari'),
         '/opt/hatari/hatari');
+  });
+
+  test('hatariConfigExecutable stays absolute outside the app dir (macOS)', () {
+    const exe = '/Users/x/Library/Application Support/MarcerGameDVDLauncher/'
+        'hatari/Hatari.app/Contents/MacOS/Hatari';
+    expect(hatariConfigExecutable(appDir: '/Applications/App.app/Contents/MacOS',
+        exePath: exe), exe);
   });
 
   test('findHatariExecutable finds hatari.exe (Windows layout)', () {
@@ -103,6 +122,15 @@ void main() {
       if (dir.existsSync()) dir.deleteSync(recursive: true);
     });
     File(p.join(dir.path, 'readme.txt')).writeAsBytesSync([0]);
+    expect(findHatariExecutable(dir.path), isNull);
+  });
+
+  test('findHatariExecutable ignores empty placeholder files', () {
+    final dir = Directory.systemTemp.createTempSync('hatari_find_empty');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    File(p.join(dir.path, 'hatari')).createSync(); // 0 bytes
     expect(findHatariExecutable(dir.path), isNull);
   });
 
