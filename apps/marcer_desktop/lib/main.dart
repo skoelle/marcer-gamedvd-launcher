@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -74,6 +75,16 @@ Future<void> main() async {
   // decision 2026-10-15); otherwise the configured size, centered. The
   // configured size is also the restore size under a maximized start.
   WidgetsFlutterBinding.ensureInitialized();
+  // macOS: the app is not sandboxed (see docs/DECISION-macos-distribution.md),
+  // so file_picker must skip its user-selected entitlement check, otherwise
+  // every picker call fails with ENTITLEMENT_NOT_FOUND.
+  if (Platform.isMacOS) {
+    try {
+      await FilePicker.skipEntitlementsChecks();
+    } catch (_) {
+      // Older/other file_picker builds may not implement it — ignore.
+    }
+  }
   await windowManager.ensureInitialized();
   final maximized = config?.windowMaximized ?? true;
   await windowManager.waitUntilReadyToShow(

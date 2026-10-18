@@ -57,6 +57,25 @@ flutter analyze                   # lint
 ../../.venv/bin/python tool/generate_icons.py   # regenerate app icons
 ```
 
+## macOS
+
+The app is **not sandboxed** on macOS (`macos/Runner/*.entitlements`): it reads
+game archives from arbitrary directories, writes `favorites.txt`/`index.json`
+next to the data, launches Hatari and self-updates its own `.app` — none of which
+the App Sandbox permits. `lib/main.dart` calls
+`FilePicker.skipEntitlementsChecks()` so the native picker works without the
+user-selected entitlement. See
+[`docs/DECISION-macos-distribution.md`](../../docs/DECISION-macos-distribution.md).
+
+- **Protected folders:** macOS still guards `~/Downloads`, `~/Documents`,
+  `~/Desktop` and external/network volumes via TCC. The first access shows a
+  system prompt (grant it); until then the path fails with
+  `Operation not permitted`. Paths outside those folders (e.g. `~/Games`) work
+  directly.
+- **Gatekeeper:** the release build is ad-hoc signed and **not notarized**, so a
+  downloaded ZIP is quarantined. Open it once via **right-click → Open**, or run
+  `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`.
+
 ## Config (`desktop.config.json`)
 
 The app looks for `desktop.config.json` in this order (first existing wins):

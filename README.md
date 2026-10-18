@@ -208,6 +208,13 @@ launching, point `Hatari.Executable` at your Hatari binary (or use the in-app
 German) from atariworld.org and install it next to the app (the STE / Low Res
 TOS 1.02 Play variants download TOS 1.62 / 1.02 on demand).
 
+> **macOS:** the build is ad-hoc signed and not notarized, so macOS quarantines
+> the download. Open it once via **right-click → Open**, or run
+> `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`. The app is
+> not sandboxed (it reads game folders you configure and launches Hatari);
+> protected folders like `~/Downloads` still trigger a one-time macOS permission
+> prompt. See [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md#macos).
+
 ### ⚙️ Configuration (`desktop.config.json`)
 
 The app looks for `desktop.config.json` in this order (first existing wins):
