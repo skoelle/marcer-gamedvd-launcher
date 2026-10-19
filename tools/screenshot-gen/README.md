@@ -12,7 +12,9 @@ full specification.
   (`Pillow`, `imagehash`, `numpy`, `scipy`)
 - Environment in `local/paths.env` (git-ignored):
   `MARCER_ROOT_DIR`, `MARCER_PATCH_DIR`, `MARCER_OUT_DIR`, `MARCER_TOS_IMG`
-  (default TOS 1.04) and, for the TOS-1.02 retry, `MARCER_TOS102_IMG`
+  (default TOS 1.04) and, for the TOS-1.02 retry, `MARCER_TOS102_IMG`.
+  Optional `MARCER_DATA_DIR` (the gameinfo directory with
+  `games-<scope>.json`) enables the `screen_format` monitor rules.
 
 ## Usage
 
@@ -52,6 +54,13 @@ tools/screenshot-gen/run.sh cleanup-drive-led --dry-run   # report only
 tools/screenshot-gen/run.sh cleanup-drive-led             # delete + flag
 tools/screenshot-gen/run.sh run --retry-drive-led         # refetch the flagged bootable ones
 
+# Remove pixel-exact duplicate candidates (offline, no Hatari):
+tools/screenshot-gen/run.sh cleanup-duplicates --dry-run   # report only
+tools/screenshot-gen/run.sh cleanup-duplicates             # delete + update index
+tools/screenshot-gen/run.sh cleanup-duplicates --list      # print removed names
+tools/screenshot-gen/run.sh cleanup-duplicates --candidates-only
+tools/screenshot-gen/run.sh cleanup-duplicates --scope pd --only "10th Frame"
+
 # Refine the entry kind of "desktop" entries (offline, no Hatari):
 tools/screenshot-gen/run.sh reclassify --dry-run          # kind counts only
 tools/screenshot-gen/run.sh reclassify                    # write index + JSON
@@ -75,7 +84,8 @@ invocation (recorded in `tos_tried`); `--force` retries it anyway.
 
 The archive is processed in named **scopes** (config `scope_default` +
 `scopes`). Every subcommand (`index`, `run`, `detect`, `reclassify`,
-`cleanup-drive-led`, `prune`) works on exactly one scope per invocation,
+`cleanup-drive-led`, `cleanup-duplicates`, `prune`) works on exactly one
+scope per invocation,
 selected with `--scope <name>`; without the flag the configured
 `scope_default` (cracked) is used. There is deliberately no "all scopes"
 mode — run the command once per scope.
@@ -268,6 +278,33 @@ are *also* structureless (`black_std_content_min` in `analyze_image`,
 SPEC §8.1) — a dark crack intro on black survives and makes the entry
 `done`.
 
+### Exact duplicate candidates (`cleanup-duplicates`)
+
+Repeated captures and the click chain can leave several candidates that show
+exactly the same pixels. `cleanup-duplicates` is an offline pass (no Hatari)
+that removes those duplicates per entry:
+
+- Every candidate is decoded and compared by a **pixel-exact** signature
+  (width, height and SHA-256 of the RGBA pixel data), never by pHash. PNGs
+  with different compression or ancillary chunks but identical pixels count
+  as duplicates; perceptually similar shots are left alone.
+- The preview is the first image in the comparison order, so it is never
+  deleted. A candidate that is pixel-identical to the preview is removed too;
+  `--candidates-only` restricts the comparison to the candidates themselves.
+- The first occurrence in the `candidates` list is kept, later identical
+  files are deleted. The index entry and, when present, the per-entry
+  metadata JSON get the shortened `candidates` list. Candidate names are not
+  renumbered, so gaps in the `_cNN` series are normal after a cleanup.
+- Missing or unreadable files are skipped and reported, never deleted. The
+  preview, `status`, `kind` and `shots` history stay untouched, so the pass
+  is also safe for `done` entries.
+- `--dry-run` only reports; `--only <substring>` limits the pass; `--list`
+  prints the removed names per entry. The output-dir lock is acquired, so it
+  cannot run while a scan is active.
+- While the pass is running it prints a compact progress line at most every
+  10 seconds (`scanned/total`, changed entries, removed/would-remove files and
+  the current entry), so even a long NAS pass shows that it is still working.
+
 ### Drive-LED white screens (`--drive-led false`, `cleanup-drive-led`)
 
 When the statusbar is hidden, Hatari paints a small green floppy drive LED
@@ -387,16 +424,37 @@ After changing `exclude_dirs`, run `index` to rebuild the index (removed
 entries are dropped automatically) and then `prune` to delete their
 leftover logs and empty output directories.
 
-## Mono directories
+## Monitor selection (Mono / Color)
 
-A game folder whose name ends with `mono_dir_suffix` (default `"Mono"`,
-matched case-insensitively against the ZIP's **parent directory**, e.g.
-`Abalone - Mono`) is booted with Hatari `--mono --tos-res high`: monochrome
-monitor plus forced ST high resolution 640x400. The flags are appended
-entry-level on top of the profile's arguments; `monitor: mono`/`color` is
-recorded in the index entry and the metadata JSON. Set the key to `""` to
-disable the rule. The rule applies in every scope (see SPEC-screenshot-generator
-§4.6).
+Monitor mode is resolved per entry, in this order:
+
+1. **Gameinfo `screen_format` rules** from `MARCER_DATA_DIR/games-<scope>.json`
+   (read-only, optional). The game folder is matched below the scope tree,
+   so ZIPs in `Original/` and other sub-directories still use their game
+   folder's values.
+   - **utils** (`screen_format_monitor.utils`): an explicit color hint
+     (`Not Mono`, `Low`, `Mid`, `Medium`, `Color`/`Colour`) forces color;
+     an explicit mono hint (`Mono`, `High`) forces mono; blank values and
+     pure notes (`Modified`, `Translated`, `Serie`, `Crashes`, …) default to
+     **mono**. This is the archive's "mono unless noted" convention.
+   - **pd** (`screen_format_monitor.pd`): mono only when **all** variants of
+     the folder say `High` (pure high-resolution folders). Mixed values such
+     as `High + Low` or `Med + High` stay color.
+2. **Folder suffix** (`mono_dir_suffix`, default `"Mono"`): a game folder
+   ending in `Mono` (e.g. `Abalone - Mono`) is mono when no gameinfo rule
+   applies.
+3. Otherwise color.
+
+Mono boots Hatari with `--mono --tos-res high` (monochrome, forced
+640x400); the decision and its source are logged per entry, and the
+resulting `monitor: mono`/`color` is recorded in the index entry and the
+metadata JSON. Missing `MARCER_DATA_DIR` or `games-<scope>.json` is not an
+error: the suffix rule is used as fallback.
+
+The rules only affect **future captures**. Already finished entries
+(`done`, `desktop`, `no_usable_shots`) are skipped by a normal `run`; use an
+explicit `run --force --only …` if you want to recapture old entries.
+See SPEC-screenshot-generator §4.6 for the exact precedence.
 
 ## Config
 
@@ -404,7 +462,8 @@ Defaults live in `shotgen.py`. Override via `config.example.json` (copy and
 adjust) or `config.local.json` (git-ignored). Time points are 10, 25 and 45
 seconds after Hatari start. Output mirrors the source tree under
 `MARCER_OUT_DIR`, one preview PNG plus optional candidate PNGs and a metadata
-JSON per entry.
+JSON per entry. `screen_format_monitor` holds the per-scope gameinfo monitor
+rules described under "Monitor selection".
 
 Scope configuration:
 
@@ -416,7 +475,15 @@ Scope configuration:
     "utils":   { "trees": ["Title Sorted/Utilitys - Title Sorted"] },
     "pd":      { "trees": ["Title Sorted/PD Games - Title Sorted"] }
   },
-  "mono_dir_suffix": "Mono"
+  "mono_dir_suffix": "Mono",
+  "screen_format_monitor": {
+    "utils": {
+      "default": "mono",
+      "color_hints": ["not mono", "low", "mid", "medium", "color", "colour"],
+      "mono_hints": ["mono", "high"]
+    },
+    "pd": { "mono_if_all": ["high"] }
+  }
 }
 ```
 

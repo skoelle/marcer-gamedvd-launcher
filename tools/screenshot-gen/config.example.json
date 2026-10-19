@@ -18,6 +18,16 @@
     }
   },
   "mono_dir_suffix": "Mono",
+  "screen_format_monitor": {
+    "utils": {
+      "default": "mono",
+      "color_hints": ["not mono", "low", "mid", "medium", "color", "colour"],
+      "mono_hints": ["mono", "high"]
+    },
+    "pd": {
+      "mono_if_all": ["high"]
+    }
+  },
   "exclude_dirs": ["kryoflux", "boxscan", "manual"],
   "timepoints": [10, 25, 45],
   "entry_timeout_s": 90,

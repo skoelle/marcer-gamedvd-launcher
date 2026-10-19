@@ -271,8 +271,9 @@ Defined scopes:
   `Title Sorted/PD Games - Title Sorted` (merged with its patch counterpart).
 
 Every subcommand (`index`, `run`, `detect`, `reclassify`,
-`cleanup-drive-led`, `prune`) takes `--scope` and works exclusively on the
-selected scope's trees, index file and output subtree. There is deliberately
+`cleanup-drive-led`, `cleanup-duplicates`, `prune`) takes `--scope` and
+works exclusively on the selected scope's trees, index file and output
+subtree. There is deliberately
 **no "all scopes" mode**: running two scopes means running the command
 twice. This keeps each index file small, keeps per-entry index rewrites
 cheap, and means an experimental scope can never disturb the curated state
@@ -309,20 +310,50 @@ files are invisible to them until a future join step.
   crack ZIP gets its own screenshots, because crack intros differ
   (user decision).
 
-### 4.6 Mono directories (user decision)
+### 4.6 Monitor selection (Mono / Color, user decision)
 
-- A folder whose name ends with the configured suffix (config
-  `mono_dir_suffix`, default `"Mono"`, matched case-insensitively against
-  the ZIP's **parent directory** name, e.g. `Abalone - Mono`) is booted
-  with Hatari `--mono --tos-res high`: monochrome monitor plus explicitly
-  forced ST high resolution 640x400. The folder `1000 Bornes - Col and Mon`
-  does not match (ends with `Mon`, not `Mono`).
-- The flags are appended entry-level on top of the selected profile's
-  arguments; `monitor` (`mono` | `color`) is stored in the index entry and
-  the metadata JSON. The capture pipeline, timepoints and filters are
-  unchanged (screenshots are 640x400 for mono entries).
-- Applies in every scope (the rule is a config key, not a per-scope key).
-  Verified on the PD scope (section 14.1.2).
+Monitor mode is resolved per entry before Hatari starts. The precedence is:
+
+1. **Gameinfo `screen_format` rules** (optional, read-only) from
+   `MARCER_DATA_DIR/games-<scope>.json`. The entry is matched by its
+   `(letter, folder)` key below the selected scope tree (same grouping as
+   the gallery/desktop join); sub-directories such as `Original/` therefore
+   still use their game folder's values. Rules live in the config key
+   `screen_format_monitor`:
+   - `utils` (default: `default: mono`, `color_hints: [not mono, low, mid,
+     medium, color, colour]`, `mono_hints: [mono, high]`): any color hint
+     forces color, otherwise any mono hint forces mono, otherwise the entry
+     defaults to **mono** (blank values and pure notes such as `Modified`,
+     `Translated`, `Serie`, `Crashes`). This is the archive's "mono unless
+     noted" convention for utilities.
+   - `pd` (default: `mono_if_all: [high]`): mono only when **every** variant
+     of the folder says `High` (pure high-resolution folder). Mixed values
+     such as `High` + `Low`, `Med + High` or `Low-High` stay color; there is
+     no per-ZIP variant matching inside a mixed folder.
+2. **Folder suffix** (config `mono_dir_suffix`, default `"Mono"`): a game
+   folder ending in `Mono` (e.g. `Abalone - Mono`) is mono when no gameinfo
+   rule matched. The check uses the game folder below the scope tree, not
+   the ZIP's immediate parent, so `Original/` sub-directories work too. The
+   folder `1000 Bornes - Col and Mon` does not match (ends with `Mon`).
+3. Otherwise color.
+
+A gameinfo rule wins over a conflicting suffix. Missing `MARCER_DATA_DIR`
+or `games-<scope>.json` is not an error: the pass logs a warning and uses
+the suffix rule. The per-entry log records `monitor <mode> (<source>)`
+(e.g. `screen_format:high`, `screen_format:default`, `folder-suffix`).
+
+Mono boots Hatari with `--mono --tos-res high`: monochrome monitor plus
+explicitly forced ST high resolution 640x400. The flags are appended
+entry-level on top of the selected profile's arguments; `monitor`
+(`mono` | `color`) is stored in the index entry and the metadata JSON. The
+capture pipeline, timepoints and filters are unchanged (screenshots are
+640x400 for mono entries).
+
+The rules apply to **future captures** only. A normal `run` still skips
+finished entries (`done`, `desktop`, `no_usable_shots`); existing captures
+are not recaptured automatically. `run --force --only <substring>` can
+recapture selected entries explicitly. Applies in every scope (the rules
+are config keys, not pipeline branches).
 
 ---
 
@@ -374,9 +405,11 @@ still allows only one tool process per `MARCER_OUT_DIR`.
 
 Besides `index`, `run` and `detect`, the tool has the `cleanup-drive-led`
 subcommand (section 8.7), a standalone offline pass that removes old
-drive-LED white screenshots and cleans the index, the `reclassify`
-subcommand (section 8.4.1), an offline pass that refines the entry kind of
-`desktop` entries, and the `prune`
+drive-LED white screenshots and cleans the index, the
+`cleanup-duplicates` subcommand (section 8.8), an offline pass that removes
+pixel-exact duplicate candidates and updates the index/metadata, the
+`reclassify` subcommand (section 8.4.1), an offline pass that refines the
+entry kind of `desktop` entries, and the `prune`
 subcommand, which deletes `logs/<rel>.log` files and empty mirror
 directories of index entries that no longer exist (used after directory
 exclusions, section 4.4).
@@ -883,7 +916,10 @@ metadata JSON of that earlier run is deleted (its `status`, `shots` and
 supported state and must not infer `preview: null` from the status.
 Candidate retention stays gated on `keep_candidates` (with `false`:
 `candidates` stays empty), while the preview itself is written regardless
-of that flag.
+of that flag. Retained candidates are not guaranteed to be pixel-distinct:
+the click chain and reruns can add exact duplicates. The offline
+`cleanup-duplicates` pass (section 8.8) removes them without touching the
+preview.
 
 ### 8.7 Drive-LED white screens (detection and cleanup)
 
@@ -942,6 +978,44 @@ instead of being re-captured endlessly, and are skipped by
 `run --retry-drive-led`. Bootability uses the same extension set as
 `cleanup-drive-led` (`.stx`, `.msa`, `.st`, `.dim`, `.ipf`, `.prg`,
 `.stt`, `.pckd`, `.pkd`).
+
+### 8.8 Pixel-exact duplicate candidate cleanup (`cleanup-duplicates`)
+
+Repeated captures, the click chain and older runs can leave several
+candidates of one entry that show exactly the same pixels. The offline
+subcommand `cleanup-duplicates` (no Hatari) removes those duplicates per
+entry:
+
+- **Comparison is pixel-exact, never perceptual.** Each existing preview
+  and candidate PNG is decoded and reduced to
+  `(width, height, sha256(RGBA pixels))`. Two files with the same
+  signature show identical pixels even when their PNG compression or
+  ancillary chunks differ; pHash distance is not used and perceptually
+  similar but distinct shots are never removed.
+- **Order and retention.** The preview is the first image in the
+  comparison order (unless `--candidates-only` is given), so it is never
+  deleted. Within the `candidates` list the first occurrence is kept and
+  every later file with an already-seen pixel signature is removed. A
+  candidate identical to the preview is therefore removed by default;
+  `--candidates-only` ignores the preview and compares only candidates
+  against each other.
+- **State updates.** The entry's `candidates` list in the scope index and,
+  when a metadata JSON exists, that JSON's `candidates` field are updated.
+  Candidate names are not renumbered, so gaps in the `_cNN` series are a
+  normal, supported state for all index consumers. The preview, `status`,
+  `kind`, `tos`, click fields and the metadata `shots` capture history stay
+  untouched; because only exact duplicates are removed, `done` entries
+  (manual curation) are safe too.
+- **Safety.** Missing or unreadable files are skipped and reported, never
+  deleted. `--dry-run` only reports the counts, `--only <substring>`
+  limits the pass, and `--list` prints the removed names per entry. The
+  output-dir lock is taken, so the pass cannot run while a scan is active.
+  Ctrl+C stops the pass and still saves the already-applied index changes.
+- **Progress.** The pass prints a compact progress line at most every
+  10 seconds: scanned/total entries with percentage, changed entries,
+  removed (or would-remove in `--dry-run`) files with their size, and the
+  current entry. It is checked between candidates and entries, so long NAS
+  passes visibly keep working without flooding the output.
 
 ---
 
@@ -1104,7 +1178,8 @@ sections 8 and 8.4.1),
 `size`, `mtime`, `profile`, `monitor` (`mono` | `color`, section 4.6),
 `last_run`, `preview` (relative PNG name, or
 null when no image exists at all), `candidates` (list of `_cNN` names,
-disjoint from the preview, section 8.6), and for the
+disjoint from the preview, section 8.6; after `cleanup-duplicates` the
+names may contain gaps, section 8.8), and for the
 click retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
 scale, source}` or absent), `icon_found` (true/false after `detect`),
 `click_retried` (true after an attempt), `click_result`
@@ -1183,6 +1258,7 @@ specs, logs or examples):
 | `MARCER_ROOT_DIR` | yes | game root layer, read-only |
 | `MARCER_PATCH_DIR` | yes | patch layer, read-only (empty disables patch layer) |
 | `MARCER_OUT_DIR` | yes | output root for screenshots, index, logs |
+| `MARCER_DATA_DIR` | no | gameinfo directory with `games-<scope>.json`, enables the `screen_format` monitor rules (section 4.6) |
 | `MARCER_TOS_IMG` | yes | default TOS 1.04 ROM image for Hatari |
 | `MARCER_TOS102_IMG` | no | TOS 1.02 ROM image, required only by `run --tos 1.02` (section 7.5) |
 | `MARCER_HATARI_BIN` | no | Hatari executable, default `hatari` from PATH |
@@ -1197,6 +1273,7 @@ this spec):
 
 ```
 MARCER_OUT_DIR=...
+MARCER_DATA_DIR=...   # optional, gameinfo directory
 MARCER_TOS_IMG=...
 MARCER_TOS102_IMG=...
 MARCER_HATARI_BIN=...
@@ -1210,7 +1287,9 @@ MARCER_DISPLAY=...
 name; the default scope maps to `index.json`, every other scope to
 `index-<name>.json`, section 4.4; legacy `scope_trees` is still accepted
 when no `scopes` entry exists), `mono_dir_suffix` (folder suffix that
-triggers `--mono --tos-res high`, section 4.6), `tos_default` +
+triggers `--mono --tos-res high`, section 4.6), `screen_format_monitor`
+(per-scope gameinfo rules that win over the suffix, section 4.6),
+`tos_default` +
 `tos_images` (version label → environment variable of its ROM image,
 section 7.5), `exclude_dirs` (sub-directory names never
 scanned, section 4.4), time points, timeouts, filter thresholds (the
@@ -1473,9 +1552,13 @@ A conforming implementation satisfies all of the following.
       then scrolled down (`click_retry.scroll_attempts` times, its scrollbar
       down arrow) so hidden icons become visible; both gadget positions are
       detected from the window frame.
-- [ ] P8 Directories ending with `mono_dir_suffix` (case-insensitive, the
-      ZIP's parent directory) are booted with `--mono --tos-res high`, and
-      `monitor: mono` is recorded in index and metadata (section 4.6).
+- [ ] P8 Monitor mode is resolved before boot: gameinfo `screen_format`
+      rules (utils "mono unless noted", pd "all High") win over the
+      case-insensitive `mono_dir_suffix` folder check; mono entries boot
+      with `--mono --tos-res high`, and `monitor: mono` is recorded in index
+      and metadata. Missing gameinfo falls back to the suffix. The rules
+      affect future captures only; finished entries are not recaptured by a
+      normal run (section 4.6).
 - [ ] P9 `run --tos <version>` boots with the mapped ROM image; a successful
       non-default capture records `tos` (sparse, index + metadata), a failed
       one records the version in `tos_tried`; `run --retry-no-usable` skips a
@@ -1500,6 +1583,10 @@ A conforming implementation satisfies all of the following.
       `darkscreen` (section 8.4.1) both in the pipeline and by the offline
       `reclassify` pass, while `status` stays `desktop`; entries without a
       preview are skipped and reported.
+- [ ] F7 `cleanup-duplicates` removes only pixel-exact duplicate candidates
+      (section 8.8), keeps the preview and the first occurrence, updates the
+      index and metadata `candidates` lists, leaves missing/unreadable files
+      alone and limits itself to the selected scope with `--only`/`--dry-run`.
 
 **Output**
 - [ ] O1 Output mirrors the source tree under `MARCER_OUT_DIR`.

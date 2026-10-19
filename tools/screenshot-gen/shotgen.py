@@ -4,9 +4,10 @@
 """Marcer GameDVD Screenshot Generator.
 
 Implements SPEC-screenshot-generator.md:
-  index   build/refresh the ZIP index for one scope's trees
-  run     process pending entries (interruptible, resumable)
-  detect  find the program icon in existing desktop previews (offline)
+  index                build/refresh the ZIP index for one scope's trees
+  run                  process pending entries (interruptible, resumable)
+  detect               find the program icon in existing desktop previews
+  cleanup-duplicates   remove pixel-exact duplicate candidates (offline)
 
 Scopes (config ``scope_default`` + ``scopes``): every subcommand works
 on exactly one scope per invocation, selected with ``--scope`` (default:
@@ -23,6 +24,7 @@ Paths come exclusively from environment variables (see run.sh and
 local/paths.env). This file contains no real data paths.
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -39,6 +41,7 @@ from pathlib import Path
 
 TOOL_VERSION = "0.1.0"
 STOP_EVENT = None  # set in main
+PROGRESS_INTERVAL_S = 10.0
 
 
 # --------------------------------------------------------------------------
@@ -69,9 +72,31 @@ DEFAULT_CONFIG = {
         },
     },
     # Directory names ending with this suffix (case-insensitive, matched
-    # against the ZIP's parent directory, e.g. "Abalone - Mono") are booted
+    # against the entry's game folder, e.g. "Abalone - Mono") are booted
     # with --mono --tos-res high (ST high res, 640x400). Empty = disabled.
     "mono_dir_suffix": "Mono",
+    # Monitor selection from the gameinfo XLS export (MARCER_DATA_DIR/
+    # games-<scope>.json, read-only). Rules are per scope:
+    #   mono_if_all   - mono when every variant's screen_format equals one
+    #                   of these values (pd: pure "High" folders)
+    #   color_hints   - any variant value containing one of these substrings
+    #                   forces color (checked before mono_hints)
+    #   mono_hints    - any variant value containing one of these substrings
+    #                   forces mono
+    #   default       - mode when no hint matched (e.g. utils blank/notes)
+    # A gameinfo rule wins over the folder suffix. Empty/missing gameinfo
+    # falls back to the suffix rule. See SPEC section 4.6.
+    "screen_format_monitor": {
+        "utils": {
+            "default": "mono",
+            "color_hints": ["not mono", "low", "mid", "medium",
+                            "color", "colour"],
+            "mono_hints": ["mono", "high"],
+        },
+        "pd": {
+            "mono_if_all": ["high"],
+        },
+    },
     # Legacy (pre-scopes) single-scope configuration: used only when the
     # merged config carries no "scopes" entry at all.
     "scope_trees": [
@@ -211,6 +236,7 @@ def paths() -> dict:
         "root": require_env("MARCER_ROOT_DIR"),
         "patch": os.environ.get("MARCER_PATCH_DIR", "").strip(),
         "out": require_env("MARCER_OUT_DIR"),
+        "data": os.environ.get("MARCER_DATA_DIR", "").strip(),
         "tos": require_env("MARCER_TOS_IMG"),
         "hatari": os.environ.get("MARCER_HATARI_BIN", "").strip() or "hatari",
         "display": os.environ.get("MARCER_DISPLAY", "").strip() or ":99",
@@ -231,6 +257,144 @@ def tos_image_for(cfg: dict, P: dict, version: str) -> str:
     if version == (cfg.get("tos_default") or "1.04"):
         return P["tos"]
     return require_env(images[version])
+
+
+# --------------------------------------------------------------------------
+# monitor selection (gameinfo screen_format + folder suffix)
+# --------------------------------------------------------------------------
+
+def _norm_screen_format(value) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def entry_card_key(rel: str, scope: dict):
+    """Return the lower-case ``(letter, folder)`` key of an entry.
+
+    The key is derived from the path *below the scope tree*, so it also
+    works for ZIPs in sub-directories such as ``Original/`` (where the
+    ZIP's immediate parent is not the game folder). Matches the
+    ``(letter, folder)`` grouping used by the gallery/desktop gameinfo
+    join.
+    """
+    for tree in scope.get("trees") or []:
+        prefix = tree.rstrip("/") + "/"
+        if rel[:len(prefix)].lower() == prefix.lower():
+            parts = Path(rel[len(prefix):]).parts
+            if len(parts) >= 2:
+                return parts[0].lower(), parts[1].lower()
+    return None
+
+
+def load_screen_formats(P: dict, scope_name: str):
+    """Load ``games-<scope>.json`` into a ``(letter, folder)`` mapping.
+
+    Returns ``(formats, source_description)``. Missing data is not an
+    error: the caller falls back to the folder-suffix rule.
+    """
+    data = (P.get("data") or "").strip()
+    if not data:
+        return {}, "MARCER_DATA_DIR is not set"
+    path = Path(data) / f"games-{scope_name}.json"
+    if not path.is_file():
+        return {}, f"{path} not found"
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except Exception as ex:
+        return {}, f"cannot read {path}: {ex}"
+    formats = {}
+    for game in doc.get("games") or []:
+        if not isinstance(game, dict):
+            continue
+        key = (str(game.get("letter") or "").lower(),
+               str(game.get("folder") or "").lower())
+        formats[key] = [
+            _norm_screen_format(v.get("screen_format"))
+            for v in (game.get("variants") or [])
+            if isinstance(v, dict)
+        ]
+    return formats, str(path)
+
+
+def _hint_match(values, hints) -> bool:
+    return any(any(h in value for h in hints) for value in values)
+
+
+def resolve_monitor(cfg: dict, scope: dict, rel: str, screen_formats: dict):
+    """Return ``(mode, source)`` for one entry.
+
+    Precedence: explicit gameinfo rule > folder suffix > color. The
+    gameinfo mapping is optional; without it the historic suffix rule
+    applies unchanged.
+    """
+    scope_name = scope["name"]
+    rule_sets = cfg.get("screen_format_monitor") or {}
+    if not isinstance(rule_sets, dict):
+        rule_sets = {}
+    rules = rule_sets.get(scope_name) or {}
+    if not isinstance(rules, dict):
+        rules = {}
+    key = entry_card_key(rel, scope)
+    folder = key[1] if key else Path(rel).parent.name
+    fmt_vals = screen_formats.get(key) if key else None
+
+    if fmt_vals is not None and rules:
+        mono_if_all = [_norm_screen_format(v)
+                       for v in (rules.get("mono_if_all") or [])]
+        if mono_if_all and fmt_vals and all(v in mono_if_all
+                                            for v in fmt_vals):
+            return "mono", "screen_format:" + ",".join(
+                sorted(set(mono_if_all)))
+        color_hints = [_norm_screen_format(v)
+                       for v in (rules.get("color_hints") or [])]
+        mono_hints = [_norm_screen_format(v)
+                      for v in (rules.get("mono_hints") or [])]
+        nonempty = [v for v in fmt_vals if v]
+        if color_hints and _hint_match(nonempty, color_hints):
+            return "color", "screen_format:color"
+        if mono_hints and _hint_match(nonempty, mono_hints):
+            return "mono", "screen_format:mono"
+        default = str(rules.get("default") or "").strip().lower()
+        if default in ("mono", "color"):
+            return default, "screen_format:default"
+
+    suffix = (cfg.get("mono_dir_suffix") or "").strip()
+    if suffix and folder.strip().lower().endswith(suffix.lower()):
+        return "mono", "folder-suffix"
+    return "color", "default"
+
+
+def build_monitor_map(cfg: dict, P: dict, scope: dict, entries):
+    """Resolve the monitor mode for every pending entry of one run."""
+    rule_sets = cfg.get("screen_format_monitor") or {}
+    if not isinstance(rule_sets, dict):
+        rule_sets = {}
+    has_rules = scope["name"] in rule_sets
+    formats, source = ({}, "")
+    if has_rules:
+        formats, source = load_screen_formats(P, scope["name"])
+    mapping = {}
+    counts = {"mono": 0, "color": 0, "rules": 0, "suffix": 0, "default": 0}
+    for entry in entries:
+        mode, why = resolve_monitor(cfg, scope, entry["rel"], formats)
+        mapping[entry["rel"]] = (mode, why)
+        counts[mode] += 1
+        if why.startswith("screen_format"):
+            counts["rules"] += 1
+        elif why == "folder-suffix":
+            counts["suffix"] += 1
+        else:
+            counts["default"] += 1
+    if not has_rules:
+        return mapping, ""
+    if not formats:
+        return mapping, (f"screen_format monitor[{scope['name']}]: {source}; "
+                         f"using folder suffix only")
+    return mapping, (
+        f"screen_format monitor[{scope['name']}] from {source}: "
+        f"{counts['mono']} mono, {counts['color']} color "
+        f"(rules {counts['rules']}, suffix {counts['suffix']}, "
+        f"default {counts['default']})")
 
 
 # --------------------------------------------------------------------------
@@ -259,6 +423,13 @@ def save_index(out: Path, idx: dict, index_name: str = INDEX_NAME) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(idx, f, indent=1, sort_keys=True)
     os.replace(tmp, p)
+
+
+def write_json_atomic(path: Path, data: dict) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=1)
+    os.replace(tmp, path)
 
 
 def _is_ignored(name: str) -> bool:
@@ -591,6 +762,25 @@ def refine_desktop_kind(kind: str, metrics: dict, cfg: dict) -> str:
 def phash_distance(a: str, b: str) -> int:
     import imagehash
     return imagehash.hex_to_hash(a) - imagehash.hex_to_hash(b)
+
+
+def pixel_signature(path: Path):
+    """Return a pixel-exact signature of a PNG, or None if unreadable.
+
+    The signature is ``(width, height, sha256(rgba_pixels))``: two files
+    with the same signature show exactly the same pixels, even when their
+    PNG compression or ancillary chunks differ. Used by
+    ``cleanup-duplicates`` to remove only genuinely identical candidates.
+    """
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            im.load()
+            rgba = im.convert("RGBA")
+            return (rgba.size,
+                    hashlib.sha256(rgba.tobytes()).hexdigest())
+    except Exception:
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -1476,7 +1666,7 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
 def process_entry(cfg: dict, P: dict, entry: dict, log,
                   state_lock=None, click_retry: bool = False,
                   force: bool = False, tos_version: str = "",
-                  tos_image: str = "") -> None:
+                  tos_image: str = "", monitor_info=None) -> None:
     def commit(fn):
         # With parallel jobs, entry mutation must be serialized against
         # index saves performed by other workers (avoids torn index state).
@@ -1491,13 +1681,19 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     rel_path = Path(rel)
     parts = rel_path.parts
 
-    # Mono directories (config mono_dir_suffix, e.g. "Abalone - Mono"):
-    # boot with a monochrome monitor in ST high resolution (640x400).
-    mono_suffix = (cfg.get("mono_dir_suffix") or "").strip()
-    parent_name = rel_path.parent.name if len(parts) > 1 else ""
-    is_mono = bool(mono_suffix) and \
-        parent_name.strip().lower().endswith(mono_suffix.lower())
-    monitor = "mono" if is_mono else "color"
+    # Monitor selection: gameinfo screen_format rules are resolved once per
+    # run and passed in; without a rule the historic folder-suffix check
+    # (e.g. "Abalone - Mono") applies. Mono boots ST high res (640x400).
+    if monitor_info:
+        monitor, monitor_source = monitor_info
+        is_mono = monitor == "mono"
+    else:
+        mono_suffix = (cfg.get("mono_dir_suffix") or "").strip()
+        parent_name = rel_path.parent.name if len(parts) > 1 else ""
+        is_mono = bool(mono_suffix) and \
+            parent_name.strip().lower().endswith(mono_suffix.lower())
+        monitor = "mono" if is_mono else "color"
+        monitor_source = "folder-suffix" if is_mono else "default"
 
     # src_rel carries the folder spelling the file actually has under its
     # own layer root when the canonical output spelling differs (case-only
@@ -1571,7 +1767,9 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             # --mono selects the monochrome monitor (TOS then boots to
             # high res); --tos-res high forces 640x400 explicitly.
             cmd += ["--mono", "--tos-res", "high"]
-            log(f"mono directory ({parent_name}): --mono --tos-res high")
+        if monitor_source != "default":
+            log(f"monitor {monitor} ({monitor_source})"
+                + (" --mono --tos-res high" if is_mono else ""))
 
         env = {**os.environ, "DISPLAY": P["display"]}
         log(f"hatari start ({' '.join(cmd[:6])} ...)")
@@ -1896,7 +2094,7 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   pending: list, jobs: int, t_start: float,
                   done_counts: dict, displays: list,
                   index_name: str = INDEX_NAME, tos_version: str = "",
-                  tos_image: str = ""):
+                  tos_image: str = "", monitor_map: dict = None):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
@@ -1960,7 +2158,8 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                               state_lock=state_lock,
                               click_retry=args.retry_desktop,
                               force=args.force,
-                              tos_version=tos_version, tos_image=tos_image)
+                              tos_version=tos_version, tos_image=tos_image,
+                              monitor_info=(monitor_map or {}).get(e["rel"]))
                 with state_lock:
                     save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
@@ -2049,6 +2248,9 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
 
     print(f"pending entries: {len(pending)} "
           f"(scope {scope['name']}, index {scope['index']})", flush=True)
+    monitor_map, monitor_info = build_monitor_map(cfg, P, scope, pending)
+    if monitor_info:
+        print(monitor_info, flush=True)
     if jobs > 1:
         print(f"parallel jobs: {jobs} on displays {', '.join(displays)}",
               flush=True)
@@ -2062,7 +2264,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
             interrupted, processed = _run_parallel(
                 cfg, P, args, out, idx, pending, jobs, t_start, done_counts,
                 displays, index_name=scope["index"],
-                tos_version=tos_version, tos_image=tos_image)
+                tos_version=tos_version, tos_image=tos_image,
+                monitor_map=monitor_map)
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -2093,7 +2296,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 process_entry(cfg, P, e, log,
                               click_retry=args.retry_desktop,
                               force=args.force,
-                              tos_version=tos_version, tos_image=tos_image)
+                              tos_version=tos_version, tos_image=tos_image,
+                              monitor_info=monitor_map.get(e["rel"]))
                 save_index(out, idx, scope["index"])
                 done_counts[e["status"]] = done_counts.get(e["status"], 0) + 1
                 if STOP_EVENT.is_set():
@@ -2336,6 +2540,155 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args, scope: dict) -> int:
           f"(bootable {stats['bootable']}, refetch {stats['refetch']}), "
           f"previews {stats['previews']}, candidates {stats['candidates']}, "
           f"jsons {stats['jsons']}"
+          + (" [dry-run, nothing changed]" if args.dry_run else ""))
+    return 0
+
+
+def cmd_cleanup_duplicates(cfg: dict, P: dict, args, scope: dict) -> int:
+    """Remove pixel-exact duplicate candidate PNGs of every entry.
+
+    Offline pass (no Hatari). For every index entry with candidates the
+    preview (unless ``--candidates-only``) and the ``_cNN`` candidates are
+    decoded and compared by their pixel-exact signature
+    (:func:`pixel_signature`): the first occurrence in the list is kept,
+    every later file that shows exactly the same pixels is deleted. This
+    removes the exact duplicates that repeated captures and the click
+    chain leave behind without touching perceptually similar but distinct
+    shots.
+
+    The preview is always the first image in the comparison order, so it
+    is never deleted; only candidates can be removed. ``status: done`` is
+    not a blocker here (unlike ``cleanup-drive-led``): preview, status and
+    kind stay untouched. The index entry's ``candidates`` list and the
+    per-entry metadata JSON are updated; candidate names are not
+    renumbered, so gaps in the ``_cNN`` series are fine for consumers.
+
+    Missing or unreadable files are skipped and reported, never deleted.
+    """
+    out = Path(P["out"])
+    idx = load_index(out, scope["index"])
+    entries = idx["entries"]
+    lock = acquire_lock(out)
+    stats = {"scanned": 0, "entries": 0, "removed": 0, "bytes": 0,
+             "missing": 0, "unreadable": 0, "metadata": 0, "errors": 0}
+    dirty = False
+    candidates_only = bool(getattr(args, "candidates_only", False))
+
+    try:
+        targets = [rel for rel in sorted(entries)
+                   if entries[rel].get("candidates")
+                   and (not args.only
+                        or args.only.lower() in rel.lower())]
+        print(f"entries with candidates: {len(targets)}", flush=True)
+        last_progress = time.monotonic()
+
+        def progress(current: str) -> None:
+            nonlocal last_progress
+            now = time.monotonic()
+            if now - last_progress < PROGRESS_INTERVAL_S:
+                return
+            last_progress = now
+            total = len(targets)
+            pct = 100.0 * stats["scanned"] / total if total else 100.0
+            action = "would remove" if args.dry_run else "removed"
+            print(f"  [progress] {time.strftime('%H:%M:%S')} "
+                  f"{stats['scanned']}/{total} ({pct:.1f}%) — "
+                  f"{stats['entries']} entries, {action} "
+                  f"{stats['removed']} files "
+                  f"({stats['bytes'] / (1024 * 1024):.1f} MiB) — "
+                  f"current: {current}", flush=True)
+
+        for rel in targets:
+            if STOP_EVENT.is_set():
+                print("interrupted", flush=True)
+                break
+            e = entries[rel]
+            stats["scanned"] += 1
+            progress(rel)
+            cands = list(e.get("candidates") or [])
+            mirror = out / Path(rel).parent
+            base = safe_filename(Path(rel).stem)
+            meta = metadata_path(mirror, base)
+
+            ordered = list(cands)
+            if not candidates_only and e.get("preview"):
+                ordered = [e["preview"]] + ordered
+
+            seen = {}
+            sizes = {}
+            remove = []
+            for name in ordered:
+                p = mirror / name
+                st = None
+                try:
+                    st = p.stat()
+                    sig = pixel_signature(p)
+                except OSError:
+                    sig = None
+                if sig is None:
+                    if st is None:
+                        stats["missing"] += 1
+                    else:
+                        stats["unreadable"] += 1
+                    continue
+                sizes[name] = st.st_size
+                if sig in seen:
+                    remove.append(name)
+                else:
+                    seen[sig] = name
+                progress(rel)
+
+            removed = list(dict.fromkeys(remove))
+            if not removed:
+                continue
+
+            stats["entries"] += 1
+            stats["removed"] += len(removed)
+            stats["bytes"] += sum(sizes.get(n, 0) for n in removed)
+            if getattr(args, "list", False):
+                print(f"  {rel}: -{', '.join(removed)}", flush=True)
+
+            if args.dry_run:
+                continue
+
+            removed_set = set(removed)
+            for name in removed:
+                try:
+                    (mirror / name).unlink(missing_ok=True)
+                except OSError as ex:
+                    stats["errors"] += 1
+                    print(f"  unlink error {rel}/{name}: {ex}",
+                          file=sys.stderr, flush=True)
+            new_cands = [c for c in cands if c not in removed_set]
+            e["candidates"] = new_cands
+            if meta is not None:
+                try:
+                    with open(meta, "r", encoding="utf-8") as fh:
+                        md = json.load(fh)
+                    md["candidates"] = new_cands
+                    write_json_atomic(meta, md)
+                    stats["metadata"] += 1
+                except Exception as ex:
+                    stats["errors"] += 1
+                    print(f"  metadata error {rel}: {ex}",
+                          file=sys.stderr, flush=True)
+            dirty = True
+            if stats["entries"] % 500 == 0:
+                save_index(out, idx, scope["index"])
+                dirty = False
+    finally:
+        try:
+            if dirty and not args.dry_run:
+                save_index(out, idx, scope["index"])
+        finally:
+            release_lock(lock)
+
+    mib = stats["bytes"] / (1024 * 1024)
+    print(f"cleanup-duplicates[{scope['name']}]: scanned {stats['scanned']}, "
+          f"entries {stats['entries']}, removed {stats['removed']} files "
+          f"({mib:.1f} MiB), metadata {stats['metadata']}, missing "
+          f"{stats['missing']}, unreadable {stats['unreadable']}, errors "
+          f"{stats['errors']}"
           + (" [dry-run, nothing changed]" if args.dry_run else ""))
     return 0
 
@@ -2601,6 +2954,20 @@ def main() -> int:
     p_clean.add_argument("--only", type=str, default="",
                          help="only paths containing this substring")
 
+    p_dedup = sub.add_parser(
+        "cleanup-duplicates",
+        help="delete pixel-exact duplicate candidate PNGs and clean the "
+             "index (offline, no Hatari)")
+    _scope_arg(p_dedup)
+    p_dedup.add_argument("--dry-run", action="store_true",
+                         help="report what would be removed, change nothing")
+    p_dedup.add_argument("--only", type=str, default="",
+                         help="only paths containing this substring")
+    p_dedup.add_argument("--candidates-only", action="store_true",
+                         help="compare candidates only, ignore the preview")
+    p_dedup.add_argument("--list", action="store_true",
+                         help="print the removed candidate names per entry")
+
     p_recl = sub.add_parser(
         "reclassify",
         help="offline: split coarse desktop kinds into desktop/textscreen/"
@@ -2646,6 +3013,8 @@ def main() -> int:
         return cmd_detect(cfg, P, args, scope)
     if args.cmd == "cleanup-drive-led":
         return cmd_cleanup_drive_led(cfg, P, args, scope)
+    if args.cmd == "cleanup-duplicates":
+        return cmd_cleanup_duplicates(cfg, P, args, scope)
     if args.cmd == "reclassify":
         return cmd_reclassify(cfg, P, args, scope)
     if args.cmd == "prune":
