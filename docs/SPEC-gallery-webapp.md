@@ -279,15 +279,17 @@ A game folder aggregates the statuses of its ZIPs:
 - `display_status` (drives the badge and status filtering), first match wins:
   `done` → `desktop` → `no_usable_shots` → `interrupted` → `pending` →
   `skipped_disk_n`.
-- `screenshots` (bool): at least one variant has `status` `done` or
-  `desktop` with a preview.
+- `screenshots` (bool): at least one variant has any preview (including
+  `no_usable_shots`, which keeps its last capture, section 8.5 of
+  `SPEC-screenshot-generator.md`).
 - `count_done`, `count_pending` etc. are included in the card payload for
   the lightbox and statistics.
 - The card's primary preview = the first (by sorted `rel`) variant preview
   with `status` `done` **and `kind` `game`**, else the first with
-  `status` `done`, else the first with `status` `desktop` (desktop-app
-  parity: a real game shot wins over e.g. a `textscreen`; within a tier
-  the sorted-`rel` order decides).
+  `status` `done`, else the first with `status` `desktop`, else the first
+  variant with any preview (desktop-app parity: a real game shot wins over
+  e.g. a `textscreen`; a `no_usable_shots` preview is shown when it is the
+  only image; within a tier the sorted-`rel` order decides).
 - `layer` for a grouped card: the single layer value if all its ZIPs share
   one (`ROOT` or `PATCH`), otherwise `BOTH` (overlay semantics of
   SPEC.md section 7 — one logical game, present in one or both layers).

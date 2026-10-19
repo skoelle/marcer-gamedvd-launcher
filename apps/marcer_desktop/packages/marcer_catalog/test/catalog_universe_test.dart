@@ -193,6 +193,18 @@ void main() {
           '$screenshotDir/Title Sorted/Cracked Games - Title Sorted/B/Beta/beta.png');
     });
 
+    test('no_usable_shots keeps its preview as card fallback', () {
+      final u = buildUniverse({
+        relB: entryJson(relB, 'no_usable_shots', 'ROOT', preview: 'beta.png'),
+      });
+      final card = u.cracked.first;
+      expect(card.displayStatus, 'no_usable_shots');
+      expect(card.screenshots, isTrue);
+      expect(
+          card.previewPath,
+          '$screenshotDir/Title Sorted/Cracked Games - Title Sorted/B/Beta/beta.png');
+    });
+
     test('single layer stays, candidates resolve against rel dir', () {
       final u = buildUniverse({
         relA: entryJson(relA, 'done', 'PATCH', preview: 'a.png',

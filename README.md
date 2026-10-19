@@ -62,10 +62,12 @@ Save, the manual screenshot curation described below.
 - **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
   several ZIPs; if exactly one of them is a game screenshot (`done`), the
   large game preview is shown instead. The card's main preview prefers a
-  `done` variant of kind `game` over e.g. `textscreen`, and the four tiles
-  are ordered the same way (`done game` → other `done` → `desktop`), so a
-  late-sorting game shot is never pushed out by textscreens (same rules
-  as the gallery webapp).
+  `done` variant of kind `game` over e.g. `textscreen`, then other `done`
+  and `desktop` variants, then any preview (so a `no_usable_shots` entry
+  that kept its last capture still shows it), and the four tiles are ordered
+  the same way (`done game` → other `done` → `desktop`), so a late-sorting
+  game shot is never pushed out by textscreens (same rules as the gallery
+  webapp).
 - **Local layer & missing ZIPs** — the card/variant layer badge
   (`ROOT`/`PATCH`/`BOTH`) and the "This ZIP" **Layer** row are resolved from
   the actual filesystem, not the published index: a ZIP moved from the patch

@@ -357,6 +357,9 @@ GameCard buildIndexedCard({
   }
   preview ??= _firstDonePreview(variants);
   preview ??= _firstDesktopPreview(variants);
+  // Fallback for entries whose only preview is not done/desktop, e.g. a
+  // `no_usable_shots` entry that keeps its last capture (SPEC §8.5).
+  preview ??= _firstAnyPreview(variants);
   final layer = layers.length == 1
       ? layers.first
       : (layers.isEmpty ? '' : 'BOTH');
@@ -387,6 +390,13 @@ String? _firstDonePreview(List<CardVariant> variants) {
 String? _firstDesktopPreview(List<CardVariant> variants) {
   for (final v in variants) {
     if (v.status == 'desktop' && v.previewPath != null) return v.previewPath;
+  }
+  return null;
+}
+
+String? _firstAnyPreview(List<CardVariant> variants) {
+  for (final v in variants) {
+    if (v.previewPath != null) return v.previewPath;
   }
   return null;
 }

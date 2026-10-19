@@ -193,6 +193,11 @@ def _build_indexed_cards(entries, games, kind, union_gameinfo):
             preview = next((v["preview"] for v in variants
                             if v["status"] == "desktop" and v["preview"]),
                            None)
+        # Fallback for entries whose only preview is not done/desktop, e.g.
+        # a `no_usable_shots` entry that keeps its last capture (SPEC §8.5).
+        if preview is None:
+            preview = next((v["preview"] for v in variants if v["preview"]),
+                           None)
         layer = next(iter(layers)) if len(layers) == 1 else "BOTH"
         info = info_by_key.get((letter, folder))
         card = {
