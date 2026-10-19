@@ -181,14 +181,33 @@ on the program template) tolerates the arrow if it does end up on an icon.
 
 - `prg` — the desktop already shows the program icon: one double click
   starts the game.
-- `drive` — the desktop only shows drive icons: double click
-  `DISKSTATION A`, wait `click_retry.step_wait` for the window, then walk
-  into the window (bounded by `click_retry.drive_max_depth`, default 2):
-  the window is scanned for the program icon first
-  (`assets/icon-prg.png`, the same icon as on the desktop) and double
-  clicked right away when it is present; only when no program icon is
-  found is the folder icon (`assets/icon-folder.png`) double clicked to
-  descend, and the window is scanned for a program icon again.
+- `drive` — the desktop only shows drive icons. The probe screenshot is
+  checked for an already-open GEM window first; if one is open, the drive
+  click is skipped and that window is enlarged before the icon scan. Only
+  when no window is open is `DISKSTATION A` double clicked (wait
+  `click_retry.step_wait`). After a drive click the program icon
+  (`assets/icon-prg.png`) is checked first; only when it is absent is the
+  window enlarged and scanned for the program icon, then the folder icon
+  (`assets/icon-folder.png`), then scrolled. The window is then walked
+  (bounded by `click_retry.drive_max_depth`, default 2): program icon
+  first, otherwise the folder icon to descend, then scan again.
+
+```text
+Probe screenshot (10 s)
+├─ GEM window already open?
+│  ├─ yes → enlarge the window
+│  │        → look for the PRG icon
+│  │        → otherwise look for the folder icon
+│  │        → otherwise scroll
+│  └─ no  → click DISKSTATION A
+│            → PRG visible?
+│               ├─ yes → continue with the PRG click
+│               └─ no  → enlarge the window
+│                         → look for the PRG icon
+│                         → otherwise look for the folder icon
+│                         → otherwise scroll
+└─ then as before: open folders, descend (max_depth)
+```
 
 Both strategies verify their clicks (`click_retry.drive_attempts` /
 `click_retry.prg_attempts` / `click_retry.folder_attempts`, default 3
@@ -210,9 +229,11 @@ white window areas while still accepting the program icon with the GEM
 arrow on it (~0.84).
 
 **Hidden icons (grow / scroll).** A window can show fewer icons than the
-folder contains, hiding the program behind a scrollbar. When an opened
-window shows no program or folder icon at all, the retry first **grows**
-the window by single clicking its "full size" box (its glyph centre in the
+folder contains, hiding the program behind a scrollbar. An already-open
+window (no drive click) or a drive window without a visible PRG icon is
+**grown first**; when an opened folder window later shows no program or
+folder icon at all, the retry also **grows** it by single clicking its
+"full size" box (its glyph centre in the
 title bar, just left of the right border — a few pixels right of centre
 misses the gadget; the mono profile opens folder views at ~half width) and
 then **scrolls down** by clicking the vertical scrollbar's down arrow, up
@@ -231,8 +252,8 @@ The attempt is recorded once per entry. `click_retried: true` marks that a
 retry ran, and a new `click_result` field records how it ended:
 
 - `click-icon-prg` — successful `prg` click (program started),
-- `click-icon-drive` — successful `drive` click (DISKSTATION A -> ... ->
-  program started),
+- `click-icon-drive` — successful `drive`-strategy chain (DISKSTATION A
+  and/or an already-open window -> ... -> program started),
 - `click-failed` — the strategy ran but no program start was confirmed,
 - `click-not-needed` — the probe was already a game/other screen, no click
   was sent.
@@ -436,7 +457,9 @@ Monitor mode is resolved per entry, in this order:
      (`Not Mono`, `Low`, `Mid`, `Medium`, `Color`/`Colour`) forces color;
      an explicit mono hint (`Mono`, `High`) forces mono; blank values and
      pure notes (`Modified`, `Translated`, `Serie`, `Crashes`, …) default to
-     **mono**. This is the archive's "mono unless noted" convention.
+     **mono**. Entries whose folder is missing from a successfully loaded
+     `games-utils.json` also default to **mono** (utils-only). This is the
+     archive's "mono unless noted" convention.
    - **pd** (`screen_format_monitor.pd`): mono only when **all** variants of
      the folder say `High` (pure high-resolution folders). Mixed values such
      as `High + Low` or `Med + High` stay color.
@@ -449,7 +472,9 @@ Mono boots Hatari with `--mono --tos-res high` (monochrome, forced
 640x400); the decision and its source are logged per entry, and the
 resulting `monitor: mono`/`color` is recorded in the index entry and the
 metadata JSON. Missing `MARCER_DATA_DIR` or `games-<scope>.json` is not an
-error: the suffix rule is used as fallback.
+error: the suffix rule is used as fallback. The utils "missing folder"
+default only applies when the gameinfo file was loaded successfully; an
+entirely missing file does not force utils to mono.
 
 The rules only affect **future captures**. Already finished entries
 (`done`, `desktop`, `no_usable_shots`) are skipped by a normal `run`; use an

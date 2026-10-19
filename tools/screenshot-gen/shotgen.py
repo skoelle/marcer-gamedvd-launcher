@@ -84,8 +84,10 @@ DEFAULT_CONFIG = {
     #   mono_hints    - any variant value containing one of these substrings
     #                   forces mono
     #   default       - mode when no hint matched (e.g. utils blank/notes)
-    # A gameinfo rule wins over the folder suffix. Empty/missing gameinfo
-    # falls back to the suffix rule. See SPEC section 4.6.
+    #                   and for entries missing from a loaded gameinfo file
+    # A gameinfo rule wins over the folder suffix. A completely missing or
+    # unreadable gameinfo file falls back to the suffix rule. See SPEC
+    # section 4.6.
     "screen_format_monitor": {
         "utils": {
             "default": "mono",
@@ -357,6 +359,13 @@ def resolve_monitor(cfg: dict, scope: dict, rel: str, screen_formats: dict):
         default = str(rules.get("default") or "").strip().lower()
         if default in ("mono", "color"):
             return default, "screen_format:default"
+
+    # A missing folder in an otherwise loaded gameinfo file uses the scope
+    # default too (utils: mono). A completely missing/unreadable gameinfo
+    # file keeps the historic suffix fallback.
+    if (fmt_vals is None and key is not None and rules and screen_formats
+            and str(rules.get("default") or "").strip().lower() == "mono"):
+        return "mono", "screen_format:missing-default"
 
     suffix = (cfg.get("mono_dir_suffix") or "").strip()
     if suffix and folder.strip().lower().endswith(suffix.lower()):
@@ -1358,6 +1367,23 @@ def drop_case_variants(mirror_dir: Path, names) -> None:
         pass
 
 
+def find_window_icon(path: Path, cfg: dict, template: str):
+    """Find one GEM window icon with the stricter window threshold.
+
+    Window icons match their templates near 1.0, so a dedicated higher
+    threshold rejects the flat-region false positives (~0.55) that appear
+    on white window areas; the same bar applies to the 0.5x mono variant,
+    whose genuine icons still score ~1.0 (a folder lightly matching the
+    program template only reaches ~0.73 and must not override its own
+    stronger folder match).
+    """
+    min_score = cfg["click_retry"].get("window_icon_min_score", 0.80)
+    hit = find_icon(path, cfg, template)
+    if hit and hit["score"] >= min_score:
+        return hit
+    return None
+
+
 def find_window_target(path: Path, cfg: dict):
     """Find the next double-click target inside an opened GEM window.
 
@@ -1365,23 +1391,27 @@ def find_window_target(path: Path, cfg: dict):
     searched first and double clicked right away when it is present. Only
     when no program icon is found is the folder icon (icon-folder) looked
     up; after descending into the folder the window is scanned again for
-    a program icon. Window icons match their templates near 1.0, so a
-    dedicated higher threshold rejects the flat-region false positives
-    (~0.55) that appear on white window areas; the same bar applies to the
-    0.5x mono variant, whose genuine icons still score ~1.0 (a folder
-    lightly matching the program template only reaches ~0.73 and must not
-    override its own stronger folder match). Returns
-    ("prg"|"folder", {sx, sy, score}) or None.
+    a program icon. Returns ("prg"|"folder", {sx, sy, score}) or None.
     """
-    min_score = cfg["click_retry"].get("window_icon_min_score", 0.80)
-
-    prg = find_icon(path, cfg, "prg")
-    if prg and prg["score"] >= min_score:
+    prg = find_window_icon(path, cfg, "prg")
+    if prg is not None:
         return "prg", prg
-    fo = find_icon(path, cfg, "folder")
-    if fo and fo["score"] >= min_score:
+    fo = find_window_icon(path, cfg, "folder")
+    if fo is not None:
         return "folder", fo
     return None
+
+
+def window_is_open(path: Path) -> bool:
+    """True when the screenshot shows an open GEM window.
+
+    A window is recognized by its title-bar "full size" gadget or, as a
+    fallback for unusual window frames, by its vertical scrollbar. Plain
+    desktop icon grids (drive/program icons on the work surface) do not
+    match either detector.
+    """
+    return find_fullsize_xy(path) is not None \
+        or find_scroll_down_xy(path) is not None
 
 
 def _grab_now(fifo: Path, outdir: Path, wait: float = 2.0):
@@ -1543,46 +1573,50 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         log("program icon never started (prg)")
         return False, chain_shots[-1], chain_shots, "click-failed"
 
-    # strategy == "drive": open DISKSTATION A first
+    # strategy == "drive": use an already-open window, otherwise open
+    # DISKSTATION A first. Standard path:
+    #   window open? -> enlarge -> PRG -> folder -> scroll
+    #   else -> drive click -> PRG? -> else enlarge -> PRG -> folder -> scroll
     probe = grabs[-1]
     win_shot = probe
     target = None
-    drive_enlarged = False
-    attempts = int(click_cfg.get("drive_attempts", 3))
-    for attempt in range(1, attempts + 1):
-        click_icon(P, win_shot, click_info["sx"], click_info["sy"], log,
-                   fifo=fifo, pid=pid)
-        log(f"drive click attempt {attempt}, waiting {step_wait}s")
-        if not sleep_until(time.monotonic() + step_wait):
+    if window_is_open(probe):
+        log("GEM window already open, skipping drive click")
+        win_shot, target = _reveal_rescan(probe)
+        if target is None:
+            log("open window has no usable program or folder icon")
             return False, win_shot, chain_shots, "click-failed"
-        win_shot = _grab_now(fifo, outdir, 2.0) or win_shot
-        chain_shots.append(win_shot)
-        # a program or folder icon only appears once the window is open;
-        # on the plain desktop neither template matches, so this is a
-        # reliable "window open" signal
-        target = find_window_target(win_shot, cfg)
-        if target is not None:
-            break
-        # double clicking DISKSTATION while its window is already open
-        # just brings up the same window again, so only retry when the
-        # click had no visible effect at all (screen unchanged)
-        if _screen_changed(probe, win_shot):
-            # window is open but its icons are not usable: a too narrow
-            # default window may hide the program behind a scrollbar, so
-            # grow it once and rescan before giving up
-            if do_enlarge and not drive_enlarged:
-                drive_enlarged = True
-                log("window open but no icon matched, enlarging to reveal "
-                    "hidden icons")
+    else:
+        attempts = int(click_cfg.get("drive_attempts", 3))
+        for attempt in range(1, attempts + 1):
+            click_icon(P, win_shot, click_info["sx"], click_info["sy"], log,
+                       fifo=fifo, pid=pid)
+            log(f"drive click attempt {attempt}, waiting {step_wait}s")
+            if not sleep_until(time.monotonic() + step_wait):
+                return False, win_shot, chain_shots, "click-failed"
+            win_shot = _grab_now(fifo, outdir, 2.0) or win_shot
+            chain_shots.append(win_shot)
+            # A program icon is the strongest signal; click it directly.
+            # Otherwise enlarge first and then scan PRG -> folder -> scroll.
+            prg = find_window_icon(win_shot, cfg, "prg")
+            if prg is not None:
+                target = ("prg", prg)
+                log("PRG icon visible after drive click")
+                break
+            # a program or folder icon only appears once the window is
+            # open; on the plain desktop neither template matches, so the
+            # screen change/window frame is a reliable "window open" signal
+            if _screen_changed(probe, win_shot) or window_is_open(win_shot):
+                log("no PRG after drive click, enlarging window")
                 win_shot, target = _reveal_rescan(win_shot)
                 if target is not None:
                     break
-            log("window opened but no program or folder icon matched")
-            break
-        log("drive click had no effect, retrying")
-    if target is None:
-        log("drive window did not open with a usable icon")
-        return False, win_shot, chain_shots, "click-failed"
+                log("window opened but no program or folder icon matched")
+                break
+            log("drive click had no effect, retrying")
+        if target is None:
+            log("drive window did not open with a usable icon")
+            return False, win_shot, chain_shots, "click-failed"
 
     for depth in range(1, max_depth + 1):
         enlarged = False

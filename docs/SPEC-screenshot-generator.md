@@ -324,7 +324,9 @@ Monitor mode is resolved per entry before Hatari starts. The precedence is:
      medium, color, colour]`, `mono_hints: [mono, high]`): any color hint
      forces color, otherwise any mono hint forces mono, otherwise the entry
      defaults to **mono** (blank values and pure notes such as `Modified`,
-     `Translated`, `Serie`, `Crashes`). This is the archive's "mono unless
+     `Translated`, `Serie`, `Crashes`). An entry whose folder is missing
+     from a successfully loaded `games-utils.json` also defaults to mono
+     (`screen_format:missing-default`); this is the archive's "mono unless
      noted" convention for utilities.
    - `pd` (default: `mono_if_all: [high]`): mono only when **every** variant
      of the folder says `High` (pure high-resolution folder). Mixed values
@@ -339,8 +341,12 @@ Monitor mode is resolved per entry before Hatari starts. The precedence is:
 
 A gameinfo rule wins over a conflicting suffix. Missing `MARCER_DATA_DIR`
 or `games-<scope>.json` is not an error: the pass logs a warning and uses
-the suffix rule. The per-entry log records `monitor <mode> (<source>)`
-(e.g. `screen_format:high`, `screen_format:default`, `folder-suffix`).
+the suffix rule. The utils missing-folder default only applies when the
+gameinfo file was loaded successfully; a completely missing file does not
+force utils to mono. The per-entry log records
+`monitor <mode> (<source>)` (e.g. `screen_format:high`,
+`screen_format:default`, `screen_format:missing-default`,
+`folder-suffix`).
 
 Mono boots Hatari with `--mono --tos-res high`: monochrome monitor plus
 explicitly forced ST high resolution 640x400. The flags are appended
@@ -606,7 +612,8 @@ classifier (so a title whose start screen is not `game`-like, e.g. a
 3-colour GEM dialog, still counts as a successful click):
 
 - `click-icon-prg` — `prg` click confirmed a program start,
-- `click-icon-drive` — `drive` click confirmed a program start,
+- `click-icon-drive` — the `drive` strategy confirmed a program start
+  (via DISKSTATION A and/or an already-open window),
 - `click-failed` — the strategy ran but no program start was confirmed,
 - `click-not-needed` — the probe was already non-desktop.
 
@@ -638,9 +645,35 @@ tolerates the cursor when it does end up on an icon.
 the icon. If the screen does not change, retry up to
 `click_retry.prg_attempts` (default 3) *(verified: Bank It)*.
 
-**Strategy `drive`** (desktop only shows drive icons, e.g. Bank It):
-double click `DISKSTATION A`, wait `click_retry.step_wait` for the window,
-then walk into the window up to `click_retry.drive_max_depth` levels
+**Strategy `drive`** (desktop only shows drive icons, e.g. Bank It). The
+standard path is:
+
+```text
+Probe screenshot (10 s)
+├─ GEM window already open?
+│  ├─ yes → enlarge the window
+│  │        → look for the PRG icon
+│  │        → otherwise look for the folder icon
+│  │        → otherwise scroll
+│  └─ no  → click DISKSTATION A
+│            → PRG visible?
+│               ├─ yes → continue with the PRG click
+│               └─ no  → enlarge the window
+│                         → look for the PRG icon
+│                         → otherwise look for the folder icon
+│                         → otherwise scroll
+└─ then as before: open folders, descend (max_depth)
+```
+
+An already-open window is detected with `find_fullsize_xy` (title-bar
+"full size" gadget) or, as a fallback, `find_scroll_down_xy` (vertical
+scrollbar); plain desktop icon grids match neither. If a window is open,
+the drive click is skipped and that window is enlarged before scanning.
+Otherwise `DISKSTATION A` is double clicked, wait
+`click_retry.step_wait` for the window, and the program icon is checked
+first; only when it is absent is the window enlarged and scanned for the
+program icon, then the folder icon, then scrolled. Then the chain walks
+into the window up to `click_retry.drive_max_depth` levels
 (default 2, enough for the verified `DISKSTATION A` -> folder `BANK_IT`
 -> `BANKIT.PRG` case): every window is scanned for the program icon first
 (`assets/icon-prg.png`, the same icon as on the desktop) and double
@@ -1539,10 +1572,13 @@ A conforming implementation satisfies all of the following.
       and as a 0.5x binarized variant (mono high-res) with a 0.02 margin in
       favor of the larger scale; misses are never booted.
 - [ ] P7 `run --retry-desktop` boots only unclicked entries with a stored
-      hit and runs the strategy: `prg` double clicks the program icon,
-      `drive` opens DISKSTATION A and descends up to
-      `click_retry.drive_max_depth` levels (folder icons) to the program
-      icon. Clicks use `hatari-event doubleclick` over the FIFO, are
+      hit and runs the strategy: `prg` double clicks the program icon;
+      `drive` first checks the probe for an already-open GEM window
+      (`find_fullsize_xy`/`find_scroll_down_xy`), skips the drive click and
+      enlarges that window if present, otherwise opens DISKSTATION A, checks
+      the program icon first and then enlarges/scans PRG -> folder -> scroll.
+      It descends up to `click_retry.drive_max_depth` levels (folder icons)
+      to the program icon. Clicks use `hatari-event doubleclick` over the FIFO, are
       retried when they do not take effect, restart the capture timepoints,
       and the attempt is recorded (`click_retried`, `clicked`,
       `click_result`). Each worker resolves its own Hatari window by process
