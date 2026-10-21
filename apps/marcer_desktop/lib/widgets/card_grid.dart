@@ -459,31 +459,29 @@ class _CenterGridState extends State<CenterGrid> {
       alignment: Alignment.bottomLeft,
       child: Padding(
         padding: const EdgeInsets.all(4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 4,
           children: [
             for (var i = 0; i < cands.length && i < 6; i++)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: GestureDetector(
-                  onTap: () => onPick(i),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFF2A2A2A)),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Image.file(
-                      io.File(cands[i]),
-                      key: ValueKey(
-                          '${cands[i]}#${widget.controller.imageVersionOf(cands[i])}'),
-                      width: 44,
-                      height: 26,
-                      fit: BoxFit.cover,
-                      filterQuality: FilterQuality.none,
-                      errorBuilder: (_, _, _) => Container(
-                          width: 44, height: 26, color: Colors.black),
-                    ),
+              GestureDetector(
+                onTap: () => onPick(i),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFF2A2A2A)),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.file(
+                    io.File(cands[i]),
+                    key: ValueKey(
+                        '${cands[i]}#${widget.controller.imageVersionOf(cands[i])}'),
+                    width: 44,
+                    height: 26,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.none,
+                    errorBuilder: (_, _, _) => Container(
+                        width: 44, height: 26, color: Colors.black),
                   ),
                 ),
               ),
@@ -614,31 +612,46 @@ class _CenterGridState extends State<CenterGrid> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 2,
-                        children: [
-                          for (final b in badges.take(4))
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                              child: Text(
-                                b,
-                                style: const TextStyle(
-                                    fontSize: 9, color: Colors.grey),
-                              ),
+                      SizedBox(
+                        height: 16,
+                        child: ClipRect(
+                          child: OverflowBox(
+                            alignment: Alignment.centerLeft,
+                            maxWidth: double.infinity,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (final b in badges.take(4))
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.08),
+                                        borderRadius:
+                                            BorderRadius.circular(3),
+                                      ),
+                                      child: Text(
+                                        b,
+                                        style: const TextStyle(
+                                            fontSize: 9,
+                                            color: Colors.grey),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
-                        ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.clip,
                         style: TextStyle(
                           fontSize: 12,
                           color: selected ? Colors.cyan : Colors.white,
