@@ -45,6 +45,16 @@ Save, the manual screenshot curation described below.
 - **Gallery-style detail sidebar** — Game info, the full Release-variants
   table (the open ZIP highlighted) and a "This ZIP" table (File, Status,
   **Kind**, Layer, Size, Path).
+- **Optional AtariLegend metadata** — fetch the weekly
+  [AtariLegend](https://www.atarilegend.com/) database on demand from the
+  settings (**AtariLegendDirectory** → **Download AtariLegend data**): genre,
+  developer, original credits/roles, boxscans/screenshots, reviews, magazines,
+  comments and the community score. Matched cards get an **AtariLegend** button
+  in the detail sidebar and the lightbox, plus additional **Genre** and
+  **Developers** filter dropdowns; the Publisher filter then also matches
+  AtariLegend publishers. Nothing is bundled — the data is downloaded at
+  runtime and is **CC BY-NC-SA 4.0** (non-commercial, attribution, share-alike):
+  see [License](#license).
 - **Crew / cracker focus** — pick a crew or cracker and each card jumps to
   *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
   matching tolerates `&`/`and` and small typos).
@@ -244,19 +254,22 @@ but cannot be read shows an error page with a **Setup…** button. Template: [`a
 
 The ⚙ gear button in the top bar opens an in-app **settings editor** for all
 path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
-`GameinfoDirectory`, `Hatari.Executable`, `Hatari.ConfigFile`) with native
-directory/file pickers, plus the **FTP** fields for the downloads
+`GameinfoDirectory`, `AtariLegendDirectory`, `Hatari.Executable`,
+`Hatari.ConfigFile`) with native directory/file pickers, plus the **FTP**
+fields for the downloads
 (`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase`,
 `Ftp.AssetsRemote` — free text, never block saving). The form is ordered
 **RootDirectory → PatchDirectory → FTP → ScreenshotDirectory /
-GameinfoDirectory → Hatari** (with the **Hatari installation** and **TOS ROM**
-rows); the two catalog-data fields each carry a
+GameinfoDirectory → AtariLegendDirectory → Hatari** (with the **Hatari
+installation** and **TOS ROM** rows); the two catalog-data fields each carry a
 **Download from FTP** button next to *Browse…* that pulls the newest
 `screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
 into the target directory (the gameinfo directory has **no** implicit
-fallback). **Save** writes them back to the same `desktop.config.json` and
-reloads the catalog in place, so new paths apply without restarting the app;
-window settings and the remaining fields stay untouched.
+fallback), and **AtariLegendDirectory** has a **Download AtariLegend data**
+button (optional, see [License](#license)). **Save** writes them back to the
+same `desktop.config.json` and reloads the catalog in place, so new paths apply
+without restarting the app; window settings and the remaining fields stay
+untouched.
 
 Every path field is validated live with a status icon: a green ✓ when the
 directory/file exists, a red ✗ when it does not (or a required field is empty),
@@ -271,6 +284,7 @@ optional (needed to launch, not to browse).
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
 | `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
+| `AtariLegendDirectory` | no | optional AtariLegend metadata cache (`atarilegend.json` + `atarilegend-texts.json`); filled by **Download AtariLegend data** |
 | `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
 | `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
@@ -442,4 +456,22 @@ Per-app/per-tool docs stay next to their code: [`apps/marcer_desktop/README.md`]
 
 ## License
 
-Licensed under the [MIT License](LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+The launcher itself is licensed under the [MIT License](LICENSE) - Copyright
+(c) 2026 Stefan Koelle (https://stefankoelle.de).
+
+### Third-party data and emulators
+
+Some optional downloads are **not** covered by the MIT license:
+
+- **AtariLegend** metadata (genre/developer/credits, boxscans, screenshots,
+  reviews, magazines, comments) is fetched on demand by the desktop app and is
+  licensed
+  **[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)** —
+  non-commercial use, attribution to
+  [AtariLegend](https://www.atarilegend.com/) and share-alike. It is never
+  bundled with this repository or the release; if you redistribute it, you must
+  follow that license.
+- **TOS ROM images** are Atari-copyrighted and are only offered for
+  non-commercial use.
+- **Hatari** is free software under the **GPL-2.0**, downloaded from the
+  official project.
