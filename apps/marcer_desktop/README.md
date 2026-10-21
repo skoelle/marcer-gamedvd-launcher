@@ -360,6 +360,19 @@ something.
   nothing is persisted across runs (the OS may clean its temp directory on its
   own). Background: [`docs/ANALYSIS-boxscan-manual-structure.md`](../../docs/ANALYSIS-boxscan-manual-structure.md).
 
+## Open the game folder
+
+The card header in the detail sidebar and the lightbox header show folder
+icons for the selected card, but only for layers where the folder exists:
+
+- **ROOT** (grey) opens the card's folder in the main tree.
+- **PATCH** (amber) opens the patch copy (only when `PatchDirectory` is
+  configured).
+
+No icon is shown when the card's folder is missing in that layer; a failed
+launch is reported in a snackbar. The folder opens in the OS file manager
+(`open` on macOS, `explorer` on Windows, `xdg-open` on Linux).
+
 ## Download missing (FTP)
 
 A card that has no local ZIP (red `MISSING` badge) can be pulled from the

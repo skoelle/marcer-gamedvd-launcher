@@ -44,7 +44,10 @@ class CatalogController extends ChangeNotifier {
   /// changes that do **not** affect the catalog data (e.g. updating
   /// `Hatari.Executable` after installing Hatari); data-root changes must go
   /// through a fresh controller (see `HomePage._applyConfig`).
-  void replaceConfig(DesktopConfig cfg) => config = cfg;
+  void replaceConfig(DesktopConfig cfg) {
+    config = cfg;
+    _cardFolderLayersCache.clear();
+  }
 
   late final OverlayBrowser browser;
   late ScreenshotIndices screenshots;
@@ -95,6 +98,7 @@ class CatalogController extends ChangeNotifier {
     initError = null;
     progress = 'Loading catalog…';
     _localAssetsCache.clear();
+    _cardFolderLayersCache.clear();
     notifyListeners();
     try {
       // Capture a plain config value (not `this`) so the loader stays
@@ -861,6 +865,45 @@ class CatalogController extends ChangeNotifier {
     return null;
   }
 
+  /// Absolute path of [card]'s game folder in the ROOT (default) or PATCH
+  /// layer. No existence check: callers validate before opening.
+  String? cardFolderPath(GameCard card, {bool patch = false}) {
+    final rel = cardFolderRel(card);
+    if (rel == null || rel.isEmpty) return null;
+    final base = patch ? config.patchDirectory : config.rootDirectory;
+    if (base.trim().isEmpty) return null;
+    return p.join(base, rel);
+  }
+
+  static final Future<Set<String>> _emptyFolderLayers =
+      Future.value(const <String>{});
+
+  final Map<String, Future<Set<String>>> _cardFolderLayersCache = {};
+
+  /// Layers (`ROOT`/`PATCH`) in which [card]'s game folder actually exists.
+  /// Cached per folder; cleared on init, config replacement and downloads.
+  Future<Set<String>> cardFolderLayers(GameCard card) {
+    final rel = cardFolderRel(card);
+    if (rel == null || rel.isEmpty) {
+      return _emptyFolderLayers;
+    }
+    return _cardFolderLayersCache.putIfAbsent(rel, () async {
+      final layers = <String>{};
+      Future<void> check(String base, String layer) async {
+        if (base.trim().isEmpty) return;
+        try {
+          if (await Directory(p.join(base, rel)).exists()) layers.add(layer);
+        } catch (_) {}
+      }
+
+      await Future.wait([
+        check(config.rootDirectory, 'ROOT'),
+        check(config.patchDirectory, 'PATCH'),
+      ]);
+      return layers;
+    });
+  }
+
   /// ZIP variants of [card], resolving pd/utils folder ZIPs lazily on first
   /// use (one overlay listing per folder, cached — a NAS-wide scan would take
   /// tens of seconds, so it must never run eagerly). Cracked cards return
@@ -1119,6 +1162,8 @@ class CatalogController extends ChangeNotifier {
         (dir, _) => dir == key || dir.startsWith('$key/'));
     _scannedDirs.removeWhere((dir) => dir == key || dir.startsWith('$key/'));
     _scanRequested.removeWhere((dir) => dir == key || dir.startsWith('$key/'));
+    _cardFolderLayersCache.removeWhere(
+        (dir, _) => dir == key || dir.startsWith('$key/'));
     _resolvedCardVariants.clear();
   }
 

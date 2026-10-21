@@ -13,6 +13,7 @@ import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
 import 'game_info_panel.dart';
 import 'local_assets_chips.dart';
+import 'open_folder_button.dart';
 import 'status_kind_dialog.dart';
 
 /// Gallery-style lightbox over the current center list: header with badges
@@ -563,6 +564,14 @@ class _GameLightboxState extends State<GameLightbox> {
                       color: Colors.white),
                 ),
               ),
+              if (item is GameCard) ...[
+                CardFolderButtons(
+                  layers: widget.controller.cardFolderLayers(item),
+                  pathFor: (layer) => widget.controller
+                      .cardFolderPath(item, patch: layer == 'PATCH'),
+                ),
+                const SizedBox(width: 8),
+              ],
               Text(
                 pos,
                 style: const TextStyle(fontSize: 12, color: Colors.grey),

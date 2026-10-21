@@ -55,6 +55,10 @@ Save, the manual screenshot curation described below.
   default app, `.msa` as info-only disk images). Discovered lazily for the
   selected card — nothing is indexed or extracted up front. Nothing is bundled;
   the app never modifies these curated files.
+- **Open the game folder** — ROOT/PATCH folder icons in the detail sidebar and
+  lightbox header open the selected card's game folder in the OS file manager
+  (grey ROOT, amber PATCH); only layers where the folder actually exists get
+  an icon.
 - **Optional AtariLegend metadata** — fetch the weekly
   [AtariLegend](https://www.atarilegend.com/) database on demand from the
   settings (**AtariLegendDirectory** → **Download AtariLegend data**): genre,

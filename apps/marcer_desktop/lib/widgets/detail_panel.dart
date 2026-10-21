@@ -11,6 +11,7 @@ import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
 import 'game_info_panel.dart';
 import 'local_assets_chips.dart';
+import 'open_folder_button.dart';
 import 'status_kind_dialog.dart';
 
 /// Right panel: preview screenshot + game metadata (Playnite-style detail).
@@ -139,9 +140,21 @@ class DetailPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(card.name,
-                  style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.bold)),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(card.name,
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.bold)),
+                  ),
+                  CardFolderButtons(
+                    layers: c.cardFolderLayers(card),
+                    pathFor: (layer) =>
+                        c.cardFolderPath(card, patch: layer == 'PATCH'),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,

@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_controller.dart';
+import 'package:path/path.dart' as p;
 
 /// MISSING detection + local layer (app-only divergence): the catalog is built
 /// from the screenshot index + gameinfo without any filesystem scan, so an
@@ -171,6 +172,26 @@ void main() {
 
     // Beta: absent everywhere → no layer badge (MISSING instead).
     expect(c.cardLayer(crackedCard('B', 'Beta')), '');
+  });
+
+  test('cardFolderPath resolves the game folder per layer', () async {
+    await c.init();
+    final alpha = crackedCard('A', 'Alpha');
+    const folder = '$crackedTree/A/Alpha';
+    expect(c.cardFolderPath(alpha), p.join(tmp.path, 'root', folder));
+    expect(c.cardFolderPath(alpha, patch: true),
+        p.join(tmp.path, 'patch', folder));
+    c.config = c.config.copyWith(patchDirectory: '');
+    expect(c.cardFolderPath(alpha, patch: true), isNull);
+  });
+
+  test('cardFolderLayers reports only existing layer folders', () async {
+    await c.init();
+    expect(await c.cardFolderLayers(crackedCard('A', 'Alpha')), {'ROOT'});
+    expect(await c.cardFolderLayers(crackedCard('C', 'Gamma')), {'PATCH'});
+    expect(await c.cardFolderLayers(crackedCard('E', 'Epsilon')),
+        {'ROOT', 'PATCH'});
+    expect(await c.cardFolderLayers(crackedCard('B', 'Beta')), isEmpty);
   });
 
   test('zipLayer reports BOTH when a ZIP exists in both layers', () async {
