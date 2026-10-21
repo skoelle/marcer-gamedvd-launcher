@@ -851,8 +851,10 @@ class _GameLightboxState extends State<GameLightbox> {
     return GameInfoPanel(
       info: _info,
       atariLegend: al,
-      onAtariLegend:
-          al == null ? null : () => showAtariLegendDialog(context, game: al),
+      onAtariLegend: al == null
+          ? null
+          : () => showAtariLegendDialog(context,
+              game: al, textsLoader: widget.controller.atariLegendTexts),
       variant: v == null
           ? null
           : ZipVariantView(

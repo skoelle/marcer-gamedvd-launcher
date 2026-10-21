@@ -192,7 +192,10 @@ void main() {
     final cache = parseAtariLegendCache(_sql,
         generatedAt: '2026-10-17T00:00:00Z',
         sourceFile: '2026-10-11.sql.gz',
-        dumpDate: '2026-10-11');
+        dumpDate: '2026-10-11',
+        textCounts: {
+          '22': (reviews: 1, comments: 2, magazines: 1),
+        });
 
     test('collects games and sorts them by name', () {
       expect(cache.games.map((g) => g.name),
@@ -219,6 +222,9 @@ void main() {
       expect(
           buggy.boxscans.map((b) => '${b.type}|${b.id}'),
           ['Box front|34', 'Box back|35']);
+      expect(buggy.reviewCount, 1);
+      expect(buggy.commentCount, 2);
+      expect(buggy.magazineCount, 1);
     });
 
     test('derives the AtariLegend web image URLs', () {
@@ -258,6 +264,9 @@ void main() {
       expect(buggy.developerCredits, hasLength(2));
       expect(buggy.screenshots.map((s) => s.id), [24, 25]);
       expect(buggy.boxscans, hasLength(2));
+      expect(buggy.reviewCount, 1);
+      expect(buggy.commentCount, 2);
+      expect(buggy.magazineCount, 1);
       expect(restored.schemaVersion, kAtariLegendSchemaVersion);
     });
   });
@@ -362,6 +371,121 @@ void main() {
       final idx = AtariLegendIndex.load(tmp.path, warnings: warnings);
       expect(idx.length, 1, reason: 'old caches still load');
       expect(warnings.any((w) => w.contains('outdated')), isTrue);
+    });
+  });
+
+  group('parseAtariLegendTexts', () {
+    const sql = r'''
+CREATE TABLE `reviews` (
+  `id` int(11) NOT NULL,
+  `game_id` int(11) NOT NULL,
+  `text` mediumtext DEFAULT NULL,
+  `graphics` int(11) DEFAULT NULL,
+  `sound` int(11) DEFAULT NULL,
+  `gameplay` int(11) DEFAULT NULL,
+  `overall` int(11) DEFAULT NULL,
+  `published_at` datetime DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `reviews` VALUES
+(67,22,'[b]Great[/b] game',8,7,9,8,'2001-11-13 01:00:00');
+
+CREATE TABLE `review_comments` (
+  `id` int(11) NOT NULL,
+  `review_id` int(11) NOT NULL,
+  `text` mediumtext DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `review_comments` VALUES
+(1,67,'Agreed','2020-01-02 00:00:00');
+
+CREATE TABLE `game_comments` (
+  `id` int(11) NOT NULL,
+  `game_id` int(11) NOT NULL,
+  `text` mediumtext DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `game_comments` VALUES
+(1,22,'First','2020-01-01 00:00:00'),
+(2,22,'Later','2021-01-01 00:00:00');
+
+CREATE TABLE `magazines` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `magazines` VALUES
+(12,'ST Magazine');
+
+CREATE TABLE `magazine_issues` (
+  `id` int(11) NOT NULL,
+  `issue` int(11) DEFAULT NULL,
+  `published` date DEFAULT NULL,
+  `magazine_id` int(11) DEFAULT NULL,
+  `archiveorg_url` varchar(255) DEFAULT NULL,
+  `alternate_url` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `magazine_issues` VALUES
+(76,21,'1988-07-01',12,'https://archive.org/x',NULL);
+
+CREATE TABLE `magazine_index_types` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `magazine_index_types` VALUES
+(1,'Review');
+
+CREATE TABLE `magazine_indices` (
+  `id` int(11) NOT NULL,
+  `magazine_issue_id` int(11) DEFAULT NULL,
+  `game_id` int(11) DEFAULT NULL,
+  `score` varchar(11) DEFAULT NULL,
+  `page` int(11) DEFAULT NULL,
+  `magazine_index_type_id` bigint(20) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `magazine_indices` VALUES
+(1,76,22,'6/10',142,1);
+''';
+
+    final texts = parseAtariLegendTexts(sql,
+        generatedAt: 'now', sourceFile: 'x.sql.gz', dumpDate: '2026-10-18');
+
+    test('reviews with scores + review comments', () {
+      final g = texts.forGame(22)!;
+      expect(g.reviews, hasLength(1));
+      final r = g.reviews.single;
+      expect(r.id, 67);
+      expect(r.text, '[b]Great[/b] game');
+      expect(r.graphics, 8);
+      expect(r.overall, 8);
+      expect(r.comments.single.text, 'Agreed');
+    });
+
+    test('comments sorted newest first', () {
+      final g = texts.forGame(22)!;
+      expect(g.comments.map((c) => c.text), ['Later', 'First']);
+    });
+
+    test('magazine references with archive link', () {
+      final g = texts.forGame(22)!;
+      final m = g.magazines.single;
+      expect(m.magazine, 'ST Magazine');
+      expect(m.issue, '21');
+      expect(m.page, '142');
+      expect(m.score, '6/10');
+      expect(m.type, 'Review');
+      expect(m.archiveUrl, 'https://archive.org/x');
+    });
+
+    test('round-trips through JSON', () {
+      final restored = AtariLegendTexts.fromJson(texts.toJson());
+      expect(restored.forGame(22)?.reviews.single.id, 67);
+      expect(restored.forGame(22)?.magazines.single.issue, '21');
     });
   });
 }

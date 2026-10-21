@@ -170,7 +170,8 @@ class DetailPanel extends StatelessWidget {
             atariLegend: al,
             onAtariLegend: al == null
                 ? null
-                : () => showAtariLegendDialog(context, game: al),
+                : () => showAtariLegendDialog(context,
+                    game: al, textsLoader: c.atariLegendTexts),
             onPlay: () => c.launchSelected(),
             onPlayVariant: (variant) => c.launchSelected(variant: variant),
             // Group click: open the lightbox on that crew's/cracker's ZIP;

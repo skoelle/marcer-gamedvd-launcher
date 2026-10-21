@@ -7,8 +7,9 @@ genre/developer/publisher/crew/cracker, sort, **★ Favorites**) and a
 gallery-style detail sidebar
 (Game info + Release variants + This ZIP); an optional overlay folder
 browser (`T` / Folders button) per `SPEC.md` §7, plus a gallery-style
-lightbox (filmstrip + info panel). **Read-only** consumer of all data roots
-except favorites and, on explicit Save, manual screenshot curation.
+lightbox (filmstrip + info panel). On desktop, **scrollbars stay visible**
+whenever a view overflows. **Read-only** consumer of all data roots except
+favorites and, on explicit Save, manual screenshot curation.
 
 ![Catalog grid](../../docs/images/catalog.png)
 
@@ -390,13 +391,16 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   needed tables in a **background isolate**, then writes the compact cache
   `atarilegend.json` (game id/name/slug, release year, publisher, genres,
   conversion/original system, developers/authors with roles, aliases, plus the
-  **screenshot/boxscan references**). The downloaded `.sql.gz` is **deleted**
-  afterwards.
+  **screenshot/boxscan references**) and the separate **`atarilegend-texts.json`**
+  (reviews, comments, magazine references, ~1.2 MB). The downloaded `.sql.gz`
+  is **deleted** afterwards.
 - the target directory is created when missing; progress and **Cancel** show
   inline, failures as a SnackBar.
 - while the fetch runs, **Save**, **Cancel** and **Exit** are disabled (and the
   dialog cannot be dismissed).
-- the cache is small (~1.4 MB for ~6.200 games).
+- the metadata cache is ~4.4 MB for ~6.200 games; the text cache (~1.2 MB) is
+  **loaded lazily** the first time a Reviews/Magazines/Comments tab is opened
+  (kept for the session).
 - at startup the cache is read and each catalog card's **folder name** is
   matched against the AtariLegend titles (aliases included; exact → prefix →
   fuzzy). When matched, the detail sidebar and the lightbox show a teal
@@ -407,16 +411,21 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   `Tatsumi`/`Game Conversion`, `Jas C Brooke`/`Music`) and an **Open on
   atarilegend.com** button (external browser, `url_launcher`). The AKA titles
   (`Speed Buggy` for Buggy Boy) are used for matching too.
-- below the metadata the dialog shows the **Boxscans** (horizontal thumbnail
-  row, with type label) and **Screenshots** (thumbnail grid) **at the same
-  time** — no default/hero image. They are hotlinked live from
-  `atarilegend.com` (derived URLs, `Image.network`, no disk cache; nothing is
-  bundled). Clicking a thumbnail opens a full-size viewer (`←`/`→`,
-  `Esc`, zoom).
+- the dialog is **tabbed**: **Info** (metadata/credits — Developers/Authors in
+  an aligned **3-column grid**, name above its role — **and** Boxscans +
+  Screenshots **at the same time**, no hero image), **Reviews (N)**
+  (date, scores, BBCode-rendered text, review link), **Magazines (N)** (issue,
+  page, score, archive.org link) and **Comments (N)** (text + date). The
+  `(N)` counts come from the metadata cache, so they are visible immediately.
+- images are hotlinked (nothing bundled); a thumbnail opens a full-size viewer
+  (`←`/`→`, `Esc`, zoom). The text data loads lazily on the first text tab.
+- the dump excludes the `users` table, so **reviews/comments show no author
+  names** (text/score/date only); the review/magazine links open the website.
 - **After updating from an older build, click Download AtariLegend data once
-  again**: cache schema **v3** adds the image references (v2 added the roles,
-  conversion system and release-AKA aliases). Older caches still load but lack
-  those fields and show an "outdated" warning.
+  again**: cache schema **v4** adds the review/comment/magazine **counts**
+  (v3 added the image references, v2 the roles/conversion/release-AKA aliases)
+  and the new `atarilegend-texts.json` provides reviews/comments/magazines.
+  Older caches still load but lack those fields and show an "outdated" warning.
 - the filter bar has **Genre** (after the status dropdown) and **Developers**
   (after Publisher) dropdowns fed by the cache — **both are hidden until
   AtariLegend data is loaded**; the **Publisher** dropdown and

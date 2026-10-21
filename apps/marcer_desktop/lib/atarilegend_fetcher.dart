@@ -100,23 +100,40 @@ class HttpAtariLegendFetcher implements AtariLegendFetcher {
       onProgress?.call('Extracting and parsing…', 0, 0);
       final dumpDate =
           dumpFile.endsWith('.sql.gz') ? dumpFile.substring(0, 10) : '';
-      final cache = await Isolate.run(() {
+      final parsed = await Isolate.run(() {
         final sql = decodeAtariLegendDump(bytes);
-        return parseAtariLegendCache(
+        final generatedAt = DateTime.now().toUtc().toIso8601String();
+        final texts = parseAtariLegendTexts(
           sql,
-          generatedAt: DateTime.now().toUtc().toIso8601String(),
+          generatedAt: generatedAt,
           sourceFile: dumpFile,
           dumpDate: dumpDate,
         );
+        final counts = {
+          for (final e in texts.games.entries)
+            e.key: (
+              reviews: e.value.reviews.length,
+              comments: e.value.comments.length,
+              magazines: e.value.magazines.length,
+            ),
+        };
+        final cache = parseAtariLegendCache(
+          sql,
+          generatedAt: generatedAt,
+          sourceFile: dumpFile,
+          dumpDate: dumpDate,
+          textCounts: counts,
+        );
+        return (cache, texts);
       });
+      final cache = parsed.$1;
+      final texts = parsed.$2;
 
       onProgress?.call('Writing cache…', 0, 0);
       final cachePath = p.join(targetDir, kAtariLegendFileName);
-      final tmpCache = File('$cachePath.tmp');
-      await tmpCache.writeAsString(cache.toJsonString(), flush: true);
-      final target = File(cachePath);
-      if (await target.exists()) await target.delete();
-      await tmpCache.rename(cachePath);
+      await _writeAtomic(cachePath, cache.toJsonString());
+      await _writeAtomic(
+          p.join(targetDir, kAtariLegendTextsFileName), texts.toJsonString());
 
       return AtariLegendFetchResult(
         games: cache.games.length,
@@ -140,6 +157,14 @@ class HttpAtariLegendFetcher implements AtariLegendFetcher {
         }
       }
     }
+  }
+
+  Future<void> _writeAtomic(String path, String content) async {
+    final tmp = File('$path.tmp');
+    await tmp.writeAsString(content, flush: true);
+    final target = File(path);
+    if (await target.exists()) await target.delete();
+    await tmp.rename(path);
   }
 
   Future<String> _getText(HttpClient client, Uri url) async {

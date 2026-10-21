@@ -22,9 +22,11 @@ const String kAtariLegendFileName = 'atarilegend.json';
 ///
 /// v2 adds developer/author **roles**, the original-system **conversion** and
 /// the `game_release_akas` (`name`) aliases; v3 adds the **screenshot** and
-/// **boxscan** image references (web URLs). Older caches still load but lack
-/// those fields, so the app warns to download the data again.
-const int kAtariLegendSchemaVersion = 3;
+/// **boxscan** image references (web URLs); v4 adds the **review/comment/
+/// magazine counts** so the details tabs can show them without loading the
+/// text cache. Older caches still load but lack those fields, so the app warns
+/// to download the data again.
+const int kAtariLegendSchemaVersion = 4;
 
 /// AtariLegend site base (game/asset URLs are derived from ids/slugs).
 const String kAtariLegendSite = 'https://www.atarilegend.com';
@@ -91,6 +93,242 @@ String atariLegendBoxscanThumbUrl(AtariLegendBoxscan scan) =>
     '$kAtariLegendSite/games/release/${scan.releaseId}/'
     'boxscan-${scan.id}.webp';
 
+/// File name of the lazy-loaded text cache (reviews/comments/magazines).
+const String kAtariLegendTextsFileName = 'atarilegend-texts.json';
+
+/// Schema version of the text cache.
+const int kAtariLegendTextsSchemaVersion = 1;
+
+String atariLegendReviewUrl(int id) => '$kAtariLegendSite/reviews/$id';
+
+/// One comment (game or review) — the dump has no `users` table, so there is
+/// no author name to show.
+class AtariLegendComment {
+  const AtariLegendComment({required this.text, this.createdAt = ''});
+
+  factory AtariLegendComment.fromJson(Map<String, dynamic> json) =>
+      AtariLegendComment(
+        text: (json['text'] ?? '').toString(),
+        createdAt: (json['created_at'] ?? '').toString(),
+      );
+
+  final String text;
+  final String createdAt;
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        if (createdAt.isNotEmpty) 'created_at': createdAt,
+      };
+}
+
+/// One review with its scores and (optional) review comments.
+class AtariLegendReview {
+  const AtariLegendReview({
+    required this.id,
+    required this.text,
+    this.publishedAt = '',
+    this.graphics,
+    this.sound,
+    this.gameplay,
+    this.overall,
+    this.comments = const [],
+  });
+
+  factory AtariLegendReview.fromJson(Map<String, dynamic> json) =>
+      AtariLegendReview(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        text: (json['text'] ?? '').toString(),
+        publishedAt: (json['published_at'] ?? '').toString(),
+        graphics: (json['graphics'] as num?)?.toInt(),
+        sound: (json['sound'] as num?)?.toInt(),
+        gameplay: (json['gameplay'] as num?)?.toInt(),
+        overall: (json['overall'] as num?)?.toInt(),
+        comments: [
+          for (final e in (json['comments'] as List<dynamic>?) ?? const [])
+            AtariLegendComment.fromJson(Map<String, dynamic>.from(e as Map)),
+        ],
+      );
+
+  final int id;
+  final String text;
+  final String publishedAt;
+  final int? graphics;
+  final int? sound;
+  final int? gameplay;
+  final int? overall;
+  final List<AtariLegendComment> comments;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'text': text,
+        if (publishedAt.isNotEmpty) 'published_at': publishedAt,
+        if (graphics != null) 'graphics': graphics,
+        if (sound != null) 'sound': sound,
+        if (gameplay != null) 'gameplay': gameplay,
+        if (overall != null) 'overall': overall,
+        if (comments.isNotEmpty)
+          'comments': comments.map((c) => c.toJson()).toList(),
+      };
+}
+
+/// One magazine reference (issue/page/score + archive.org link).
+class AtariLegendMagazineRef {
+  const AtariLegendMagazineRef({
+    this.magazine = '',
+    this.issue = '',
+    this.published = '',
+    this.page = '',
+    this.score = '',
+    this.type = '',
+    this.archiveUrl = '',
+  });
+
+  factory AtariLegendMagazineRef.fromJson(Map<String, dynamic> json) =>
+      AtariLegendMagazineRef(
+        magazine: (json['magazine'] ?? '').toString(),
+        issue: (json['issue'] ?? '').toString(),
+        published: (json['published'] ?? '').toString(),
+        page: (json['page'] ?? '').toString(),
+        score: (json['score'] ?? '').toString(),
+        type: (json['type'] ?? '').toString(),
+        archiveUrl: (json['archive_url'] ?? '').toString(),
+      );
+
+  final String magazine;
+  final String issue;
+  final String published;
+  final String page;
+  final String score;
+
+  /// Magazine index type (`Review`, `Preview`, …) when available.
+  final String type;
+  final String archiveUrl;
+
+  Map<String, dynamic> toJson() => {
+        if (magazine.isNotEmpty) 'magazine': magazine,
+        if (issue.isNotEmpty) 'issue': issue,
+        if (published.isNotEmpty) 'published': published,
+        if (page.isNotEmpty) 'page': page,
+        if (score.isNotEmpty) 'score': score,
+        if (type.isNotEmpty) 'type': type,
+        if (archiveUrl.isNotEmpty) 'archive_url': archiveUrl,
+      };
+}
+
+/// All text sections of one game.
+class AtariLegendGameTexts {
+  const AtariLegendGameTexts({
+    this.reviews = const [],
+    this.comments = const [],
+    this.magazines = const [],
+  });
+
+  factory AtariLegendGameTexts.fromJson(Map<String, dynamic> json) =>
+      AtariLegendGameTexts(
+        reviews: [
+          for (final e in (json['reviews'] as List<dynamic>?) ?? const [])
+            AtariLegendReview.fromJson(Map<String, dynamic>.from(e as Map)),
+        ],
+        comments: [
+          for (final e in (json['comments'] as List<dynamic>?) ?? const [])
+            AtariLegendComment.fromJson(Map<String, dynamic>.from(e as Map)),
+        ],
+        magazines: [
+          for (final e in (json['magazines'] as List<dynamic>?) ?? const [])
+            AtariLegendMagazineRef.fromJson(Map<String, dynamic>.from(e as Map)),
+        ],
+      );
+
+  final List<AtariLegendReview> reviews;
+  final List<AtariLegendComment> comments;
+  final List<AtariLegendMagazineRef> magazines;
+
+  bool get isEmpty => reviews.isEmpty && comments.isEmpty && magazines.isEmpty;
+
+  Map<String, dynamic> toJson() => {
+        if (reviews.isNotEmpty)
+          'reviews': reviews.map((r) => r.toJson()).toList(),
+        if (comments.isNotEmpty)
+          'comments': comments.map((c) => c.toJson()).toList(),
+        if (magazines.isNotEmpty)
+          'magazines': magazines.map((m) => m.toJson()).toList(),
+      };
+}
+
+/// The lazy-loaded text cache (`atarilegend-texts.json`), keyed by game id.
+class AtariLegendTexts {
+  const AtariLegendTexts({
+    this.schemaVersion = kAtariLegendTextsSchemaVersion,
+    this.generatedAt = '',
+    this.sourceFile = '',
+    this.dumpDate = '',
+    this.games = const {},
+    this.available = true,
+  });
+
+  /// `false` when the text cache file is missing/unreadable (the dialog then
+  /// points to "Download AtariLegend data" instead of "No reviews").
+  factory AtariLegendTexts.empty() =>
+      const AtariLegendTexts(available: false);
+
+  factory AtariLegendTexts.fromJson(Map<String, dynamic> json) {
+    final source = (json['source'] as Map<String, dynamic>?) ?? const {};
+    final games = <String, AtariLegendGameTexts>{};
+    for (final entry in ((json['games'] as Map<String, dynamic>?) ?? const {})
+        .entries) {
+      games[entry.key] = AtariLegendGameTexts.fromJson(
+          Map<String, dynamic>.from(entry.value as Map));
+    }
+    return AtariLegendTexts(
+      schemaVersion: (json['schema_version'] as num?)?.toInt() ??
+          kAtariLegendTextsSchemaVersion,
+      generatedAt: (json['generated_at'] ?? '').toString(),
+      sourceFile: (source['file'] ?? '').toString(),
+      dumpDate: (source['dump_date'] ?? '').toString(),
+      games: games,
+    );
+  }
+
+  /// Reads `<dir>/atarilegend-texts.json`; empty (with a [warnings] entry)
+  /// when missing/unreadable.
+  factory AtariLegendTexts.load(String dir, {List<String>? warnings}) {
+    final d = dir.trim();
+    if (d.isEmpty) return AtariLegendTexts.empty();
+    final file = File('$d/$kAtariLegendTextsFileName');
+    if (!file.existsSync()) {
+      warnings
+          ?.add('AtariLegend texts: $kAtariLegendTextsFileName not found in $d');
+      return AtariLegendTexts.empty();
+    }
+    try {
+      return AtariLegendTexts.fromJson(
+          jsonDecode(file.readAsStringSync()) as Map<String, dynamic>);
+    } catch (e) {
+      warnings?.add('AtariLegend texts: could not read ${file.path}: $e');
+      return AtariLegendTexts.empty();
+    }
+  }
+
+  final int schemaVersion;
+  final String generatedAt;
+  final String sourceFile;
+  final String dumpDate;
+  final Map<String, AtariLegendGameTexts> games;
+  final bool available;
+
+  AtariLegendGameTexts? forGame(int id) => games['$id'];
+
+  Map<String, dynamic> toJson() => {
+        'schema_version': schemaVersion,
+        'generated_at': generatedAt,
+        'source': {'file': sourceFile, 'dump_date': dumpDate},
+        'games': {for (final e in games.entries) e.key: e.value.toJson()},
+      };
+
+  String toJsonString() =>
+      '${const JsonEncoder.withIndent(' ').convert(toJson())}\n';
+}
+
 /// One credited person/company with an optional role (e.g. `Taito` / `Arcade`,
 /// `Jas C Brooke` / `Music`).
 class AtariLegendCredit {
@@ -128,6 +366,9 @@ class AtariLegendGame {
     this.aliases = const [],
     this.screenshots = const [],
     this.boxscans = const [],
+    this.reviewCount = 0,
+    this.commentCount = 0,
+    this.magazineCount = 0,
   });
 
   factory AtariLegendGame.fromJson(Map<String, dynamic> json) {
@@ -171,6 +412,9 @@ class AtariLegendGame {
         for (final e in (json['boxscans'] as List<dynamic>?) ?? const [])
           AtariLegendBoxscan.fromJson(Map<String, dynamic>.from(e as Map)),
       ],
+      reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
+      commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
+      magazineCount: (json['magazine_count'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -204,6 +448,12 @@ class AtariLegendGame {
   /// Web box-scan references (`game_release_scans` of the game's releases).
   final List<AtariLegendBoxscan> boxscans;
 
+  /// Counts of the lazy text sections (reviews/comments/magazines), so the
+  /// detail tabs can show them without loading `atarilegend-texts.json`.
+  final int reviewCount;
+  final int commentCount;
+  final int magazineCount;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -224,6 +474,9 @@ class AtariLegendGame {
           'screenshots': screenshots.map((s) => s.toJson()).toList(),
         if (boxscans.isNotEmpty)
           'boxscans': boxscans.map((s) => s.toJson()).toList(),
+        if (reviewCount > 0) 'review_count': reviewCount,
+        if (commentCount > 0) 'comment_count': commentCount,
+        if (magazineCount > 0) 'magazine_count': magazineCount,
       };
 }
 
@@ -477,6 +730,7 @@ AtariLegendCache parseAtariLegendCache(
   String generatedAt = '',
   String sourceFile = '',
   String dumpDate = '',
+  Map<String, ({int reviews, int comments, int magazines})>? textCounts,
 }) {
   final games = _rows(sql, 'games');
   final releases = _rows(sql, 'game_releases');
@@ -637,6 +891,9 @@ AtariLegendCache parseAtariLegendCache(
       ]),
       screenshots: gameScreenshots[gid] ?? const [],
       boxscans: gameBoxscans[gid] ?? const [],
+      reviewCount: textCounts?[gid]?.reviews ?? 0,
+      commentCount: textCounts?[gid]?.comments ?? 0,
+      magazineCount: textCounts?[gid]?.magazines ?? 0,
     ));
   }
   out.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -646,6 +903,120 @@ AtariLegendCache parseAtariLegendCache(
     sourceFile: sourceFile,
     dumpDate: dumpDate,
     games: out,
+  );
+}
+
+int? _intOrNull(String? v) => v == null ? null : int.tryParse(v);
+
+/// Parses the text tables (reviews, comments, magazines) into the lazy text
+/// cache. No user names are available (the dump excludes the `users` table).
+AtariLegendTexts parseAtariLegendTexts(
+  String sql, {
+  String generatedAt = '',
+  String sourceFile = '',
+  String dumpDate = '',
+}) {
+  final reviewComments = <String, List<AtariLegendComment>>{};
+  for (final r in _rows(sql, 'review_comments')) {
+    final rid = r['review_id'];
+    final text = r['text'];
+    if (rid != null && text != null && text.isNotEmpty) {
+      (reviewComments[rid] ??= <AtariLegendComment>[])
+          .add(AtariLegendComment(
+              text: text, createdAt: r['created_at'] ?? ''));
+    }
+  }
+
+  final reviewsByGame = <String, List<AtariLegendReview>>{};
+  for (final r in _rows(sql, 'reviews')) {
+    final gid = r['game_id'];
+    final text = r['text'];
+    if (gid == null || text == null || text.isEmpty) continue;
+    final id = int.tryParse(r['id'] ?? '') ?? 0;
+    (reviewsByGame[gid] ??= <AtariLegendReview>[]).add(AtariLegendReview(
+      id: id,
+      text: text,
+      publishedAt: r['published_at'] ?? '',
+      graphics: _intOrNull(r['graphics']),
+      sound: _intOrNull(r['sound']),
+      gameplay: _intOrNull(r['gameplay']),
+      overall: _intOrNull(r['overall']),
+      comments: reviewComments[r['id']] ?? const [],
+    ));
+  }
+  for (final list in reviewsByGame.values) {
+    list.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+  }
+
+  final commentsByGame = <String, List<AtariLegendComment>>{};
+  for (final r in _rows(sql, 'game_comments')) {
+    final gid = r['game_id'];
+    final text = r['text'];
+    if (gid != null && text != null && text.isNotEmpty) {
+      (commentsByGame[gid] ??= <AtariLegendComment>[])
+          .add(AtariLegendComment(
+              text: text, createdAt: r['created_at'] ?? ''));
+    }
+  }
+  for (final list in commentsByGame.values) {
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  final magazineNames = {
+    for (final r in _rows(sql, 'magazines')) r['id']: r['name']
+  };
+  final issues = {for (final r in _rows(sql, 'magazine_issues')) r['id']: r};
+  final indexTypes = {
+    for (final r in _rows(sql, 'magazine_index_types')) r['id']: r['name']
+  };
+  final magazinesByGame = <String, List<AtariLegendMagazineRef>>{};
+  for (final r in _rows(sql, 'magazine_indices')) {
+    final gid = r['game_id'];
+    if (gid == null) continue;
+    final issue = issues[r['magazine_issue_id']];
+    if (issue == null) continue;
+    (magazinesByGame[gid] ??= <AtariLegendMagazineRef>[])
+        .add(AtariLegendMagazineRef(
+      magazine: (magazineNames[issue['magazine_id']] ?? '').toString(),
+      issue: (issue['issue'] ?? '').toString(),
+      published: (issue['published'] ?? '').toString(),
+      page: (r['page'] ?? '').toString(),
+      score: (r['score'] ?? '').toString(),
+      type: (indexTypes[r['magazine_index_type_id']] ?? '').toString(),
+      archiveUrl:
+          (issue['archiveorg_url'] ?? issue['alternate_url'] ?? '').toString(),
+    ));
+  }
+  for (final list in magazinesByGame.values) {
+    list.sort((a, b) {
+      final byDate = b.published.compareTo(a.published);
+      if (byDate != 0) return byDate;
+      final byName = a.magazine.toLowerCase().compareTo(b.magazine.toLowerCase());
+      if (byName != 0) return byName;
+      return a.issue.compareTo(b.issue);
+    });
+  }
+
+  final ids = <String>{
+    ...reviewsByGame.keys,
+    ...commentsByGame.keys,
+    ...magazinesByGame.keys,
+  };
+  final games = <String, AtariLegendGameTexts>{};
+  for (final gid in ids) {
+    final game = AtariLegendGameTexts(
+      reviews: reviewsByGame[gid] ?? const [],
+      comments: commentsByGame[gid] ?? const [],
+      magazines: magazinesByGame[gid] ?? const [],
+    );
+    if (!game.isEmpty) games[gid] = game;
+  }
+
+  return AtariLegendTexts(
+    generatedAt: generatedAt,
+    sourceFile: sourceFile,
+    dumpDate: dumpDate,
+    games: games,
   );
 }
 

@@ -190,6 +190,14 @@ class CatalogController extends ChangeNotifier {
   /// dropdowns are only shown then (otherwise they would offer just `any`).
   bool get hasAtariLegend => atariLegend.length > 0;
 
+  Future<AtariLegendTexts>? _atariLegendTextsFuture;
+
+  /// Lazily loads the reviews/comments/magazines cache the first time the
+  /// AtariLegend details text tabs are opened (kept for the session).
+  Future<AtariLegendTexts> atariLegendTexts() =>
+      _atariLegendTextsFuture ??= Future(() =>
+          AtariLegendTexts.load(config.resolveAtariLegendDirectory()));
+
   bool get crewFocusActive => !favoritesOnly &&
       filter.crew != 'any' &&
       kindFilters(filter.section).contains('crew');

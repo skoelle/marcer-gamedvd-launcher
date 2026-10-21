@@ -92,5 +92,10 @@ ThemeData buildAppTheme() {
     canvasColor: const Color(0xFF121212),
     dividerColor: const Color(0xFF2A2A2A),
     visualDensity: VisualDensity.compact,
+    // Desktop scrollbars stay visible whenever the content is scrollable
+    // (previously they only appeared while scrolling).
+    scrollbarTheme: const ScrollbarThemeData(
+      thumbVisibility: WidgetStatePropertyAll(true),
+    ),
   );
 }
