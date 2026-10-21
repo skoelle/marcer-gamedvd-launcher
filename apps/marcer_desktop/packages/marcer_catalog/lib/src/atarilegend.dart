@@ -21,9 +21,75 @@ const String kAtariLegendFileName = 'atarilegend.json';
 /// Cache schema version (bump on incompatible layout changes).
 ///
 /// v2 adds developer/author **roles**, the original-system **conversion** and
-/// the `game_release_akas` (`name`) aliases; a v1 cache still loads but lacks
+/// the `game_release_akas` (`name`) aliases; v3 adds the **screenshot** and
+/// **boxscan** image references (web URLs). Older caches still load but lack
 /// those fields, so the app warns to download the data again.
-const int kAtariLegendSchemaVersion = 2;
+const int kAtariLegendSchemaVersion = 3;
+
+/// AtariLegend site base (game/asset URLs are derived from ids/slugs).
+const String kAtariLegendSite = 'https://www.atarilegend.com';
+
+/// One AtariLegend screenshot reference (`screenshots` table).
+class AtariLegendImage {
+  const AtariLegendImage({required this.id, required this.imgext});
+
+  factory AtariLegendImage.fromJson(Map<String, dynamic> json) =>
+      AtariLegendImage(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        imgext: (json['imgext'] ?? '').toString(),
+      );
+
+  final int id;
+  final String imgext;
+
+  Map<String, dynamic> toJson() => {'id': id, 'imgext': imgext};
+}
+
+/// One AtariLegend box scan (`game_release_scans`), linked to its release so
+/// the small webp thumbnail URL can be built too.
+class AtariLegendBoxscan {
+  const AtariLegendBoxscan({
+    required this.id,
+    required this.releaseId,
+    required this.type,
+    required this.imgext,
+  });
+
+  factory AtariLegendBoxscan.fromJson(Map<String, dynamic> json) =>
+      AtariLegendBoxscan(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        releaseId: (json['release_id'] as num?)?.toInt() ?? 0,
+        type: (json['type'] ?? '').toString(),
+        imgext: (json['imgext'] ?? '').toString(),
+      );
+
+  final int id;
+  final int releaseId;
+
+  /// `Box front` | `Box back` | `Goodie` | `Other`.
+  final String type;
+  final String imgext;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'release_id': releaseId,
+        'type': type,
+        'imgext': imgext,
+      };
+}
+
+String atariLegendGameUrl(String slug) => '$kAtariLegendSite/games/$slug';
+
+String atariLegendScreenshotUrl(String slug, AtariLegendImage image) =>
+    '$kAtariLegendSite/games/$slug/screenshot-${image.id}.${image.imgext}';
+
+String atariLegendBoxscanUrl(AtariLegendBoxscan scan) =>
+    '$kAtariLegendSite/storage/images/game_release_scans/'
+    '${scan.id}.${scan.imgext}';
+
+String atariLegendBoxscanThumbUrl(AtariLegendBoxscan scan) =>
+    '$kAtariLegendSite/games/release/${scan.releaseId}/'
+    'boxscan-${scan.id}.webp';
 
 /// One credited person/company with an optional role (e.g. `Taito` / `Arcade`,
 /// `Jas C Brooke` / `Music`).
@@ -60,6 +126,8 @@ class AtariLegendGame {
     this.authorCredits = const [],
     this.conversion = '',
     this.aliases = const [],
+    this.screenshots = const [],
+    this.boxscans = const [],
   });
 
   factory AtariLegendGame.fromJson(Map<String, dynamic> json) {
@@ -95,6 +163,14 @@ class AtariLegendGame {
       authorCredits: credits('author_credits', authors),
       conversion: (json['conversion'] ?? '').toString(),
       aliases: strings('aliases'),
+      screenshots: [
+        for (final e in (json['screenshots'] as List<dynamic>?) ?? const [])
+          AtariLegendImage.fromJson(Map<String, dynamic>.from(e as Map)),
+      ],
+      boxscans: [
+        for (final e in (json['boxscans'] as List<dynamic>?) ?? const [])
+          AtariLegendBoxscan.fromJson(Map<String, dynamic>.from(e as Map)),
+      ],
     );
   }
 
@@ -122,6 +198,12 @@ class AtariLegendGame {
   /// used for matching.
   final List<String> aliases;
 
+  /// Web screenshot references (`game_screenshot` → `screenshots`).
+  final List<AtariLegendImage> screenshots;
+
+  /// Web box-scan references (`game_release_scans` of the game's releases).
+  final List<AtariLegendBoxscan> boxscans;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -138,6 +220,10 @@ class AtariLegendGame {
           'author_credits': authorCredits.map((c) => c.toJson()).toList(),
         if (conversion.isNotEmpty) 'conversion': conversion,
         if (aliases.isNotEmpty) 'aliases': aliases,
+        if (screenshots.isNotEmpty)
+          'screenshots': screenshots.map((s) => s.toJson()).toList(),
+        if (boxscans.isNotEmpty)
+          'boxscans': boxscans.map((s) => s.toJson()).toList(),
       };
 }
 
@@ -464,6 +550,40 @@ AtariLegendCache parseAtariLegendCache(
     }
   }
 
+  final screenshotExt = {
+    for (final r in _rows(sql, 'screenshots')) r['id']: r['imgext']
+  };
+  final gameScreenshots = <String, List<AtariLegendImage>>{};
+  for (final r in _rows(sql, 'game_screenshot')) {
+    final gid = r['game_id'];
+    final sid = int.tryParse(r['screenshot_id'] ?? '');
+    final ext = screenshotExt[r['screenshot_id']];
+    if (gid == null || sid == null || ext == null) continue;
+    (gameScreenshots[gid] ??= []).add(AtariLegendImage(id: sid, imgext: ext));
+  }
+  for (final list in gameScreenshots.values) {
+    list.sort((a, b) => a.id.compareTo(b.id));
+  }
+
+  const boxOrder = {'Box front': 0, 'Box back': 1, 'Goodie': 2, 'Other': 3};
+  final gameBoxscans = <String, List<AtariLegendBoxscan>>{};
+  for (final r in _rows(sql, 'game_release_scans')) {
+    final gid = releaseToGame[r['game_release_id']];
+    final id = int.tryParse(r['id'] ?? '');
+    final rid = int.tryParse(r['game_release_id'] ?? '');
+    final ext = r['imgext'];
+    if (gid == null || id == null || ext == null) continue;
+    (gameBoxscans[gid] ??= []).add(AtariLegendBoxscan(
+        id: id, releaseId: rid ?? 0, type: r['type'] ?? '', imgext: ext));
+  }
+  for (final list in gameBoxscans.values) {
+    list.sort((a, b) {
+      final oa = boxOrder[a.type] ?? 99;
+      final ob = boxOrder[b.type] ?? 99;
+      return oa != ob ? oa.compareTo(ob) : a.id.compareTo(b.id);
+    });
+  }
+
   int? yearOf(String gid) {
     final years = <int>[];
     for (final r in releasesByGame[gid] ?? const []) {
@@ -515,6 +635,8 @@ AtariLegendCache parseAtariLegendCache(
         for (final r in releasesByGame[gid] ?? const []) r['name'] ?? '',
         ...(releaseAkas[gid] ?? const []),
       ]),
+      screenshots: gameScreenshots[gid] ?? const [],
+      boxscans: gameBoxscans[gid] ?? const [],
     ));
   }
   out.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));

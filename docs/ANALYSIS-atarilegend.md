@@ -233,10 +233,12 @@ Paths come exclusively from `local/paths.env`: `MARCER_ATARILEGEND_DIR`
 | M0 (done) | `fetch` / `match` / `report` + this analysis |
 | M1 (done) | `extract` → full-dump SQLite (tool analysis) |
 | M2 (done) | `index` / `detail` / `fixtures` reference outputs |
-| M3.1 (done) | Desktop app settings path `AtariLegendDirectory` + **Download AtariLegend data** button: fetch the newest `.sql.gz`, gunzip, parse in a background isolate, write the compact `atarilegend.json` (schema **v2**: id/name/slug, year, publisher, genres, conversion/original system, developers/authors **with roles**, aliases incl. `game_release_akas`), delete the dump. v1 caches still load but warn "outdated". |
+| M3.1 (done) | Desktop app settings path `AtariLegendDirectory` + **Download AtariLegend data** button: fetch the newest `.sql.gz`, gunzip, parse in a background isolate, write the compact `atarilegend.json` (schema **v3**: id/name/slug, year, publisher, genres, conversion/original system, developers/authors **with roles**, aliases incl. `game_release_akas`, screenshot/boxscan references), delete the dump. Older caches still load but warn "outdated". |
 | M3.2 (done) | App loads the cache and matches each card's **folder** incl. aliases (exact → prefix → fuzzy, ≈84 % cracked); a teal **AtariLegend** button in the sidebar/lightbox *Game info* heading opens an in-app dialog (cached metadata) with an "Open on atarilegend.com" browser link |
 | M3.3 (done) | App UI: **Genre** (after the status dropdown) and **Developers** (after Publisher) filter dropdowns fed by the cache; the Publisher facet matches gameinfo **and** AtariLegend (case-insensitive merge). An author filter is not implemented (authors shown in the dialog only) |
-| M4 | Box-scan / screenshot **images** from `images.zip` (separate, large) |
+| M3.4 (done) | **Web images** in the AtariLegend dialog: Boxscans (thumbnail row) + Screenshots (thumbnail grid) shown **simultaneously** (no hero), hotlinked from atarilegend.com (derived URLs, `Image.network`, no disk cache); click → full-size viewer (`←/→`, `Esc`, zoom) |
+| M3.5 (open) | Later: **Magazines / Reviews / Comments** in a tabbed full-screen AtariLegend view (Info / Images / Reviews / Magazines / Comments) |
+| M4 | Standalone `images.zip` processing (separate, large) — not needed for the hotlinked web images above |
 | M5 | Weekly automation of fetch + app cache refresh |
 
 Open questions: when the app cache is rebuilt (startup check vs manual); how

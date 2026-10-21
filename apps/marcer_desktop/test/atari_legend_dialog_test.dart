@@ -28,6 +28,16 @@ void main() {
         AtariLegendCredit(name: 'Jas C Brooke', role: 'Music'),
         AtariLegendCredit(name: 'Martin W. Ward', role: 'Programming'),
       ],
+      screenshots: [
+        AtariLegendImage(id: 24, imgext: 'png'),
+        AtariLegendImage(id: 25, imgext: 'png'),
+      ],
+      boxscans: [
+        AtariLegendBoxscan(
+            id: 34, releaseId: 22, type: 'Box front', imgext: 'jpg'),
+        AtariLegendBoxscan(
+            id: 35, releaseId: 22, type: 'Box back', imgext: 'jpg'),
+      ],
     );
 
     await tester.pumpWidget(MaterialApp(
@@ -42,6 +52,9 @@ void main() {
                   opened = uri;
                   return true;
                 },
+                imageBuilder: (context, url,
+                        {int? cacheWidth, BoxFit? fit}) =>
+                    Text(url),
               ),
               child: const Text('open'),
             ),
@@ -66,6 +79,25 @@ void main() {
     expect(find.text('Martin W. Ward'), findsOneWidget);
     expect(find.text('Music'), findsOneWidget);
     expect(find.text('Programming'), findsOneWidget);
+
+    // Both image sections are visible simultaneously (no hero image).
+    expect(find.text('Boxscans (2)'), findsOneWidget);
+    expect(find.text('Screenshots (2)'), findsOneWidget);
+    final shotUrl =
+        atariLegendScreenshotUrl('buggy-boy', game.screenshots.first);
+    expect(find.text(shotUrl), findsOneWidget);
+
+    // Thumbnail click opens the viewer; arrows navigate.
+    await tester.ensureVisible(find.text(shotUrl));
+    await tester.tap(find.text(shotUrl));
+    await tester.pumpAndSettle();
+    expect(find.text('Screenshot   1 / 2'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.chevron_right));
+    await tester.pumpAndSettle();
+    expect(find.text('Screenshot   2 / 2'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+    expect(find.text('Screenshot   2 / 2'), findsNothing);
 
     await tester.tap(find.text('Open on atarilegend.com'));
     await tester.pumpAndSettle();

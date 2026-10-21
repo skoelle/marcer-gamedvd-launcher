@@ -389,8 +389,9 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   dump directory, downloads it, decompresses it (gzip) and parses only the
   needed tables in a **background isolate**, then writes the compact cache
   `atarilegend.json` (game id/name/slug, release year, publisher, genres,
-  conversion/original system, developers/authors with roles, aliases). The
-  downloaded `.sql.gz` is **deleted** afterwards.
+  conversion/original system, developers/authors with roles, aliases, plus the
+  **screenshot/boxscan references**). The downloaded `.sql.gz` is **deleted**
+  afterwards.
 - the target directory is created when missing; progress and **Cancel** show
   inline, failures as a SnackBar.
 - while the fetch runs, **Save**, **Cancel** and **Exit** are disabled (and the
@@ -406,10 +407,16 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   `Tatsumi`/`Game Conversion`, `Jas C Brooke`/`Music`) and an **Open on
   atarilegend.com** button (external browser, `url_launcher`). The AKA titles
   (`Speed Buggy` for Buggy Boy) are used for matching too.
+- below the metadata the dialog shows the **Boxscans** (horizontal thumbnail
+  row, with type label) and **Screenshots** (thumbnail grid) **at the same
+  time** — no default/hero image. They are hotlinked live from
+  `atarilegend.com` (derived URLs, `Image.network`, no disk cache; nothing is
+  bundled). Clicking a thumbnail opens a full-size viewer (`←`/`→`,
+  `Esc`, zoom).
 - **After updating from an older build, click Download AtariLegend data once
-  again**: cache schema **v2** adds the roles, the conversion system and the
-  missing release-AKA aliases (a v1 cache still loads, but without them and with
-  an "outdated" warning).
+  again**: cache schema **v3** adds the image references (v2 added the roles,
+  conversion system and release-AKA aliases). Older caches still load but lack
+  those fields and show an "outdated" warning.
 - the filter bar has **Genre** (after the status dropdown) and **Developers**
   (after Publisher) dropdowns fed by the cache; the **Publisher** dropdown and
   match merge gameinfo and AtariLegend publishers (case-insensitive). An

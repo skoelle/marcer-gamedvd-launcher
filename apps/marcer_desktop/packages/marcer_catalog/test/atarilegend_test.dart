@@ -126,6 +126,33 @@ CREATE TABLE `game_release_akas` (
 
 INSERT INTO `game_release_akas` VALUES
 (1,1,'Speed Buggy US');
+
+CREATE TABLE `screenshots` (
+  `id` int(11) NOT NULL,
+  `imgext` varchar(8) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `screenshots` VALUES
+(24,'png'),(25,'png');
+
+CREATE TABLE `game_screenshot` (
+  `id` int(11) NOT NULL,
+  `game_id` int(11) DEFAULT NULL,
+  `screenshot_id` int(11) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `game_screenshot` VALUES
+(1,22,25),(2,22,24);
+
+CREATE TABLE `game_release_scans` (
+  `id` int(11) NOT NULL,
+  `game_release_id` int(11) NOT NULL,
+  `type` varchar(16) NOT NULL,
+  `imgext` varchar(8) NOT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `game_release_scans` VALUES
+(35,1,'Box back','jpg'),(34,1,'Box front','jpg');
 ''';
 
 void main() {
@@ -188,6 +215,20 @@ void main() {
           ['Jas C Brooke|Music', 'Martin W. Ward|Programming']);
       expect(buggy.conversion, 'Arcade');
       expect(buggy.aliases, containsAll(['Speed Buggy', 'Speed Buggy US']));
+      expect(buggy.screenshots.map((s) => s.id), [24, 25]);
+      expect(
+          buggy.boxscans.map((b) => '${b.type}|${b.id}'),
+          ['Box front|34', 'Box back|35']);
+    });
+
+    test('derives the AtariLegend web image URLs', () {
+      final buggy = cache.games.firstWhere((g) => g.id == 22);
+      expect(atariLegendScreenshotUrl('buggy-boy', buggy.screenshots.first),
+          'https://www.atarilegend.com/games/buggy-boy/screenshot-24.png');
+      expect(atariLegendBoxscanUrl(buggy.boxscans.first),
+          'https://www.atarilegend.com/storage/images/game_release_scans/34.jpg');
+      expect(atariLegendBoxscanThumbUrl(buggy.boxscans.first),
+          'https://www.atarilegend.com/games/release/1/boxscan-34.webp');
     });
 
     test('ignores undated/null releases for year/publisher', () {
@@ -215,6 +256,8 @@ void main() {
       expect(buggy.genres, ['Simulation', 'Driving']);
       expect(buggy.conversion, 'Arcade');
       expect(buggy.developerCredits, hasLength(2));
+      expect(buggy.screenshots.map((s) => s.id), [24, 25]);
+      expect(buggy.boxscans, hasLength(2));
       expect(restored.schemaVersion, kAtariLegendSchemaVersion);
     });
   });
