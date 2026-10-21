@@ -21,7 +21,7 @@ if [ ! -f "$CONFIG" ] && [ -f "$REPO_ROOT/local/paths.env" ]; then
   "ScreenshotDirectory": "${MARCER_OUT_DIR:-}",
   "GameinfoDirectory": "${MARCER_DATA_DIR:-}",
   "Hatari": {
-    "Executable": "${MARCER_HATARI_BIN:-hatari}",
+    "Executable": "${MARCER_HATARI_BIN:-/usr/bin/hatari}",
     "ConfigFile": "",
     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
   },

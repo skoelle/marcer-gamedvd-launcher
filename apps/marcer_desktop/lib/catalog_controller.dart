@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -10,6 +9,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
 import 'favorites_service.dart';
+import 'ftp_downloader.dart';
 import 'hatari_launcher.dart';
 import 'index_editor.dart';
 
@@ -35,7 +35,13 @@ class CatalogController extends ChangeNotifier {
     filter.status = config.defaultStatus;
   }
 
-  final DesktopConfig config;
+  DesktopConfig config;
+
+  /// Replaces the config in place without rebuilding the catalog. Intended for
+  /// changes that do **not** affect the catalog data (e.g. updating
+  /// `Hatari.Executable` after installing Hatari); data-root changes must go
+  /// through a fresh controller (see `HomePage._applyConfig`).
+  void replaceConfig(DesktopConfig cfg) => config = cfg;
 
   late final OverlayBrowser browser;
   late ScreenshotIndices screenshots;
@@ -82,66 +88,85 @@ class CatalogController extends ChangeNotifier {
   // ---------------------------------------------------------------- loading
 
   Future<void> init() async {
+    initError = null;
     progress = 'Loading catalog…';
     notifyListeners();
-    // Capture a plain config value (not `this`) so the isolate closure stays
-    // sendable even when listeners are attached to the controller.
-    final cfg = config;
-    final bundle = await Isolate.run(() => CatalogBundle.loadSync(
-          screenshotDir: cfg.screenshotDirectory,
-          gameinfoDir: cfg.resolveGameinfoDirectory(),
-        ));
-    notices.addAll(bundle.warnings);
-    screenshots = bundle.index;
-    gameinfo = bundle.info;
-    universe = bundle.universe;
+    try {
+      // Capture a plain config value (not `this`) so the loader stays
+      // independent of the controller's listeners. The bundle is loaded in a
+      // background isolate that streams coarse phase messages (sources +
+      // catalog build) back for the loading screen.
+      final cfg = config;
+      final bundle = await CatalogBundle.load(
+        screenshotDir: cfg.screenshotDirectory,
+        gameinfoDir: cfg.resolveGameinfoDirectory(),
+        onProgress: (message) {
+          progress = message;
+          notifyListeners();
+        },
+      );
+      notices.addAll(bundle.warnings);
+      screenshots = bundle.index;
+      gameinfo = bundle.info;
+      universe = bundle.universe;
 
-    if (!Directory(config.rootDirectory).existsSync()) {
-      notices.add('RootDirectory missing: ${config.rootDirectory}');
+      if (!Directory(config.rootDirectory).existsSync()) {
+        notices.add('RootDirectory missing: ${config.rootDirectory}');
+      }
+
+      browser = OverlayBrowser(
+        rootDir: config.rootDirectory,
+        patchDir: config.patchDirectory.isEmpty ? null : config.patchDirectory,
+      );
+
+      // Section trees (`Title Sorted/Cracked…`, `PD…`, `Util…`) — they define
+      // where the per-section favorites files live (console layout) and the
+      // folder rel of every card (favorite matching, pd/utils ZIP resolution).
+      sectionTrees = discoverSectionTrees(browser);
+
+      // SPEC §11.1: one favorites file per section tree (console layout), plus
+      // the legacy/unknown-section file resolved patchDir → appDir → CWD so a
+      // single `favorites.txt` written by an older build or the console
+      // launcher is still honored.
+      final patch = config.patchDirectory;
+      final appDir = File(Platform.resolvedExecutable).parent.path;
+      final cwd = Directory.current.path;
+      favorites = FavoritesService.load(
+        fileForSection: {
+          for (final section in kSections)
+            if (patch.isEmpty)
+              section: p.join(appDir, favoritesSectionFileName(section))
+            else if (sectionTrees[section] != null)
+              section:
+                  p.join(patch, sectionTrees[section]!, kFavoritesFileName),
+          kMiscFavoritesSection: resolveFavoritesPath(
+            patchDir: patch.isEmpty ? null : patch,
+            appDir: appDir,
+            cwd: cwd,
+            exists: (path) => File(path).existsSync(),
+          ),
+        },
+        extraFiles: [
+          p.join(appDir, kFavoritesFileName),
+          p.join(cwd, kFavoritesFileName),
+        ],
+        sectionOfPath: _sectionOfFavoritePath,
+      );
+
+      ready = true;
+      progress = '';
+    } catch (e) {
+      // Never leave the app stuck on the loading screen: surface the failure
+      // with a retry option instead.
+      initError = '$e';
+      progress = '';
     }
-
-    browser = OverlayBrowser(
-      rootDir: config.rootDirectory,
-      patchDir: config.patchDirectory.isEmpty ? null : config.patchDirectory,
-    );
-
-    // Section trees (`Title Sorted/Cracked…`, `PD…`, `Util…`) — they define
-    // where the per-section favorites files live (console layout) and the
-    // folder rel of every card (favorite matching, pd/utils ZIP resolution).
-    sectionTrees = discoverSectionTrees(browser);
-
-    // SPEC §11.1: one favorites file per section tree (console layout), plus
-    // the legacy/unknown-section file resolved patchDir → appDir → CWD so a
-    // single `favorites.txt` written by an older build or the console
-    // launcher is still honored.
-    final patch = config.patchDirectory;
-    final appDir = File(Platform.resolvedExecutable).parent.path;
-    final cwd = Directory.current.path;
-    favorites = FavoritesService.load(
-      fileForSection: {
-        for (final section in kSections)
-          if (patch.isEmpty)
-            section: p.join(appDir, favoritesSectionFileName(section))
-          else if (sectionTrees[section] != null)
-            section: p.join(patch, sectionTrees[section]!, kFavoritesFileName),
-        kMiscFavoritesSection: resolveFavoritesPath(
-          patchDir: patch.isEmpty ? null : patch,
-          appDir: appDir,
-          cwd: cwd,
-          exists: (path) => File(path).existsSync(),
-        ),
-      },
-      extraFiles: [
-        p.join(appDir, kFavoritesFileName),
-        p.join(cwd, kFavoritesFileName),
-      ],
-      sectionOfPath: _sectionOfFavoritePath,
-    );
-
-    ready = true;
-    progress = '';
     notifyListeners();
   }
+
+  /// Human-readable message when the last [init] failed, else `null`. While it
+  /// is set the UI shows an error/retry screen instead of the catalog.
+  String? initError;
 
   // ------------------------------------------------------- catalog (global)
 
@@ -604,10 +629,16 @@ class CatalogController extends ChangeNotifier {
 
   final Map<GameCard, List<CardVariant>> _resolvedCardVariants = {};
 
+  /// Optional pre-launch guard (set by the UI): when it returns `false` the
+  /// launch is aborted. Used to offer a TOS ROM download before the first start
+  /// (the [HatariVariant] selects which TOS the run needs).
+  Future<bool> Function(HatariVariant? variant)? beforeLaunch;
+
   /// Launches [zipPath] with Hatari (non-blocking). Sets [launchError] when the
   /// configuration or ZIP is invalid; [launching] while the process runs.
-  Future<void> launchZip(String zipPath) async {
-    final result = await launchHatari(config, zipPath);
+  Future<void> launchZip(String zipPath, {HatariVariant? variant}) async {
+    if (beforeLaunch != null && !await beforeLaunch!(variant)) return;
+    final result = await launchHatari(config, zipPath, variant: variant);
     if (result.error != null) {
       launchError = result.error;
       notifyListeners();
@@ -622,24 +653,41 @@ class CatalogController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Default launch variant for [card] when none is chosen explicitly: old
+  /// titles the screenshot generator could only capture with a non-default
+  /// TOS (index marker `tos`, e.g. `1.02`) preselect the matching Play
+  /// variant (`SPEC-screenshot-generator.md` §7.5), so the primary Play
+  /// action does not fail on the default TOS. Null for the default TOS.
+  HatariVariant? defaultVariantForCard(GameCard card) {
+    final tos = card.tosVersion;
+    if (tos == null || tos.isEmpty) return null;
+    for (final v in kHatariVariants) {
+      if (v.tosVersions.contains(tos)) return v;
+    }
+    return null;
+  }
+
   /// Launches the ZIP of a catalog card's variant [index] — an index into
   /// [variantsOfCard] (lightbox "Play").
-  Future<void> launchCardVariant(GameCard card, int index) async {
+  Future<void> launchCardVariant(GameCard card, int index,
+      {HatariVariant? variant}) async {
     final variants = variantsOfCard(card);
     if (index < 0 || index >= variants.length) return;
-    await launchZip(zipPathForVariant(variants[index]));
+    await launchZip(zipPathForVariant(variants[index]),
+        variant: variant ?? defaultVariantForCard(card));
   }
 
   /// Launches the current selection: a ZIP in browse mode, the card's ZIP in
   /// catalog mode. A card with exactly one favorited variant launches that
   /// favorited ZIP (user decision 2026-10-15), otherwise [launchVariantForCard].
-  Future<void> launchSelected() async {
+  Future<void> launchSelected({HatariVariant? variant}) async {
     if (catalogMode) {
       final card = selectedCard;
       if (card == null) return;
+      final effective = variant ?? defaultVariantForCard(card);
       final favoriteKeys = favoriteKeysOfCard(card);
       if (favoriteKeys.length == 1) {
-        await launchZip(favoriteKeys.first);
+        await launchZip(favoriteKeys.first, variant: effective);
         return;
       }
       final v = launchVariantForCard(card);
@@ -648,20 +696,126 @@ class CatalogController extends ChangeNotifier {
         notifyListeners();
         return;
       }
-      await launchZip(zipPathForVariant(v));
+      await launchZip(zipPathForVariant(v), variant: effective);
       return;
     }
     final e = selectedEntry;
     if (e == null || e.kind != EntryKind.zip) return;
     final path = e.effectivePath;
     if (path == null) return;
-    await launchZip(path);
+    await launchZip(path, variant: variant);
   }
 
   void clearLaunchError() {
     if (launchError == null) return;
     launchError = null;
     notifyListeners();
+  }
+
+  // --------------------------------------------------- missing (FTP download)
+
+  /// Pluggable downloader (FTP in production, a fake in tests).
+  Downloader downloader = const FtpDownloader();
+
+  /// True while a "download missing" run transfers a card's folder; the
+  /// DetailPanel shows progress + Cancel for [downloadingCard] then.
+  bool downloading = false;
+
+  /// The card whose folder is currently being downloaded (null when idle).
+  GameCard? downloadingCard;
+
+  /// Human-readable download progress ("Connecting…", "12/34 files").
+  String downloadProgress = '';
+
+  /// Last download error, surfaced as a modal and cleared on acknowledgement.
+  String? downloadError;
+
+  VoidCallback? _cancelDownload;
+
+  /// True when the FTP connection settings are present (host set).
+  bool get ftpConfigured => config.ftpConfigured;
+
+  /// Requests cancellation of the running download (best effort; the run stops
+  /// between file transfers).
+  void cancelDownload() => _cancelDownload?.call();
+
+  void clearDownloadError() {
+    if (downloadError == null) return;
+    downloadError = null;
+    notifyListeners();
+  }
+
+  /// Downloads [card]'s whole folder (all ZIP variants + subdirectories) from
+  /// the configured FTP server into the patch layer (or root when no patch
+  /// directory is set) and refreshes the local layer/missing caches so the
+  /// badges clear without a full reload. No-op while another run is active.
+  Future<void> downloadMissing(GameCard card) async {
+    if (downloading) return;
+    final folder = cardFolderRel(card);
+    if (folder == null || folder.isEmpty) {
+      downloadError = 'No folder to download for this card.';
+      notifyListeners();
+      return;
+    }
+    if (!config.ftpConfigured) {
+      downloadError =
+          'FTP not configured — set Host/User/Password in Settings.';
+      notifyListeners();
+      return;
+    }
+
+    var cancelled = false;
+    _cancelDownload = () => cancelled = true;
+    downloading = true;
+    downloadingCard = card;
+    downloadProgress = 'Connecting…';
+    downloadError = null;
+    notifyListeners();
+
+    try {
+      await downloader.downloadDirectory(
+        host: config.ftpHostName,
+        port: config.ftpPort,
+        user: config.ftpUser,
+        password: config.ftpPassword,
+        remoteDir: _remoteDirFor(folder),
+        localDir: p.join(config.downloadTargetDirectory, folder),
+        onProgress: (done, total) {
+          downloadProgress =
+              total <= 0 ? 'Downloading…' : 'Downloading $done/$total files';
+          notifyListeners();
+        },
+        isCancelled: () => cancelled,
+      );
+      downloadProgress = 'Download finished.';
+      _refreshAfterDownload(folder);
+    } on DownloadCancelledException {
+      downloadProgress = 'Download cancelled.';
+      _refreshAfterDownload(folder);
+    } catch (e) {
+      downloadError = 'Download failed: $e';
+    } finally {
+      downloading = false;
+      downloadingCard = null;
+      _cancelDownload = null;
+      notifyListeners();
+    }
+  }
+
+  /// Remote path of [folder] (relative to the catalog root), prefixed with the
+  /// configured `Ftp.RemoteBase` when set.
+  String _remoteDirFor(String folder) {
+    final base = config.ftpRemoteBase.trim().replaceAll(RegExp(r'/+$'), '');
+    return base.isEmpty ? folder : '$base/$folder';
+  }
+
+  /// Drops the cached local-layer state for [folder] (and clears the lazily
+  /// resolved pd/utils variants) so the next `cardMissing`/`cardLayer` call
+  /// re-reads the freshly downloaded files from disk.
+  void _refreshAfterDownload(String folder) {
+    _zipLayerCache
+        .removeWhere((rel, _) => rel == folder || rel.startsWith('$folder/'));
+    _resolvedCardVariants.clear();
   }
 
   // ------------------------------------------------------------- navigation
@@ -765,6 +919,26 @@ class CatalogController extends ChangeNotifier {
       parts.add('gameinfo unavailable — screenshots only');
     }
     return parts;
+  }
+
+  /// Actionable hint shown as a banner when the active section has **no**
+  /// catalog cards at all because the screenshot index and/or the gameinfo
+  /// data is missing (the catalog is artifact-driven). `null` when there is
+  /// data.
+  String? get catalogDataNotice {
+    if (!catalogMode) return null;
+    final section = filter.section;
+    if (universe.cardsFor(section).isNotEmpty) return null;
+    final noIndex = screenshots.forSection(section).loadError != null;
+    final noInfo = gameinfo.length == 0;
+    if (!noIndex && !noInfo) return null;
+    final missing = <String>[
+      if (noIndex) 'the screenshot index (${screenshots.indexNameFor(section)})',
+      if (noInfo) 'the game metadata',
+    ].join(' and ');
+    return 'No catalog data loaded — missing $missing. Open Settings (⚙) and '
+        'use “Download from FTP” to fetch it, then set the status filter to '
+        '“any” to show games without screenshots.';
   }
 
   static String _fmtTime(DateTime t) {

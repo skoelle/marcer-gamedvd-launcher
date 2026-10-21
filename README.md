@@ -62,10 +62,12 @@ Save, the manual screenshot curation described below.
 - **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
   several ZIPs; if exactly one of them is a game screenshot (`done`), the
   large game preview is shown instead. The card's main preview prefers a
-  `done` variant of kind `game` over e.g. `textscreen`, and the four tiles
-  are ordered the same way (`done game` → other `done` → `desktop`), so a
-  late-sorting game shot is never pushed out by textscreens (same rules
-  as the gallery webapp).
+  `done` variant of kind `game` over e.g. `textscreen`, then other `done`
+  and `desktop` variants, then any preview (so a `no_usable_shots` entry
+  that kept its last capture still shows it), and the four tiles are ordered
+  the same way (`done game` → other `done` → `desktop`), so a late-sorting
+  game shot is never pushed out by textscreens (same rules as the gallery
+  webapp).
 - **Local layer & missing ZIPs** — the card/variant layer badge
   (`ROOT`/`PATCH`/`BOTH`) and the "This ZIP" **Layer** row are resolved from
   the actual filesystem, not the published index: a ZIP moved from the patch
@@ -74,6 +76,28 @@ Save, the manual screenshot curation described below.
   exists. A card without any local ZIP gets a red `MISSING` badge, a single
   absent variant is tagged in the lightbox filmstrip. The check is cached per
   session — reload the settings to pick up files synced while the app runs.
+- **Download missing game folders (FTP)** — a `MISSING` catalog card shows a
+  **Download folder** button in the detail sidebar that pulls the card's whole
+  folder (all ZIP variants + subdirectories) recursively from the Marcer FTP
+  server into the patch layer (the root directory when no `PatchDirectory` is
+  set) and then clears the `MISSING`/layer badges in place. Plain FTP (port 21,
+  or `host:port` for a non-standard port); the connection settings
+  (`Ftp.Host`/`Ftp.User`/`Ftp.Password`, optional `Ftp.RemoteBase`, default
+  `/GameDVD/`) are edited in the settings editor.
+  Existing local files are skipped, progress + **Cancel** show in the sidebar
+  and status bar, failures appear as a modal, and an unconfigured host shows a
+  hint instead of downloading.
+- **Catalog-data update check** — after the app self-update check a silent
+  startup check (release builds) fetches the small `latest.json` pointer
+  published by `tools/asset-manifest` from the GitHub `catalog-latest`
+  prerelease (**GitHub only, never the FTP**). An always-visible gray
+  **dataset** button in the top bar shows a green count badge when newer
+  `screenshots`/`gameinfo` archives are available; the dialog lists **game info
+  before screenshots** with the local vs. remote archive and per asset
+  **Update**/**Install** + **Skip this version** (skip is stored in
+  `<targetDir>/.marcer-assets.json` and cleared on update), verifies the
+  `sha256` when the pointer provides one and reloads the catalog after a
+  successful update.
 - **Gallery-style status bar** — section-aware coverage as separate games
   segments (`3287 folders`, `3211 with screenshot`), status counts as
   `done <games> (<zips> zips)`, gameinfo coverage (`gameinfo N folders` /
@@ -93,7 +117,17 @@ Save, the manual screenshot curation described below.
 - **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
   list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
   detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
-  bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking.
+  bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking. The **PLAY** button
+  is a split button: the main part launches the default variant, the arrow opens
+  a variant menu — **Standard** (ST, TOS 1.04), **Mono** (`--monitor mono`),
+  **STE** (`--machine ste`, TOS 1.62 → `TOS162.IMG`) and **Low Res TOS
+  1.02** (`TOS102.IMG`); a missing variant TOS is downloaded on demand.
+- **Download & install Hatari** — when no emulator is configured, the app offers
+  to download prebuilt Hatari **2.6.1** (Windows x64 / macOS universal from
+  [hatari-emu.org](https://www.hatari-emu.org/)) before launch or from the
+  settings **Hatari installation** row, unpacks it into `<appDir>/hatari` and
+  writes the relative `Hatari.Executable` path back to the config. Linux has no
+  official prebuilt binary (manual/system install).
 - **Favorites** (`*` on the selected ZIP/card, in the detail panel or on a
   filmstrip star) with `FAVORITE` badges, the virtual `Favorites` folder in
   the browser view and a **★ Favorites** filter that lists your favorite
@@ -170,8 +204,22 @@ Download the ZIP for your platform from the [Releases](https://github.com/skoell
 The release ZIPs ship `desktop.config.example.json` **and** the bundled
 `MarcerGameDvd-Hatari.cfg` — copy the example next to the executable (or the
 `.app`), rename it to `desktop.config.json`, and set your absolute paths. For
-launching, also point `Hatari.Executable` at your Hatari binary and put
-`TOS.IMG` next to the app.
+launching, point `Hatari.Executable` at your Hatari binary (or use the in-app
+**Install Hatari…** to download prebuilt Hatari 2.6.1 on Windows/macOS). If
+`TOS.IMG` is missing, the app offers to download it (TOS 1.04, English (UK) or
+German) from atariworld.org and install it next to the app (the STE / Low Res
+TOS 1.02 Play variants download TOS 1.62 / 1.02 on demand).
+
+> **macOS:** the build is ad-hoc signed and not notarized, so macOS quarantines
+> the download. Open it once via **right-click → Open**, or run
+> `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`. Also
+> **drag the `.app` individually in Finder** out of the unzipped folder into a
+> normal folder (e.g. `~/Applications`; not Downloads/Documents) — otherwise
+> macOS runs it from a temporary read-only copy (App Translocation) and
+> self-update/favorites cannot be saved. The app is not sandboxed (it reads game
+> folders you configure and launches Hatari); protected folders like
+> `~/Downloads` still trigger a one-time macOS permission prompt. See
+> [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md#macos).
 
 ### ⚙️ Configuration (`desktop.config.json`)
 
@@ -180,9 +228,12 @@ The app looks for `desktop.config.json` in this order (first existing wins):
 1. current working directory
 2. the directory of the executable (portable ZIP release)
 3. macOS only: the folder containing the `.app` bundle
+4. macOS only: `~/Library/Application Support/MarcerGameDVDLauncher` (last-resort
+   writable fallback — a config is written to the first **writable** of these, so
+   a read-only/translocated `.app` still works)
 
 When no config is found the app opens the **first-run setup page** (it lists
-the searched locations and the target file it will write). A config that exists
+the searched locations and the candidate save locations). A config that exists
 but cannot be read shows an error page with a **Setup…** button. Template: [`apps/marcer_desktop/desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json).
 
 > **Upgrading:** the config keys were renamed (`OutDirectory` →
@@ -194,10 +245,18 @@ but cannot be read shows an error page with a **Setup…** button. Template: [`a
 The ⚙ gear button in the top bar opens an in-app **settings editor** for all
 path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
 `GameinfoDirectory`, `Hatari.Executable`, `Hatari.ConfigFile`) with native
-directory/file pickers. **Save** writes them back to the same
-`desktop.config.json` and reloads the catalog in place, so new paths apply
-without restarting the app; window settings and the remaining fields stay
-untouched.
+directory/file pickers, plus the **FTP** fields for the downloads
+(`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase`,
+`Ftp.AssetsRemote` — free text, never block saving). The form is ordered
+**RootDirectory → PatchDirectory → FTP → ScreenshotDirectory /
+GameinfoDirectory → Hatari** (with the **Hatari installation** and **TOS ROM**
+rows); the two catalog-data fields each carry a
+**Download from FTP** button next to *Browse…* that pulls the newest
+`screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
+into the target directory (the gameinfo directory has **no** implicit
+fallback). **Save** writes them back to the same `desktop.config.json` and
+reloads the catalog in place, so new paths apply without restarting the app;
+window settings and the remaining fields stay untouched.
 
 Every path field is validated live with a status icon: a green ✓ when the
 directory/file exists, a red ✗ when it does not (or a required field is empty),
@@ -211,10 +270,14 @@ optional (needed to launch, not to browse).
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
-| `GameinfoDirectory` | no | gameinfo JSONs; default `<Patch>/../Data` |
+| `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
 | `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
 | `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
+| `Ftp.Host` | for download | FTP server for "Download missing" and the catalog assets; `host` or `host:port` (default port 21) |
+| `Ftp.User` / `Ftp.Password` | no | FTP credentials (empty user ⇒ `anonymous`; password stored in plaintext) |
+| `Ftp.RemoteBase` | no | remote directory prefix of the game folders (default `/GameDVD/`; empty ⇒ FTP login root) |
+| `Ftp.AssetsRemote` | no | remote dir of the catalog asset archives `screenshots-*.zip` / `gameinfo-*.zip` (default `/Uploads/MarcerGameDVDLauncher-assets/`) |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
 | `Window.width/height` | no | initial window size and restore size (default 1280×800) |
@@ -254,7 +317,10 @@ status/kind, `Esc` closes.
 
 > **Launching** needs `Hatari.Executable` in `desktop.config.json` and a TOS ROM
 > (`TOS.IMG`) next to the app — same convention as the console launcher; the
-> bundled `MarcerGameDvd-Hatari.cfg` looks for it in the working directory.
+> bundled `MarcerGameDvd-Hatari.cfg` looks for it in the working directory. If
+> `TOS.IMG` is missing, the app offers to download and install it (TOS 1.04,
+> English (UK) or German) from atariworld.org; the STE / Low Res TOS 1.02 Play
+> variants download TOS 1.62 / 1.02 on demand.
 
 ### 🛠️ Build & Run (developers)
 
@@ -302,9 +368,10 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 |---|---|---|
 | [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) |
 | [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR`). | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) |
+| [`tools/asset-manifest`](tools/asset-manifest/README.md) | Lists the newest `screenshots-*.zip` / `gameinfo-*.zip` on the Marcer FTP (read-only: connect + list, never uploads) and publishes a `latest.json` pointer as a GitHub release asset on the fixed `catalog-latest` prerelease (used by the desktop update check). | [`tools/asset-manifest/README.md`](tools/asset-manifest/README.md) |
 | [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`; entry kinds are `game`, `desktop`, `textscreen`, `darkscreen`,
-`no_game_image` (offline `reclassify` pass; drive-LED resets re-captured via
-`run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview; the root/patch overlay merge is case-insensitive for file **and** folder names, so each directory has exactly one canonical output spelling; processing happens in named **scopes** — one scope per invocation via `--scope`, default `cracked` on `index.json`, the opt-in `utils` scope (`Title Sorted/Utilitys - Title Sorted`) on `index-utils.json`, the opt-in `pd` scope (`Title Sorted/PD Games - Title Sorted`) on `index-pd.json`, which the gallery/desktop UIs do not read; folders whose name ends with `Mono` are booted with Hatari `--mono --tos-res high` (ST high res 640x400, config `mono_dir_suffix`)). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
+`no_game_image` (offline `reclassify` pass; offline `cleanup-duplicates` pass removes pixel-exact duplicate candidates, updates index + metadata and prints a 10-second progress line; drive-LED resets re-captured via
+`run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview; old titles that hang on TOS 1.04 are re-captured via `run --retry-no-usable --tos 1.02` (a success records a sparse `tos: "1.02"` marker shown as a `TOS 1.02` badge in the gallery/desktop app, failed attempts go to `tos_tried`); the root/patch overlay merge is case-insensitive for file **and** folder names, so each directory has exactly one canonical output spelling; processing happens in named **scopes** — one scope per invocation via `--scope`, default `cracked` on `index.json`, the opt-in `utils` scope (`Title Sorted/Utilitys - Title Sorted`) on `index-utils.json`, the opt-in `pd` scope (`Title Sorted/PD Games - Title Sorted`) on `index-pd.json`, which the gallery/desktop UIs do not read; monitor mode comes from the gameinfo `screen_format` rules (`MARCER_DATA_DIR/games-<scope>.json`: utils mono unless `Not Mono`/`Low`/`Mid`, including utils entries without a gameinfo match, pd mono only for all-`High` folders) with the `mono_dir_suffix` folder check as fallback; mono boots Hatari `--mono --tos-res high` (ST high res 640x400), and the rules affect future captures only). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
 
 ---
 

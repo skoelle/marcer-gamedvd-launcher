@@ -127,6 +127,7 @@ class _GameLightboxState extends State<GameLightbox> {
             size: variants[i].size,
             rel: variants[i].rel,
             origIndex: i,
+            tos: variants[i].tos,
             missing: widget.controller.variantMissing(variants[i]),
           ),
       ];
@@ -150,6 +151,7 @@ class _GameLightboxState extends State<GameLightbox> {
           size: shots?.size,
           rel: c.relOf(item),
           origIndex: 0,
+          tos: shots?.tos,
         ),
       ];
     }
@@ -573,6 +575,8 @@ class _GameLightboxState extends State<GameLightbox> {
                 _badge(_layer!, Colors.green),
               if (item is GameCard && widget.controller.cardMissing(item))
                 _badge('MISSING', Colors.redAccent),
+              if (v?.tos != null && v!.tos!.isNotEmpty)
+                _badge('TOS ${v.tos}', Colors.deepOrange),
               if (counts.isNotEmpty) _badge(counts, Colors.blueGrey),
               if (_year.isNotEmpty) _badge(_year, Colors.teal),
             ],
@@ -843,9 +847,13 @@ class _GameLightboxState extends State<GameLightbox> {
               rel: v.rel,
               size: v.size,
               missing: v.missing,
+              tos: v.tos,
             ),
       filter: widget.controller.filter,
       onPlay: v == null ? null : _launchCurrent,
+      variants: kHatariVariants,
+      onPlayVariant:
+          v == null ? null : (variant) => _launchCurrent(variant: variant),
       // Group click: switch to that crew's/cracker's variant; no matching
       // ZIP ("not found") jumps to variant 0 (the header shows the
       // "… ZIP not found —" prefix when a focus filter missed).
@@ -862,16 +870,16 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 
   /// Launches the currently shown ZIP with Hatari (the selected variant of a
-  /// catalog card, or the browse-mode entry).
-  void _launchCurrent() {
+  /// catalog card, or the browse-mode entry) using [variant] (default Standard).
+  void _launchCurrent({HatariVariant? variant}) {
     final item = _item;
     if (item is GameCard) {
       final vs = _variants;
       final orig = _variantIdx < vs.length ? vs[_variantIdx].origIndex : 0;
-      widget.controller.launchCardVariant(item, orig);
+      widget.controller.launchCardVariant(item, orig, variant: variant);
     } else if (item is Entry) {
       final path = item.effectivePath;
-      if (path != null) widget.controller.launchZip(path);
+      if (path != null) widget.controller.launchZip(path, variant: variant);
     }
   }
 }
@@ -983,6 +991,7 @@ class _Variant {
     required this.rel,
     required this.origIndex,
     this.kind,
+    this.tos,
     this.missing = false,
   });
 
@@ -997,6 +1006,10 @@ class _Variant {
   /// Preview classification (`game`/`desktop`/`textscreen`/`darkscreen`);
   /// feeds the "This ZIP" Kind row and the `C` dialog's current mark.
   final String? kind;
+
+  /// Non-default TOS version that captured this ZIP (e.g. `1.02`); shown as
+  /// the "This ZIP" TOS row.
+  final String? tos;
 
   /// True when the variant's ZIP is not present locally (neither root nor
   /// patch); marked in the filmstrip and the "This ZIP" table.

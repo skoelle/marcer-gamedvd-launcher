@@ -176,8 +176,16 @@ git-ignored (same policy as `launcher.config.json`).
   anywhere, resolve against the application directory (R10, same rule as the console app).
 - `Hatari` is part of the schema but **unused in the MVP** (launch = Phase 5+).
 - `ScreenshotDirectory` (screenshot archive) and `GameinfoDirectory` (gameinfo JSONs) are
-  desktop-only fields; `GameinfoDirectory` default convention is `<PatchDirectory>/../Data`
-  (per `ANALYSIS-game-data.md` §5.5) when left empty.
+  desktop-only fields. **2026-10-17:** the former `<PatchDirectory>/../Data` default
+  convention was removed — `GameinfoDirectory` has no implicit fallback; the setup/settings
+  form downloads the assets ("Download from FTP") or the field stays empty.
+- **Catalog-data download (2026-10-17):** the settings/setup form is ordered
+  RootDirectory → PatchDirectory → FTP → ScreenshotDirectory/GameinfoDirectory → Hatari;
+  the two catalog-data fields have a **Download from FTP** button that fetches the newest
+  `screenshots-*.zip`/`gameinfo-*.zip` from `Ftp.AssetsRemote`
+  (default `/Uploads/MarcerGameDVDLauncher-assets/`) and extracts it into the target directory
+  (`lib/catalog_assets.dart`). Uploads never overwrite, so the newest archive is picked by
+  the `yyyyMMdd-HHmmss` name timestamp.
 - `run.sh` still sources `local/paths.env` for developer convenience, but only to
   **seed/print** a working `desktop.config.json` on first run — the app itself reads
   only the config file.

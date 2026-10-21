@@ -19,8 +19,10 @@ class HatariProcess {
 /// Launches Hatari for [zipPath]. Returns a [HatariProcess] on success or an
 /// error message when the configuration/ZIP is invalid (SPEC.md §5.4, E3/E4,E7).
 Future<({HatariProcess? process, String? error})> launchHatari(
-    DesktopConfig config, String zipPath) async {
-  final (:command, :error) = buildHatariCommand(config, zipPath);
+    DesktopConfig config, String zipPath,
+    {HatariVariant? variant}) async {
+  final (:command, :error) =
+      buildHatariCommand(config, zipPath, variant: variant);
   if (command == null) return (process: null, error: error);
   try {
     final process = await Process.start(

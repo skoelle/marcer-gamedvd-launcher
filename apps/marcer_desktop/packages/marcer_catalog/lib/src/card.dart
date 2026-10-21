@@ -65,6 +65,7 @@ class CardVariant {
     this.previewPath,
     this.candidatePaths = const [],
     this.size,
+    this.tos,
   });
 
   final String rel;
@@ -82,6 +83,11 @@ class CardVariant {
   final String? previewPath;
   final List<String> candidatePaths;
   final int? size;
+
+  /// TOS version that captured this variant when it differs from the default
+  /// (`1.04`), e.g. `1.02` (`SPEC-screenshot-generator.md` §7.5). `null` means
+  /// the default TOS.
+  final String? tos;
 }
 
 /// Flattened first-XLS-variant info for display (gallery
@@ -194,6 +200,7 @@ class GameCard {
     required this.languageSort,
     required this.searchText,
     this.focusVariant,
+    this.tosVersion,
   });
 
   final String id;
@@ -227,6 +234,13 @@ class GameCard {
   final String crackerSort;
   final String languageSort;
   final String searchText;
+
+  /// Non-default TOS version required by any of the card's variants (e.g.
+  /// `1.02`), or null when every variant boots with the default TOS
+  /// (`SPEC-screenshot-generator.md` §7.5). Drives the `TOS 1.02` badge and
+  /// the Play dropdown preselection. Distinct from the gameinfo [tos]
+  /// boolean (TOS/bad note from the XLS).
+  final String? tosVersion;
 
   /// Index of the ZIP variant focused by an active crew/cracker filter
   /// (gallery `_apply_focus`): `null` when no focus filter applies, `-1`
@@ -322,6 +336,7 @@ GameCard buildIndexedCard({
       candidatePaths:
           e.candidates.map((c) => fullPng(rel, c)).whereType<String>().toList(),
       size: e.size,
+      tos: e.tos,
     ));
   }
   var displayStatus = 'pending';
@@ -342,6 +357,9 @@ GameCard buildIndexedCard({
   }
   preview ??= _firstDonePreview(variants);
   preview ??= _firstDesktopPreview(variants);
+  // Fallback for entries whose only preview is not done/desktop, e.g. a
+  // `no_usable_shots` entry that keeps its last capture (SPEC §8.5).
+  preview ??= _firstAnyPreview(variants);
   final layer = layers.length == 1
       ? layers.first
       : (layers.isEmpty ? '' : 'BOTH');
@@ -372,6 +390,13 @@ String? _firstDonePreview(List<CardVariant> variants) {
 String? _firstDesktopPreview(List<CardVariant> variants) {
   for (final v in variants) {
     if (v.status == 'desktop' && v.previewPath != null) return v.previewPath;
+  }
+  return null;
+}
+
+String? _firstAnyPreview(List<CardVariant> variants) {
+  for (final v in variants) {
+    if (v.previewPath != null) return v.previewPath;
   }
   return null;
 }
@@ -452,6 +477,14 @@ GameCard _finalizeCard({
     for (final v in variants) v.rel,
     _infoSearchText(info),
   ];
+  // Non-default TOS marker of the card: the first variant that needed one.
+  String? tosVersion;
+  for (final v in variants) {
+    if (v.tos != null && v.tos!.trim().isNotEmpty) {
+      tosVersion = v.tos;
+      break;
+    }
+  }
   return GameCard(
     id: id,
     name: name,
@@ -480,6 +513,7 @@ GameCard _finalizeCard({
     crackerSort: _minLower(crackers),
     languageSort: _minLower(langs),
     searchText: searchParts.where((p) => p.isNotEmpty).join(' ').toLowerCase(),
+    tosVersion: tosVersion,
   );
 }
 
@@ -637,5 +671,6 @@ GameCard _copyCard(
     languageSort: card.languageSort,
     searchText: card.searchText,
     focusVariant: focusVariant,
+    tosVersion: card.tosVersion,
   );
 }

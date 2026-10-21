@@ -390,6 +390,8 @@ class _CenterGridState extends State<CenterGrid> {
       if (card.variants.length > 1) '×${card.variants.length}',
       if (layer.isNotEmpty) layer,
       if (c.cardMissing(card)) 'MISSING',
+      if (card.tosVersion != null && card.tosVersion!.isNotEmpty)
+        'TOS ${card.tosVersion}',
       if (card.displayStatus.isNotEmpty) card.displayStatus,
       if (card.year != 'unknown') card.year,
     ];

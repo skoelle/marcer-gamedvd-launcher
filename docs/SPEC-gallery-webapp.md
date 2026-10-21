@@ -279,15 +279,17 @@ A game folder aggregates the statuses of its ZIPs:
 - `display_status` (drives the badge and status filtering), first match wins:
   `done` → `desktop` → `no_usable_shots` → `interrupted` → `pending` →
   `skipped_disk_n`.
-- `screenshots` (bool): at least one variant has `status` `done` or
-  `desktop` with a preview.
+- `screenshots` (bool): at least one variant has any preview (including
+  `no_usable_shots`, which keeps its last capture, section 8.5 of
+  `SPEC-screenshot-generator.md`).
 - `count_done`, `count_pending` etc. are included in the card payload for
   the lightbox and statistics.
 - The card's primary preview = the first (by sorted `rel`) variant preview
   with `status` `done` **and `kind` `game`**, else the first with
-  `status` `done`, else the first with `status` `desktop` (desktop-app
-  parity: a real game shot wins over e.g. a `textscreen`; within a tier
-  the sorted-`rel` order decides).
+  `status` `done`, else the first with `status` `desktop`, else the first
+  variant with any preview (desktop-app parity: a real game shot wins over
+  e.g. a `textscreen`; a `no_usable_shots` preview is shown when it is the
+  only image; within a tier the sorted-`rel` order decides).
 - `layer` for a grouped card: the single layer value if all its ZIPs share
   one (`ROOT` or `PATCH`), otherwise `BOTH` (overlay semantics of
   SPEC.md section 7 — one logical game, present in one or both layers).
@@ -673,8 +675,11 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
     navigation follow this; the underlying variant index (URL, side panel,
     `↑`/`↓` target mapping) is unchanged (desktop-app parity).
   - **Header badges** under the title line: layer (`ROOT`/`PATCH`/`BOTH`),
-    a status histogram of the folder (`2× done  1× pending`) and the year
-    when known.
+    a `TOS <version>` badge when the shown variant carries a non-default
+    `tos` (e.g. `1.02`; section 7.5 of the generator spec), a status
+    histogram of the folder (`2× done  1× pending`) and the year when
+    known. The grid card gets the same `TOS 1.02` chip and the "This ZIP"
+    table a `TOS` row.
 - **Candidate strip**: preview + all `_cNN` images of the *selected*
   variant selectable. The strip always reserves a fixed height (~56 px)
   so the layout does not jump when candidates appear/disappear between

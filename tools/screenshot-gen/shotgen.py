@@ -4,9 +4,10 @@
 """Marcer GameDVD Screenshot Generator.
 
 Implements SPEC-screenshot-generator.md:
-  index   build/refresh the ZIP index for one scope's trees
-  run     process pending entries (interruptible, resumable)
-  detect  find the program icon in existing desktop previews (offline)
+  index                build/refresh the ZIP index for one scope's trees
+  run                  process pending entries (interruptible, resumable)
+  detect               find the program icon in existing desktop previews
+  cleanup-duplicates   remove pixel-exact duplicate candidates (offline)
 
 Scopes (config ``scope_default`` + ``scopes``): every subcommand works
 on exactly one scope per invocation, selected with ``--scope`` (default:
@@ -23,6 +24,7 @@ Paths come exclusively from environment variables (see run.sh and
 local/paths.env). This file contains no real data paths.
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -39,6 +41,7 @@ from pathlib import Path
 
 TOOL_VERSION = "0.1.0"
 STOP_EVENT = None  # set in main
+PROGRESS_INTERVAL_S = 10.0
 
 
 # --------------------------------------------------------------------------
@@ -69,9 +72,33 @@ DEFAULT_CONFIG = {
         },
     },
     # Directory names ending with this suffix (case-insensitive, matched
-    # against the ZIP's parent directory, e.g. "Abalone - Mono") are booted
+    # against the entry's game folder, e.g. "Abalone - Mono") are booted
     # with --mono --tos-res high (ST high res, 640x400). Empty = disabled.
     "mono_dir_suffix": "Mono",
+    # Monitor selection from the gameinfo XLS export (MARCER_DATA_DIR/
+    # games-<scope>.json, read-only). Rules are per scope:
+    #   mono_if_all   - mono when every variant's screen_format equals one
+    #                   of these values (pd: pure "High" folders)
+    #   color_hints   - any variant value containing one of these substrings
+    #                   forces color (checked before mono_hints)
+    #   mono_hints    - any variant value containing one of these substrings
+    #                   forces mono
+    #   default       - mode when no hint matched (e.g. utils blank/notes)
+    #                   and for entries missing from a loaded gameinfo file
+    # A gameinfo rule wins over the folder suffix. A completely missing or
+    # unreadable gameinfo file falls back to the suffix rule. See SPEC
+    # section 4.6.
+    "screen_format_monitor": {
+        "utils": {
+            "default": "mono",
+            "color_hints": ["not mono", "low", "mid", "medium",
+                            "color", "colour"],
+            "mono_hints": ["mono", "high"],
+        },
+        "pd": {
+            "mono_if_all": ["high"],
+        },
+    },
     # Legacy (pre-scopes) single-scope configuration: used only when the
     # merged config carries no "scopes" entry at all.
     "scope_trees": [
@@ -84,6 +111,16 @@ DEFAULT_CONFIG = {
     "timepoints": [10, 25, 45],
     "entry_timeout_s": 90,
     "keep_candidates": True,
+    # TOS selection (section 7.5): the version used for a normal run is
+    # `tos_default`; `tos_images` maps a version label to the environment
+    # variable holding its ROM image. `run --tos <version>` boots with that
+    # version instead, used to retry `no_usable_shots` entries that hang on
+    # the default TOS (e.g. old titles that require TOS 1.02).
+    "tos_default": "1.04",
+    "tos_images": {
+        "1.04": "MARCER_TOS_IMG",
+        "1.02": "MARCER_TOS102_IMG",
+    },
     "disk_skip_regex": (
         r"(?i)(?:^|[\s\-_.])(?:disk|side|disc)[\s\-_.]*"
         r"(?:[2-9]|b|ii|iii)(?:$|[\s\-_.])"
@@ -111,6 +148,8 @@ DEFAULT_CONFIG = {
         "drive_attempts": 3,
         "prg_attempts": 3,
         "folder_attempts": 3,
+        "enlarge_window": True,
+        "scroll_attempts": 4,
     },
     "tmp_dir": "/tmp/marcer-shotgen",
     "xvfb_screen": "1024x768x24",
@@ -199,10 +238,172 @@ def paths() -> dict:
         "root": require_env("MARCER_ROOT_DIR"),
         "patch": os.environ.get("MARCER_PATCH_DIR", "").strip(),
         "out": require_env("MARCER_OUT_DIR"),
+        "data": os.environ.get("MARCER_DATA_DIR", "").strip(),
         "tos": require_env("MARCER_TOS_IMG"),
         "hatari": os.environ.get("MARCER_HATARI_BIN", "").strip() or "hatari",
         "display": os.environ.get("MARCER_DISPLAY", "").strip() or ":99",
     }
+
+
+def tos_image_for(cfg: dict, P: dict, version: str) -> str:
+    """Resolve the ROM image path for a TOS [version] label (section 7.5).
+
+    The default version's image is the already-resolved ``MARCER_TOS_IMG``;
+    every other version is read lazily from its configured environment
+    variable, so a missing alternative TOS only aborts a run that uses it.
+    """
+    images = cfg.get("tos_images") or {}
+    if version not in images:
+        sys.exit(f"error: unknown TOS version {version!r} "
+                 f"(known: {', '.join(sorted(images))})")
+    if version == (cfg.get("tos_default") or "1.04"):
+        return P["tos"]
+    return require_env(images[version])
+
+
+# --------------------------------------------------------------------------
+# monitor selection (gameinfo screen_format + folder suffix)
+# --------------------------------------------------------------------------
+
+def _norm_screen_format(value) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def entry_card_key(rel: str, scope: dict):
+    """Return the lower-case ``(letter, folder)`` key of an entry.
+
+    The key is derived from the path *below the scope tree*, so it also
+    works for ZIPs in sub-directories such as ``Original/`` (where the
+    ZIP's immediate parent is not the game folder). Matches the
+    ``(letter, folder)`` grouping used by the gallery/desktop gameinfo
+    join.
+    """
+    for tree in scope.get("trees") or []:
+        prefix = tree.rstrip("/") + "/"
+        if rel[:len(prefix)].lower() == prefix.lower():
+            parts = Path(rel[len(prefix):]).parts
+            if len(parts) >= 2:
+                return parts[0].lower(), parts[1].lower()
+    return None
+
+
+def load_screen_formats(P: dict, scope_name: str):
+    """Load ``games-<scope>.json`` into a ``(letter, folder)`` mapping.
+
+    Returns ``(formats, source_description)``. Missing data is not an
+    error: the caller falls back to the folder-suffix rule.
+    """
+    data = (P.get("data") or "").strip()
+    if not data:
+        return {}, "MARCER_DATA_DIR is not set"
+    path = Path(data) / f"games-{scope_name}.json"
+    if not path.is_file():
+        return {}, f"{path} not found"
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except Exception as ex:
+        return {}, f"cannot read {path}: {ex}"
+    formats = {}
+    for game in doc.get("games") or []:
+        if not isinstance(game, dict):
+            continue
+        key = (str(game.get("letter") or "").lower(),
+               str(game.get("folder") or "").lower())
+        formats[key] = [
+            _norm_screen_format(v.get("screen_format"))
+            for v in (game.get("variants") or [])
+            if isinstance(v, dict)
+        ]
+    return formats, str(path)
+
+
+def _hint_match(values, hints) -> bool:
+    return any(any(h in value for h in hints) for value in values)
+
+
+def resolve_monitor(cfg: dict, scope: dict, rel: str, screen_formats: dict):
+    """Return ``(mode, source)`` for one entry.
+
+    Precedence: explicit gameinfo rule > folder suffix > color. The
+    gameinfo mapping is optional; without it the historic suffix rule
+    applies unchanged.
+    """
+    scope_name = scope["name"]
+    rule_sets = cfg.get("screen_format_monitor") or {}
+    if not isinstance(rule_sets, dict):
+        rule_sets = {}
+    rules = rule_sets.get(scope_name) or {}
+    if not isinstance(rules, dict):
+        rules = {}
+    key = entry_card_key(rel, scope)
+    folder = key[1] if key else Path(rel).parent.name
+    fmt_vals = screen_formats.get(key) if key else None
+
+    if fmt_vals is not None and rules:
+        mono_if_all = [_norm_screen_format(v)
+                       for v in (rules.get("mono_if_all") or [])]
+        if mono_if_all and fmt_vals and all(v in mono_if_all
+                                            for v in fmt_vals):
+            return "mono", "screen_format:" + ",".join(
+                sorted(set(mono_if_all)))
+        color_hints = [_norm_screen_format(v)
+                       for v in (rules.get("color_hints") or [])]
+        mono_hints = [_norm_screen_format(v)
+                      for v in (rules.get("mono_hints") or [])]
+        nonempty = [v for v in fmt_vals if v]
+        if color_hints and _hint_match(nonempty, color_hints):
+            return "color", "screen_format:color"
+        if mono_hints and _hint_match(nonempty, mono_hints):
+            return "mono", "screen_format:mono"
+        default = str(rules.get("default") or "").strip().lower()
+        if default in ("mono", "color"):
+            return default, "screen_format:default"
+
+    # A missing folder in an otherwise loaded gameinfo file uses the scope
+    # default too (utils: mono). A completely missing/unreadable gameinfo
+    # file keeps the historic suffix fallback.
+    if (fmt_vals is None and key is not None and rules and screen_formats
+            and str(rules.get("default") or "").strip().lower() == "mono"):
+        return "mono", "screen_format:missing-default"
+
+    suffix = (cfg.get("mono_dir_suffix") or "").strip()
+    if suffix and folder.strip().lower().endswith(suffix.lower()):
+        return "mono", "folder-suffix"
+    return "color", "default"
+
+
+def build_monitor_map(cfg: dict, P: dict, scope: dict, entries):
+    """Resolve the monitor mode for every pending entry of one run."""
+    rule_sets = cfg.get("screen_format_monitor") or {}
+    if not isinstance(rule_sets, dict):
+        rule_sets = {}
+    has_rules = scope["name"] in rule_sets
+    formats, source = ({}, "")
+    if has_rules:
+        formats, source = load_screen_formats(P, scope["name"])
+    mapping = {}
+    counts = {"mono": 0, "color": 0, "rules": 0, "suffix": 0, "default": 0}
+    for entry in entries:
+        mode, why = resolve_monitor(cfg, scope, entry["rel"], formats)
+        mapping[entry["rel"]] = (mode, why)
+        counts[mode] += 1
+        if why.startswith("screen_format"):
+            counts["rules"] += 1
+        elif why == "folder-suffix":
+            counts["suffix"] += 1
+        else:
+            counts["default"] += 1
+    if not has_rules:
+        return mapping, ""
+    if not formats:
+        return mapping, (f"screen_format monitor[{scope['name']}]: {source}; "
+                         f"using folder suffix only")
+    return mapping, (
+        f"screen_format monitor[{scope['name']}] from {source}: "
+        f"{counts['mono']} mono, {counts['color']} color "
+        f"(rules {counts['rules']}, suffix {counts['suffix']}, "
+        f"default {counts['default']})")
 
 
 # --------------------------------------------------------------------------
@@ -231,6 +432,13 @@ def save_index(out: Path, idx: dict, index_name: str = INDEX_NAME) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(idx, f, indent=1, sort_keys=True)
     os.replace(tmp, p)
+
+
+def write_json_atomic(path: Path, data: dict) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=1)
+    os.replace(tmp, path)
 
 
 def _is_ignored(name: str) -> bool:
@@ -565,6 +773,25 @@ def phash_distance(a: str, b: str) -> int:
     return imagehash.hex_to_hash(a) - imagehash.hex_to_hash(b)
 
 
+def pixel_signature(path: Path):
+    """Return a pixel-exact signature of a PNG, or None if unreadable.
+
+    The signature is ``(width, height, sha256(rgba_pixels))``: two files
+    with the same signature show exactly the same pixels, even when their
+    PNG compression or ancillary chunks differ. Used by
+    ``cleanup-duplicates`` to remove only genuinely identical candidates.
+    """
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            im.load()
+            rgba = im.convert("RGBA")
+            return (rgba.size,
+                    hashlib.sha256(rgba.tobytes()).hexdigest())
+    except Exception:
+        return None
+
+
 # --------------------------------------------------------------------------
 # click retry: icon detection and mouse control via XTest (xdotool)
 # --------------------------------------------------------------------------
@@ -652,15 +879,19 @@ def find_hatari_window(P: dict, grab_png: Path, pid: int = None):
 
 
 def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
-                    icon_sx: int, icon_sy: int, log, fifo: Path = None) -> None:
-    """Double-click a screenshot pixel on a known Hatari window.
+                    icon_sx: int, icon_sy: int, log, fifo: Path = None,
+                    double: bool = True) -> None:
+    """Click a screenshot pixel on a known Hatari window.
 
     The real X pointer is positioned via XTest (xdotool mousemove), then
-    Hatari's own ``hatari-event doubleclick`` command is used for the
-    actual click: sending it through the emulator's input path is far more
+    Hatari's own ``hatari-event doubleclick`` command is used for a double
+    click: sending it through the emulator's input path is far more
     reliable than XTest clicks, which GEM often only registers as a single
-    selection (verified live). The pointer is serialized under CLICK_LOCK
-    across parallel workers because it is global per display.
+    selection (verified live). A single click (``double=False``, needed for
+    GEM gadgets such as the window "full size" box) has no FIFO control
+    command in Hatari 2.4.1 and goes through XTest. The pointer is
+    serialized under CLICK_LOCK across parallel workers because it is global
+    per display.
     """
     disp = P["display"]
     wx, wy = int(kv["X"]), int(kv["Y"])
@@ -686,8 +917,13 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
         except subprocess.TimeoutExpired:
             _xdotool(["mousemove", str(x), str(y)], disp)
         time.sleep(0.4)
-        if fifo is not None:
+        if double and fifo is not None:
             fifo_write(fifo, "hatari-event doubleclick")
+        elif not double:
+            # no single-click control command in Hatari 2.4.1 (section 7.4):
+            # a GEM gadget (full size box, scrollbar arrow) needs a single
+            # XTest click
+            _xdotool(["click", "1"], disp)
         else:
             _xdotool(["click", "--repeat", "2", "--delay", "30", "1"], disp)
         # GEM draws its mouse arrow into the framebuffer and it stays
@@ -714,7 +950,8 @@ def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
 
 
 def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
-               log, fifo: Path = None, pid: int = None) -> None:
+               log, fifo: Path = None, pid: int = None,
+               double: bool = True) -> None:
     """Double-click the detected icon on Hatari's SDL window.
 
     The grab screenshot provides the window content size so that the
@@ -725,7 +962,227 @@ def click_icon(P: dict, grab_png: Path, icon_sx: int, icon_sy: int,
         shot_w, shot_h = im.size
     wid, kv = find_hatari_window(P, grab_png, pid=pid)
     click_window_xy(P, wid, kv, shot_w, shot_h, icon_sx, icon_sy, log,
-                    fifo=fifo)
+                    fifo=fifo, double=double)
+
+
+def find_fullsize_xy(img_path: Path):
+    """Screenshot pixel at the centre of the active window's "full size" box.
+
+    The box sits in the title bar at the window's top right. Its glyph
+    rendering differs between GEM modes (mono high res vs colour medium/low
+    res), so it is not matched as a template, but its centre is detected from
+    the window frame (position independent): the rightmost long vertical dark
+    line is the window's right border; the box glyph is the rightmost compact
+    dark block in the title bar band just left of that border. The click must
+    land on the glyph centre — a few pixels to the right (near the border)
+    misses the gadget. Returns (x, y) or None when no box glyph is found.
+    """
+    arr = load_gray(img_path)
+    dark = arr < 128
+    height, width = dark.shape
+    min_run = max(60, height // 6)
+
+    def longest(vec):
+        best = best_start = cur = start = 0
+        for i, v in enumerate(vec):
+            if v:
+                if cur == 0:
+                    start = i
+                cur += 1
+                if cur > best:
+                    best, best_start = cur, start
+            else:
+                cur = 0
+        return best, best_start
+
+    right_x = right_top = None
+    for x in range(width - 1, -1, -1):
+        length, start = longest(dark[:, x])
+        if length >= min_run:
+            right_x, right_top = x, start
+            break
+    if right_x is None:
+        return None
+    x_hi = max(0, right_x - 6)
+    x_lo = max(0, right_x - 34)
+    y_lo = min(height - 1, right_top + 4)
+    y_hi = min(height, right_top + 16)
+    colsum = dark[y_lo:y_hi, x_lo:x_hi + 1].sum(axis=0)
+    cols = [i for i, c in enumerate(colsum) if c >= 3]
+    if not cols:
+        return None
+    colset = set(cols)
+    end = cols[-1]
+    start = end
+    while (start - 1) in colset:
+        start -= 1
+    return (x_lo + (start + end) // 2, (y_lo + y_hi) // 2)
+
+
+def enlarge_window(P: dict, grab_png: Path, log, fifo: Path = None,
+                   pid: int = None) -> bool:
+    """Grow a too narrow GEM window by clicking its "full size" box.
+
+    A folder view that shows more icons than fit its default width cuts
+    the rightmost ones off (behind a horizontal scrollbar); the program to
+    start can be among them, so the window is grown to the full work area
+    to reveal every icon before the scan gives up. The box reacts to a
+    *single* click; its position is detected from the window frame
+    (find_fullsize_xy). Returns True when a click was sent.
+    """
+    from PIL import Image
+    xy = find_fullsize_xy(grab_png)
+    if xy is None:
+        log("full size box not found, not enlarging")
+        return False
+    with Image.open(grab_png) as im:
+        shot_w, shot_h = im.size
+    wid, kv = find_hatari_window(P, grab_png, pid=pid)
+    click_window_xy(P, wid, kv, shot_w, shot_h, xy[0], xy[1], log,
+                    fifo=fifo, double=False)
+    return True
+
+
+def find_scroll_down_xy(img_path: Path):
+    """Screenshot pixel of the active window's vertical scrollbar down arrow.
+
+    A folder view shows far fewer icons than it contains, the rest hidden
+    below behind a vertical scrollbar; the program to start can be among
+    them. The down arrow sits in the innermost right column, one arrow
+    height above the window bottom border. Detected from the window frame
+    (position independent). Returns (x, y) or None.
+    """
+    arr = load_gray(img_path)
+    dark = arr < 128
+    height, width = dark.shape
+    min_run = max(60, height // 6)
+
+    def longest(vec):
+        best = best_start = cur = start = 0
+        for i, v in enumerate(vec):
+            if v:
+                if cur == 0:
+                    start = i
+                cur += 1
+                if cur > best:
+                    best, best_start = cur, start
+            else:
+                cur = 0
+        return best, best_start
+
+    right_x = right_top = None
+    for x in range(width - 1, -1, -1):
+        length, start = longest(dark[:, x])
+        if length >= min_run:
+            right_x, right_top = x, start
+            break
+    if right_x is None:
+        return None
+    bottom_y = None
+    for y in range(height - 1, right_top, -1):
+        length, start = longest(dark[y])
+        if length >= min_run and right_x - 8 <= start + length - 1 <= right_x + 2:
+            bottom_y = y
+            break
+    if bottom_y is None:
+        return None
+    return (max(1, right_x - 15), max(1, bottom_y - 30))
+
+
+def scroll_window_down(P: dict, grab_png: Path, log, fifo: Path = None,
+                       pid: int = None) -> bool:
+    """Scroll the active window one step down via its scrollbar down arrow.
+
+    Returns True when a click was sent.
+    """
+    from PIL import Image
+    xy = find_scroll_down_xy(grab_png)
+    if xy is None:
+        log("scrollbar down arrow not found, not scrolling")
+        return False
+    with Image.open(grab_png) as im:
+        shot_w, shot_h = im.size
+    wid, kv = find_hatari_window(P, grab_png, pid=pid)
+    click_window_xy(P, wid, kv, shot_w, shot_h, xy[0], xy[1], log,
+                    fifo=fifo, double=False)
+    return True
+
+
+def find_menubar_xy(img_path: Path):
+    """Screenshot pixel on the GEM menu bar (topmost row with menu text).
+
+    Used to activate the front window before clicking its "full size" box:
+    in some (headless SDL) setups the box only reacts once the window has
+    been activated by a menu bar click. Returns (x, y) or None.
+    """
+    import numpy as np
+    arr = load_gray(img_path)
+    dark = arr < 128
+    height, width = dark.shape
+    for y in range(2, min(height, 130)):
+        xs = np.nonzero(dark[y])[0]
+        if len(xs) >= 40:
+            return (int((int(xs.min()) + int(xs.max())) // 2), y)
+    return None
+
+
+def force_grow(P: dict, grab_png: Path, log, fifo: Path = None,
+               pid: int = None) -> bool:
+    """Grow the window when a plain box click was ignored by GEM.
+
+    Fallback for setups where the "full size" box only reacts after the GEM
+    window has been activated: click the menu bar to activate, then the box
+    twice (the first click dismisses the menu, the second grows). Returns
+    True when clicks were sent.
+    """
+    menu = find_menubar_xy(grab_png)
+    box = find_fullsize_xy(grab_png)
+    if menu is None or box is None:
+        return False
+    from PIL import Image
+    with Image.open(grab_png) as im:
+        shot_w, shot_h = im.size
+    wid, kv = find_hatari_window(P, grab_png, pid=pid)
+    log("box click had no effect, activating via menu bar and retrying")
+    for sx, sy in (menu, box, box):
+        click_window_xy(P, wid, kv, shot_w, shot_h, sx, sy, log,
+                        fifo=fifo, double=False)
+        time.sleep(1.0)
+    return True
+
+
+_GRAY_CACHE: dict = {}
+_GRAY_CACHE_ORDER: deque = deque()
+_GRAY_CACHE_MAX = 8
+
+
+def load_gray(img_path: Path):
+    """Load a screenshot as a float64 grayscale array, cached by mtime/size.
+
+    find_icon probes several templates/variants against the same image and a
+    retry run revisits one preview across timepoints; re-decoding a ~832x552
+    PNG from the (often network) archive for every call dominated the detect
+    runtime, so the last few decoded images are kept (LRU, bounded).
+    """
+    import numpy as np
+    from PIL import Image
+
+    key = str(img_path)
+    try:
+        st = os.stat(key)
+        sig = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        sig = None
+    cached = _GRAY_CACHE.get(key)
+    if cached is not None and cached[0] == sig:
+        return cached[1]
+    with Image.open(img_path) as im:
+        arr = np.asarray(im.convert("L"), dtype=np.float64)
+    _GRAY_CACHE[key] = (sig, arr)
+    _GRAY_CACHE_ORDER.append(key)
+    while len(_GRAY_CACHE_ORDER) > _GRAY_CACHE_MAX:
+        _GRAY_CACHE.pop(_GRAY_CACHE_ORDER.popleft(), None)
+    return arr
 
 
 def find_template(img_path: Path, template, min_score: float):
@@ -735,10 +1192,9 @@ def find_template(img_path: Path, template, min_score: float):
     still match. Returns (cx, cy, score) at the template center, or None.
     """
     import numpy as np
-    from PIL import Image
     from scipy.signal import fftconvolve
 
-    img = np.asarray(Image.open(img_path).convert("L"), dtype=np.float64)
+    img = load_gray(img_path)
     t_base = np.asarray(template, dtype=np.float64)
     best = None
     for t_img in (t_base, 255.0 - t_base):
@@ -775,29 +1231,69 @@ ICON_TEMPLATE_FILES = {
     "folder": "icon-folder.png",    # folder icon inside a window
 }
 
+# Icon template variants, built once per process. Color screenshots render
+# the GEM screen at 2x (the templates were cut from them), so their icons
+# are twice the size of those in native mono high-res screenshots
+# (`--mono --tos-res high`, 640x400 at 1x). The 0.5x variant is binarized
+# so only the black/white structure matches: the drive template's green fill
+# (0,238,0 -> grey ~140) would otherwise correlate poorly against the
+# dithered mono background (binarizing maps it to white).
+_ICON_VARIANTS: dict = {}
+
+# A smaller-scale variant must beat the 1x match by this margin before it
+# takes over: on color screenshots the 0.5x binarized template can tie a
+# weak 1x false positive (~0.66) at a different pixel, which would silently
+# shift an established click point. A genuine mono icon wins by a wide
+# margin because its 1x match stays below icon_min_score.
+_VARIANT_MARGIN = 0.02
+
+
+def icon_variants(template: str):
+    """Return [(scale, PIL.Image)] candidates for a named icon template."""
+    if template not in _ICON_VARIANTS:
+        variants = []
+        tpl_name = ICON_TEMPLATE_FILES.get(template)
+        tpl_path = ASSETS_DIR / tpl_name if tpl_name else None
+        if tpl_path is not None and tpl_path.exists():
+            import numpy as np
+            from PIL import Image
+            with Image.open(tpl_path) as tpl:
+                gray = tpl.convert("L")
+                full = np.asarray(gray, dtype=np.float64)
+                half = np.asarray(gray.resize(
+                    (max(1, gray.width // 2), max(1, gray.height // 2)),
+                    Image.LANCZOS), dtype=np.float64)
+            variants.append((1.0, Image.fromarray(full.astype(np.uint8))))
+            variants.append((
+                0.5, Image.fromarray(
+                    np.where(half >= 128, 255.0, 0.0).astype(np.uint8))))
+        _ICON_VARIANTS[template] = variants
+    return _ICON_VARIANTS[template]
+
 
 def find_icon(path: Path, cfg: dict, template: str = "prg"):
     """Locate a GEM icon in a screenshot via NCC.
 
-    template: "prg" (program icon) or "drive" (disk drive icon).
-    Returns {"sx", "sy", "score"} (screenshot pixel, template center)
-    or None.
+    template: "prg" (program icon), "drive" (DISKSTATION drive icon) or
+    "folder" (folder icon inside a window). Every template is tried at the
+    1x color scale and as a 0.5x binarized variant (mono high-res); the
+    best-scoring variant wins, but a smaller scale must beat the larger one
+    by _VARIANT_MARGIN. Returns {"sx", "sy", "score", "scale"} (screenshot
+    pixel, template center) or None.
     """
-    tpl_name = ICON_TEMPLATE_FILES.get(template)
-    if tpl_name is None:
+    min_score = cfg["click_retry"]["icon_min_score"]
+    best = None
+    for scale, tpl in icon_variants(template):
+        res = find_template(path, tpl, min_score)
+        if res is None:
+            continue
+        cx, cy, score = res
+        if best is None or score > best[2] + _VARIANT_MARGIN:
+            best = (cx, cy, score, scale)
+    if best is None:
         return None
-    tpl_path = ASSETS_DIR / tpl_name
-    if not tpl_path.exists():
-        return None
-    from PIL import Image
-    with Image.open(tpl_path) as tpl:
-        grayscale = tpl.convert("L")
-        res = find_template(path, grayscale,
-                            cfg["click_retry"]["icon_min_score"])
-    if res is None:
-        return None
-    cx, cy, score = res
-    return {"sx": cx, "sy": cy, "score": round(score, 3)}
+    cx, cy, score, scale = best
+    return {"sx": cx, "sy": cy, "score": round(score, 3), "scale": scale}
 
 
 def find_desktop_click(path: Path, cfg: dict):
@@ -871,6 +1367,23 @@ def drop_case_variants(mirror_dir: Path, names) -> None:
         pass
 
 
+def find_window_icon(path: Path, cfg: dict, template: str):
+    """Find one GEM window icon with the stricter window threshold.
+
+    Window icons match their templates near 1.0, so a dedicated higher
+    threshold rejects the flat-region false positives (~0.55) that appear
+    on white window areas; the same bar applies to the 0.5x mono variant,
+    whose genuine icons still score ~1.0 (a folder lightly matching the
+    program template only reaches ~0.73 and must not override its own
+    stronger folder match).
+    """
+    min_score = cfg["click_retry"].get("window_icon_min_score", 0.80)
+    hit = find_icon(path, cfg, template)
+    if hit and hit["score"] >= min_score:
+        return hit
+    return None
+
+
 def find_window_target(path: Path, cfg: dict):
     """Find the next double-click target inside an opened GEM window.
 
@@ -878,19 +1391,27 @@ def find_window_target(path: Path, cfg: dict):
     searched first and double clicked right away when it is present. Only
     when no program icon is found is the folder icon (icon-folder) looked
     up; after descending into the folder the window is scanned again for
-    a program icon. Window icons match their templates near 1.0, so a
-    dedicated higher threshold rejects the flat-region false positives
-    (~0.55) that appear on white window areas. Returns
-    ("prg"|"folder", {sx, sy, score}) or None.
+    a program icon. Returns ("prg"|"folder", {sx, sy, score}) or None.
     """
-    min_score = cfg["click_retry"].get("window_icon_min_score", 0.80)
-    prg = find_icon(path, cfg, "prg")
-    if prg and prg["score"] >= min_score:
+    prg = find_window_icon(path, cfg, "prg")
+    if prg is not None:
         return "prg", prg
-    fo = find_icon(path, cfg, "folder")
-    if fo and fo["score"] >= min_score:
+    fo = find_window_icon(path, cfg, "folder")
+    if fo is not None:
         return "folder", fo
     return None
+
+
+def window_is_open(path: Path) -> bool:
+    """True when the screenshot shows an open GEM window.
+
+    A window is recognized by its title-bar "full size" gadget or, as a
+    fallback for unusual window frames, by its vertical scrollbar. Plain
+    desktop icon grids (drive/program icons on the work surface) do not
+    match either detector.
+    """
+    return find_fullsize_xy(path) is not None \
+        or find_scroll_down_xy(path) is not None
 
 
 def _grab_now(fifo: Path, outdir: Path, wait: float = 2.0):
@@ -965,7 +1486,8 @@ def _folder_click_state(before: Path, after: Path, cfg: dict,
 
 
 def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
-                        grabs, log, pid: int = None):
+                        grabs, log, pid: int = None,
+                        allow_enlarge: bool = False):
     """Execute the click sequence for a desktop retry.
 
     prg: one double click on the program icon (game starts directly).
@@ -974,7 +1496,10 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
            open a folder and look again (bounded by drive_max_depth).
 
     ``pid`` is the running Hatari process, used to resolve its own window
-    when parallel workers share one X display.
+    when parallel workers share one X display. ``allow_enlarge`` enables the
+    "full size" fallback: when an opened window shows no usable icon, the
+    window is grown once so icons cut off at its right edge become visible
+    (section 7.4).
 
     returns (clicked, last_grab, chain_shots, result):
       clicked     - True when a program start was confirmed
@@ -985,6 +1510,51 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
     """
     strategy = click_info.get("strategy", "prg")
     chain_shots = list(grabs)
+
+    step_wait = float(click_cfg.get("step_wait", 2.0))
+    max_depth = int(click_cfg.get("drive_max_depth", 2))
+    do_enlarge = bool(allow_enlarge and click_cfg.get("enlarge_window", True))
+    scroll_attempts = int(click_cfg.get("scroll_attempts", 4))
+    grew = [False]
+
+    def _reveal_rescan(shot):
+        """Reveal hidden icons and rescan for a program/folder icon.
+
+        First grow a too narrow window (the mono high-res profile opens at
+        half width, pushing the program behind a horizontal scrollbar), then
+        scroll a window that hides icons below (the colour profile shows far
+        fewer icons than it contains behind a vertical scrollbar).
+        """
+        def grab(prev):
+            if not sleep_until(time.monotonic() + step_wait):
+                return prev, None
+            grown = _grab_now(fifo, outdir, 2.0) or prev
+            chain_shots.append(grown)
+            return grown, find_window_target(grown, cfg)
+
+        # GEM's "full size" box toggles, so it must be clicked exactly once
+        # per entry: a second grow click would restore the window.
+        if do_enlarge and not grew[0]:
+            grew[0] = True
+            before = shot
+            if enlarge_window(P, shot, log, fifo=fifo, pid=pid):
+                shot, target = grab(shot)
+                if target is not None:
+                    return shot, target
+                # some setups ignore the first box click until the window is
+                # activated: retry via the menu bar when nothing changed
+                if not _screen_changed(before, shot) \
+                        and force_grow(P, shot, log, fifo=fifo, pid=pid):
+                    shot, target = grab(shot)
+                    if target is not None:
+                        return shot, target
+        for _ in range(scroll_attempts):
+            if not scroll_window_down(P, shot, log, fifo=fifo, pid=pid):
+                break
+            shot, target = grab(shot)
+            if target is not None:
+                return shot, target
+        return shot, None
 
     if strategy == "prg":
         before = grabs[-1]
@@ -1003,40 +1573,53 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         log("program icon never started (prg)")
         return False, chain_shots[-1], chain_shots, "click-failed"
 
-    # strategy == "drive": open DISKSTATION A first
-    step_wait = float(click_cfg.get("step_wait", 2.0))
-    max_depth = int(click_cfg.get("drive_max_depth", 2))
-
+    # strategy == "drive": use an already-open window, otherwise open
+    # DISKSTATION A first. Standard path:
+    #   window open? -> enlarge -> PRG -> folder -> scroll
+    #   else -> drive click -> PRG? -> else enlarge -> PRG -> folder -> scroll
     probe = grabs[-1]
     win_shot = probe
     target = None
-    attempts = int(click_cfg.get("drive_attempts", 3))
-    for attempt in range(1, attempts + 1):
-        click_icon(P, win_shot, click_info["sx"], click_info["sy"], log,
-                   fifo=fifo, pid=pid)
-        log(f"drive click attempt {attempt}, waiting {step_wait}s")
-        if not sleep_until(time.monotonic() + step_wait):
+    if window_is_open(probe):
+        log("GEM window already open, skipping drive click")
+        win_shot, target = _reveal_rescan(probe)
+        if target is None:
+            log("open window has no usable program or folder icon")
             return False, win_shot, chain_shots, "click-failed"
-        win_shot = _grab_now(fifo, outdir, 2.0) or win_shot
-        chain_shots.append(win_shot)
-        # a program or folder icon only appears once the window is open;
-        # on the plain desktop neither template matches, so this is a
-        # reliable "window open" signal
-        target = find_window_target(win_shot, cfg)
-        if target is not None:
-            break
-        # double clicking DISKSTATION while its window is already open
-        # just brings up the same window again, so only retry when the
-        # click had no visible effect at all (screen unchanged)
-        if _screen_changed(probe, win_shot):
-            log("window opened but no program or folder icon matched")
-            break
-        log("drive click had no effect, retrying")
-    if target is None:
-        log("drive window did not open with a usable icon")
-        return False, win_shot, chain_shots, "click-failed"
+    else:
+        attempts = int(click_cfg.get("drive_attempts", 3))
+        for attempt in range(1, attempts + 1):
+            click_icon(P, win_shot, click_info["sx"], click_info["sy"], log,
+                       fifo=fifo, pid=pid)
+            log(f"drive click attempt {attempt}, waiting {step_wait}s")
+            if not sleep_until(time.monotonic() + step_wait):
+                return False, win_shot, chain_shots, "click-failed"
+            win_shot = _grab_now(fifo, outdir, 2.0) or win_shot
+            chain_shots.append(win_shot)
+            # A program icon is the strongest signal; click it directly.
+            # Otherwise enlarge first and then scan PRG -> folder -> scroll.
+            prg = find_window_icon(win_shot, cfg, "prg")
+            if prg is not None:
+                target = ("prg", prg)
+                log("PRG icon visible after drive click")
+                break
+            # a program or folder icon only appears once the window is
+            # open; on the plain desktop neither template matches, so the
+            # screen change/window frame is a reliable "window open" signal
+            if _screen_changed(probe, win_shot) or window_is_open(win_shot):
+                log("no PRG after drive click, enlarging window")
+                win_shot, target = _reveal_rescan(win_shot)
+                if target is not None:
+                    break
+                log("window opened but no program or folder icon matched")
+                break
+            log("drive click had no effect, retrying")
+        if target is None:
+            log("drive window did not open with a usable icon")
+            return False, win_shot, chain_shots, "click-failed"
 
     for depth in range(1, max_depth + 1):
+        enlarged = False
         kind, hit = target
         if kind == "prg":
             # GEM occasionally registers the double click as a mere
@@ -1072,6 +1655,19 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
             chain_shots.append(new_shot)
             state = _folder_click_state(win_shot, new_shot, cfg,
                                         hit["sx"], hit["sy"])
+            if state != "opened" and do_enlarge and not enlarged \
+                    and find_window_target(new_shot, cfg) is None:
+                # No matchable icon at all: the opened folder window may
+                # just look like its parent (small pixel diff) and hide the
+                # program behind a scrollbar, so the click was misjudged as
+                # a mere selection or as an auto-started game. Grow the
+                # window once and rescan before retrying or believing it.
+                enlarged = True
+                log(f"depth {depth}: no icon after folder click, enlarging "
+                    f"to check for hidden icons")
+                new_shot, hidden = _reveal_rescan(new_shot)
+                if hidden is not None:
+                    state = "opened"
             if state == "program":
                 # the game started directly from the double click (the
                 # folder icon was already the program, or the click landed
@@ -1089,6 +1685,11 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
             return False, win_shot, chain_shots, "click-failed"
         win_shot = new_shot
         target = find_window_target(win_shot, cfg)
+        if target is None and do_enlarge and not enlarged:
+            enlarged = True
+            log(f"depth {depth}: no icon in window, enlarging to reveal "
+                f"hidden icons")
+            win_shot, target = _reveal_rescan(win_shot)
         if target is None:
             log(f"window depth {depth}: no further program or folder icon")
             return False, win_shot, chain_shots, "click-failed"
@@ -1098,7 +1699,8 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
 
 def process_entry(cfg: dict, P: dict, entry: dict, log,
                   state_lock=None, click_retry: bool = False,
-                  force: bool = False) -> None:
+                  force: bool = False, tos_version: str = "",
+                  tos_image: str = "", monitor_info=None) -> None:
     def commit(fn):
         # With parallel jobs, entry mutation must be serialized against
         # index saves performed by other workers (avoids torn index state).
@@ -1113,13 +1715,19 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     rel_path = Path(rel)
     parts = rel_path.parts
 
-    # Mono directories (config mono_dir_suffix, e.g. "Abalone - Mono"):
-    # boot with a monochrome monitor in ST high resolution (640x400).
-    mono_suffix = (cfg.get("mono_dir_suffix") or "").strip()
-    parent_name = rel_path.parent.name if len(parts) > 1 else ""
-    is_mono = bool(mono_suffix) and \
-        parent_name.strip().lower().endswith(mono_suffix.lower())
-    monitor = "mono" if is_mono else "color"
+    # Monitor selection: gameinfo screen_format rules are resolved once per
+    # run and passed in; without a rule the historic folder-suffix check
+    # (e.g. "Abalone - Mono") applies. Mono boots ST high res (640x400).
+    if monitor_info:
+        monitor, monitor_source = monitor_info
+        is_mono = monitor == "mono"
+    else:
+        mono_suffix = (cfg.get("mono_dir_suffix") or "").strip()
+        parent_name = rel_path.parent.name if len(parts) > 1 else ""
+        is_mono = bool(mono_suffix) and \
+            parent_name.strip().lower().endswith(mono_suffix.lower())
+        monitor = "mono" if is_mono else "color"
+        monitor_source = "folder-suffix" if is_mono else "default"
 
     # src_rel carries the folder spelling the file actually has under its
     # own layer root when the canonical output spelling differs (case-only
@@ -1168,9 +1776,12 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             zip_contents = []
 
         prof = cfg["profile"]
+        tos_version = (tos_version or cfg.get("tos_default") or "1.04").strip()
+        tos_image = tos_image or P["tos"]
+        log(f"tos {tos_version}: {tos_image}")
         cmd = [
             P["hatari"],
-            "--tos", P["tos"],
+            "--tos", tos_image,
             "--machine", prof["machine"],
             "--memsize", prof["memsize"],
             "--sound", "off",
@@ -1190,7 +1801,9 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             # --mono selects the monochrome monitor (TOS then boots to
             # high res); --tos-res high forces 640x400 explicitly.
             cmd += ["--mono", "--tos-res", "high"]
-            log(f"mono directory ({parent_name}): --mono --tos-res high")
+        if monitor_source != "default":
+            log(f"monitor {monitor} ({monitor_source})"
+                + (" --mono --tos-res high" if is_mono else ""))
 
         env = {**os.environ, "DISPLAY": P["display"]}
         log(f"hatari start ({' '.join(cmd[:6])} ...)")
@@ -1242,7 +1855,8 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                         clicked, last_grab, chain_shots, click_result = \
                             perform_click_chain(
                                 P, cfg, click_cfg, click_info, fifo, outdir,
-                                grabs, log, pid=proc.pid)
+                                grabs, log, pid=proc.pid,
+                                allow_enlarge=True)
                     except Exception as ex:
                         log(f"click chain failed ({strategy}): {ex}")
                         clicked = False
@@ -1420,6 +2034,21 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             entry["zip_contents"] = zip_contents
             entry["capture_method"] = "cmd-fifo"
             entry["monitor"] = monitor
+            # TOS marker (section 7.5/10.4): only a successful capture with a
+            # non-default TOS is recorded (sparse; absent = the default TOS).
+            # A failed attempt remembers its version in `tos_tried` so a
+            # later `--retry-no-usable --tos <version>` skips it.
+            default_tos = cfg.get("tos_default") or "1.04"
+            if status in ("done", "desktop") and tos_version != default_tos:
+                entry["tos"] = tos_version
+                entry.pop("tos_tried", None)
+            else:
+                entry.pop("tos", None)
+                if tos_version != default_tos:
+                    tried = list(entry.get("tos_tried") or [])
+                    if tos_version not in tried:
+                        tried.append(tos_version)
+                    entry["tos_tried"] = tried
             if preview:
                 # a fresh preview supersedes the drive-LED reset state
                 entry.pop("drive_led", None)
@@ -1437,6 +2066,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "profile": prof["name"],
             "machine": prof["machine"],
             "monitor": monitor,
+            "tos": tos_version,
             "status": status,
             "kind": kind,
             "preview_is_desktop": bool(kind in
@@ -1497,7 +2127,8 @@ def release_lock(lock: Path) -> None:
 def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   pending: list, jobs: int, t_start: float,
                   done_counts: dict, displays: list,
-                  index_name: str = INDEX_NAME):
+                  index_name: str = INDEX_NAME, tos_version: str = "",
+                  tos_image: str = "", monitor_map: dict = None):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
@@ -1560,7 +2191,9 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                 process_entry(cfg, Pw, e, make_log(e, wid),
                               state_lock=state_lock,
                               click_retry=args.retry_desktop,
-                              force=args.force)
+                              force=args.force,
+                              tos_version=tos_version, tos_image=tos_image,
+                              monitor_info=(monitor_map or {}).get(e["rel"]))
                 with state_lock:
                     save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
@@ -1604,6 +2237,11 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
             print(f"Xvfb started on {disp} (pid {xv.pid})", flush=True)
             xvfbs.append(xv)
 
+    tos_version = (args.tos or cfg.get("tos_default") or "1.04").strip()
+    tos_image = tos_image_for(cfg, P, tos_version)
+    if tos_version != (cfg.get("tos_default") or "1.04"):
+        print(f"TOS override: {tos_version}", flush=True)
+
     idx = load_index(out, scope["index"])
     entries = idx["entries"]
     pending = []
@@ -1620,6 +2258,10 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 continue
         elif args.retry_no_usable:
             if e["status"] != "no_usable_shots":
+                continue
+            # skip versions already attempted on this entry (e.g. a 1.02
+            # pass that did not help), unless --force
+            if not args.force and tos_version in (e.get("tos_tried") or []):
                 continue
         elif args.retry_drive_led:
             # drive-LED resets (section 8.7): re-capture the bootable ones
@@ -1640,6 +2282,9 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
 
     print(f"pending entries: {len(pending)} "
           f"(scope {scope['name']}, index {scope['index']})", flush=True)
+    monitor_map, monitor_info = build_monitor_map(cfg, P, scope, pending)
+    if monitor_info:
+        print(monitor_info, flush=True)
     if jobs > 1:
         print(f"parallel jobs: {jobs} on displays {', '.join(displays)}",
               flush=True)
@@ -1652,7 +2297,9 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
         if jobs > 1:
             interrupted, processed = _run_parallel(
                 cfg, P, args, out, idx, pending, jobs, t_start, done_counts,
-                displays, index_name=scope["index"])
+                displays, index_name=scope["index"],
+                tos_version=tos_version, tos_image=tos_image,
+                monitor_map=monitor_map)
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -1682,7 +2329,9 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                       f"{e['rel']}", flush=True)
                 process_entry(cfg, P, e, log,
                               click_retry=args.retry_desktop,
-                              force=args.force)
+                              force=args.force,
+                              tos_version=tos_version, tos_image=tos_image,
+                              monitor_info=monitor_map.get(e["rel"]))
                 save_index(out, idx, scope["index"])
                 done_counts[e["status"]] = done_counts.get(e["status"], 0) + 1
                 if STOP_EVENT.is_set():
@@ -1929,6 +2578,155 @@ def cmd_cleanup_drive_led(cfg: dict, P: dict, args, scope: dict) -> int:
     return 0
 
 
+def cmd_cleanup_duplicates(cfg: dict, P: dict, args, scope: dict) -> int:
+    """Remove pixel-exact duplicate candidate PNGs of every entry.
+
+    Offline pass (no Hatari). For every index entry with candidates the
+    preview (unless ``--candidates-only``) and the ``_cNN`` candidates are
+    decoded and compared by their pixel-exact signature
+    (:func:`pixel_signature`): the first occurrence in the list is kept,
+    every later file that shows exactly the same pixels is deleted. This
+    removes the exact duplicates that repeated captures and the click
+    chain leave behind without touching perceptually similar but distinct
+    shots.
+
+    The preview is always the first image in the comparison order, so it
+    is never deleted; only candidates can be removed. ``status: done`` is
+    not a blocker here (unlike ``cleanup-drive-led``): preview, status and
+    kind stay untouched. The index entry's ``candidates`` list and the
+    per-entry metadata JSON are updated; candidate names are not
+    renumbered, so gaps in the ``_cNN`` series are fine for consumers.
+
+    Missing or unreadable files are skipped and reported, never deleted.
+    """
+    out = Path(P["out"])
+    idx = load_index(out, scope["index"])
+    entries = idx["entries"]
+    lock = acquire_lock(out)
+    stats = {"scanned": 0, "entries": 0, "removed": 0, "bytes": 0,
+             "missing": 0, "unreadable": 0, "metadata": 0, "errors": 0}
+    dirty = False
+    candidates_only = bool(getattr(args, "candidates_only", False))
+
+    try:
+        targets = [rel for rel in sorted(entries)
+                   if entries[rel].get("candidates")
+                   and (not args.only
+                        or args.only.lower() in rel.lower())]
+        print(f"entries with candidates: {len(targets)}", flush=True)
+        last_progress = time.monotonic()
+
+        def progress(current: str) -> None:
+            nonlocal last_progress
+            now = time.monotonic()
+            if now - last_progress < PROGRESS_INTERVAL_S:
+                return
+            last_progress = now
+            total = len(targets)
+            pct = 100.0 * stats["scanned"] / total if total else 100.0
+            action = "would remove" if args.dry_run else "removed"
+            print(f"  [progress] {time.strftime('%H:%M:%S')} "
+                  f"{stats['scanned']}/{total} ({pct:.1f}%) — "
+                  f"{stats['entries']} entries, {action} "
+                  f"{stats['removed']} files "
+                  f"({stats['bytes'] / (1024 * 1024):.1f} MiB) — "
+                  f"current: {current}", flush=True)
+
+        for rel in targets:
+            if STOP_EVENT.is_set():
+                print("interrupted", flush=True)
+                break
+            e = entries[rel]
+            stats["scanned"] += 1
+            progress(rel)
+            cands = list(e.get("candidates") or [])
+            mirror = out / Path(rel).parent
+            base = safe_filename(Path(rel).stem)
+            meta = metadata_path(mirror, base)
+
+            ordered = list(cands)
+            if not candidates_only and e.get("preview"):
+                ordered = [e["preview"]] + ordered
+
+            seen = {}
+            sizes = {}
+            remove = []
+            for name in ordered:
+                p = mirror / name
+                st = None
+                try:
+                    st = p.stat()
+                    sig = pixel_signature(p)
+                except OSError:
+                    sig = None
+                if sig is None:
+                    if st is None:
+                        stats["missing"] += 1
+                    else:
+                        stats["unreadable"] += 1
+                    continue
+                sizes[name] = st.st_size
+                if sig in seen:
+                    remove.append(name)
+                else:
+                    seen[sig] = name
+                progress(rel)
+
+            removed = list(dict.fromkeys(remove))
+            if not removed:
+                continue
+
+            stats["entries"] += 1
+            stats["removed"] += len(removed)
+            stats["bytes"] += sum(sizes.get(n, 0) for n in removed)
+            if getattr(args, "list", False):
+                print(f"  {rel}: -{', '.join(removed)}", flush=True)
+
+            if args.dry_run:
+                continue
+
+            removed_set = set(removed)
+            for name in removed:
+                try:
+                    (mirror / name).unlink(missing_ok=True)
+                except OSError as ex:
+                    stats["errors"] += 1
+                    print(f"  unlink error {rel}/{name}: {ex}",
+                          file=sys.stderr, flush=True)
+            new_cands = [c for c in cands if c not in removed_set]
+            e["candidates"] = new_cands
+            if meta is not None:
+                try:
+                    with open(meta, "r", encoding="utf-8") as fh:
+                        md = json.load(fh)
+                    md["candidates"] = new_cands
+                    write_json_atomic(meta, md)
+                    stats["metadata"] += 1
+                except Exception as ex:
+                    stats["errors"] += 1
+                    print(f"  metadata error {rel}: {ex}",
+                          file=sys.stderr, flush=True)
+            dirty = True
+            if stats["entries"] % 500 == 0:
+                save_index(out, idx, scope["index"])
+                dirty = False
+    finally:
+        try:
+            if dirty and not args.dry_run:
+                save_index(out, idx, scope["index"])
+        finally:
+            release_lock(lock)
+
+    mib = stats["bytes"] / (1024 * 1024)
+    print(f"cleanup-duplicates[{scope['name']}]: scanned {stats['scanned']}, "
+          f"entries {stats['entries']}, removed {stats['removed']} files "
+          f"({mib:.1f} MiB), metadata {stats['metadata']}, missing "
+          f"{stats['missing']}, unreadable {stats['unreadable']}, errors "
+          f"{stats['errors']}"
+          + (" [dry-run, nothing changed]" if args.dry_run else ""))
+    return 0
+
+
 def cmd_reclassify(cfg: dict, P: dict, args, scope: dict) -> int:
     """Offline pass: split coarse ``desktop`` kinds into finer categories.
 
@@ -2160,6 +2958,11 @@ def main() -> int:
     p_run.add_argument("--retry-no-usable", action="store_true",
                        help="retry only entries that ended as no_usable_shots "
                             "(not reprocessed by a normal run)")
+    p_run.add_argument("--tos", type=str, default="",
+                       help="TOS version label to boot with (default: config "
+                            "tos_default, e.g. 1.04). Use e.g. "
+                            "'--retry-no-usable --tos 1.02' for old titles "
+                            "that hang on TOS 1.04")
     p_run.add_argument("--retry-drive-led", action="store_true",
                        help="retry the bootable drive-LED resets "
                             "(status desktop + drive_led_refetch): capture "
@@ -2184,6 +2987,20 @@ def main() -> int:
                          help="report what would be removed, change nothing")
     p_clean.add_argument("--only", type=str, default="",
                          help="only paths containing this substring")
+
+    p_dedup = sub.add_parser(
+        "cleanup-duplicates",
+        help="delete pixel-exact duplicate candidate PNGs and clean the "
+             "index (offline, no Hatari)")
+    _scope_arg(p_dedup)
+    p_dedup.add_argument("--dry-run", action="store_true",
+                         help="report what would be removed, change nothing")
+    p_dedup.add_argument("--only", type=str, default="",
+                         help="only paths containing this substring")
+    p_dedup.add_argument("--candidates-only", action="store_true",
+                         help="compare candidates only, ignore the preview")
+    p_dedup.add_argument("--list", action="store_true",
+                         help="print the removed candidate names per entry")
 
     p_recl = sub.add_parser(
         "reclassify",
@@ -2230,6 +3047,8 @@ def main() -> int:
         return cmd_detect(cfg, P, args, scope)
     if args.cmd == "cleanup-drive-led":
         return cmd_cleanup_drive_led(cfg, P, args, scope)
+    if args.cmd == "cleanup-duplicates":
+        return cmd_cleanup_duplicates(cfg, P, args, scope)
     if args.cmd == "reclassify":
         return cmd_reclassify(cfg, P, args, scope)
     if args.cmd == "prune":

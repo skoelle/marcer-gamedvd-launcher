@@ -12,6 +12,9 @@ full specification.
   (`Pillow`, `imagehash`, `numpy`, `scipy`)
 - Environment in `local/paths.env` (git-ignored):
   `MARCER_ROOT_DIR`, `MARCER_PATCH_DIR`, `MARCER_OUT_DIR`, `MARCER_TOS_IMG`
+  (default TOS 1.04) and, for the TOS-1.02 retry, `MARCER_TOS102_IMG`.
+  Optional `MARCER_DATA_DIR` (the gameinfo directory with
+  `games-<scope>.json`) enables the `screen_format` monitor rules.
 
 ## Usage
 
@@ -23,6 +26,14 @@ tools/screenshot-gen/run.sh run --limit 3  # small test batch
 tools/screenshot-gen/run.sh run --only Xevious   # only matching paths
 tools/screenshot-gen/run.sh run --jobs 8   # parallel workers (e.g. night runs)
 tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
+
+# Old titles that hang on TOS 1.04 (black screen -> no_usable_shots) but run
+# on TOS 1.02: boot the no_usable entries with a non-default TOS. A successful
+# capture records `tos: "1.02"` in the index/metadata (shown as a `TOS 1.02`
+# badge in the gallery and desktop app, which then preselect the TOS 1.02
+# Play variant); failed attempts are remembered in `tos_tried`.
+tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.02
+tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.02 --only Bellum
 
 # Scopes: every command works on exactly one scope per invocation
 # (default: the configured scope_default, see "Scopes" below).
@@ -43,6 +54,13 @@ tools/screenshot-gen/run.sh cleanup-drive-led --dry-run   # report only
 tools/screenshot-gen/run.sh cleanup-drive-led             # delete + flag
 tools/screenshot-gen/run.sh run --retry-drive-led         # refetch the flagged bootable ones
 
+# Remove pixel-exact duplicate candidates (offline, no Hatari):
+tools/screenshot-gen/run.sh cleanup-duplicates --dry-run   # report only
+tools/screenshot-gen/run.sh cleanup-duplicates             # delete + update index
+tools/screenshot-gen/run.sh cleanup-duplicates --list      # print removed names
+tools/screenshot-gen/run.sh cleanup-duplicates --candidates-only
+tools/screenshot-gen/run.sh cleanup-duplicates --scope pd --only "10th Frame"
+
 # Refine the entry kind of "desktop" entries (offline, no Hatari):
 tools/screenshot-gen/run.sh reclassify --dry-run          # kind counts only
 tools/screenshot-gen/run.sh reclassify                    # write index + JSON
@@ -58,13 +76,16 @@ Interrupt with Ctrl+C at any time. Progress is saved after every entry.
 A later `run` skips completed entries (`done`, `desktop`, `no_usable_shots`)
 and retries unfinished or failed ones (`pending`, `interrupted`, `timeout`,
 `error`). The `no_usable_shots` entries are not retried by a normal run;
-repeat them explicitly with `run --retry-no-usable`.
+repeat them explicitly with `run --retry-no-usable`. A TOS version already
+attempted via `--tos` is skipped on the next `run --retry-no-usable --tos`
+invocation (recorded in `tos_tried`); `--force` retries it anyway.
 
 ## Scopes
 
 The archive is processed in named **scopes** (config `scope_default` +
 `scopes`). Every subcommand (`index`, `run`, `detect`, `reclassify`,
-`cleanup-drive-led`, `prune`) works on exactly one scope per invocation,
+`cleanup-drive-led`, `cleanup-duplicates`, `prune`) works on exactly one
+scope per invocation,
 selected with `--scope <name>`; without the flag the configured
 `scope_default` (cracked) is used. There is deliberately no "all scopes"
 mode — run the command once per scope.
@@ -122,10 +143,15 @@ clicked. `detect` runs fully offline over all `desktop` entries: it
 matches templates of the standard GEM icons (`assets/icon-prg.png` for a
 program icon, `assets/icon-drive.png` for a DISKSTATION drive icon)
 against each existing preview PNG (FFT normalized cross correlation, also
-tries the inverted/selected icon). Hits are stored as `click` (strategy,
-screenshot pixel of the icon center, score) in the index; misses are
-marked `icon_found: false` and are never booted again (`detect --force`
-redoes them).
+tries the inverted/selected icon). Every template is tried at the 1x scale
+and as a binarized 0.5x variant, so the half-sized icons of native mono
+high-res captures (`- Mono` folders) are found too; the best variant wins
+(its `scale` is stored in `click`), but a smaller scale must beat the 1x
+match by a margin (0.02) before it takes over so weak color false
+positives keep their pixel. Hits are stored as `click` (strategy,
+screenshot pixel of the icon center, score, scale) in the index; misses
+are marked `icon_found: false` and are never booted again
+(`detect --force` redoes them).
 
 `run --retry-desktop` then selects only entries with `status: desktop`
 and a stored `click` that have not been clicked yet (`click_retried`).
@@ -149,19 +175,39 @@ the icon of the following window (same grid cell) during template
 matching. The park deliberately stays inside the window: a warp to the
 window/screen edge (e.g. the bottom-right corner) makes Hatari's relative
 mouse handling drift, after which every later click misses its icon.
-`click_retry.window_icon_min_score` (0.80) tolerates the arrow if it does
-end up on an icon.
+`click_retry.window_icon_min_score` (0.80, the same bar for the 0.5x mono
+variant — genuine mono icons score ~1.0 while a folder only reaches ~0.73
+on the program template) tolerates the arrow if it does end up on an icon.
 
 - `prg` — the desktop already shows the program icon: one double click
   starts the game.
-- `drive` — the desktop only shows drive icons: double click
-  `DISKSTATION A`, wait `click_retry.step_wait` for the window, then walk
-  into the window (bounded by `click_retry.drive_max_depth`, default 2):
-  the window is scanned for the program icon first
-  (`assets/icon-prg.png`, the same icon as on the desktop) and double
-  clicked right away when it is present; only when no program icon is
-  found is the folder icon (`assets/icon-folder.png`) double clicked to
-  descend, and the window is scanned for a program icon again.
+- `drive` — the desktop only shows drive icons. The probe screenshot is
+  checked for an already-open GEM window first; if one is open, the drive
+  click is skipped and that window is enlarged before the icon scan. Only
+  when no window is open is `DISKSTATION A` double clicked (wait
+  `click_retry.step_wait`). After a drive click the program icon
+  (`assets/icon-prg.png`) is checked first; only when it is absent is the
+  window enlarged and scanned for the program icon, then the folder icon
+  (`assets/icon-folder.png`), then scrolled. The window is then walked
+  (bounded by `click_retry.drive_max_depth`, default 2): program icon
+  first, otherwise the folder icon to descend, then scan again.
+
+```text
+Probe screenshot (10 s)
+├─ GEM window already open?
+│  ├─ yes → enlarge the window
+│  │        → look for the PRG icon
+│  │        → otherwise look for the folder icon
+│  │        → otherwise scroll
+│  └─ no  → click DISKSTATION A
+│            → PRG visible?
+│               ├─ yes → continue with the PRG click
+│               └─ no  → enlarge the window
+│                         → look for the PRG icon
+│                         → otherwise look for the folder icon
+│                         → otherwise scroll
+└─ then as before: open folders, descend (max_depth)
+```
 
 Both strategies verify their clicks (`click_retry.drive_attempts` /
 `click_retry.prg_attempts` / `click_retry.folder_attempts`, default 3
@@ -182,12 +228,32 @@ match their templates near 1.0, so `click_retry.window_icon_min_score`
 white window areas while still accepting the program icon with the GEM
 arrow on it (~0.84).
 
+**Hidden icons (grow / scroll).** A window can show fewer icons than the
+folder contains, hiding the program behind a scrollbar. An already-open
+window (no drive click) or a drive window without a visible PRG icon is
+**grown first**; when an opened folder window later shows no program or
+folder icon at all, the retry also **grows** it by single clicking its
+"full size" box (its glyph centre in the
+title bar, just left of the right border — a few pixels right of centre
+misses the gadget; the mono profile opens folder views at ~half width) and
+then **scrolls down** by clicking the vertical scrollbar's down arrow, up
+to `click_retry.scroll_attempts` (default 4) times (the colour profile
+opens wide windows that show only the first rows). Where the first box
+click is ignored until the window is activated (headless SDL setups), it
+falls back to a menu-bar click followed by two box clicks (the first
+dismisses the menu, the second grows); this fallback only runs when the
+first click did not change the screen. Both gadget positions are detected
+from the window frame (`find_fullsize_xy` / `find_scroll_down_xy`), not
+hard coded. This also stops an opened folder whose icons do not match (a
+child window that looks like its parent) from being mistaken for a game
+that started.
+
 The attempt is recorded once per entry. `click_retried: true` marks that a
 retry ran, and a new `click_result` field records how it ended:
 
 - `click-icon-prg` — successful `prg` click (program started),
-- `click-icon-drive` — successful `drive` click (DISKSTATION A -> ... ->
-  program started),
+- `click-icon-drive` — successful `drive`-strategy chain (DISKSTATION A
+  and/or an already-open window -> ... -> program started),
 - `click-failed` — the strategy ran but no program start was confirmed,
 - `click-not-needed` — the probe was already a game/other screen, no click
   was sent.
@@ -232,6 +298,33 @@ its preview. Note that dark shots are only classified `black` when they
 are *also* structureless (`black_std_content_min` in `analyze_image`,
 SPEC §8.1) — a dark crack intro on black survives and makes the entry
 `done`.
+
+### Exact duplicate candidates (`cleanup-duplicates`)
+
+Repeated captures and the click chain can leave several candidates that show
+exactly the same pixels. `cleanup-duplicates` is an offline pass (no Hatari)
+that removes those duplicates per entry:
+
+- Every candidate is decoded and compared by a **pixel-exact** signature
+  (width, height and SHA-256 of the RGBA pixel data), never by pHash. PNGs
+  with different compression or ancillary chunks but identical pixels count
+  as duplicates; perceptually similar shots are left alone.
+- The preview is the first image in the comparison order, so it is never
+  deleted. A candidate that is pixel-identical to the preview is removed too;
+  `--candidates-only` restricts the comparison to the candidates themselves.
+- The first occurrence in the `candidates` list is kept, later identical
+  files are deleted. The index entry and, when present, the per-entry
+  metadata JSON get the shortened `candidates` list. Candidate names are not
+  renumbered, so gaps in the `_cNN` series are normal after a cleanup.
+- Missing or unreadable files are skipped and reported, never deleted. The
+  preview, `status`, `kind` and `shots` history stay untouched, so the pass
+  is also safe for `done` entries.
+- `--dry-run` only reports; `--only <substring>` limits the pass; `--list`
+  prints the removed names per entry. The output-dir lock is acquired, so it
+  cannot run while a scan is active.
+- While the pass is running it prints a compact progress line at most every
+  10 seconds (`scanned/total`, changed entries, removed/would-remove files and
+  the current entry), so even a long NAS pass shows that it is still working.
 
 ### Drive-LED white screens (`--drive-led false`, `cleanup-drive-led`)
 
@@ -352,16 +445,41 @@ After changing `exclude_dirs`, run `index` to rebuild the index (removed
 entries are dropped automatically) and then `prune` to delete their
 leftover logs and empty output directories.
 
-## Mono directories
+## Monitor selection (Mono / Color)
 
-A game folder whose name ends with `mono_dir_suffix` (default `"Mono"`,
-matched case-insensitively against the ZIP's **parent directory**, e.g.
-`Abalone - Mono`) is booted with Hatari `--mono --tos-res high`: monochrome
-monitor plus forced ST high resolution 640x400. The flags are appended
-entry-level on top of the profile's arguments; `monitor: mono`/`color` is
-recorded in the index entry and the metadata JSON. Set the key to `""` to
-disable the rule. The rule applies in every scope (see SPEC-screenshot-generator
-§4.6).
+Monitor mode is resolved per entry, in this order:
+
+1. **Gameinfo `screen_format` rules** from `MARCER_DATA_DIR/games-<scope>.json`
+   (read-only, optional). The game folder is matched below the scope tree,
+   so ZIPs in `Original/` and other sub-directories still use their game
+   folder's values.
+   - **utils** (`screen_format_monitor.utils`): an explicit color hint
+     (`Not Mono`, `Low`, `Mid`, `Medium`, `Color`/`Colour`) forces color;
+     an explicit mono hint (`Mono`, `High`) forces mono; blank values and
+     pure notes (`Modified`, `Translated`, `Serie`, `Crashes`, …) default to
+     **mono**. Entries whose folder is missing from a successfully loaded
+     `games-utils.json` also default to **mono** (utils-only). This is the
+     archive's "mono unless noted" convention.
+   - **pd** (`screen_format_monitor.pd`): mono only when **all** variants of
+     the folder say `High` (pure high-resolution folders). Mixed values such
+     as `High + Low` or `Med + High` stay color.
+2. **Folder suffix** (`mono_dir_suffix`, default `"Mono"`): a game folder
+   ending in `Mono` (e.g. `Abalone - Mono`) is mono when no gameinfo rule
+   applies.
+3. Otherwise color.
+
+Mono boots Hatari with `--mono --tos-res high` (monochrome, forced
+640x400); the decision and its source are logged per entry, and the
+resulting `monitor: mono`/`color` is recorded in the index entry and the
+metadata JSON. Missing `MARCER_DATA_DIR` or `games-<scope>.json` is not an
+error: the suffix rule is used as fallback. The utils "missing folder"
+default only applies when the gameinfo file was loaded successfully; an
+entirely missing file does not force utils to mono.
+
+The rules only affect **future captures**. Already finished entries
+(`done`, `desktop`, `no_usable_shots`) are skipped by a normal `run`; use an
+explicit `run --force --only …` if you want to recapture old entries.
+See SPEC-screenshot-generator §4.6 for the exact precedence.
 
 ## Config
 
@@ -369,7 +487,8 @@ Defaults live in `shotgen.py`. Override via `config.example.json` (copy and
 adjust) or `config.local.json` (git-ignored). Time points are 10, 25 and 45
 seconds after Hatari start. Output mirrors the source tree under
 `MARCER_OUT_DIR`, one preview PNG plus optional candidate PNGs and a metadata
-JSON per entry.
+JSON per entry. `screen_format_monitor` holds the per-scope gameinfo monitor
+rules described under "Monitor selection".
 
 Scope configuration:
 
@@ -381,7 +500,15 @@ Scope configuration:
     "utils":   { "trees": ["Title Sorted/Utilitys - Title Sorted"] },
     "pd":      { "trees": ["Title Sorted/PD Games - Title Sorted"] }
   },
-  "mono_dir_suffix": "Mono"
+  "mono_dir_suffix": "Mono",
+  "screen_format_monitor": {
+    "utils": {
+      "default": "mono",
+      "color_hints": ["not mono", "low", "mid", "medium", "color", "colour"],
+      "mono_hints": ["mono", "high"]
+    },
+    "pd": { "mono_if_all": ["high"] }
+  }
 }
 ```
 

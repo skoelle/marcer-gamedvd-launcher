@@ -202,6 +202,7 @@ class ScreenshotEntry {
     required this.candidates,
     this.size,
     this.zipContents = const [],
+    this.tos,
   });
 
   factory ScreenshotEntry.fromJson(String key, Map<String, dynamic> json) {
@@ -219,6 +220,9 @@ class ScreenshotEntry {
       zipContents: ((json['zip_contents'] as List<dynamic>?) ?? const [])
           .map((e) => e.toString())
           .toList(),
+      tos: (json['tos'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : (json['tos'] as String).trim(),
     );
   }
 
@@ -239,6 +243,11 @@ class ScreenshotEntry {
   final List<String> candidates;
   final int? size;
   final List<String> zipContents;
+
+  /// TOS version that produced the successful capture when it differs from
+  /// the default (`1.04`) — e.g. `1.02` for old titles that hang on TOS 1.04
+  /// (`SPEC-screenshot-generator.md` §7.5). `null` means the default TOS.
+  final String? tos;
 
   /// Manual curation: set a new status/kind pair in memory (the pending
   /// map in the controller keeps the original values for discard/save).

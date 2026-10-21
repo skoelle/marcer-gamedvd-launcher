@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
+import '../asset_updater.dart';
 import '../catalog_controller.dart';
 import '../self_updater.dart';
 
@@ -22,6 +23,8 @@ class FilterBar extends StatefulWidget {
     this.onExitSearch,
     this.onOpenSettings,
     this.updater,
+    this.assetUpdater,
+    this.onOpenAssetUpdates,
   });
 
   final CatalogController controller;
@@ -41,6 +44,13 @@ class FilterBar extends StatefulWidget {
   /// Self-update state; when a release build found a newer version, the
   /// first row shows an amber update badge left of the Folders button.
   final SelfUpdateController? updater;
+
+  /// Catalog-data (screenshots/gameinfo) update state; a green badge appears
+  /// when newer asset archives are available.
+  final AssetUpdateController? assetUpdater;
+
+  /// Opens the catalog-data update dialog (from the green badge).
+  final VoidCallback? onOpenAssetUpdates;
 
   @override
   State<FilterBar> createState() => _FilterBarState();
@@ -116,6 +126,10 @@ class _FilterBarState extends State<FilterBar> {
                 ],
                 if (widget.updater != null) ...[
                   _updateBadge(widget.updater!),
+                  const SizedBox(width: 6),
+                ],
+                if (widget.assetUpdater != null) ...[
+                  _catalogAssetsButton(widget.assetUpdater!),
                   const SizedBox(width: 6),
                 ],
                 if (widget.onOpenSettings != null) ...[
@@ -360,6 +374,43 @@ class _FilterBarState extends State<FilterBar> {
               child: Text(label),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  /// Always-visible gray button (top right, left of the gear) that opens the
+  /// catalog-data update dialog; a small green badge shows how many assets have
+  /// updates available.
+  Widget _catalogAssetsButton(AssetUpdateController a) {
+    return ListenableBuilder(
+      listenable: a,
+      builder: (context, _) {
+        final n = a.pendingAssets().length;
+        final button = SizedBox(
+          width: 32,
+          height: 28,
+          child: Tooltip(
+            message: 'Check catalog assets (screenshots / game info)',
+            child: TextButton(
+              onPressed: widget.onOpenAssetUpdates,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey,
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(32, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                alignment: Alignment.center,
+              ),
+              child: const Icon(Icons.dataset, size: 16),
+            ),
+          ),
+        );
+        if (n == 0) return button;
+        return Badge(
+          label: Text('$n'),
+          backgroundColor: const Color(0xFF66BB6A),
+          offset: const Offset(-4, -2),
+          child: button,
         );
       },
     );

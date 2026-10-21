@@ -131,6 +131,37 @@ void main() {
       expect(info!.folder, 'Alpha Game');
       expect(idx.lookupByRel('too/short.zip'), isNull);
     });
+
+    test('malformed games file is skipped with a warning (no throw)', () {
+      final data = '${tmp.path}/data-broken';
+      Directory(data).createSync();
+      // Truncated JSON must not abort the whole catalog load.
+      File('$data/games-cracked.json').writeAsStringSync('{"games": [ {"folder"');
+      File('$data/games-pd.json').writeAsStringSync('''
+        {"games": [
+          {"folder": "PacMan", "letter": "P", "layers": ["ROOT"],
+           "matched_via": "folder", "matched_title": "Pac-Man",
+           "variants": []}
+        ]}''');
+      final idx = GameInfoIndex.load(data);
+      expect(idx.byKind('cracked'), isEmpty);
+      expect(idx.byKind('pd'), hasLength(1));
+      expect(idx.warnings.any((w) => w.contains('games-cracked.json')), isTrue);
+    });
+
+    test('a single broken game entry is skipped, the rest is kept', () {
+      final data = '${tmp.path}/data-partial';
+      Directory(data).createSync();
+      File('$data/games-cracked.json').writeAsStringSync('''
+        {"games": [
+          {"folder": "Broken", "letter": 42},
+          {"folder": "Good", "letter": "G", "layers": ["ROOT"],
+           "matched_via": "folder", "matched_title": "Good", "variants": []}
+        ]}''');
+      final idx = GameInfoIndex.load(data);
+      expect(idx.byKind('cracked'), hasLength(1));
+      expect(idx.byKind('cracked').single.folder, 'Good');
+    });
   });
 
   group('DesktopConfig', () {
@@ -149,6 +180,69 @@ void main() {
       expect(c.hatariArgsTemplate, contains('{zip}'));
       expect(c.showCandidates, isFalse);
       expect(c.defaultStatus, 'done');
+    });
+
+    test('parses the Ftp section and marks it configured', () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync('''
+        {"RootDirectory": "/r",
+         "Ftp": {"Host": "ftp.example.com", "User": "u",
+                 "Password": "p", "RemoteBase": "/dvd"}}''');
+      final c = DesktopConfig.load(f.path);
+      expect(c.ftpHost, 'ftp.example.com');
+      expect(c.ftpUser, 'u');
+      expect(c.ftpPassword, 'p');
+      expect(c.ftpRemoteBase, '/dvd');
+      expect(c.ftpConfigured, isTrue);
+    });
+
+    test('FTP is unconfigured by default; download target falls back to root',
+        () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync('{"RootDirectory": "/r"}');
+      final c = DesktopConfig.load(f.path);
+      expect(c.ftpConfigured, isFalse);
+      expect(c.ftpHost, '');
+      expect(c.ftpUser, '');
+      expect(c.ftpPassword, '');
+      expect(c.ftpRemoteBase, '/GameDVD/',
+          reason: 'default remote base directory');
+      expect(c.ftpAssetsRemote, '/Uploads/MarcerGameDVDLauncher-assets/',
+          reason: 'default catalog asset directory');
+      expect(c.downloadTargetDirectory, '/r',
+          reason: 'no PatchDirectory → root layer');
+      expect(c.copyWith(patchDirectory: '/p').downloadTargetDirectory, '/p');
+    });
+
+    test('resolveGameinfoDirectory has no implicit fallback', () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync(
+            '{"RootDirectory": "/r", "PatchDirectory": "/p"}');
+      final c = DesktopConfig.load(f.path);
+      expect(c.resolveGameinfoDirectory(), '',
+          reason: 'no <Patch>/../Data fallback anymore');
+      expect(c.copyWith(gameinfoDirectory: '/data').resolveGameinfoDirectory(),
+          '/data');
+    });
+
+    test('Ftp.Host parses an optional :port (default 21)', () {
+      DesktopConfig host(String h) =>
+          DesktopConfig(rootDirectory: '/r', ftpHost: h);
+      expect(host('ftp.example.com').ftpHostName, 'ftp.example.com');
+      expect(host('ftp.example.com').ftpPort, 21);
+      expect(host('ftp.example.com:2121').ftpHostName, 'ftp.example.com');
+      expect(host('ftp.example.com:2121').ftpPort, 2121);
+      expect(host('ftp.example.com:').ftpHostName, 'ftp.example.com');
+      expect(host('ftp.example.com:').ftpPort, 21);
+      expect(host('host:abc').ftpHostName, 'host:abc',
+          reason: 'a non-numeric suffix is kept as part of the host');
+      expect(host('host:abc').ftpPort, 21);
+      expect(host('[::1]').ftpHostName, '::1');
+      expect(host('[::1]').ftpPort, 21);
+      expect(host('[::1]:2121').ftpHostName, '::1');
+      expect(host('[::1]:2121').ftpPort, 2121);
+      expect(host(':2121').ftpConfigured, isFalse,
+          reason: 'empty host part → not configured');
     });
 
     test('gallery config defaults when fields are absent', () {
@@ -203,6 +297,11 @@ void main() {
         hatariExecutable: '/hatari/bin/hatari',
         hatariConfigFile: '/cfg/hatari.cfg',
         hatariArgsTemplate: '-c "{cfg}" --disk-a "{zip}"',
+        ftpHost: 'ftp.example.com',
+        ftpUser: 'anonymous',
+        ftpPassword: 'secret',
+        ftpRemoteBase: '/dvd',
+        ftpAssetsRemote: '/upload/assets',
         showCandidates: false,
         defaultStatus: 'done',
         windowWidth: 1600,
@@ -218,6 +317,11 @@ void main() {
       expect(reloaded.hatariExecutable, '/hatari/bin/hatari');
       expect(reloaded.hatariConfigFile, '/cfg/hatari.cfg');
       expect(reloaded.hatariArgsTemplate, '-c "{cfg}" --disk-a "{zip}"');
+      expect(reloaded.ftpHost, 'ftp.example.com');
+      expect(reloaded.ftpUser, 'anonymous');
+      expect(reloaded.ftpPassword, 'secret');
+      expect(reloaded.ftpRemoteBase, '/dvd');
+      expect(reloaded.ftpAssetsRemote, '/upload/assets');
       expect(reloaded.showCandidates, isFalse);
       expect(reloaded.defaultStatus, 'done');
       expect(reloaded.windowWidth, 1600);

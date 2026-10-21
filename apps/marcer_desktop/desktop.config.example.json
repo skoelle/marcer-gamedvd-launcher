@@ -8,6 +8,13 @@
     "ConfigFile": "",
     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
   },
+  "Ftp": {
+    "Host": "ftp.example.com",
+    "User": "anonymous",
+    "Password": "",
+    "RemoteBase": "/GameDVD/",
+    "AssetsRemote": "/Uploads/MarcerGameDVDLauncher-assets/"
+  },
   "ShowCandidates": true,
   "DefaultStatus": "with_screenshot",
   "Window": {

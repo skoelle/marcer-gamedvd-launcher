@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:async';
+import 'dart:isolate';
+
 import 'card.dart';
 import 'gameinfo.dart';
 import 'screenshot_index.dart';
@@ -50,31 +53,39 @@ class CatalogUniverse {
     required ScreenshotIndices indices,
     required GameInfoIndex info,
     required String screenshotDir,
+    void Function(String message)? onProgress,
   }) {
     final fullPng = _fullPngFn(screenshotDir);
 
+    onProgress?.call('Building catalog — cracked…');
     final cracked = _buildIndexedSection(
       kind: 'cracked',
       index: indices.forSection('cracked'),
       info: info,
       fullPng: fullPng,
       unionGameinfo: false,
+      onProgress: onProgress,
     );
+    onProgress?.call('Building catalog — pd…');
     final pd = _buildIndexedSection(
       kind: 'pd',
       index: indices.forSection('pd'),
       info: info,
       fullPng: fullPng,
       unionGameinfo: true,
+      onProgress: onProgress,
     );
+    onProgress?.call('Building catalog — utils…');
     final utils = _buildIndexedSection(
       kind: 'utils',
       index: indices.forSection('utils'),
       info: info,
       fullPng: fullPng,
       unionGameinfo: true,
+      onProgress: onProgress,
     );
 
+    onProgress?.call('Building catalog — facets…');
     return CatalogUniverse._(
       cracked: cracked.cards,
       pd: pd.cards,
@@ -169,6 +180,7 @@ _SectionBuild _buildIndexedSection({
   required GameInfoIndex info,
   required String? Function(String rel, String? baseName) fullPng,
   required bool unionGameinfo,
+  void Function(String)? onProgress,
 }) {
   final groups = <String, List<(String, ScreenshotEntry)>>{};
   final groupKeys = <(String, String)>[];
@@ -189,7 +201,12 @@ _SectionBuild _buildIndexedSection({
   final cards = <GameCard>[];
   final statusCounts = <String, int>{};
   final seen = <String>{};
-  for (final (letter, folder) in groupKeys) {
+  final total = groupKeys.length;
+  for (var gi = 0; gi < groupKeys.length; gi++) {
+    if (onProgress != null && gi % 500 == 0) {
+      onProgress('Building catalog — $kind ${gi + 1}/$total…');
+    }
+    final (letter, folder) = groupKeys[gi];
     final items = groups['${letter.toLowerCase()}|${folder.toLowerCase()}']!;
     final game = info.lookupKind(kind, letter, folder);
     final card = buildIndexedCard(
@@ -301,7 +318,7 @@ Set<String> kindFields(String kind) => switch (kind) {
     };
 
 /// One isolate-loadable bundle of all read-only data (indices, gameinfo,
-/// universe). Loaded once at startup via `Isolate.run`.
+/// universe). Loaded once at startup via [load] (a background isolate).
 class CatalogBundle {
   CatalogBundle({
     required this.index,
@@ -310,22 +327,84 @@ class CatalogBundle {
     required this.warnings,
   });
 
-  /// Loads everything synchronously (call inside an isolate).
+  /// Loads the whole bundle in a **background isolate**, reporting coarse
+  /// progress through [onProgress] (called on the caller's isolate; e.g.
+  /// `Loading screenshot index…`, `Building catalog — cracked 1200/8000…`,
+  /// `Finalizing…`). Keeps the UI responsive while the large JSON files are
+  /// parsed and the catalog is built.
+  static Future<CatalogBundle> load({
+    required String screenshotDir,
+    required String gameinfoDir,
+    void Function(String message)? onProgress,
+  }) {
+    final receive = ReceivePort();
+    final errors = ReceivePort();
+    final completer = Completer<CatalogBundle>();
+    Isolate? isolate;
+
+    void cleanup() {
+      receive.close();
+      errors.close();
+      isolate?.kill(priority: Isolate.immediate);
+    }
+
+    receive.listen((message) {
+      if (message is CatalogBundle) {
+        if (!completer.isCompleted) completer.complete(message);
+        cleanup();
+      } else if (message is String) {
+        onProgress?.call(message);
+      }
+    });
+    errors.listen((message) {
+      if (completer.isCompleted) return;
+      final text = message is List && message.isNotEmpty
+          ? '${message.first}'
+          : '$message';
+      final trace = message is List && message.length > 1
+          ? StackTrace.fromString('${message[1]}')
+          : StackTrace.current;
+      completer.completeError(Exception(text), trace);
+      cleanup();
+    });
+
+    () async {
+      try {
+        isolate = await Isolate.spawn(
+          _loadEntry,
+          _LoadRequest(receive.sendPort, screenshotDir, gameinfoDir),
+          onError: errors.sendPort,
+        );
+      } catch (e, st) {
+        if (!completer.isCompleted) completer.completeError(e, st);
+        cleanup();
+      }
+    }();
+
+    return completer.future;
+  }
+
+  /// Loads everything synchronously (call inside an isolate). [onProgress]
+  /// reports coarse phase messages (sources + catalog build progress).
   static CatalogBundle loadSync({
     required String screenshotDir,
     required String gameinfoDir,
+    void Function(String message)? onProgress,
   }) {
     final warnings = <String>[];
 
+    onProgress?.call('Loading screenshot index…');
     final index = ScreenshotIndices.load(screenshotDir);
     warnings.addAll(index.warnings);
 
+    onProgress?.call('Loading game metadata…');
     GameInfoIndex info;
     if (gameinfoDir.isEmpty) {
       info = GameInfoIndex.load('');
       warnings.add('Game metadata: GameinfoDirectory not configured');
     } else {
       info = GameInfoIndex.load(gameinfoDir);
+      warnings.addAll(info.warnings);
       if (info.length == 0) {
         warnings.add('Game metadata: no games found in $gameinfoDir');
       }
@@ -335,7 +414,9 @@ class CatalogBundle {
       indices: index,
       info: info,
       screenshotDir: screenshotDir,
+      onProgress: onProgress,
     );
+    onProgress?.call('Finalizing…');
     return CatalogBundle(
       index: index,
       info: info,
@@ -348,4 +429,24 @@ class CatalogBundle {
   final GameInfoIndex info;
   final CatalogUniverse universe;
   final List<String> warnings;
+}
+
+/// Request passed to the loader isolate ([CatalogBundle.load]).
+class _LoadRequest {
+  const _LoadRequest(this.port, this.screenshotDir, this.gameinfoDir);
+
+  final SendPort port;
+  final String screenshotDir;
+  final String gameinfoDir;
+}
+
+/// Isolate entry point: loads the bundle, streams progress messages through
+/// the request port and exits with the finished bundle.
+void _loadEntry(_LoadRequest request) {
+  final bundle = CatalogBundle.loadSync(
+    screenshotDir: request.screenshotDir,
+    gameinfoDir: request.gameinfoDir,
+    onProgress: request.port.send,
+  );
+  Isolate.exit(request.port, bundle);
 }

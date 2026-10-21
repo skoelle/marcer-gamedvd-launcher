@@ -1,0 +1,203 @@
+// Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+// Licensed under the MIT License. See LICENSE file in project root for details.
+
+import 'package:flutter/material.dart';
+
+import '../asset_updater.dart';
+import '../catalog_assets.dart';
+
+/// Shows the catalog-data update dialog (gameinfo first, then screenshots).
+/// [onApplied] is called after a successful update so the caller can reload the
+/// catalog.
+Future<void> showAssetUpdateDialog(
+  BuildContext context, {
+  required AssetUpdateController controller,
+  required void Function() onApplied,
+}) {
+  // Refresh the remote stand whenever the dialog opens.
+  controller.check(force: true);
+  return showDialog<void>(
+    context: context,
+    builder: (_) =>
+        AssetUpdateDialog(controller: controller, onApplied: onApplied),
+  );
+}
+
+/// Dialog listing the catalog-data assets with local vs. remote version and
+/// per-asset Update / Skip this version actions (gameinfo first).
+class AssetUpdateDialog extends StatefulWidget {
+  const AssetUpdateDialog({
+    super.key,
+    required this.controller,
+    required this.onApplied,
+  });
+
+  final AssetUpdateController controller;
+  final void Function() onApplied;
+
+  @override
+  State<AssetUpdateDialog> createState() => _AssetUpdateDialogState();
+}
+
+class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
+  bool _cancelRequested = false;
+
+  static const _order = [CatalogAsset.gameinfo, CatalogAsset.screenshots];
+
+  Future<void> _update(CatalogAsset asset) async {
+    _cancelRequested = false;
+    final ok = await widget.controller
+        .update(asset, isCancelled: () => _cancelRequested);
+    if (!mounted) return;
+    if (ok) widget.onApplied();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) {
+        final c = widget.controller;
+        final rows = _order
+            .where((a) => c.remoteFor(a) != null)
+            .toList(growable: false);
+        return AlertDialog(
+          title: const Text('Catalog data'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Newer screenshot/game-info archives are available on the '
+                    'server. Update them here (downloaded via FTP).',
+                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                  const SizedBox(height: 12),
+                  if (c.latest == null)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('No catalog-data info available.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ),
+                  for (final asset in rows) ...[
+                    _row(c, asset),
+                    const SizedBox(height: 8),
+                  ],
+                  if (c.error != null) ...[
+                    const SizedBox(height: 4),
+                    Text(c.error!,
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.redAccent)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: c.busy ? null : () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _row(AssetUpdateController c, CatalogAsset asset) {
+    final remote = c.remoteFor(asset)!;
+    final local = c.localFor(asset);
+    final dataPresent = c.dataPresentFor(asset);
+    final localLabel = local ??
+        (dataPresent ? 'version unknown (data present)' : 'not installed');
+    final pending = c.isPending(asset);
+    final updating = c.updatingAsset == asset;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 90,
+                child: Text(
+                  asset == CatalogAsset.gameinfo ? 'game info' : 'screenshots',
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('local:  $localLabel',
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.grey)),
+                    Text('remote: ${remote.archive}',
+                        style: const TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (updating)
+            Row(
+              children: [
+                Expanded(
+                  child: c.updateTotal > 0
+                      ? LinearProgressIndicator(
+                          value: c.updateDone / c.updateTotal, minHeight: 6)
+                      : const LinearProgressIndicator(minHeight: 6),
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(c.updateMessage,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                ),
+                const SizedBox(width: 4),
+                TextButton(
+                  onPressed: () => setState(() => _cancelRequested = true),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            )
+          else if (pending)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: c.busy ? null : () => c.skip(asset),
+                  child: const Text('Skip this version'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: c.busy ? null : () => _update(asset),
+                  child: Text(local == null
+                      ? (dataPresent ? 'Overwrite' : 'Install')
+                      : 'Update'),
+                ),
+              ],
+            )
+          else
+            const Align(
+              alignment: Alignment.centerRight,
+              child: Text('up to date',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50))),
+            ),
+        ],
+      ),
+    );
+  }
+}

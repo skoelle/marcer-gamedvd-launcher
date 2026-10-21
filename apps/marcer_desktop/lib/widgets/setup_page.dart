@@ -22,6 +22,7 @@ class SetupPage extends StatefulWidget {
     super.key,
     required this.onConfigured,
     required this.saveDirs,
+    this.searchDirs = const [],
     this.initial,
     this.configPath,
   });
@@ -30,6 +31,10 @@ class SetupPage extends StatefulWidget {
 
   /// Directories tried (in order) for the new config file.
   final List<String> saveDirs;
+
+  /// Directories searched for an existing `desktop.config.json` (shown so the
+  /// user can also drop the file there by hand).
+  final List<String> searchDirs;
 
   /// Prefilled values; defaults to an empty config.
   final DesktopConfig? initial;
@@ -47,9 +52,13 @@ class _SetupPageState extends State<SetupPage> {
   bool _valid = false;
   String? _error;
 
+  /// True while a download/extraction runs in the form (blocks Save/Exit so
+  /// the running transfer is not interrupted).
+  bool _busy = false;
+
   void _save() {
     final cfg = _latest;
-    if (cfg == null || !_valid) return;
+    if (cfg == null || !_valid || _busy) return;
 
     final known = widget.configPath;
     if (known != null) {
@@ -79,14 +88,16 @@ class _SetupPageState extends State<SetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    final target = widget.configPath ??
-        '${widget.saveDirs.first}${Platform.pathSeparator}$kConfigFileName';
+    final knownTarget = widget.configPath;
+    final saveCandidates = widget.saveDirs
+        .map((d) => '$d${Platform.pathSeparator}$kConfigFileName')
+        .join('  ·  ');
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
+            constraints: const BoxConstraints(maxWidth: 1100),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -106,9 +117,18 @@ class _SetupPageState extends State<SetupPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Saves to: $target',
+                  knownTarget != null
+                      ? 'Saves to: $knownTarget'
+                      : 'Saves to the first writable of: $saveCandidates',
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
+                if (widget.searchDirs.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Searched in: ${widget.searchDirs.join('  ·  ')}',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 SettingsForm(
                   initial: widget.initial ?? DesktopConfig(rootDirectory: ''),
@@ -117,6 +137,9 @@ class _SetupPageState extends State<SetupPage> {
                     _valid = valid;
                     if (_error != null) _error = null;
                     setState(() {});
+                  },
+                  onBusyChanged: (busy) {
+                    if (mounted) setState(() => _busy = busy);
                   },
                 ),
                 if (_error != null) ...[
@@ -130,12 +153,12 @@ class _SetupPageState extends State<SetupPage> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed: () => exit(0),
+                      onPressed: _busy ? null : () => exit(0),
                       child: const Text('Exit'),
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
-                      onPressed: _valid ? _save : null,
+                      onPressed: (_valid && !_busy) ? _save : null,
                       child: const Text('Save'),
                     ),
                   ],

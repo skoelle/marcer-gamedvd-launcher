@@ -38,4 +38,5 @@ desktop.config.json
 /tools/screenshot-gen/__pycache__/
 /tools/gameinfo-gen/__pycache__/
 /tools/atarilegend-gen/__pycache__/
+/tools/asset-manifest/__pycache__/
 /tools/gallery/__pycache__

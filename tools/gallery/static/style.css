@@ -236,6 +236,8 @@ header { margin-bottom: 8px; }
 .b-layer { background: #163a24; color: #8fd9a8; }
 .b-hist { background: #2b3238; color: #9ab; }
 .b-year { background: #173a3a; color: #8fd6d6; }
+/* non-default TOS marker (desktop deepOrange badge) */
+.b-tos { background: #4a2408; color: #ffb27a; }
 .ph {
   width: 100%;
   padding-top: 60%;
@@ -252,6 +254,7 @@ header { margin-bottom: 8px; }
   margin-left: 4px;
   vertical-align: middle;
 }
+.chip-tos { background: #4a2408; color: #ffb27a; }
 .layer {
   display: inline-block;
   font-size: 0.65em;

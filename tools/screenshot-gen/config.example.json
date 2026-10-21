@@ -18,10 +18,25 @@
     }
   },
   "mono_dir_suffix": "Mono",
+  "screen_format_monitor": {
+    "utils": {
+      "default": "mono",
+      "color_hints": ["not mono", "low", "mid", "medium", "color", "colour"],
+      "mono_hints": ["mono", "high"]
+    },
+    "pd": {
+      "mono_if_all": ["high"]
+    }
+  },
   "exclude_dirs": ["kryoflux", "boxscan", "manual"],
   "timepoints": [10, 25, 45],
   "entry_timeout_s": 90,
   "keep_candidates": true,
+  "tos_default": "1.04",
+  "tos_images": {
+    "1.04": "MARCER_TOS_IMG",
+    "1.02": "MARCER_TOS102_IMG"
+  },
   "disk_skip_regex": "(?i)(?:^|[\\s\\-_.])(?:disk|side|disc)[\\s\\-_.]*(?:[2-9]|b|ii|iii)(?:$|[\\s\\-_.])",
   "filters": {
     "black_mean_max": 0.02,
@@ -49,7 +64,9 @@
     "drive_max_depth": 2,
     "drive_attempts": 3,
     "prg_attempts": 3,
-    "folder_attempts": 3
+    "folder_attempts": 3,
+    "enlarge_window": true,
+    "scroll_attempts": 4
   },
   "tmp_dir": "/tmp/marcer-shotgen",
   "xvfb_screen": "1024x768x24",

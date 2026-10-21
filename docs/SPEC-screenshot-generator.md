@@ -271,8 +271,9 @@ Defined scopes:
   `Title Sorted/PD Games - Title Sorted` (merged with its patch counterpart).
 
 Every subcommand (`index`, `run`, `detect`, `reclassify`,
-`cleanup-drive-led`, `prune`) takes `--scope` and works exclusively on the
-selected scope's trees, index file and output subtree. There is deliberately
+`cleanup-drive-led`, `cleanup-duplicates`, `prune`) takes `--scope` and
+works exclusively on the selected scope's trees, index file and output
+subtree. There is deliberately
 **no "all scopes" mode**: running two scopes means running the command
 twice. This keeps each index file small, keeps per-entry index rewrites
 cheap, and means an experimental scope can never disturb the curated state
@@ -309,20 +310,56 @@ files are invisible to them until a future join step.
   crack ZIP gets its own screenshots, because crack intros differ
   (user decision).
 
-### 4.6 Mono directories (user decision)
+### 4.6 Monitor selection (Mono / Color, user decision)
 
-- A folder whose name ends with the configured suffix (config
-  `mono_dir_suffix`, default `"Mono"`, matched case-insensitively against
-  the ZIP's **parent directory** name, e.g. `Abalone - Mono`) is booted
-  with Hatari `--mono --tos-res high`: monochrome monitor plus explicitly
-  forced ST high resolution 640x400. The folder `1000 Bornes - Col and Mon`
-  does not match (ends with `Mon`, not `Mono`).
-- The flags are appended entry-level on top of the selected profile's
-  arguments; `monitor` (`mono` | `color`) is stored in the index entry and
-  the metadata JSON. The capture pipeline, timepoints and filters are
-  unchanged (screenshots are 640x400 for mono entries).
-- Applies in every scope (the rule is a config key, not a per-scope key).
-  Verified on the PD scope (section 14.1.2).
+Monitor mode is resolved per entry before Hatari starts. The precedence is:
+
+1. **Gameinfo `screen_format` rules** (optional, read-only) from
+   `MARCER_DATA_DIR/games-<scope>.json`. The entry is matched by its
+   `(letter, folder)` key below the selected scope tree (same grouping as
+   the gallery/desktop join); sub-directories such as `Original/` therefore
+   still use their game folder's values. Rules live in the config key
+   `screen_format_monitor`:
+   - `utils` (default: `default: mono`, `color_hints: [not mono, low, mid,
+     medium, color, colour]`, `mono_hints: [mono, high]`): any color hint
+     forces color, otherwise any mono hint forces mono, otherwise the entry
+     defaults to **mono** (blank values and pure notes such as `Modified`,
+     `Translated`, `Serie`, `Crashes`). An entry whose folder is missing
+     from a successfully loaded `games-utils.json` also defaults to mono
+     (`screen_format:missing-default`); this is the archive's "mono unless
+     noted" convention for utilities.
+   - `pd` (default: `mono_if_all: [high]`): mono only when **every** variant
+     of the folder says `High` (pure high-resolution folder). Mixed values
+     such as `High` + `Low`, `Med + High` or `Low-High` stay color; there is
+     no per-ZIP variant matching inside a mixed folder.
+2. **Folder suffix** (config `mono_dir_suffix`, default `"Mono"`): a game
+   folder ending in `Mono` (e.g. `Abalone - Mono`) is mono when no gameinfo
+   rule matched. The check uses the game folder below the scope tree, not
+   the ZIP's immediate parent, so `Original/` sub-directories work too. The
+   folder `1000 Bornes - Col and Mon` does not match (ends with `Mon`).
+3. Otherwise color.
+
+A gameinfo rule wins over a conflicting suffix. Missing `MARCER_DATA_DIR`
+or `games-<scope>.json` is not an error: the pass logs a warning and uses
+the suffix rule. The utils missing-folder default only applies when the
+gameinfo file was loaded successfully; a completely missing file does not
+force utils to mono. The per-entry log records
+`monitor <mode> (<source>)` (e.g. `screen_format:high`,
+`screen_format:default`, `screen_format:missing-default`,
+`folder-suffix`).
+
+Mono boots Hatari with `--mono --tos-res high`: monochrome monitor plus
+explicitly forced ST high resolution 640x400. The flags are appended
+entry-level on top of the selected profile's arguments; `monitor`
+(`mono` | `color`) is stored in the index entry and the metadata JSON. The
+capture pipeline, timepoints and filters are unchanged (screenshots are
+640x400 for mono entries).
+
+The rules apply to **future captures** only. A normal `run` still skips
+finished entries (`done`, `desktop`, `no_usable_shots`); existing captures
+are not recaptured automatically. `run --force --only <substring>` can
+recapture selected entries explicitly. Applies in every scope (the rules
+are config keys, not pipeline branches).
 
 ---
 
@@ -336,9 +373,12 @@ files are invisible to them until a future join step.
 [3] select pending entries (status != done, or --force;
          with --retry-desktop: only status == desktop with a stored
          icon hit that has not been clicked yet, section 7.4;
-         with --retry-no-usable: only status == no_usable_shots;
+         with --retry-no-usable: only status == no_usable_shots (skipping
+         a TOS version already in tos_tried unless --force);
          with --retry-drive-led: only status == desktop with the
-         drive_led_refetch flag set and kind != no_game_image, section 8.7)
+         drive_led_refetch flag set and kind != no_game_image, section 8.7;
+         --tos <version> overrides the TOS image for the whole run, e.g.
+         --retry-no-usable --tos 1.02, section 7.5)
         |
 [4] per entry:
       a. copy ZIP from NAS to local staging dir     (NAS is read-only)
@@ -371,9 +411,11 @@ still allows only one tool process per `MARCER_OUT_DIR`.
 
 Besides `index`, `run` and `detect`, the tool has the `cleanup-drive-led`
 subcommand (section 8.7), a standalone offline pass that removes old
-drive-LED white screenshots and cleans the index, the `reclassify`
-subcommand (section 8.4.1), an offline pass that refines the entry kind of
-`desktop` entries, and the `prune`
+drive-LED white screenshots and cleans the index, the
+`cleanup-duplicates` subcommand (section 8.8), an offline pass that removes
+pixel-exact duplicate candidates and updates the index/metadata, the
+`reclassify` subcommand (section 8.4.1), an offline pass that refines the
+entry kind of `desktop` entries, and the `prune`
 subcommand, which deletes `logs/<rel>.log` files and empty mirror
 directories of index entries that no longer exist (used after directory
 exclusions, section 4.4).
@@ -515,9 +557,22 @@ phase workflow:
   tried as well so inverted (selected) icons still match. Template geometry
   is 60x54 px (program icon) and 64x60 px (drive icon) at the verified
   832x552 capture size.
+- **Multi-scale match.** Color captures render the GEM screen 2x (the
+  templates were cut from them), so their icons are twice as large as those
+  in native mono high-res captures (`--mono --tos-res high`, 640x400 at 1x,
+  section 4.6). Every template is therefore tried at the 1x scale and as a
+  0.5x variant; the 0.5x variant is binarized (>=128 -> white) so only the
+  black/white structure matches — the drive template's green fill
+  (0,238,0) would otherwise correlate poorly against the dithered mono
+  background. The best-scoring variant wins, but a smaller scale must beat
+  the larger one by a margin (0.02) before it takes over, so a weak 1x
+  false positive on a color screen keeps its established pixel. The winning
+  scale is stored as `scale` in the `click` object (1.0 or 0.5).
+  *(verified: mono drive icons match at scale 0.5, score ~0.83)*.
 - Strategy choice: a real program icon always wins; otherwise a drive icon
   selects the drive strategy. Hit: entry gets
-  `click` = `{strategy, sx, sy, score, source}` and `icon_found: true`.
+  `click` = `{strategy, sx, sy, score, scale, source}` and
+  `icon_found: true`.
   Score threshold default 0.5 (config `click_retry.icon_min_score`); true
   positives scored 0.53 to 1.0 in the pilot *(verified)*, a drive icon
   reaches 1.0.
@@ -557,7 +612,8 @@ classifier (so a title whose start screen is not `game`-like, e.g. a
 3-colour GEM dialog, still counts as a successful click):
 
 - `click-icon-prg` — `prg` click confirmed a program start,
-- `click-icon-drive` — `drive` click confirmed a program start,
+- `click-icon-drive` — the `drive` strategy confirmed a program start
+  (via DISKSTATION A and/or an already-open window),
 - `click-failed` — the strategy ran but no program start was confirmed,
 - `click-not-needed` — the probe was already non-desktop.
 
@@ -589,9 +645,35 @@ tolerates the cursor when it does end up on an icon.
 the icon. If the screen does not change, retry up to
 `click_retry.prg_attempts` (default 3) *(verified: Bank It)*.
 
-**Strategy `drive`** (desktop only shows drive icons, e.g. Bank It):
-double click `DISKSTATION A`, wait `click_retry.step_wait` for the window,
-then walk into the window up to `click_retry.drive_max_depth` levels
+**Strategy `drive`** (desktop only shows drive icons, e.g. Bank It). The
+standard path is:
+
+```text
+Probe screenshot (10 s)
+├─ GEM window already open?
+│  ├─ yes → enlarge the window
+│  │        → look for the PRG icon
+│  │        → otherwise look for the folder icon
+│  │        → otherwise scroll
+│  └─ no  → click DISKSTATION A
+│            → PRG visible?
+│               ├─ yes → continue with the PRG click
+│               └─ no  → enlarge the window
+│                         → look for the PRG icon
+│                         → otherwise look for the folder icon
+│                         → otherwise scroll
+└─ then as before: open folders, descend (max_depth)
+```
+
+An already-open window is detected with `find_fullsize_xy` (title-bar
+"full size" gadget) or, as a fallback, `find_scroll_down_xy` (vertical
+scrollbar); plain desktop icon grids match neither. If a window is open,
+the drive click is skipped and that window is enlarged before scanning.
+Otherwise `DISKSTATION A` is double clicked, wait
+`click_retry.step_wait` for the window, and the program icon is checked
+first; only when it is absent is the window enlarged and scanned for the
+program icon, then the folder icon, then scrolled. Then the chain walks
+into the window up to `click_retry.drive_max_depth` levels
 (default 2, enough for the verified `DISKSTATION A` -> folder `BANK_IT`
 -> `BANKIT.PRG` case): every window is scanned for the program icon first
 (`assets/icon-prg.png`, the same icon as on the desktop) and double
@@ -622,10 +704,49 @@ early shows a half-drawn window with no recognizable icon). Window icons
 match their templates near 1.0, so `click_retry.window_icon_min_score`
 (default 0.80) rejects the flat-region false positives (~0.55) seen on
 white window areas while still accepting the program icon with the GEM
-arrow on it (~0.84).
+arrow on it (~0.84). The same bar applies to the 0.5x mono variant: its
+genuine icons still score ~1.0, while a folder only matches the program
+template at ~0.73 and is rejected there in favour of its own (much
+stronger, ~0.90) folder match.
 *(verified: Bank It - Hotline starts via drive -> folder -> PRG; 10th
 Frame - Tsunoo Rhilty v2 and 10th Frame - Elsi via drive -> folder ->
-PRG.)*
+PRG; mono drive -> folder -> PRG chain executes at scale 0.5.)*
+
+**Revealing hidden icons** (`click_retry.enlarge_window`, plus
+`click_retry.scroll_attempts`). A window can show fewer icons than the
+folder contains, hiding the program behind a scrollbar. Two position
+independent steps are tried before the drive window is written off and
+before an opened folder is misread as a directly started game (a folder
+window that looks like its parent changes too few pixels for the diff test
+and, with no matchable icon, was previously taken for a game). The gadget
+positions are detected from the window frame (`find_fullsize_xy`,
+`find_scroll_down_xy`), not hard coded, because both the window placement
+and the GEM gadget rendering differ between disks and monitor modes:
+
+1. **Grow** the window by single clicking its **"full size" box**. The box
+   glyph sits in the title bar just left of the window's right border; the
+   click must land on the glyph's centre (a few pixels to the right, nearer
+   the border, misses the gadget), so the centre is detected from the dark
+   glyph block rather than a fixed offset. The mono high-res profile opens
+   folder views at about half width, pushing the program's column behind a
+   horizontal scrollbar; growing reveals it.
+2. **Scroll down** by clicking the **vertical scrollbar's down arrow**
+   (innermost right column, just above the window's bottom border), up to
+   `scroll_attempts` (default 4) times. The colour profile opens wide
+   windows that show only the first icon rows, hiding the rest below.
+
+Both gadgets react to a *single* click; Hatari 2.4.1 has no single-click
+control command (section 7.4 mechanics), so an *instant* XTest click is
+sent (holding the button on the title bar is read as a window move).
+Where the first box click is ignored until the GEM window has been
+activated (observed in a headless SDL setup, where the opened window is not
+the active one), the retry falls back to clicking the menu bar once and
+then the box twice — the first click dismisses the menu, the second grows.
+The fallback only runs when the first box click did not change the screen,
+so setups where the box already works are unaffected.
+*(verified: mono `Box - Mono` / `Brainbox - Mono` grow directly and
+graduate to `done`; colour `Bootiful Babe` (cracked) and `Der Motor v1.1`
+grow via the fallback, revealing `BOOTIFUL.PRG` / `MOTOR.PRG`.)*
 
 Notes:
 
@@ -646,6 +767,37 @@ Notes:
   is not game-like for the classifier) keeps `click_retried: true` and is
   not retried again automatically; the updated preview and candidates
   show the newer state.
+
+### 7.5 TOS override and the `no_usable_shots` TOS retry (user decision)
+
+Many old Atari titles never boot under TOS 1.04 but run fine under
+TOS 1.02. Such a title hangs on a black screen, so every capture is
+classified `black` (section 8.1) and the entry ends as
+`no_usable_shots` even though it is a working game.
+
+- **TOS map.** The config maps a version label to the environment
+  variable holding its ROM image (section 11.2 `tos_images`): `1.04`
+  (default, `MARCER_TOS_IMG`) and `1.02` (`MARCER_TOS102_IMG`). The
+  alternative image is resolved lazily, so a run that does not use it
+  does not require its variable to be set.
+- **`run --tos <version>`.** Boots every pending entry with the given
+  version instead of `tos_default`. The override combines with any
+  selection flag, so the intended use is
+  `run --retry-no-usable --tos 1.02` — only `no_usable_shots` entries,
+  booted with TOS 1.02.
+- **Marker.** A capture that succeeds with a non-default TOS records the
+  version in the index entry (`tos`, section 10.4) and metadata
+  (`tos`, section 10.3): `"tos": "1.02"`. The field is **sparse**:
+  absent means the default TOS. Consumers (gallery, desktop app) show a
+  `TOS 1.02` marker and preselect the matching Hatari launch variant.
+- **Failed attempts.** A 1.02 run that still yields no usable shot keeps
+  `status: no_usable_shots` and records the version in the `tos_tried`
+  list (section 10.4), so a later `run --retry-no-usable --tos 1.02`
+  skips it (`--force` retries anyway). On a successful capture `tos_tried`
+  is cleared.
+- `--tos` accepts any version label defined in `tos_images`; an unknown
+  label aborts with a clear message. A missing ROM image aborts with the
+  usual `require_env` message.
 
 ---
 
@@ -797,7 +949,10 @@ metadata JSON of that earlier run is deleted (its `status`, `shots` and
 supported state and must not infer `preview: null` from the status.
 Candidate retention stays gated on `keep_candidates` (with `false`:
 `candidates` stays empty), while the preview itself is written regardless
-of that flag.
+of that flag. Retained candidates are not guaranteed to be pixel-distinct:
+the click chain and reruns can add exact duplicates. The offline
+`cleanup-duplicates` pass (section 8.8) removes them without touching the
+preview.
 
 ### 8.7 Drive-LED white screens (detection and cleanup)
 
@@ -856,6 +1011,44 @@ instead of being re-captured endlessly, and are skipped by
 `run --retry-drive-led`. Bootability uses the same extension set as
 `cleanup-drive-led` (`.stx`, `.msa`, `.st`, `.dim`, `.ipf`, `.prg`,
 `.stt`, `.pckd`, `.pkd`).
+
+### 8.8 Pixel-exact duplicate candidate cleanup (`cleanup-duplicates`)
+
+Repeated captures, the click chain and older runs can leave several
+candidates of one entry that show exactly the same pixels. The offline
+subcommand `cleanup-duplicates` (no Hatari) removes those duplicates per
+entry:
+
+- **Comparison is pixel-exact, never perceptual.** Each existing preview
+  and candidate PNG is decoded and reduced to
+  `(width, height, sha256(RGBA pixels))`. Two files with the same
+  signature show identical pixels even when their PNG compression or
+  ancillary chunks differ; pHash distance is not used and perceptually
+  similar but distinct shots are never removed.
+- **Order and retention.** The preview is the first image in the
+  comparison order (unless `--candidates-only` is given), so it is never
+  deleted. Within the `candidates` list the first occurrence is kept and
+  every later file with an already-seen pixel signature is removed. A
+  candidate identical to the preview is therefore removed by default;
+  `--candidates-only` ignores the preview and compares only candidates
+  against each other.
+- **State updates.** The entry's `candidates` list in the scope index and,
+  when a metadata JSON exists, that JSON's `candidates` field are updated.
+  Candidate names are not renumbered, so gaps in the `_cNN` series are a
+  normal, supported state for all index consumers. The preview, `status`,
+  `kind`, `tos`, click fields and the metadata `shots` capture history stay
+  untouched; because only exact duplicates are removed, `done` entries
+  (manual curation) are safe too.
+- **Safety.** Missing or unreadable files are skipped and reported, never
+  deleted. `--dry-run` only reports the counts, `--only <substring>`
+  limits the pass, and `--list` prints the removed names per entry. The
+  output-dir lock is taken, so the pass cannot run while a scan is active.
+  Ctrl+C stops the pass and still saves the already-applied index changes.
+- **Progress.** The pass prints a compact progress line at most every
+  10 seconds: scanned/total entries with percentage, changed entries,
+  removed (or would-remove in `--dry-run`) files with their size, and the
+  current entry. It is checked between candidates and entries, so long NAS
+  passes visibly keep working without flooding the output.
 
 ---
 
@@ -968,7 +1161,7 @@ deleted by the one-off data repair that accompanies the merge change
   "profile": "st",
   "machine": "st",
   "monitor": "color",
-  "tos": "TOS104GE.IMG",
+  "tos": "1.04",
   "status": "done",
   "kind": "game",
   "preview_is_desktop": false,
@@ -1000,7 +1193,9 @@ Allowed values for `kind` (section 8): `game`, `desktop`, `textscreen`,
 preview, e.g. after a drive-LED reset, and for every `no_usable_shots`
 entry — that status never carries a kind, section 8.5). `status` stays
 `desktop` for all three desktop sub-kinds. `monitor` is `mono` when the
-entry was booted in mono mode (section 4.6), otherwise `color`.
+entry was booted in mono mode (section 4.6), otherwise `color`. `tos` is
+the version label the entry was booted with (`1.04`, `1.02`, …; section
+7.5); it is always written in the metadata.
 
 The file is written only for entries that end as `done` or `desktop`.
 An entry ending as `no_usable_shots` (section 8.5) can have a preview but
@@ -1016,12 +1211,18 @@ sections 8 and 8.4.1),
 `size`, `mtime`, `profile`, `monitor` (`mono` | `color`, section 4.6),
 `last_run`, `preview` (relative PNG name, or
 null when no image exists at all), `candidates` (list of `_cNN` names,
-disjoint from the preview, section 8.6), and for the
+disjoint from the preview, section 8.6; after `cleanup-duplicates` the
+names may contain gaps, section 8.8), and for the
 click retry (section 7.4): `click` (hit object `{strategy, sx, sy, score,
-source}` or absent), `icon_found` (true/false after `detect`),
+scale, source}` or absent), `icon_found` (true/false after `detect`),
 `click_retried` (true after an attempt), `click_result`
 (`click-icon-prg` | `click-icon-drive` | `click-failed` |
-`click-not-needed` | null). For drive-LED cleanup (section 8.7): `drive_led`
+`click-not-needed` | null). For the TOS override (section 7.5): `tos`
+(the non-default TOS version that produced a successful capture, e.g.
+`"1.02"`; **absent** = default TOS) and `tos_tried` (list of non-default
+versions already attempted on a still-`no_usable_shots` entry, so a repeat
+`--retry-no-usable --tos <version>` skips them; cleared on success). For
+drive-LED cleanup (section 8.7): `drive_led`
 (true when a blank LED-white preview/candidate was found and removed) and
 `drive_led_refetch` (true when a bootable `drive_led` entry should be
 re-captured later; cleared again by `run --retry-drive-led` once that entry
@@ -1090,7 +1291,9 @@ specs, logs or examples):
 | `MARCER_ROOT_DIR` | yes | game root layer, read-only |
 | `MARCER_PATCH_DIR` | yes | patch layer, read-only (empty disables patch layer) |
 | `MARCER_OUT_DIR` | yes | output root for screenshots, index, logs |
-| `MARCER_TOS_IMG` | yes | TOS ROM image for Hatari |
+| `MARCER_DATA_DIR` | no | gameinfo directory with `games-<scope>.json`, enables the `screen_format` monitor rules (section 4.6) |
+| `MARCER_TOS_IMG` | yes | default TOS 1.04 ROM image for Hatari |
+| `MARCER_TOS102_IMG` | no | TOS 1.02 ROM image, required only by `run --tos 1.02` (section 7.5) |
 | `MARCER_HATARI_BIN` | no | Hatari executable, default `hatari` from PATH |
 | `MARCER_DISPLAY` | no | fixed X display number, default `:99` |
 
@@ -1103,7 +1306,9 @@ this spec):
 
 ```
 MARCER_OUT_DIR=...
+MARCER_DATA_DIR=...   # optional, gameinfo directory
 MARCER_TOS_IMG=...
+MARCER_TOS102_IMG=...
 MARCER_HATARI_BIN=...
 MARCER_DISPLAY=...
 ```
@@ -1115,7 +1320,11 @@ MARCER_DISPLAY=...
 name; the default scope maps to `index.json`, every other scope to
 `index-<name>.json`, section 4.4; legacy `scope_trees` is still accepted
 when no `scopes` entry exists), `mono_dir_suffix` (folder suffix that
-triggers `--mono --tos-res high`, section 4.6), `exclude_dirs` (sub-directory names never
+triggers `--mono --tos-res high`, section 4.6), `screen_format_monitor`
+(per-scope gameinfo rules that win over the suffix, section 4.6),
+`tos_default` +
+`tos_images` (version label → environment variable of its ROM image,
+section 7.5), `exclude_dirs` (sub-directory names never
 scanned, section 4.4), time points, timeouts, filter thresholds (the
 black/empty thresholds `black_mean_max`, `black_std_max`,
 `black_std_content_min` of section 8.1 and the desktop sub-kind thresholds
@@ -1243,9 +1452,13 @@ Resolved decisions:
   desktop of `123 Jumble - Mono`). Most pd entries end `desktop` (program
   menus / GEM desktop without auto-boot) — expected for the pilot window,
   same shape as the utils pilot; follow-up is `detect` + click retry.
-  The color-click-retry templates (`icon-prg.png`, `icon-drive.png`) are
-  2–3-color black/white images, so detection on mono GEM desktops is
-  expected to work.
+  The color-click-retry templates (`icon-prg.png`, `icon-drive.png`) were
+  cut from the 2x-scaled color screens, so at 1x they do **not** match the
+  half-sized icons of native mono captures (initial `detect` found 0/6 mono
+  icons). Detection therefore tries a 0.5x binarized variant as well
+  (section 7.4); with it a 25-entry mono sample recovers 24/25 drive hits
+  at scale 0.5, score ~0.83, and the color sample keeps its strategies
+  unchanged *(verified offline)*.
 
 ### 14.2 Adjustment
 
@@ -1272,6 +1485,17 @@ Resolved decisions:
   `click_retried: true` and `click_result: click-icon-drive`; the newer
   screenshots and the intermediate chain shots were kept as preview and
   candidates *(verified)*.
+- Mono (`monitor: mono`, section 4.6): the 2x color templates do not match
+  the half-sized mono icons at 1x, so `detect` tries a 0.5x binarized
+  variant (section 7.4). A 25-entry mono desktop sample recovers 24/25
+  `drive` hits at scale 0.5 (score ~0.83, pixel 36,36 = floppy A), while a
+  25-entry color sample keeps all its strategies and, with the 0.02 margin,
+  its 1x pixels *(verified offline)*. A live `run --retry-desktop` on
+  `Defend the Earth 2 - Mono` executes the full chain — drive double click
+  at the scale-0.5 hit, window scan finds the program icon at scale 0.5
+  and double clicks it, `click_result` is recorded; the title itself ends
+  `desktop`/`textscreen` because its disk has no auto-startable game
+  *(verified live)*.
 
 ### 14.4 Full run
 
@@ -1344,20 +1568,37 @@ A conforming implementation satisfies all of the following.
 - [ ] P5 Per-entry timeout is enforced and the run continues after it.
 - [ ] P6 `detect` finds the GEM program or drive icon in existing desktop
       previews offline, selects the `prg`/`drive` strategy, stores
-      `click`/`icon_found`; misses are never booted.
+      `click`/`icon_found`; each template is matched at the 1x color scale
+      and as a 0.5x binarized variant (mono high-res) with a 0.02 margin in
+      favor of the larger scale; misses are never booted.
 - [ ] P7 `run --retry-desktop` boots only unclicked entries with a stored
-      hit and runs the strategy: `prg` double clicks the program icon,
-      `drive` opens DISKSTATION A and descends up to
-      `click_retry.drive_max_depth` levels (folder icons) to the program
-      icon. Clicks use `hatari-event doubleclick` over the FIFO, are
+      hit and runs the strategy: `prg` double clicks the program icon;
+      `drive` first checks the probe for an already-open GEM window
+      (`find_fullsize_xy`/`find_scroll_down_xy`), skips the drive click and
+      enlarges that window if present, otherwise opens DISKSTATION A, checks
+      the program icon first and then enlarges/scans PRG -> folder -> scroll.
+      It descends up to `click_retry.drive_max_depth` levels (folder icons)
+      to the program icon. Clicks use `hatari-event doubleclick` over the FIFO, are
       retried when they do not take effect, restart the capture timepoints,
       and the attempt is recorded (`click_retried`, `clicked`,
       `click_result`). Each worker resolves its own Hatari window by process
       id, so `--jobs N` is safe, and all intermediate chain screenshots are
-      kept as `_cNN` candidates.
-- [ ] P8 Directories ending with `mono_dir_suffix` (case-insensitive, the
-      ZIP's parent directory) are booted with `--mono --tos-res high`, and
-      `monitor: mono` is recorded in index and metadata (section 4.6).
+      kept as `_cNN` candidates. With `click_retry.enlarge_window`, a window
+      that shows no program/folder icon is grown (its "full size" box) and
+      then scrolled down (`click_retry.scroll_attempts` times, its scrollbar
+      down arrow) so hidden icons become visible; both gadget positions are
+      detected from the window frame.
+- [ ] P8 Monitor mode is resolved before boot: gameinfo `screen_format`
+      rules (utils "mono unless noted", pd "all High") win over the
+      case-insensitive `mono_dir_suffix` folder check; mono entries boot
+      with `--mono --tos-res high`, and `monitor: mono` is recorded in index
+      and metadata. Missing gameinfo falls back to the suffix. The rules
+      affect future captures only; finished entries are not recaptured by a
+      normal run (section 4.6).
+- [ ] P9 `run --tos <version>` boots with the mapped ROM image; a successful
+      non-default capture records `tos` (sparse, index + metadata), a failed
+      one records the version in `tos_tried`; `run --retry-no-usable` skips a
+      version already in `tos_tried` unless `--force` (section 7.5).
 
 **Filtering**
 - [ ] F1 Black or empty shots are rejected by configurable thresholds.
@@ -1378,6 +1619,10 @@ A conforming implementation satisfies all of the following.
       `darkscreen` (section 8.4.1) both in the pipeline and by the offline
       `reclassify` pass, while `status` stays `desktop`; entries without a
       preview are skipped and reported.
+- [ ] F7 `cleanup-duplicates` removes only pixel-exact duplicate candidates
+      (section 8.8), keeps the preview and the first occurrence, updates the
+      index and metadata `candidates` lists, leaves missing/unreadable files
+      alone and limits itself to the selected scope with `--only`/`--dry-run`.
 
 **Output**
 - [ ] O1 Output mirrors the source tree under `MARCER_OUT_DIR`.

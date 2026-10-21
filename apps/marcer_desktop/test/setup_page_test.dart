@@ -88,4 +88,27 @@ void main() {
     expect(configuredPath, target);
     expect(DesktopConfig.load(target).rootDirectory, root.path);
   });
+
+  testWidgets('lists the searched config locations', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tmp = Directory.systemTemp.createTempSync('setup_page_test');
+    addTearDown(() {
+      if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+    });
+
+    await tester.pumpWidget(MaterialApp(
+      home: SetupPage(
+        saveDirs: [tmp.path],
+        searchDirs: ['/search/one', '/search/two'],
+        onConfigured: (_, _) {},
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('/search/one'), findsOneWidget);
+    expect(find.textContaining('/search/two'), findsOneWidget);
+  });
 }

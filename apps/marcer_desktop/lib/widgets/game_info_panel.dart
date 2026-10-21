@@ -14,6 +14,7 @@ class ZipVariantView {
     this.kind,
     this.size,
     this.missing = false,
+    this.tos,
   });
 
   final String name;
@@ -26,6 +27,10 @@ class ZipVariantView {
   final String layer;
   final String rel;
   final int? size;
+
+  /// Non-default TOS version that captured this ZIP (e.g. `1.02`); shown as a
+  /// dedicated "TOS" row. Null means the default TOS (`SPEC-screenshot-generator.md` §7.5).
+  final String? tos;
 
   /// True when this ZIP is not present locally (neither root nor patch);
   /// shown as a dedicated red "Missing" row in the "This ZIP" table.
@@ -43,6 +48,8 @@ class GameInfoPanel extends StatelessWidget {
     this.variant,
     this.filter,
     this.onPlay,
+    this.onPlayVariant,
+    this.variants = const [],
     this.onSelectGroup,
   });
 
@@ -56,9 +63,16 @@ class GameInfoPanel extends StatelessWidget {
   /// ZIP name matched a release variant.
   final CatalogFilter? filter;
 
-  /// Launches the shown ZIP with Hatari (the "(P)lay" button); hidden when
-  /// null.
+  /// Launches the shown ZIP with Hatari using the default variant (the
+  /// "(P)lay" button); hidden when null.
   final VoidCallback? onPlay;
+
+  /// Launches the shown ZIP with a specific [HatariVariant] (the split
+  /// button's dropdown).
+  final void Function(HatariVariant variant)? onPlayVariant;
+
+  /// Variants offered by the Play dropdown (hidden when empty).
+  final List<HatariVariant> variants;
 
   /// Click on a crew/cracker group (release-variant row or the Game info
   /// Crew/Cracked-by values): selects that group's image. [kind] is
@@ -96,7 +110,8 @@ class GameInfoPanel extends StatelessWidget {
     );
   }
 
-  /// Heading with the optional blue-gradient "PLAY" button on the right.
+  /// Heading with the optional blue-gradient "PLAY" split button on the right
+  /// (the main part uses the default variant, the arrow opens the variant menu).
   Widget _headingRow(String text) => Row(
         children: [
           Expanded(child: _heading(text)),
@@ -104,42 +119,75 @@ class GameInfoPanel extends StatelessWidget {
         ],
       );
 
-  Widget _playButton() => Material(
-        color: Colors.transparent,
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-            borderRadius: BorderRadius.circular(4),
+  Widget _playButton() {
+    final showDropdown = onPlayVariant != null && variants.isNotEmpty;
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          child: InkWell(
-            onTap: onPlay,
-            borderRadius: BorderRadius.circular(4),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.play_arrow, size: 16, color: Colors.white),
-                  SizedBox(width: 4),
-                  Text(
-                    'PLAY',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 0.5,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: onPlay,
+              borderRadius: BorderRadius.circular(4),
+              child: const Padding(
+                padding: EdgeInsets.fromLTRB(14, 6, 10, 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.play_arrow, size: 16, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
+                      'PLAY',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
+            if (showDropdown) ...[
+              Container(
+                  width: 1,
+                  height: 18,
+                  color: Colors.white.withValues(alpha: 0.3)),
+              PopupMenuButton<HatariVariant>(
+                tooltip: 'Play as…',
+                onSelected: (v) => onPlayVariant!(v),
+                itemBuilder: (context) => [
+                  for (final v in variants)
+                    PopupMenuItem<HatariVariant>(
+                      value: v,
+                      child: Tooltip(
+                        message: v.description,
+                        child: Text(v.name),
+                      ),
+                    ),
+                ],
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                  child:
+                      Icon(Icons.arrow_drop_down, size: 18, color: Colors.white),
+                ),
+              ),
+            ],
+          ],
         ),
-      );
+      ),
+    );
+  }
 
   Widget _heading(String text) => Text(
         text,
@@ -341,6 +389,7 @@ class GameInfoPanel extends StatelessWidget {
       _kv('File', v.name),
       _kv('Status', v.status),
       _kv('Kind', kind),
+      if (v.tos != null && v.tos!.isNotEmpty) _kv('TOS', v.tos!),
       if (v.missing) _kv('Missing', 'yes — not present locally'),
       if (v.layer.isNotEmpty) _kv('Layer', v.layer),
       if (v.size != null) _kv('Size', '${(v.size! / 1024).toStringAsFixed(0)} KB'),

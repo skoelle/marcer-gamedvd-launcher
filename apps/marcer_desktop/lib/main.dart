@@ -4,15 +4,20 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'catalog_controller.dart';
+import 'app_paths.dart';
 import 'config_locator.dart';
+import 'hatari_installer.dart';
 import 'self_updater.dart';
+import 'asset_updater.dart';
 import 'theme.dart';
+import 'tos_rom.dart';
 import 'widgets/card_grid.dart';
 import 'widgets/detail_panel.dart';
 import 'widgets/entry_list.dart';
@@ -20,23 +25,40 @@ import 'widgets/filter_bar.dart';
 import 'widgets/folder_tree.dart';
 import 'widgets/game_lightbox.dart';
 import 'widgets/help_overlay.dart';
+import 'widgets/asset_update_dialog.dart';
+import 'widgets/hatari_install_dialog.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/setup_page.dart';
+import 'widgets/tos_rom_dialog.dart';
 
 Future<void> main() async {
   final cwd = Directory.current.path;
   final exeDir = File(Platform.resolvedExecutable).parent.path;
+  // Stable, writable fallback on macOS (`~/Library/Application Support/…`):
+  // the only place a config can be written while the app runs translocated
+  // from a read-only path. Empty on Windows/Linux.
+  final appDataDir = marcerAppDataDir();
+  if (appDataDir.isNotEmpty) {
+    try {
+      Directory(appDataDir).createSync(recursive: true);
+    } catch (_) {
+      // Best effort — a missing/unwritable dir just drops the fallback.
+    }
+  }
   final searchDirs = configSearchDirs(
     cwd: cwd,
     exeDir: exeDir,
     isMacOS: Platform.isMacOS,
+    extraDir: appDataDir,
   );
   // Where a new config is written by the first-run setup (portable location
-  // next to the executable / .app, CWD as writability fallback).
+  // next to the executable / .app, CWD and the per-user data dir as
+  // writability fallbacks).
   final saveDirs = configSaveDirs(
     cwd: cwd,
     exeDir: exeDir,
     isMacOS: Platform.isMacOS,
+    extraDir: appDataDir,
   );
   final configPath = resolveConfigPath(
     dirs: searchDirs,
@@ -50,6 +72,10 @@ Future<void> main() async {
       // the bundled config is searched in CWD → exe dir → (macOS) .app parent.
       config = DesktopConfig.load(configPath,
           appDir: exeDir, searchDirs: searchDirs);
+      // Downloaded artifacts (Hatari, TOS) live outside the bundle on macOS;
+      // Hatari runs with that directory as its working dir.
+      config = config.copyWith(
+          hatariWorkingDirectory: downloadedDataDir(config));
     } catch (e) {
       configError = '$configPath: $e';
     }
@@ -68,6 +94,16 @@ Future<void> main() async {
   // decision 2026-10-15); otherwise the configured size, centered. The
   // configured size is also the restore size under a maximized start.
   WidgetsFlutterBinding.ensureInitialized();
+  // macOS: the app is not sandboxed (see docs/DECISION-macos-distribution.md),
+  // so file_picker must skip its user-selected entitlement check, otherwise
+  // every picker call fails with ENTITLEMENT_NOT_FOUND.
+  if (Platform.isMacOS) {
+    try {
+      await FilePicker.skipEntitlementsChecks();
+    } catch (_) {
+      // Older/other file_picker builds may not implement it — ignore.
+    }
+  }
   await windowManager.ensureInitialized();
   final maximized = config?.windowMaximized ?? true;
   await windowManager.waitUntilReadyToShow(
@@ -90,6 +126,7 @@ Future<void> main() async {
     configError: configError,
     configPath: configPath,
     saveDirs: saveDirs,
+    searchDirs: searchDirs,
   ));
   if (maximized) {
     // Windows safeguard: the runner reveals the window on the first frame
@@ -117,6 +154,7 @@ class MarcerDesktopApp extends StatelessWidget {
     this.configError,
     this.configPath,
     this.saveDirs = const [],
+    this.searchDirs = const [],
   });
 
   final DesktopConfig? config;
@@ -129,6 +167,10 @@ class MarcerDesktopApp extends StatelessWidget {
   /// Candidate directories for a first-run config file (see [configSaveDirs]).
   final List<String> saveDirs;
 
+  /// Directories searched for an existing `desktop.config.json` (shown on the
+  /// first-run setup page).
+  final List<String> searchDirs;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -140,6 +182,7 @@ class MarcerDesktopApp extends StatelessWidget {
         configError: configError,
         configPath: configPath,
         saveDirs: saveDirs,
+        searchDirs: searchDirs,
       ),
     );
   }
@@ -155,12 +198,14 @@ class _AppRoot extends StatefulWidget {
     required this.configError,
     required this.configPath,
     required this.saveDirs,
+    this.searchDirs = const [],
   });
 
   final DesktopConfig? config;
   final String? configError;
   final String? configPath;
   final List<String> saveDirs;
+  final List<String> searchDirs;
 
   @override
   State<_AppRoot> createState() => _AppRootState();
@@ -179,7 +224,8 @@ class _AppRootState extends State<_AppRoot> {
 
   void _onConfigured(DesktopConfig config, String path) {
     setState(() {
-      _config = config;
+      _config = config.copyWith(
+          hatariWorkingDirectory: downloadedDataDir(config));
       _configPath = path;
     });
   }
@@ -233,6 +279,7 @@ class _AppRootState extends State<_AppRoot> {
     }
     return SetupPage(
       saveDirs: widget.saveDirs,
+      searchDirs: widget.searchDirs,
       onConfigured: _onConfigured,
     );
   }
@@ -295,8 +342,10 @@ class _HomePageState extends State<HomePage> {
   /// back to the center panel.
   final FocusNode _centerFocus = FocusNode(debugLabel: 'center');
   final SelfUpdateController _updater = SelfUpdateController();
+  final AssetUpdateController _assetUpdater = AssetUpdateController();
   bool _showHelp = false;
   bool _showingLaunchError = false;
+  bool _showingDownloadError = false;
   bool _showingUpdateError = false;
 
   /// Running app version (release builds: stamped from the git tag via
@@ -309,11 +358,30 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _config = widget.config;
     _controller = CatalogController(_config);
+    _controller.beforeLaunch = _beforeLaunch;
     _controller.addListener(_onControllerChanged);
     _controller.init();
     _updater.addListener(_onUpdateChanged);
+    _assetUpdater.config = _config;
     _loadAppVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initSelfUpdate());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _warnIfTranslocated());
+  }
+
+  /// macOS runs a quarantined, unsigned app from a randomized read-only
+  /// App-Translocation path; config, downloads and the self-update should
+  /// live outside the bundle. Tell the user once how to fix it.
+  void _warnIfTranslocated() {
+    if (!mounted || !isAppTranslocated()) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text(
+          'macOS runs this app from a temporary read-only copy. Quit it, then '
+          'drag the .app individually in Finder out of the unzipped folder into '
+          'a normal folder (e.g. ~/Applications) and reopen it — not '
+          'Downloads/Documents. Otherwise updates and favorites cannot be '
+          'saved.'),
+      duration: Duration(seconds: 20),
+    ));
   }
 
   /// Reads the version for the status bar (always — unlike the self-update
@@ -334,12 +402,15 @@ class _HomePageState extends State<HomePage> {
     _searchFocus.dispose();
     _centerFocus.dispose();
     _updater.dispose();
+    _assetUpdater.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   /// Silent update check after startup (release builds only; the version
-  /// is stamped from the git tag via `--build-name` in the workflow).
+  /// is stamped from the git tag via `--build-name` in the workflow). Then the
+  /// catalog-data (screenshots/gameinfo) asset check — which only fetches the
+  /// small `latest.json` from GitHub, never the FTP.
   Future<void> _initSelfUpdate() async {
     if (!SelfUpdateController.enabled) return;
     try {
@@ -349,6 +420,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
     await _updater.check();
+    await _assetUpdater.check();
   }
 
   /// Surfaces failed update installs as a modal, once per error.
@@ -393,29 +465,54 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  /// Surfaces launch errors (SPEC.md E3/E4/E7) as a modal, once per error.
+  /// Surfaces launch errors (SPEC.md E3/E4/E7) and download failures as a
+  /// modal, once per error.
   void _onControllerChanged() {
+    if (!mounted) return;
     final err = _controller.launchError;
-    if (err == null || _showingLaunchError || !mounted) return;
-    _showingLaunchError = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Cannot launch'),
-          content: Text(err),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      _controller.clearLaunchError();
-      _showingLaunchError = false;
-    });
+    if (err != null && !_showingLaunchError) {
+      _showingLaunchError = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Cannot launch'),
+            content: Text(err),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        _controller.clearLaunchError();
+        _showingLaunchError = false;
+      });
+    }
+    final derr = _controller.downloadError;
+    if (derr != null && !_showingDownloadError) {
+      _showingDownloadError = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Download failed'),
+            content: Text(derr),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        _controller.clearDownloadError();
+        _showingDownloadError = false;
+      });
+    }
   }
 
   /// Opens the settings editor, persists the edited paths back to
@@ -441,14 +538,81 @@ class _HomePageState extends State<HomePage> {
   /// Rebuilds the catalog controller with [cfg] (overlay, screenshots,
   /// gameinfo and favorites are all re-read by `init`).
   void _applyConfig(DesktopConfig cfg) {
+    final config = cfg.copyWith(hatariWorkingDirectory: downloadedDataDir(cfg));
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     setState(() {
-      _config = cfg;
-      _controller = CatalogController(cfg);
+      _config = config;
+      _controller = CatalogController(config);
     });
+    _controller.beforeLaunch = _beforeLaunch;
     _controller.addListener(_onControllerChanged);
     _controller.init();
+    _assetUpdater.config = config;
+    _assetUpdater.check();
+  }
+
+  /// Opens the catalog-data update dialog (green badge); a successful update
+  /// reloads the catalog.
+  Future<void> _openAssetUpdates() async {
+    await showAssetUpdateDialog(
+      context,
+      controller: _assetUpdater,
+      onApplied: () => _applyConfig(_config),
+    );
+  }
+
+  /// Pre-launch guard chain: ensure Hatari itself is installed first, then the
+  /// TOS ROM the run needs. Returns `false` to abort the launch.
+  Future<bool> _beforeLaunch(HatariVariant? variant) async {
+    if (!await _ensureHatari()) return false;
+    return _ensureTos(variant);
+  }
+
+  /// Pre-launch guard: when no Hatari executable is configured/installed,
+  /// offer to download the prebuilt release for this platform. Returns `true`
+  /// when Hatari is available (or was just installed), `false` to abort. On
+  /// platforms without a prebuilt binary (Linux) it is a no-op so the normal
+  /// launch error surfaces.
+  Future<bool> _ensureHatari() async {
+    if (hatariInstalled(_config)) return true;
+    if (hatariBuildFor() == null) return true;
+    if (!mounted) return false;
+    final exe = await showHatariInstallDialog(context, config: _config);
+    if (exe == null) return false;
+    final value =
+        hatariConfigExecutable(appDir: _config.appDir, exePath: exe);
+    final edited = _config.copyWith(hatariExecutable: value);
+    if (widget.configPath.isNotEmpty) {
+      try {
+        edited.save(widget.configPath);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Could not save desktop.config.json: $e'),
+              duration: const Duration(seconds: 5)));
+        }
+      }
+    }
+    setState(() => _config = edited);
+    _controller.replaceConfig(edited);
+    return true;
+  }
+
+  /// Pre-launch guard: when the TOS ROM the run needs (variant-specific, e.g.
+  /// `TOS162.IMG` for STE / `TOS102.IMG` for Low Res) is missing next to the
+  /// app, offer the matching TOS ROM download dialog. Returns `true` when the
+  /// image is present (or was just installed), `false` to abort the launch.
+  Future<bool> _ensureTos(HatariVariant? variant) async {
+    final cfg = _config;
+    final fileName = variant?.tosFileName ?? kTosImageFileName;
+    final versions = (variant == null || variant.tosVersions.isEmpty)
+        ? kDefaultTosVersions
+        : variant.tosVersions;
+    if (File(tosImagePath(cfg, fileName: fileName)).existsSync()) return true;
+    if (!mounted) return false;
+    return showTosRomDialog(context,
+        config: cfg, versions: versions, fileName: fileName);
   }
 
   void _toggleHelp() {
@@ -481,15 +645,62 @@ class _HomePageState extends State<HomePage> {
       builder: (context, _) {
         final c = _controller;
         if (!c.ready) {
+          final err = c.initError;
+          if (err == null) {
+            return Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(c.progress,
+                        style: const TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ),
+            );
+          }
+          // Loading failed: never leave the app stuck on the spinner — show
+          // the error with a retry (and a shortcut to the settings editor).
           return Scaffold(
             body: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(c.progress, style: const TextStyle(color: Colors.grey)),
-                ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          color: Colors.orangeAccent, size: 36),
+                      const SizedBox(height: 12),
+                      const Text('Could not load the catalog',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      SelectableText(err,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.grey)),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OutlinedButton(
+                            onPressed: _openSettings,
+                            child: const Text('Settings…'),
+                          ),
+                          const SizedBox(width: 12),
+                          FilledButton(
+                            onPressed: () => _controller.init(),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           );
@@ -503,8 +714,31 @@ class _HomePageState extends State<HomePage> {
                 onExitSearch: () => _centerFocus.requestFocus(),
                 onOpenSettings: _openSettings,
                 updater: _updater,
+                assetUpdater: _assetUpdater,
+                onOpenAssetUpdates: _openAssetUpdates,
               ),
               const Divider(height: 1),
+              if (c.catalogDataNotice != null) ...[
+                Container(
+                  width: double.infinity,
+                  color: const Color(0xFF3A2E12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline,
+                          size: 16, color: Colors.orangeAccent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(c.catalogDataNotice!,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.orangeAccent)),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+              ],
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -584,6 +818,18 @@ class _StatusBar extends StatelessWidget {
             const SizedBox(width: 6),
             const Text('Hatari is running…',
                 style: TextStyle(fontSize: 11, color: Colors.lightGreen)),
+            const SizedBox(width: 16),
+          ],
+          if (c.downloading) ...[
+            const SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(strokeWidth: 1.5),
+            ),
+            const SizedBox(width: 6),
+            Text('Downloading… ${c.downloadProgress}',
+                style: const TextStyle(
+                    fontSize: 11, color: Colors.orangeAccent)),
             const SizedBox(width: 16),
           ],
           Text(messages.join('  ·  '),

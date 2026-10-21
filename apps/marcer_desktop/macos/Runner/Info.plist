@@ -24,6 +24,19 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
+	<!-- TCC usage descriptions: the app reads game archives from arbitrary
+	     locations the user configures. macOS protects these folders per-user;
+	     the strings label the system permission prompts. -->
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Marcer GameDVD Launcher reads game archives and writes downloaded catalog data from/to your Downloads folder.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Marcer GameDVD Launcher reads game archives from folders you configure in your Documents folder.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Marcer GameDVD Launcher reads game archives from folders you configure on your Desktop.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>Marcer GameDVD Launcher reads game archives from removable volumes (e.g. USB drives).</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>Marcer GameDVD Launcher reads game archives from network volumes.</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
