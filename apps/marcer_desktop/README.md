@@ -413,7 +413,10 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   (`Speed Buggy` for Buggy Boy) are used for matching too.
 - the dialog is **tabbed**: **Info** (metadata/credits — Developers/Authors in
   an aligned **3-column grid**, name above its role — **and** Boxscans +
-  Screenshots **at the same time**, no hero image), **Reviews (N)**
+  Screenshots **at the same time**, no hero image). The Info header shows the
+  **community score** far right (`4.11 / 5`, `7 votes`; average of
+  `game_votes` normalized to /5) and the **publisher + developer logos** side
+  by side in the middle (hotlinked from `companies.imgext`), **Reviews (N)**
   (date, scores, BBCode-rendered text, review link), **Magazines (N)** (issue,
   page, score, archive.org link) and **Comments (N)** (text + date). The
   `(N)` counts come from the metadata cache, so they are visible immediately.
@@ -422,8 +425,9 @@ CC BY-NC-SA 4.0); it is fetched on demand:
 - the dump excludes the `users` table, so **reviews/comments show no author
   names** (text/score/date only); the review/magazine links open the website.
 - **After updating from an older build, click Download AtariLegend data once
-  again**: cache schema **v4** adds the review/comment/magazine **counts**
-  (v3 added the image references, v2 the roles/conversion/release-AKA aliases)
+  again**: cache schema **v5** adds the **community score** and the
+  publisher/developer **logo references** (v4 added the review/comment/magazine
+  counts, v3 the image references, v2 the roles/conversion/release-AKA aliases)
   and the new `atarilegend-texts.json` provides reviews/comments/magazines.
   Older caches still load but lack those fields and show an "outdated" warning.
 - the filter bar has **Genre** (after the status dropdown) and **Developers**

@@ -24,9 +24,10 @@ const String kAtariLegendFileName = 'atarilegend.json';
 /// the `game_release_akas` (`name`) aliases; v3 adds the **screenshot** and
 /// **boxscan** image references (web URLs); v4 adds the **review/comment/
 /// magazine counts** so the details tabs can show them without loading the
-/// text cache. Older caches still load but lack those fields, so the app warns
-/// to download the data again.
-const int kAtariLegendSchemaVersion = 4;
+/// text cache; v5 adds the **community score** (`game_votes`, normalized to
+/// /5) and the **publisher/developer logo** references. Older caches still
+/// load but lack those fields, so the app warns to download the data again.
+const int kAtariLegendSchemaVersion = 5;
 
 /// AtariLegend site base (game/asset URLs are derived from ids/slugs).
 const String kAtariLegendSite = 'https://www.atarilegend.com';
@@ -92,6 +93,9 @@ String atariLegendBoxscanUrl(AtariLegendBoxscan scan) =>
 String atariLegendBoxscanThumbUrl(AtariLegendBoxscan scan) =>
     '$kAtariLegendSite/games/release/${scan.releaseId}/'
     'boxscan-${scan.id}.webp';
+
+String atariLegendCompanyLogoUrl(int companyId, String imgext) =>
+    '$kAtariLegendSite/storage/images/company_logos/$companyId.$imgext';
 
 /// File name of the lazy-loaded text cache (reviews/comments/magazines).
 const String kAtariLegendTextsFileName = 'atarilegend-texts.json';
@@ -369,6 +373,12 @@ class AtariLegendGame {
     this.reviewCount = 0,
     this.commentCount = 0,
     this.magazineCount = 0,
+    this.score,
+    this.voteCount = 0,
+    this.publisherCompanyId,
+    this.publisherImgext = '',
+    this.developerCompanyId,
+    this.developerImgext = '',
   });
 
   factory AtariLegendGame.fromJson(Map<String, dynamic> json) {
@@ -415,6 +425,12 @@ class AtariLegendGame {
       reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
       magazineCount: (json['magazine_count'] as num?)?.toInt() ?? 0,
+      score: (json['score'] as num?)?.toDouble(),
+      voteCount: (json['vote_count'] as num?)?.toInt() ?? 0,
+      publisherCompanyId: (json['publisher_company_id'] as num?)?.toInt(),
+      publisherImgext: (json['publisher_imgext'] ?? '').toString(),
+      developerCompanyId: (json['developer_company_id'] as num?)?.toInt(),
+      developerImgext: (json['developer_imgext'] ?? '').toString(),
     );
   }
 
@@ -454,6 +470,18 @@ class AtariLegendGame {
   final int commentCount;
   final int magazineCount;
 
+  /// Community score on the AtariLegend scale (`game_votes` average, 0–5),
+  /// `null` when the game has no votes.
+  final double? score;
+  final int voteCount;
+
+  /// Publisher and (first) developer company logo references; the logo URL
+  /// is derived via [atariLegendCompanyLogoUrl].
+  final int? publisherCompanyId;
+  final String publisherImgext;
+  final int? developerCompanyId;
+  final String developerImgext;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -477,6 +505,16 @@ class AtariLegendGame {
         if (reviewCount > 0) 'review_count': reviewCount,
         if (commentCount > 0) 'comment_count': commentCount,
         if (magazineCount > 0) 'magazine_count': magazineCount,
+        if (score != null) 'score': score,
+        if (voteCount > 0) 'vote_count': voteCount,
+        if (publisherCompanyId != null && publisherImgext.isNotEmpty) ...{
+          'publisher_company_id': publisherCompanyId,
+          'publisher_imgext': publisherImgext,
+        },
+        if (developerCompanyId != null && developerImgext.isNotEmpty) ...{
+          'developer_company_id': developerCompanyId,
+          'developer_imgext': developerImgext,
+        },
       };
 }
 
@@ -734,7 +772,7 @@ AtariLegendCache parseAtariLegendCache(
 }) {
   final games = _rows(sql, 'games');
   final releases = _rows(sql, 'game_releases');
-  final companies = {for (final r in _rows(sql, 'companies')) r['id']: r['name']};
+  final companyRows = {for (final r in _rows(sql, 'companies')) r['id']: r};
   final genres = {for (final r in _rows(sql, 'genres')) r['id']: r['name']};
   final individuals = {
     for (final r in _rows(sql, 'individuals')) r['id']: r['name']
@@ -757,14 +795,23 @@ AtariLegendCache parseAtariLegendCache(
   }
   final gameDevelopers = <String, List<String>>{};
   final gameDeveloperCredits = <String, List<AtariLegendCredit>>{};
+  // First developer company that actually has a logo (`imgext`).
+  final gameDeveloperLogo =
+      <String, ({int? companyId, String imgext})>{};
   for (final r in _rows(sql, 'game_developer')) {
     final gid = r['game_id'];
-    final name = companies[r['company_id']];
+    final company = companyRows[r['company_id']];
+    final name = company?['name'];
     if (gid == null || name == null) continue;
     final role = developerRoles[r['developer_role_id']] ?? '';
     (gameDevelopers[gid] ??= <String>[]).add(name);
     (gameDeveloperCredits[gid] ??= <AtariLegendCredit>[])
         .add(AtariLegendCredit(name: name, role: role));
+    final imgext = (company?['imgext'] ?? '').toString();
+    if (imgext.isNotEmpty && !gameDeveloperLogo.containsKey(gid)) {
+      gameDeveloperLogo[gid] =
+          (companyId: int.tryParse(r['company_id'] ?? ''), imgext: imgext);
+    }
   }
   final gameAuthors = <String, List<String>>{};
   final gameAuthorCredits = <String, List<AtariLegendCredit>>{};
@@ -852,17 +899,42 @@ AtariLegendCache parseAtariLegendCache(
     return years.first;
   }
 
-  String publisherOf(String gid) {
+  final votesByGame = <String, List<int>>{};
+  for (final r in _rows(sql, 'game_votes')) {
+    final gid = r['game_id'];
+    final score = int.tryParse(r['score'] ?? '');
+    if (gid != null && score != null) {
+      (votesByGame[gid] ??= <int>[]).add(score);
+    }
+  }
+
+  /// AtariLegend's community score: average of the 0–4 votes, normalized to
+  /// the displayed /5 scale (`app/Helpers/GameHelper::normalizeScore`).
+  double? scoreOf(String gid) {
+    final votes = votesByGame[gid];
+    if (votes == null || votes.isEmpty) return null;
+    final average = votes.reduce((a, b) => a + b) / votes.length;
+    return average / 4 * 5;
+  }
+
+  ({String name, int? companyId, String imgext}) publisherOf(String gid) {
     final rs = [...(releasesByGame[gid] ?? const [])];
     rs.sort((a, b) => (a['date'] ?? '9999').compareTo(b['date'] ?? '9999'));
     for (final r in rs) {
       final cid = r['company_id'];
       if (cid != null) {
-        final name = companies[cid];
-        if (name != null && name.isNotEmpty) return name;
+        final company = companyRows[cid];
+        final name = company?['name'];
+        if (name != null && name.isNotEmpty) {
+          return (
+            name: name,
+            companyId: int.tryParse(cid),
+            imgext: (company?['imgext'] ?? '').toString(),
+          );
+        }
       }
     }
-    return '';
+    return (name: '', companyId: null, imgext: '');
   }
 
   final out = <AtariLegendGame>[];
@@ -872,12 +944,14 @@ AtariLegendCache parseAtariLegendCache(
     final slug = (g['slug'] ?? '').toString();
     if (id == null || name.isEmpty) continue;
     final gid = g['id']!;
+    final publisher = publisherOf(gid);
+    final developerLogo = gameDeveloperLogo[gid];
     out.add(AtariLegendGame(
       id: id,
       name: name,
       slug: slug,
       year: yearOf(gid),
-      publisher: publisherOf(gid),
+      publisher: publisher.name,
       genres: _uniqStrings(gameGenres[gid] ?? const []),
       developers: _uniqStrings(gameDevelopers[gid] ?? const []),
       authors: _uniqStrings(gameAuthors[gid] ?? const []),
@@ -894,6 +968,12 @@ AtariLegendCache parseAtariLegendCache(
       reviewCount: textCounts?[gid]?.reviews ?? 0,
       commentCount: textCounts?[gid]?.comments ?? 0,
       magazineCount: textCounts?[gid]?.magazines ?? 0,
+      score: scoreOf(gid),
+      voteCount: votesByGame[gid]?.length ?? 0,
+      publisherCompanyId: publisher.companyId,
+      publisherImgext: publisher.imgext,
+      developerCompanyId: developerLogo?.companyId,
+      developerImgext: developerLogo?.imgext ?? '',
     ));
   }
   out.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));

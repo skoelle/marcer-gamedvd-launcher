@@ -264,15 +264,72 @@ class _AtariLegendDialogState extends State<AtariLegendDialog>
         : [for (final n in game.authors) AtariLegendCredit(name: n)];
     final builder = widget.imageBuilder ?? _defaultImageBuilder;
     final hasImages = game.boxscans.isNotEmpty || game.screenshots.isNotEmpty;
+
+    final publisherLogo =
+        (game.publisherCompanyId != null && game.publisherImgext.isNotEmpty)
+            ? atariLegendCompanyLogoUrl(
+                game.publisherCompanyId!, game.publisherImgext)
+            : null;
+    final developerLogo =
+        (game.developerCompanyId != null && game.developerImgext.isNotEmpty)
+            ? atariLegendCompanyLogoUrl(
+                game.developerCompanyId!, game.developerImgext)
+            : null;
+    final hasScore = game.score != null && game.voteCount > 0;
+
+    final metaRows = <Widget>[
+      if (game.publisher.isNotEmpty) _row('Publisher', game.publisher),
+      if (game.genres.isNotEmpty) _row('Genres', game.genres.join(', ')),
+      if (game.conversion.isNotEmpty) _row('Conversion', game.conversion),
+    ];
+
+    final hasLogos = publisherLogo != null || developerLogo != null;
+    final header = (!hasLogos && !hasScore)
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: metaRows)
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: 4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: metaRows,
+                ),
+              ),
+              if (hasLogos)
+                Expanded(
+                  flex: 3,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (publisherLogo != null)
+                        Tooltip(
+                          message: 'Publisher: ${game.publisher}',
+                          child: _logo(builder, publisherLogo),
+                        ),
+                      if (publisherLogo != null && developerLogo != null)
+                        const SizedBox(width: 8),
+                      if (developerLogo != null)
+                        Tooltip(
+                          message: 'Developer',
+                          child: _logo(builder, developerLogo),
+                        ),
+                    ],
+                  ),
+                ),
+              if (hasScore) _scoreBlock(),
+            ],
+          );
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (game.publisher.isNotEmpty) _row('Publisher', game.publisher),
-          if (game.genres.isNotEmpty) _row('Genres', game.genres.join(', ')),
-          if (game.conversion.isNotEmpty)
-            _row('Conversion', game.conversion),
+          header,
+          const SizedBox(height: 8),
           if (developers.isNotEmpty) _credits('Developers', developers),
           if (authors.isNotEmpty) _credits('Authors', authors),
           if (game.aliases.isNotEmpty) _row('A.k.a.', game.aliases.join(', ')),
@@ -297,6 +354,45 @@ class _AtariLegendDialogState extends State<AtariLegendDialog>
             const Text('Images: atarilegend.com — CC BY-NC-SA 4.0',
                 style: TextStyle(color: Colors.grey, fontSize: 10)),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// One publisher/developer logo tile (hotlinked, no disk cache).
+  Widget _logo(AtariLegendImageBuilder builder, String url) {
+    return Container(
+      width: 76,
+      height: 76,
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: builder(context, url, cacheWidth: 152, fit: BoxFit.contain),
+    );
+  }
+
+  /// Community score on the right (`4.11 / 5`, `7 votes`).
+  Widget _scoreBlock() {
+    return SizedBox(
+      width: 108,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            game.score!.toStringAsFixed(2),
+            style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: kAtariLegendTeal),
+          ),
+          const Text('/ 5',
+              style: TextStyle(color: Colors.grey, fontSize: 10)),
+          Text('${game.voteCount} votes',
+              style: const TextStyle(color: Colors.grey, fontSize: 10)),
         ],
       ),
     );

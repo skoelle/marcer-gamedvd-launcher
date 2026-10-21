@@ -44,11 +44,13 @@ INSERT INTO `game_releases` VALUES
 
 CREATE TABLE `companies` (
   `id` int(11) NOT NULL,
-  `name` varchar(255) DEFAULT NULL
+  `name` varchar(255) DEFAULT NULL,
+  `imgext` varchar(8) DEFAULT NULL
 ) ENGINE=InnoDB;
 
 INSERT INTO `companies` VALUES
-(270,'Elite'),(1367,'Encore'),(1070,'Tatsumi'),(5,'X'),(6,'Y');
+(270,'Elite','png'),(1367,'Encore',NULL),(1070,'Tatsumi',NULL),
+(5,'X',NULL),(6,'Y',NULL);
 
 CREATE TABLE `genres` (
   `id` int(11) NOT NULL,
@@ -153,6 +155,17 @@ CREATE TABLE `game_release_scans` (
 
 INSERT INTO `game_release_scans` VALUES
 (35,1,'Box back','jpg'),(34,1,'Box front','jpg');
+
+CREATE TABLE `game_votes` (
+  `id` int(11) NOT NULL,
+  `game_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `score` int(11) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `game_votes` VALUES
+(1,22,1,3),(2,22,2,3),(3,22,3,3),(4,22,4,3),
+(5,22,5,4),(6,22,6,4),(7,22,7,3);
 ''';
 
 void main() {
@@ -225,6 +238,12 @@ void main() {
       expect(buggy.reviewCount, 1);
       expect(buggy.commentCount, 2);
       expect(buggy.magazineCount, 1);
+      expect(buggy.score, closeTo(4.107, 0.01));
+      expect(buggy.voteCount, 7);
+      expect(buggy.publisherCompanyId, 270);
+      expect(buggy.publisherImgext, 'png');
+      expect(buggy.developerCompanyId, 270);
+      expect(buggy.developerImgext, 'png');
     });
 
     test('derives the AtariLegend web image URLs', () {
@@ -235,6 +254,8 @@ void main() {
           'https://www.atarilegend.com/storage/images/game_release_scans/34.jpg');
       expect(atariLegendBoxscanThumbUrl(buggy.boxscans.first),
           'https://www.atarilegend.com/games/release/1/boxscan-34.webp');
+      expect(atariLegendCompanyLogoUrl(270, 'png'),
+          'https://www.atarilegend.com/storage/images/company_logos/270.png');
     });
 
     test('ignores undated/null releases for year/publisher', () {
@@ -267,6 +288,10 @@ void main() {
       expect(buggy.reviewCount, 1);
       expect(buggy.commentCount, 2);
       expect(buggy.magazineCount, 1);
+      expect(buggy.score, closeTo(4.107, 0.01));
+      expect(buggy.voteCount, 7);
+      expect(buggy.publisherCompanyId, 270);
+      expect(buggy.developerCompanyId, 270);
       expect(restored.schemaVersion, kAtariLegendSchemaVersion);
     });
   });

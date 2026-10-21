@@ -41,6 +41,12 @@ void main() {
       reviewCount: 1,
       commentCount: 1,
       magazineCount: 1,
+      score: 4.11,
+      voteCount: 7,
+      publisherCompanyId: 270,
+      publisherImgext: 'png',
+      developerCompanyId: 163,
+      developerImgext: 'png',
     );
 
     const texts = AtariLegendTexts(
@@ -121,6 +127,19 @@ void main() {
     expect(find.text('Martin W. Ward'), findsOneWidget);
     expect(find.text('Music'), findsOneWidget);
     expect(find.text('Programming'), findsOneWidget);
+
+    // Community score far right + publisher/developer logos side by side.
+    expect(find.text('4.11'), findsOneWidget);
+    expect(find.text('/ 5'), findsOneWidget);
+    expect(find.text('7 votes'), findsOneWidget);
+    expect(
+        find.text(
+            'https://www.atarilegend.com/storage/images/company_logos/270.png'),
+        findsOneWidget);
+    expect(
+        find.text(
+            'https://www.atarilegend.com/storage/images/company_logos/163.png'),
+        findsOneWidget);
 
     // Images live in the Info tab: both sections simultaneously (no hero).
     expect(find.text('Boxscans (2)'), findsOneWidget);
