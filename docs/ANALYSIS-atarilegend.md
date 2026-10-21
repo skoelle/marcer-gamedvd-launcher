@@ -233,8 +233,9 @@ Paths come exclusively from `local/paths.env`: `MARCER_ATARILEGEND_DIR`
 | M0 (done) | `fetch` / `match` / `report` + this analysis |
 | M1 (done) | `extract` → full-dump SQLite (tool analysis) |
 | M2 (done) | `index` / `detail` / `fixtures` reference outputs |
-| M3.1 (done) | Desktop app settings path `AtariLegendDirectory` + **Download AtariLegend data** button: fetch the newest `.sql.gz`, gunzip, parse in a background isolate, write the compact `atarilegend.json` (id/name/slug, year, publisher, genres, developers, authors), delete the dump |
-| M3.2 | App UI: developer/author/genre filter dropdowns fed by the cache + the **AtariLegend details** panel |
+| M3.1 (done) | Desktop app settings path `AtariLegendDirectory` + **Download AtariLegend data** button: fetch the newest `.sql.gz`, gunzip, parse in a background isolate, write the compact `atarilegend.json` (id/name/slug, year, publisher, genres, developers, authors, aliases), delete the dump |
+| M3.2 (done) | App loads the cache and matches each card's **folder** incl. aliases (exact → prefix → fuzzy, ≈84 % cracked); a teal **AtariLegend** button in the sidebar/lightbox *Game info* heading opens an in-app dialog (cached metadata) with an "Open on atarilegend.com" browser link |
+| M3.3 | App UI: developer/author/genre filter dropdowns fed by the cache |
 | M4 | Box-scan / screenshot **images** from `images.zip` (separate, large) |
 | M5 | Weekly automation of fetch + app cache refresh |
 

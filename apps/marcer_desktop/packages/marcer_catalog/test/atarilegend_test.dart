@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:io';
+
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:test/test.dart';
 
@@ -80,6 +82,15 @@ CREATE TABLE `game_individual` (
 
 INSERT INTO `game_individual` VALUES
 (1,22,243,2),(2,22,3280,1);
+
+CREATE TABLE `game_akas` (
+  `id` int(11) NOT NULL,
+  `game_id` int(11) DEFAULT NULL,
+  `name` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `game_akas` VALUES
+(1,22,'Speed Buggy');
 ''';
 
 void main() {
@@ -134,6 +145,7 @@ void main() {
       expect(buggy.genres, ['Simulation', 'Driving']);
       expect(buggy.developers, ['Elite', 'Tatsumi']);
       expect(buggy.authors, ['Jas C Brooke', 'Martin W. Ward']);
+      expect(buggy.aliases, ['Speed Buggy']);
     });
 
     test('ignores undated/null releases for year/publisher', () {
@@ -153,6 +165,91 @@ void main() {
       final buggy = restored.games.firstWhere((g) => g.id == 22);
       expect(buggy.year, 1987);
       expect(buggy.genres, ['Simulation', 'Driving']);
+    });
+  });
+
+  group('AtariLegendIndex matching', () {
+    AtariLegendGame game(int id, String name) =>
+        AtariLegendGame(id: id, name: name, slug: 'g$id');
+
+    final index = AtariLegendIndex.fromGames([
+      game(22, 'Buggy Boy'),
+      game(152, '1943 - The Battle of Midway'),
+      game(978, 'Dungeon Master'),
+      game(991, 'Prehistoric Tale, A'),
+      game(992, 'Kletba Jižní Země'),
+      game(20, 'Arkanoid'),
+    ]);
+
+    test('exact (case/punctuation insensitive)', () {
+      expect(index.matchFolder('Buggy Boy')?.id, 22);
+      expect(index.matchFolder('buggy-boy')?.id, 22);
+    });
+
+    test('aliases (game_akas) are matched too', () {
+      final idx = AtariLegendIndex.fromGames([
+        const AtariLegendGame(
+            id: 22,
+            name: 'Buggy Boy',
+            slug: 'buggy-boy',
+            aliases: ['Speed Buggy']),
+      ]);
+      expect(idx.matchFolder('Speed Buggy')?.id, 22);
+      expect(idx.matchFolder('Buggy Boy')?.id, 22);
+    });
+
+    test('article inversion', () {
+      expect(index.matchFolder('A Prehistoric Tale')?.id, 991);
+    });
+
+    test('diacritics fold', () {
+      expect(index.matchFolder('Kletba Jizni Zeme')?.id, 992);
+    });
+
+    test('prefix (either direction)', () {
+      expect(index.matchFolder('1943')?.id, 152);
+      expect(index.matchFolder('Arkanoid 2')?.id, 20);
+    });
+
+    test('fuzzy typo within the block', () {
+      expect(index.matchFolder('Dungeon Masters')?.id, 978);
+    });
+
+    test('unmatched folder returns null', () {
+      expect(index.matchFolder('Completely Unknown Title'), isNull);
+    });
+  });
+
+  group('AtariLegendIndex.load', () {
+    test('missing directory/file degrades to empty with a warning', () {
+      final tmp = Directory.systemTemp.createTempSync('al_index_missing');
+      addTearDown(() {
+        if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+      });
+      final warnings = <String>[];
+      final idx = AtariLegendIndex.load('${tmp.path}/nope', warnings: warnings);
+      expect(idx.length, 0);
+      expect(warnings, isNotEmpty);
+    });
+
+    test('loads the cache and matches by folder', () {
+      final tmp = Directory.systemTemp.createTempSync('al_index_load');
+      addTearDown(() {
+        if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+      });
+      final cache = AtariLegendCache(
+        generatedAt: 'now',
+        games: const [
+          AtariLegendGame(
+              id: 22, name: 'Buggy Boy', slug: 'buggy-boy', year: 1987),
+        ],
+      );
+      File('${tmp.path}/atarilegend.json')
+          .writeAsStringSync(cache.toJsonString());
+      final idx = AtariLegendIndex.load(tmp.path);
+      expect(idx.length, 1);
+      expect(idx.matchFolder('Buggy Boy')?.id, 22);
+      expect(idx.byId(22)?.slug, 'buggy-boy');
     });
   });
 }

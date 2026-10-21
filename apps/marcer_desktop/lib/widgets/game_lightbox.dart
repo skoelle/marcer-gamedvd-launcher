@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
+import 'atari_legend_dialog.dart';
 import 'game_info_panel.dart';
 import 'status_kind_dialog.dart';
 
@@ -164,6 +165,17 @@ class _GameLightboxState extends State<GameLightbox> {
     if (item is Entry) {
       final g = widget.controller.infoFor(item);
       return g == null ? null : InfoSummary.fromGame(g);
+    }
+    return null;
+  }
+
+  AtariLegendGame? get _atariLegend {
+    final item = _item;
+    if (item is GameCard) {
+      return widget.controller.atariLegendForCard(item);
+    }
+    if (item is Entry) {
+      return widget.controller.atariLegendForEntry(item);
     }
     return null;
   }
@@ -835,8 +847,12 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 
   Widget _infoPanel(_Variant? v) {
+    final al = _atariLegend;
     return GameInfoPanel(
       info: _info,
+      atariLegend: al,
+      onAtariLegend:
+          al == null ? null : () => showAtariLegendDialog(context, game: al),
       variant: v == null
           ? null
           : ZipVariantView(

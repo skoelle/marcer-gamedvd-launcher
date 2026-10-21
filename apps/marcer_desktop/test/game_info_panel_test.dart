@@ -7,6 +7,8 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/widgets/game_info_panel.dart';
 
 void main() {
+  _atariLegendTests();
+
   testWidgets('play split button lists variants and reports the selection',
       (tester) async {
     tester.view.physicalSize = const Size(800, 800);
@@ -45,5 +47,44 @@ void main() {
     await tester.tap(find.text('Mono').last);
     await tester.pumpAndSettle();
     expect(selected?.name, 'Mono');
+  });
+}
+
+void _atariLegendTests() {
+  testWidgets('AtariLegend button shown for a match (also without game info)',
+      (tester) async {
+    var tapped = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 420,
+          child: GameInfoPanel(
+            info: null,
+            atariLegend: const AtariLegendGame(
+                id: 22, name: 'Buggy Boy', slug: 'buggy-boy'),
+            onAtariLegend: () => tapped++,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No game info'), findsOneWidget);
+    expect(find.text('AtariLegend'), findsOneWidget);
+    await tester.tap(find.text('AtariLegend'));
+    expect(tapped, 1);
+  });
+
+  testWidgets('no AtariLegend button without a match', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 420,
+          child: GameInfoPanel(info: null),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('AtariLegend'), findsNothing);
   });
 }

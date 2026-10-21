@@ -19,6 +19,7 @@ dependencies:
   window_manager: ^0.5.2
   file_picker: ^11.0.3
   ftpconnect: ^3.0.0
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:

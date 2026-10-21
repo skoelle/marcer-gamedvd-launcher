@@ -393,9 +393,15 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   inline, failures as a SnackBar.
 - while the fetch runs, **Save**, **Cancel** and **Exit** are disabled (and the
   dialog cannot be dismissed).
-- the cache is small (~1.4 MB for ~6.200 games). This step only **stores** the
-  data; the catalog filters (developer/author/genre) and the "AtariLegend
-  details" panel are the next milestones — see
+- the cache is small (~1.4 MB for ~6.200 games).
+- at startup the cache is read and each catalog card's **folder name** is
+  matched against the AtariLegend titles (aliases included; exact → prefix →
+  fuzzy). When matched, the detail sidebar and the lightbox show a teal
+  **AtariLegend** button at the top-right of the *Game info* heading (also on
+  *No game info*). It opens an in-app dialog with the cached metadata
+  (year, publisher, genres, developers, authors) and an **Open on
+  atarilegend.com** button (external browser, `url_launcher`).
+- the developer/author/genre **filter dropdowns** are the next milestone — see
   [`../../docs/ANALYSIS-atarilegend.md`](../../docs/ANALYSIS-atarilegend.md).
 
 ## Catalog-data update check

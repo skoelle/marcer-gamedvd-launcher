@@ -46,6 +46,7 @@ class CatalogController extends ChangeNotifier {
   late final OverlayBrowser browser;
   late ScreenshotIndices screenshots;
   late GameInfoIndex gameinfo;
+  late AtariLegendIndex atariLegend;
   late CatalogUniverse universe;
   FavoritesService? favorites;
 
@@ -100,6 +101,7 @@ class CatalogController extends ChangeNotifier {
       final bundle = await CatalogBundle.load(
         screenshotDir: cfg.screenshotDirectory,
         gameinfoDir: cfg.resolveGameinfoDirectory(),
+        atariLegendDir: cfg.resolveAtariLegendDirectory(),
         onProgress: (message) {
           progress = message;
           notifyListeners();
@@ -108,6 +110,7 @@ class CatalogController extends ChangeNotifier {
       notices.addAll(bundle.warnings);
       screenshots = bundle.index;
       gameinfo = bundle.info;
+      atariLegend = bundle.atariLegend;
       universe = bundle.universe;
 
       if (!Directory(config.rootDirectory).existsSync()) {
@@ -448,6 +451,19 @@ class CatalogController extends ChangeNotifier {
       screenshots.candidatePathsFor(relOf(e));
 
   GameInfo? infoFor(Entry e) => gameinfo.lookupByRel(relOf(e));
+
+  /// AtariLegend match for a catalog card (matched by folder name, like the
+  /// `tools/atarilegend-gen` matcher). `null` when no data/matche.
+  AtariLegendGame? atariLegendForCard(GameCard card) =>
+      atariLegend.matchFolder(card.folder);
+
+  /// AtariLegend match for a folder-browser entry: the folder is
+  /// `<letter>/<folder>` of its rel path (same join as the screenshot index).
+  AtariLegendGame? atariLegendForEntry(Entry e) {
+    final parts = relOf(e).split('/');
+    if (parts.length >= 4) return atariLegend.matchFolder(parts[3]);
+    return atariLegend.matchFolder(e.name);
+  }
 
   String sectionOf(Entry e) {
     final rel = relOf(e);

@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'atarilegend.dart';
 import 'card.dart';
 import 'gameinfo.dart';
 import 'screenshot_index.dart';
@@ -323,6 +324,7 @@ class CatalogBundle {
   CatalogBundle({
     required this.index,
     required this.info,
+    required this.atariLegend,
     required this.universe,
     required this.warnings,
   });
@@ -335,6 +337,7 @@ class CatalogBundle {
   static Future<CatalogBundle> load({
     required String screenshotDir,
     required String gameinfoDir,
+    String atariLegendDir = '',
     void Function(String message)? onProgress,
   }) {
     final receive = ReceivePort();
@@ -372,7 +375,8 @@ class CatalogBundle {
       try {
         isolate = await Isolate.spawn(
           _loadEntry,
-          _LoadRequest(receive.sendPort, screenshotDir, gameinfoDir),
+          _LoadRequest(
+              receive.sendPort, screenshotDir, gameinfoDir, atariLegendDir),
           onError: errors.sendPort,
         );
       } catch (e, st) {
@@ -389,6 +393,7 @@ class CatalogBundle {
   static CatalogBundle loadSync({
     required String screenshotDir,
     required String gameinfoDir,
+    String atariLegendDir = '',
     void Function(String message)? onProgress,
   }) {
     final warnings = <String>[];
@@ -410,6 +415,10 @@ class CatalogBundle {
       }
     }
 
+    onProgress?.call('Loading AtariLegend data…');
+    final atariLegend =
+        AtariLegendIndex.load(atariLegendDir, warnings: warnings);
+
     final universe = CatalogUniverse.build(
       indices: index,
       info: info,
@@ -420,6 +429,7 @@ class CatalogBundle {
     return CatalogBundle(
       index: index,
       info: info,
+      atariLegend: atariLegend,
       universe: universe,
       warnings: warnings,
     );
@@ -427,17 +437,20 @@ class CatalogBundle {
 
   final ScreenshotIndices index;
   final GameInfoIndex info;
+  final AtariLegendIndex atariLegend;
   final CatalogUniverse universe;
   final List<String> warnings;
 }
 
 /// Request passed to the loader isolate ([CatalogBundle.load]).
 class _LoadRequest {
-  const _LoadRequest(this.port, this.screenshotDir, this.gameinfoDir);
+  const _LoadRequest(
+      this.port, this.screenshotDir, this.gameinfoDir, this.atariLegendDir);
 
   final SendPort port;
   final String screenshotDir;
   final String gameinfoDir;
+  final String atariLegendDir;
 }
 
 /// Isolate entry point: loads the bundle, streams progress messages through
@@ -446,6 +459,7 @@ void _loadEntry(_LoadRequest request) {
   final bundle = CatalogBundle.loadSync(
     screenshotDir: request.screenshotDir,
     gameinfoDir: request.gameinfoDir,
+    atariLegendDir: request.atariLegendDir,
     onProgress: request.port.send,
   );
   Isolate.exit(request.port, bundle);
