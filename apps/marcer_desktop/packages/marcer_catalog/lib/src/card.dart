@@ -200,6 +200,7 @@ class GameCard {
     required this.crackerSort,
     required this.languageSort,
     required this.searchText,
+    required this.sortName,
     this.focusVariant,
     this.tosVersion,
     this.atariLegend,
@@ -241,6 +242,10 @@ class GameCard {
   final String languageSort;
   final String searchText;
 
+  /// Lowercased [name], precomputed once for the (hot) name sort/tie-break
+  /// instead of allocating in every comparison.
+  final String sortName;
+
   /// Non-default TOS version required by any of the card's variants (e.g.
   /// `1.02`), or null when every variant boots with the default TOS
   /// (`SPEC-screenshot-generator.md` §7.5). Drives the `TOS 1.02` badge and
@@ -260,7 +265,7 @@ class GameCard {
 
   /// Sort tie key (gallery `_tie`): `(name.lower, firstVariantRel)`.
   int tieCompare(GameCard other) {
-    final byName = name.toLowerCase().compareTo(other.name.toLowerCase());
+    final byName = sortName.compareTo(other.sortName);
     if (byName != 0) return byName;
     final a = variants.isNotEmpty ? variants.first.rel : name;
     final b = other.variants.isNotEmpty ? other.variants.first.rel : other.name;
@@ -309,7 +314,9 @@ String _minLower(Iterable<String> values) {
       values.where((v) => v.trim().isNotEmpty).toList();
   if (list.isEmpty) return '';
   list.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-  return list.first;
+  // Store it lowercased: the sort comparators use it directly (no
+  // per-comparison toLowerCase()).
+  return list.first.toLowerCase();
 }
 
 /// Builds a card from grouped index entries of one section (gallery
@@ -536,6 +543,7 @@ GameCard _finalizeCard({
     crackerSort: _minLower(crackers),
     languageSort: _minLower(langs),
     searchText: searchParts.where((p) => p.isNotEmpty).join(' ').toLowerCase(),
+    sortName: name.toLowerCase(),
     tosVersion: tosVersion,
     atariLegend: atariLegend,
   );
@@ -694,7 +702,9 @@ GameCard _copyCard(
     crackerSort: card.crackerSort,
     languageSort: card.languageSort,
     searchText: card.searchText,
+    sortName: card.sortName,
     focusVariant: focusVariant,
     tosVersion: card.tosVersion,
+    atariLegend: card.atariLegend,
   );
 }

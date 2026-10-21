@@ -231,6 +231,9 @@ bool matchesCard(GameCard c, CatalogFilter f) {
 
 /// Port of `gallery.py _sort_cards` (deterministic comparators; Dart's
 /// `List.sort` is unstable, so tie-breaks are explicit).
+///
+/// The comparators only read precomputed keys (`GameCard.sortName` and the
+/// lowercased `*Sort` fields) — no `toLowerCase()`/allocation inside the sort.
 void sortCards(List<GameCard> cards, String sort, String order) {
   if (!kSortKeys.contains(sort)) sort = 'name';
   final desc = order == 'desc';
@@ -249,7 +252,8 @@ void sortCards(List<GameCard> cards, String sort, String order) {
         _ => '',
       };
 
-  bool isUnknown(GameCard c) => sort == 'year' ? c.yearNum == 0 : primStr(c).isEmpty;
+  bool isUnknown(GameCard c) =>
+      sort == 'year' ? c.yearNum == 0 : primStr(c).isEmpty;
 
   final known = cards.where((c) => !isUnknown(c)).toList();
   final unknown = cards.where(isUnknown).toList();
@@ -264,9 +268,7 @@ void sortCards(List<GameCard> cards, String sort, String order) {
     });
   } else {
     known.sort((a, b) {
-      final cmp = primStr(a)
-          .toLowerCase()
-          .compareTo(primStr(b).toLowerCase());
+      final cmp = primStr(a).compareTo(primStr(b));
       final ordered = desc ? -cmp : cmp;
       return ordered != 0 ? ordered : a.tieCompare(b);
     });

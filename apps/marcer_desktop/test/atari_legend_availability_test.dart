@@ -57,4 +57,47 @@ void main() {
     expect(c.ready, isTrue);
     expect(c.hasAtariLegend, isTrue);
   });
+
+  test('curation keeps the AtariLegend match on the rebuilt cards', () async {
+    File('$alDir/atarilegend.json').writeAsStringSync(jsonEncode({
+      'schema_version': kAtariLegendSchemaVersion,
+      'generated_at': 'now',
+      'games': [
+        {'id': 22, 'name': 'Alpha', 'slug': 'alpha'},
+      ],
+    }));
+    const rel = 'Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.zip';
+    File('${tmp.path}/out/$rel').parent.createSync(recursive: true);
+    File('${tmp.path}/out/index.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {
+        rel: {
+          'rel': rel,
+          'name': 'a.zip',
+          'status': 'desktop',
+          'kind': 'textscreen',
+          'layer': 'ROOT',
+          'preview': null,
+          'candidates': <String>[],
+        },
+      },
+    }));
+
+    final c = controller();
+    await c.init();
+    final before = c.universe.cracked.firstWhere((x) => x.folder == 'Alpha');
+    expect(before.atariLegend, isNotNull);
+    // A crew/cracker focus filter copies the card (`applyFocus`); the
+    // AtariLegend match must be carried over to the copy.
+    expect(applyFocus(before, 'Some Crew', 'crew').atariLegend, isNotNull);
+
+    // Manual curation rebuilds the universe in memory; the AtariLegend match
+    // must survive (regression: `_rebuildUniverse` dropped it).
+    c.applyStatusChange(rel, 'done', 'game');
+
+    final after = c.universe.cracked.firstWhere((x) => x.folder == 'Alpha');
+    expect(after.atariLegend, isNotNull);
+    expect(c.hasAtariLegend, isTrue);
+    c.dispose();
+  });
 }

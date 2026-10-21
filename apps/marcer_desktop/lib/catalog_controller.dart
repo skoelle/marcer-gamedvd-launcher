@@ -1510,6 +1510,10 @@ class CatalogController extends ChangeNotifier {
       indices: screenshots,
       info: gameinfo,
       screenshotDir: config.screenshotDirectory,
+      // Keep the AtariLegend matches: without this a manual curation (C +
+      // Save/Discard) silently dropped the genre/developer data, the
+      // Publisher merge and the AtariLegend button until a reload.
+      atariLegend: atariLegend,
     );
     // New card objects — drop the lazy pd/utils variant cache (identity-keyed).
     _resolvedCardVariants.clear();
