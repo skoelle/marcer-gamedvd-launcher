@@ -220,6 +220,18 @@ Probe screenshot (10 s)
 └─ then as before: open folders, descend (max_depth)
 ```
 
+**TTP launchers.** If a program click opens GEM's TTP command-line dialog
+(`ANWENDUNG ÖFFNEN`, detected with `assets/ttp-dialog-title.png` /
+`ttp-dialog-buttons.png`), the chain does **not** treat it as a started
+program. It clicks `ABBRUCH` (`assets/ttp-dialog-abort.png`, single click),
+waits for the dialog to close and tries the **next program icon in the same
+window** (`click_retry.max_icon_attempts`, default 8). The same window is
+searched; it does not backtrack to other folders. If every icon is a TTP
+or never starts, the result is `click-failed`. Cancellation is retried up
+to `click_retry.ttp_cancel_attempts` (default 2); a dialog that cannot be
+closed aborts the chain. For the single-icon `prg` strategy the dialog is
+also cancelled, but there is no alternate stored icon to try.
+
 Both strategies verify their clicks (`click_retry.drive_attempts` /
 `click_retry.prg_attempts` / `click_retry.folder_attempts`, default 3
 each). The folder click is classified with the icon templates rather than

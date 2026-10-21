@@ -715,6 +715,19 @@ stronger, ~0.90) folder match.
 Frame - Tsunoo Rhilty v2 and 10th Frame - Elsi via drive -> folder ->
 PRG; mono drive -> folder -> PRG chain executes at scale 0.5.)*
 
+**TTP command-line dialogs.** A double click on a `.TTP` launcher opens
+GEM's "ANWENDUNG ÖFFNEN" dialog instead of starting the application. The
+chain checks every program click with `is_ttp_dialog` (title/button
+templates, section 8.9). When it matches, it single clicks `ABBRUCH`
+(`assets/ttp-dialog-abort.png`), waits for the dialog to close and tries
+the next program icon in the same window (`click_retry.max_icon_attempts`,
+default 8). It does not backtrack to other folders. Cancellation is
+retried up to `click_retry.ttp_cancel_attempts` (default 2); if the
+dialog stays open the chain aborts with `click-failed`. If every program
+icon is a TTP or never starts, the result is `click-failed` (no new
+`click_result` value). The single-icon `prg` strategy also cancels the
+dialog, but has no other stored icon to try.
+
 **Revealing hidden icons** (`click_retry.enlarge_window`, plus
 `click_retry.scroll_attempts`). A window can show fewer icons than the
 folder contains, hiding the program behind a scrollbar. Two position
@@ -1630,8 +1643,12 @@ A conforming implementation satisfies all of the following.
       enlarges that window if present, otherwise opens DISKSTATION A, checks
       the program icon first and then enlarges/scans PRG -> folder -> scroll.
       It descends up to `click_retry.drive_max_depth` levels (folder icons)
-      to the program icon. Clicks use `hatari-event doubleclick` over the FIFO, are
-      retried when they do not take effect, restart the capture timepoints,
+      to the program icon. A TTP command dialog after a program click is
+      cancelled via ABBRUCH and the next program icon in the same window is
+      tried (bounded by `click_retry.max_icon_attempts`,
+      `click_retry.ttp_cancel_attempts`). Clicks use
+      `hatari-event doubleclick` over the FIFO, are retried when they do not
+      take effect, restart the capture timepoints,
       and the attempt is recorded (`click_retried`, `clicked`,
       `click_result`). Each worker resolves its own Hatari window by process
       id, so `--jobs N` is safe, and all intermediate chain screenshots are

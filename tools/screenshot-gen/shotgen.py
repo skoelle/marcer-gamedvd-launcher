@@ -151,6 +151,8 @@ DEFAULT_CONFIG = {
         "folder_attempts": 3,
         "enlarge_window": True,
         "scroll_attempts": 4,
+        "max_icon_attempts": 8,
+        "ttp_cancel_attempts": 2,
     },
     "tmp_dir": "/tmp/marcer-shotgen",
     "xvfb_screen": "1024x768x24",
@@ -1192,18 +1194,11 @@ def load_gray(img_path: Path):
     return arr
 
 
-def find_template(img_path: Path, template, min_score: float):
-    """Zero-mean normalized cross correlation (FFT) against a template.
-
-    Also tries the inverted template so that inverted (selected) GEM icons
-    still match. Returns (cx, cy, score) at the template center, or None.
-    """
+def _template_ncc_maps(img, t_base):
+    """Yield ``(ncc, th, tw)`` maps for the template and its inverse."""
     import numpy as np
     from scipy.signal import fftconvolve
 
-    img = load_gray(img_path)
-    t_base = np.asarray(template, dtype=np.float64)
-    best = None
     for t_img in (t_base, 255.0 - t_base):
         t = t_img - t_img.mean()
         th, tw = t.shape
@@ -1223,6 +1218,21 @@ def find_template(img_path: Path, template, min_score: float):
         den = np.sqrt(np.maximum(var, 1e-9) * t_energy)
         ncc = np.where(contrast, num / den, -1.0)
         ncc = np.nan_to_num(ncc, nan=-1.0, posinf=-1.0, neginf=-1.0)
+        yield ncc, th, tw
+
+
+def find_template(img_path: Path, template, min_score: float):
+    """Zero-mean normalized cross correlation (FFT) against a template.
+
+    Also tries the inverted template so that inverted (selected) GEM icons
+    still match. Returns (cx, cy, score) at the template center, or None.
+    """
+    import numpy as np
+
+    img = load_gray(img_path)
+    t_base = np.asarray(template, dtype=np.float64)
+    best = None
+    for ncc, th, tw in _template_ncc_maps(img, t_base):
         iy, ix = np.unravel_index(int(np.argmax(ncc)), ncc.shape)
         score = float(np.clip(ncc[iy, ix], -1.0, 1.0))
         if best is None or score > best[2]:
@@ -1230,6 +1240,62 @@ def find_template(img_path: Path, template, min_score: float):
     if best is None or best[2] < min_score:
         return None
     return best
+
+
+def find_template_peaks(img_path: Path, template, min_score: float,
+                        max_peaks: int = 12, min_distance: int = 12):
+    """Find multiple template matches, suppressing neighbours of a hit.
+
+    Returns ``[(cx, cy, score)]`` sorted by score (best first).
+    """
+    import numpy as np
+
+    img = load_gray(img_path)
+    t_base = np.asarray(template, dtype=np.float64)
+    hits = []
+    for ncc, th, tw in _template_ncc_maps(img, t_base):
+        ys, xs = np.where(ncc >= min_score)
+        if len(xs) == 0:
+            continue
+        scores = ncc[ys, xs]
+        accepted = []
+        for idx in np.argsort(scores)[::-1]:
+            if len(accepted) >= max_peaks:
+                break
+            cx = int(xs[idx] + tw // 2)
+            cy = int(ys[idx] + th // 2)
+            if all(abs(cx - a[0]) > min_distance
+                   or abs(cy - a[1]) > min_distance for a in accepted):
+                accepted.append((cx, cy, float(scores[idx])))
+        hits.extend(accepted)
+    hits.sort(key=lambda h: h[2], reverse=True)
+    return hits[:max_peaks]
+
+
+def find_icons(path: Path, cfg: dict, template: str, limit: int = 8,
+               min_score: float = None):
+    """Find multiple icons of one template, best scale per position.
+
+    Returns ``[{"sx", "sy", "score", "scale"}]`` sorted by score.
+    """
+    if min_score is None:
+        min_score = cfg["click_retry"]["icon_min_score"]
+    merged = []
+    for scale, tpl in icon_variants(template):
+        for cx, cy, score in find_template_peaks(
+                path, tpl, min_score, max_peaks=limit * 2,
+                min_distance=12):
+            hit = {"sx": cx, "sy": cy, "score": score, "scale": scale}
+            for i, old in enumerate(merged):
+                if (abs(cx - old["sx"]) <= 12
+                        and abs(cy - old["sy"]) <= 12):
+                    if score > old["score"] + _VARIANT_MARGIN:
+                        merged[i] = hit
+                    break
+            else:
+                merged.append(hit)
+    merged.sort(key=lambda h: h["score"], reverse=True)
+    return merged[:limit]
 
 
 ICON_TEMPLATE_FILES = {
@@ -1339,6 +1405,30 @@ def is_ttp_dialog(path: Path) -> bool:
     return False
 
 
+TTP_ABORT_TEMPLATE_FILE = "ttp-dialog-abort.png"
+_TTP_ABORT_TEMPLATE: list = []
+
+
+def ttp_abort_template():
+    """Return the cached template of the TTP dialog's ABBRUCH button."""
+    if not _TTP_ABORT_TEMPLATE:
+        from PIL import Image
+        path = ASSETS_DIR / TTP_ABORT_TEMPLATE_FILE
+        if path.exists():
+            with Image.open(path) as tpl:
+                _TTP_ABORT_TEMPLATE.append(tpl.convert("L").copy())
+    return _TTP_ABORT_TEMPLATE
+
+
+def find_ttp_abort_xy(path: Path):
+    """Screenshot pixel of the ABBRUCH button in a TTP dialog, or None."""
+    for template in ttp_abort_template():
+        res = find_template(path, template, TTP_TEMPLATE_MIN_SCORE)
+        if res is not None:
+            return res[0], res[1]
+    return None
+
+
 GEM_FILE_WINDOW_TEMPLATE = "gem-file-window.png"
 GEM_FILE_WINDOW_MIN_SCORE = 0.90
 _GEM_FILE_WINDOW: list = []
@@ -1444,8 +1534,9 @@ def drop_case_variants(mirror_dir: Path, names) -> None:
         pass
 
 
-def find_window_icon(path: Path, cfg: dict, template: str):
-    """Find one GEM window icon with the stricter window threshold.
+def find_window_icons(path: Path, cfg: dict, template: str,
+                      limit: int = 12):
+    """Find all GEM window icons of one template with the window threshold.
 
     Window icons match their templates near 1.0, so a dedicated higher
     threshold rejects the flat-region false positives (~0.55) that appear
@@ -1455,10 +1546,13 @@ def find_window_icon(path: Path, cfg: dict, template: str):
     stronger folder match).
     """
     min_score = cfg["click_retry"].get("window_icon_min_score", 0.80)
-    hit = find_icon(path, cfg, template)
-    if hit and hit["score"] >= min_score:
-        return hit
-    return None
+    return find_icons(path, cfg, template, limit=limit, min_score=min_score)
+
+
+def find_window_icon(path: Path, cfg: dict, template: str):
+    """Find the best GEM window icon (first of :func:`find_window_icons`)."""
+    hits = find_window_icons(path, cfg, template)
+    return hits[0] if hits else None
 
 
 def find_window_target(path: Path, cfg: dict):
@@ -1562,6 +1656,35 @@ def _folder_click_state(before: Path, after: Path, cfg: dict,
     return "opened"
 
 
+def cancel_ttp_dialog(P, cfg, shot, log, fifo, outdir, pid: int = None):
+    """Click ABBRUCH in the TTP command dialog.
+
+    Returns ``(cancelled, last_screenshot)``. Retries up to
+    ``click_retry.ttp_cancel_attempts`` times; a missing button or a dialog
+    that stays open returns False so the caller can abort the chain.
+    """
+    attempts = int(cfg.get("click_retry", {}).get(
+        "ttp_cancel_attempts", 2))
+    current = shot
+    for attempt in range(1, attempts + 1):
+        xy = find_ttp_abort_xy(current)
+        if xy is None:
+            log("TTP ABBRUCH button not found")
+            return False, current
+        log(f"TTP ABBRUCH click attempt {attempt}")
+        click_icon(P, current, xy[0], xy[1], log, fifo=fifo, pid=pid,
+                   double=False)
+        if not sleep_until(time.monotonic() + 2.0):
+            return False, current
+        new_shot = _grab_now(fifo, outdir, 2.0) or current
+        if not is_ttp_dialog(new_shot):
+            log("TTP dialog cancelled")
+            return True, new_shot
+        current = new_shot
+    log("TTP dialog did not close")
+    return False, current
+
+
 def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
                         grabs, log, pid: int = None,
                         allow_enlarge: bool = False):
@@ -1633,6 +1756,50 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
                 return shot, target
         return shot, None
 
+    def _try_prgs(shot, depth):
+        """Try every program icon in the current window.
+
+        TTP launchers open GEM's command-line dialog: click ABBRUCH, mark
+        that icon as tried and continue with the next program icon.
+        Returns (started, last_shot, result).
+        """
+        max_icons = int(click_cfg.get("max_icon_attempts", 8))
+        prg_attempts = int(click_cfg.get("prg_attempts", 3))
+        hits = find_window_icons(shot, cfg, "prg", limit=max_icons)
+        hits.sort(key=lambda h: (h["sy"], h["sx"]))
+        tried = []
+        for idx, hit in enumerate(hits[:max_icons], 1):
+            if any(abs(hit["sx"] - x) <= 8 and abs(hit["sy"] - y) <= 8
+                   for x, y in tried):
+                continue
+            tried.append((hit["sx"], hit["sy"]))
+            for pa in range(1, prg_attempts + 1):
+                before = shot
+                click_icon(P, shot, hit["sx"], hit["sy"], log,
+                           fifo=fifo, pid=pid)
+                if not sleep_until(time.monotonic() + step_wait):
+                    return False, shot, "click-failed"
+                new_shot = _grab_now(fifo, outdir, 2.0) or shot
+                chain_shots.append(new_shot)
+                if is_ttp_dialog(new_shot):
+                    log(f"TTP dialog after program icon {idx} at depth "
+                        f"{depth}; cancelling")
+                    cancelled, new_shot = cancel_ttp_dialog(
+                        P, cfg, new_shot, log, fifo, outdir, pid=pid)
+                    chain_shots.append(new_shot)
+                    if not cancelled:
+                        log("TTP ABBRUCH failed; aborting click chain")
+                        return False, new_shot, "click-failed"
+                    shot = new_shot
+                    break
+                if _screen_changed(before, new_shot):
+                    log(f"program started at depth {depth} "
+                        f"(icon {idx}, attempt {pa})")
+                    return True, new_shot, "click-icon-drive"
+                log(f"program icon {idx} did not start (attempt {pa}), "
+                    f"retrying")
+        return False, shot, None
+
     if strategy == "prg":
         before = grabs[-1]
         attempts = int(click_cfg.get("prg_attempts", 3))
@@ -1643,6 +1810,14 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
                 return False, before, chain_shots, "click-failed"
             new_shot = _grab_now(fifo, outdir, 2.0) or before
             chain_shots.append(new_shot)
+            if is_ttp_dialog(new_shot):
+                log("TTP dialog after desktop program icon; cancelling")
+                cancelled, new_shot = cancel_ttp_dialog(
+                    P, cfg, new_shot, log, fifo, outdir, pid=pid)
+                chain_shots.append(new_shot)
+                if not cancelled:
+                    log("TTP ABBRUCH failed; aborting click chain")
+                return False, new_shot, chain_shots, "click-failed"
             if _screen_changed(before, new_shot):
                 log(f"program started (prg, attempt {pa})")
                 return True, new_shot, chain_shots, "click-icon-prg"
@@ -1699,24 +1874,18 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
         enlarged = False
         kind, hit = target
         if kind == "prg":
-            # GEM occasionally registers the double click as a mere
-            # selection; verify that the screen changed and retry otherwise
-            before = win_shot
-            prg_attempts = int(click_cfg.get("prg_attempts", 3))
-            for pa in range(1, prg_attempts + 1):
-                click_icon(P, win_shot, hit["sx"], hit["sy"], log,
-                           fifo=fifo, pid=pid)
-                if not sleep_until(time.monotonic() + step_wait):
-                    return False, win_shot, chain_shots, "click-failed"
-                new_shot = _grab_now(fifo, outdir, 2.0) or win_shot
-                chain_shots.append(new_shot)
-                if _screen_changed(before, new_shot):
-                    log(f"program started at depth {depth} "
-                        f"(attempt {pa})")
-                    return True, new_shot, chain_shots, "click-icon-drive"
-                log(f"program icon did not start (attempt {pa}), retrying")
-            log(f"program icon never started at depth {depth}")
-            return False, new_shot, chain_shots, "click-failed"
+            started, win_shot, result = _try_prgs(win_shot, depth)
+            if started:
+                return True, win_shot, chain_shots, result
+            if result == "click-failed":
+                return False, win_shot, chain_shots, "click-failed"
+            # All program icons were unusable (TTP dialogs, no response).
+            # Fall back to a folder icon in the same window.
+            folders = find_window_icons(win_shot, cfg, "folder", limit=1)
+            if not folders:
+                log(f"no further program or folder icon at depth {depth}")
+                return False, win_shot, chain_shots, "click-failed"
+            kind, hit = "folder", folders[0]
         # GEM occasionally registers the double click as a mere selection
         # (verified live); verify that the folder actually opened and retry
         # the click otherwise
