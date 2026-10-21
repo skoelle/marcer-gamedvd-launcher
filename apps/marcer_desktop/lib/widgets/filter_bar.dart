@@ -149,7 +149,7 @@ class _FilterBarState extends State<FilterBar> {
                 children: [
                   _fixed(
                     SizedBox(
-                      width: 240,
+                      width: 144,
                       // Escape handling on the wrapper: key events bubble up
                       // from the TextField's own focus node below.
                       child: Focus(
@@ -176,13 +176,29 @@ class _FilterBarState extends State<FilterBar> {
                   // pd/utils carry index-derived statuses (default `any`
                   // there, `default_status` for cracked).
                   _statusDropdown(f.status, c.setStatus),
+                  if (fields.contains('genre'))
+                    _facetMenu(
+                      'Genre: any',
+                      f.genre,
+                      ['any', ...facets.genres],
+                      c.setGenre,
+                      width: 130,
+                    ),
                   if (fields.contains('publisher'))
                     _facetMenu(
                       'Publisher: any',
                       f.publisher,
                       ['any', ...facets.publishers],
                       c.setPublisher,
-                      width: 170,
+                      width: 140,
+                    ),
+                  if (fields.contains('developer'))
+                    _facetMenu(
+                      'Developers: any',
+                      f.developer,
+                      ['any', ...facets.developers],
+                      c.setDeveloper,
+                      width: 140,
                     ),
                   if (fields.contains('crew'))
                     _facetMenu(
@@ -190,7 +206,7 @@ class _FilterBarState extends State<FilterBar> {
                       f.crew,
                       ['any', ...facets.crews],
                       c.setCrew,
-                      width: 150,
+                      width: 120,
                     ),
                   if (fields.contains('cracker'))
                     _facetMenu(
@@ -198,7 +214,7 @@ class _FilterBarState extends State<FilterBar> {
                       f.cracker,
                       ['any', ...facets.crackers],
                       c.setCracker,
-                      width: 150,
+                      width: 105,
                     ),
                   if (fields.contains('language'))
                     _facetMenu(
@@ -226,13 +242,21 @@ class _FilterBarState extends State<FilterBar> {
                   if (fields.contains('tos'))
                     _tosDropdown(f.tos, c.setTos),
                   _sortDropdown(f.sort, f.order, c.setSortOrder),
-                  _labelButton('★ Favorites', c.toggleFavoritesOnly,
-                      width: 96, active: c.favoritesOnly),
-                  _labelButton('clear', c.resetFilters, width: 52),
                 ],
               ),
               const SizedBox(height: 4),
-              _letterRow(facets.letters, f.letter, c.setLetter),
+              _letterRow(
+                facets.letters,
+                f.letter,
+                c.setLetter,
+                trailing: [
+                  const SizedBox(width: 8),
+                  _labelButton('★ Favorites', c.toggleFavoritesOnly,
+                      width: 96, active: c.favoritesOnly),
+                  const SizedBox(width: 2),
+                  _labelButton('clear', c.resetFilters, width: 52),
+                ],
+              ),
             ],
           ],
         ),
@@ -660,7 +684,11 @@ class _FilterBarState extends State<FilterBar> {
   }
 
   Widget _letterRow(
-      List<String> facetLetters, String current, ValueChanged<String> onPick) {
+    List<String> facetLetters,
+    String current,
+    ValueChanged<String> onPick, {
+    List<Widget> trailing = const [],
+  }) {
     const all = [
       'any',
       '0-9',
@@ -670,6 +698,7 @@ class _FilterBarState extends State<FilterBar> {
     return Wrap(
       spacing: 2,
       runSpacing: 2,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         for (final l in all)
           InkWell(
@@ -698,6 +727,7 @@ class _FilterBarState extends State<FilterBar> {
               ),
             ),
           ),
+        ...trailing,
       ],
     );
   }

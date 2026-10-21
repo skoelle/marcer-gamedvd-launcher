@@ -3,7 +3,8 @@
 Inventory browser for the Marcer GameDVD archive: windowed master-detail UI,
 gameinfo metadata and screenshot previews, gallery-style global filters with a
 **catalog grid as the default view** (section tabs, search, facets incl.
-crew/cracker, sort, **★ Favorites**) and a gallery-style detail sidebar
+genre/developer/publisher/crew/cracker, sort, **★ Favorites**) and a
+gallery-style detail sidebar
 (Game info + Release variants + This ZIP); an optional overlay folder
 browser (`T` / Folders button) per `SPEC.md` §7, plus a gallery-style
 lightbox (filmstrip + info panel). **Read-only** consumer of all data roots
@@ -401,7 +402,11 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   *No game info*). It opens an in-app dialog with the cached metadata
   (year, publisher, genres, developers, authors) and an **Open on
   atarilegend.com** button (external browser, `url_launcher`).
-- the developer/author/genre **filter dropdowns** are the next milestone — see
+- the filter bar has **Genre** (after the status dropdown) and **Developers**
+  (after Publisher) dropdowns fed by the cache; the **Publisher** dropdown and
+  match merge gameinfo and AtariLegend publishers (case-insensitive). An
+  **author** filter is not implemented (AtariLegend data is shown in the
+  dialog only) — see
   [`../../docs/ANALYSIS-atarilegend.md`](../../docs/ANALYSIS-atarilegend.md).
 
 ## Catalog-data update check

@@ -106,7 +106,15 @@ void main() {
       'generated_at': 'now',
       'source': {'file': 'x.sql.gz', 'dump_date': '2026-10-18'},
       'games': [
-        {'id': 22, 'name': 'Alpha', 'slug': 'alpha', 'year': 1990},
+        {
+          'id': 22,
+          'name': 'Alpha',
+          'slug': 'alpha',
+          'year': 1990,
+          'publisher': 'AL Pub',
+          'genres': ['Simulation'],
+          'developers': ['Taito'],
+        },
       ],
     }));
 
@@ -120,5 +128,11 @@ void main() {
     expect(messages, contains('Loading AtariLegend data…'));
     expect(bundle.atariLegend.length, 1);
     expect(bundle.atariLegend.matchFolder('Alpha')?.id, 22);
+
+    final card = bundle.universe.cracked.single;
+    expect(card.atariLegend?.id, 22);
+    expect(card.publishers, contains('AL Pub'));
+    expect(bundle.universe.crackedFacets.genres, ['Simulation']);
+    expect(bundle.universe.crackedFacets.developers, ['Taito']);
   });
 }

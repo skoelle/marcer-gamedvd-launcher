@@ -213,6 +213,8 @@ class CatalogController extends ChangeNotifier {
         ..status = 'any'
         ..letter = 'any'
         ..publisher = 'any'
+        ..genre = 'any'
+        ..developer = 'any'
         ..crew = 'any'
         ..cracker = 'any'
         ..language = 'any'
@@ -252,6 +254,8 @@ class CatalogController extends ChangeNotifier {
     filter.pasti = 'any';
     filter.boxscan = 'any';
     filter.tos = 'any';
+    filter.genre = 'any';
+    filter.developer = 'any';
     filter.crew = 'any';
     filter.cracker = 'any';
     // `cracker` sort is not meaningful for pd — fall back to name.
@@ -278,6 +282,16 @@ class CatalogController extends ChangeNotifier {
 
   void setPublisher(String value) {
     filter.publisher = value;
+    _filtersChanged();
+  }
+
+  void setGenre(String value) {
+    filter.genre = value;
+    _filtersChanged();
+  }
+
+  void setDeveloper(String value) {
+    filter.developer = value;
     _filtersChanged();
   }
 
