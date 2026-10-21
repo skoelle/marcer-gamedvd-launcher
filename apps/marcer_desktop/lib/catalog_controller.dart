@@ -14,6 +14,7 @@ import 'favorites_service.dart';
 import 'ftp_downloader.dart';
 import 'hatari_launcher.dart';
 import 'index_editor.dart';
+import 'local_assets.dart';
 
 /// Sentinel rel-path for the virtual `Favorites` view (`SPEC.md` §11.3);
 /// cannot collide with a real directory name (NUL is invalid in paths).
@@ -93,6 +94,7 @@ class CatalogController extends ChangeNotifier {
   Future<void> init() async {
     initError = null;
     progress = 'Loading catalog…';
+    _localAssetsCache.clear();
     notifyListeners();
     try {
       // Capture a plain config value (not `this`) so the loader stays
@@ -500,6 +502,30 @@ class CatalogController extends ChangeNotifier {
     final parts = relOf(e).split('/');
     if (parts.length >= 4) return atariLegend.matchFolder(parts[3]);
     return atariLegend.matchFolder(e.name);
+  }
+
+  /// Lazily discovered local `Boxscan/`/`Manual/` assets per game folder.
+  final LocalAssetsService localAssetsService = LocalAssetsService();
+  final Map<String, Future<LocalGameAssets>> _localAssetsCache = {};
+
+  /// Local box-scan/manual assets of [card]'s game folder. Discovered on the
+  /// first use (background isolate, paths only) and cached for the controller's
+  /// lifetime; the whole tree is never scanned.
+  Future<LocalGameAssets> localAssetsForCard(GameCard card) {
+    final rel = cardFolderRel(card);
+    if (rel == null || rel.isEmpty) {
+      return Future.value(LocalGameAssets.empty);
+    }
+    return _localAssetsCache.putIfAbsent(
+      rel,
+      () => localAssetsService
+          .discover(
+            rootDirectory: config.rootDirectory,
+            patchDirectory: config.patchDirectory,
+            gameRel: rel,
+          )
+          .catchError((Object _) => LocalGameAssets.empty),
+    );
   }
 
   String sectionOf(Entry e) {

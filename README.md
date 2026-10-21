@@ -2,7 +2,7 @@
 
 Tools and apps for browsing and launching the [Marcer GameDVD](https://www.facebook.com/groups/360493904888475/) Atari ST game archive.
 
-The primary application is the **Flutter desktop app** — a gallery-style inventory browser with metadata and screenshot previews. A legacy **console launcher** (C#) and a set of Python maintenance tools round out the monorepo.
+The primary application is the **Flutter desktop app** — a gallery-style inventory browser with metadata, screenshot previews **and Marcer's curated box scans & manuals**. A legacy **console launcher** (C#) and a set of Python maintenance tools round out the monorepo.
 
 ---
 
@@ -10,7 +10,7 @@ The primary application is the **Flutter desktop app** — a gallery-style inven
 
 | App | Path | Tag | Description |
 |---|---|---|---|
-| **Desktop app** (primary) | [`apps/marcer_desktop`](apps/marcer_desktop/README.md) | `desktop-v*` | Flutter desktop app: gallery-style catalog grid, game info, screenshots, lightbox, optional folder browser. |
+| **Desktop app** (primary) | [`apps/marcer_desktop`](apps/marcer_desktop/README.md) | `desktop-v*` | Flutter desktop app: gallery-style catalog grid, game info, screenshots, lightbox, **Marcer's curated box scans & manuals**, optional folder browser. |
 | Console launcher (legacy) | [`apps/marcer_console`](apps/marcer_console/README.md) | `v*` | Keyboard-driven terminal UI over the same archive; launches ZIPs in Hatari. |
 
 Both are strictly **read-only** consumers of the archive and its derived artifacts.
@@ -47,6 +47,14 @@ Save, the manual screenshot curation described below.
 - **Gallery-style detail sidebar** — Game info, the full Release-variants
   table (the open ZIP highlighted) and a "This ZIP" table (File, Status,
   **Kind**, Layer, Size, Path).
+- **⭐ Marcer's curated box scans & manuals** — the hand-curated `Boxscan/` and
+  `Manual/` folders shipped with the archive are a first-class part of the app.
+  Clickable `Box scans (N)` / `Manuals (N)` chips in the detail sidebar and
+  lightbox open a per-edition gallery with a full-screen viewer, or the grouped
+  manual list (scan/text PDFs, image-page manuals, PDFs/`.doc`/`.txt` in the OS
+  default app, `.msa` as info-only disk images). Discovered lazily for the
+  selected card — nothing is indexed or extracted up front. Nothing is bundled;
+  the app never modifies these curated files.
 - **Optional AtariLegend metadata** — fetch the weekly
   [AtariLegend](https://www.atarilegend.com/) database on demand from the
   settings (**AtariLegendDirectory** → **Download AtariLegend data**): genre,
@@ -185,6 +193,25 @@ Save, the manual screenshot curation described below.
   next to the app — a failed update always leaves that log, whose path is
   also shown in the error dialog).
   Dev runs (`run.sh`) never check.
+
+### 📦 Marcer's curated box scans & manuals
+
+The archive's hand-curated **`Boxscan/`** and **`Manual/`** folders are the
+collector-grade extras Marcer curated alongside the games — not derived
+screenshots or scraped metadata. The desktop app treats them as a first-class
+feature:
+
+- **Box scans:** grouped by edition (ZIP stem / edition folder) with bounded
+  thumbnails and a full-screen viewer (`←/→`, `Esc`, zoom); recursive in-ZIP
+  images are supported, PDFs/disk images inside `Boxscan/` are ignored.
+- **Manuals:** grouped by stem; scan/text pairs (`<stem>.zip` /
+  `<stem>_text.zip`) are both offered. Image-page manuals open in the viewer,
+  PDFs and `.doc`/`.txt` open in the OS default application, and `.msa` files
+  are shown as info-only disk images (never opened as documents).
+- **Lazy & read-only:** discovered only for the selected card (both layers
+  merged, patch wins), no index and no pre-extraction; the app never modifies
+  these curated files and nothing is bundled. Details:
+  [`docs/ANALYSIS-boxscan-manual-structure.md`](docs/ANALYSIS-boxscan-manual-structure.md).
 
 ### 🚀 Quick start
 

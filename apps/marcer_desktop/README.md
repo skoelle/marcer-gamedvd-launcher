@@ -1,7 +1,8 @@
 # Marcer GameDVD Desktop App (Flutter, Surface A)
 
 Inventory browser for the Marcer GameDVD archive: windowed master-detail UI,
-gameinfo metadata and screenshot previews, gallery-style global filters with a
+gameinfo metadata, screenshot previews, **Marcer's curated box scans &
+manuals**, gallery-style global filters with a
 **catalog grid as the default view** (section tabs, search, facets incl.
 genre/developer/publisher/crew/cracker, sort, **★ Favorites**) and a
 gallery-style detail sidebar
@@ -328,6 +329,33 @@ triggers the scan on demand).
 
 The offline data-layer benchmark against the real artifacts is
 `dart run tool/benchmark.dart` (see [Commands](#commands)).
+
+## Box scans & manuals
+
+The hand-curated `Boxscan/` and `Manual/` folders shipped with the Marcer
+archive are a **first-class feature** — the collector-grade scans and manuals
+are discovered **lazily** for the selected card only (no index, no tree scan)
+and displayed in-app; the app never modifies these files. A background isolate
+checks both layers for child folders named
+`boxscan`/`box scan`/`manual`/`manuals` (case-insensitive) and lists their loose
+files and ZIP central directories. Nothing is extracted until you open
+something.
+
+- The **Box scans (N)** / **Manuals (N)** chips at the top of the Game-info
+  panel (detail sidebar **and** lightbox) appear when assets exist.
+- **Box scans:** gallery grouped by edition (ZIP stem / edition folder) with
+  bounded thumbnails; a thumbnail opens the full-screen viewer (`←/→`, `Esc`,
+  zoom). Recursive in-ZIP images are supported; PDFs/disk images inside
+  `Boxscan/` are ignored.
+- **Manuals:** grouped by stem; scan/text pairs (`<stem>.zip` /
+  `<stem>_text.zip`) are both offered. PDFs and `.doc`/`.txt` open in the OS
+  default application, image-page manuals open in the image viewer, `.msa` files
+  are shown as info-only disk images (never opened as documents).
+- Both layers are merged (patch wins for the same path); hidden entries
+  (`@eaDir`, dotfiles) are skipped and vanished/unreadable folders are treated
+  as empty. The XLS `boxscan` filter flag stays independent metadata.
+- ZIP media is extracted on demand into a session temp cache; nothing is
+  pre-extracted or persisted. Background: [`docs/ANALYSIS-boxscan-manual-structure.md`](../../docs/ANALYSIS-boxscan-manual-structure.md).
 
 ## Download missing (FTP)
 

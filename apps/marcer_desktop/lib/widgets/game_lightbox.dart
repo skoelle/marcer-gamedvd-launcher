@@ -12,6 +12,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
 import 'game_info_panel.dart';
+import 'local_assets_chips.dart';
 import 'status_kind_dialog.dart';
 
 /// Gallery-style lightbox over the current center list: header with badges
@@ -848,6 +849,9 @@ class _GameLightboxState extends State<GameLightbox> {
 
   Widget _infoPanel(_Variant? v) {
     final al = _atariLegend;
+    final item = _item;
+    final localAssets =
+        item is GameCard ? widget.controller.localAssetsForCard(item) : null;
     return GameInfoPanel(
       info: _info,
       atariLegend: al,
@@ -855,6 +859,12 @@ class _GameLightboxState extends State<GameLightbox> {
           ? null
           : () => showAtariLegendDialog(context,
               game: al, textsLoader: widget.controller.atariLegendTexts),
+      extras: localAssets == null
+          ? null
+          : LocalAssetsChips(
+              assets: localAssets,
+              service: widget.controller.localAssetsService,
+            ),
       variant: v == null
           ? null
           : ZipVariantView(

@@ -55,6 +55,7 @@ class GameInfoPanel extends StatelessWidget {
     this.onSelectGroup,
     this.atariLegend,
     this.onAtariLegend,
+    this.extras,
   });
 
   final InfoSummary? info;
@@ -90,12 +91,20 @@ class GameInfoPanel extends StatelessWidget {
   /// Opens the AtariLegend dialog; hidden when null (no match / no data).
   final VoidCallback? onAtariLegend;
 
+  /// Optional extras row rendered above the info tables (e.g. the local
+  /// `Box scans`/`Manuals` chips). Shown only when non-null.
+  final Widget? extras;
+
   @override
   Widget build(BuildContext context) {
     final info = this.info;
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
+        if (extras != null) ...[
+          extras!,
+          const SizedBox(height: 8),
+        ],
         if (info == null) ...[
           _headingRow('No game info', trailing: _atariLegendButtonOrNull()),
           if (variant != null) ...[

@@ -475,6 +475,16 @@ loose non-ZIP files (PDFs, PNGs) are invisible, which is why
 
 ## 8. Requirements For A Consumer (Flutter Desktop App)
 
+> **Desktop app status (2026-10-21): implemented lazily per selected card.**
+> `lib/local_assets.dart` discovers both layers (case-insensitive `Boxscan`/
+> `Manual`/`Manuals`), lists loose files and ZIP central directories in a
+> background isolate and materializes media on demand; `GameInfoPanel` shows
+> `Box scans (N)`/`Manuals (N)` chips
+> (`lib/widgets/local_assets_chips.dart`, `local_assets_dialog.dart`). Box
+> scans open an edition gallery + viewer; manuals group scan/text pairs, open
+> PDFs/DOC/TXT in the OS default app, show image-page manuals in the viewer and
+> `.msa` as info-only. See the desktop README "Box scans & manuals".
+
 Derived directly from sections 2–6:
 
 1. **Discovery** — for each game folder, look for child directories named

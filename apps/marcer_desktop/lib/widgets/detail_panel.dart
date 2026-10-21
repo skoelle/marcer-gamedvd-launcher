@@ -10,6 +10,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
 import 'game_info_panel.dart';
+import 'local_assets_chips.dart';
 import 'status_kind_dialog.dart';
 
 /// Right panel: preview screenshot + game metadata (Playnite-style detail).
@@ -127,6 +128,8 @@ class DetailPanel extends StatelessWidget {
     final layer = c.cachedCardLayer(card);
     final missing = c.cachedCardMissing(card);
     final al = c.atariLegendForCard(card);
+    // Lazily discovered local Boxscan/Manual assets (cached per game folder).
+    final localAssets = c.localAssetsForCard(card);
     // Gallery-style detail (no large preview — the lightbox shows the image).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -177,6 +180,10 @@ class DetailPanel extends StatelessWidget {
                 ? null
                 : () => showAtariLegendDialog(context,
                     game: al, textsLoader: c.atariLegendTexts),
+            extras: LocalAssetsChips(
+              assets: localAssets,
+              service: c.localAssetsService,
+            ),
             onPlay: () => c.launchSelected(),
             onPlayVariant: (variant) => c.launchSelected(variant: variant),
             // Group click: open the lightbox on that crew's/cracker's ZIP;
