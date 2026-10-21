@@ -418,7 +418,8 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   conversion system and release-AKA aliases). Older caches still load but lack
   those fields and show an "outdated" warning.
 - the filter bar has **Genre** (after the status dropdown) and **Developers**
-  (after Publisher) dropdowns fed by the cache; the **Publisher** dropdown and
+  (after Publisher) dropdowns fed by the cache — **both are hidden until
+  AtariLegend data is loaded**; the **Publisher** dropdown and
   match merge gameinfo and AtariLegend publishers (case-insensitive). An
   **author** filter is not implemented (AtariLegend data is shown in the
   dialog only) — see

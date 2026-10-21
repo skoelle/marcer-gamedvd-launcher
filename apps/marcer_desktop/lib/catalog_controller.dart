@@ -46,7 +46,7 @@ class CatalogController extends ChangeNotifier {
   late final OverlayBrowser browser;
   late ScreenshotIndices screenshots;
   late GameInfoIndex gameinfo;
-  late AtariLegendIndex atariLegend;
+  AtariLegendIndex atariLegend = AtariLegendIndex.empty();
   late CatalogUniverse universe;
   FavoritesService? favorites;
 
@@ -185,6 +185,10 @@ class CatalogController extends ChangeNotifier {
   }
 
   CatalogFacets get facets => universe.facetsFor(filter.section);
+
+  /// True when AtariLegend data is loaded; the Genre/Developers filter
+  /// dropdowns are only shown then (otherwise they would offer just `any`).
+  bool get hasAtariLegend => atariLegend.length > 0;
 
   bool get crewFocusActive => !favoritesOnly &&
       filter.crew != 'any' &&
