@@ -1,7 +1,10 @@
 # Screenshot Generator
 
 Generates preview screenshots for the Marcer GameDVD archive by booting each
-ZIP in Hatari on a virtual X display. See
+ZIP in Hatari on a virtual X display. The result documents the actual **boot
+state** of every ZIP (game, crack intro, TOS desktop, text screen or no usable
+image) and the differences between release/crack variants — it is deliberately
+not a collection of curated in-game or AtariLegend screenshots. See
 [`SPEC-screenshot-generator.md`](../../docs/SPEC-screenshot-generator.md) for the
 full specification.
 

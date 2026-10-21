@@ -390,7 +390,11 @@ time), so browsing stays responsive.
 ## Catalog data (Download from FTP)
 
 The catalog is built from the screenshot index and the gameinfo JSONs; without
-them the catalog is empty. The setup/settings form therefore puts a **Download
+them the catalog is empty. `ScreenshotDirectory` contains the generated **ZIP
+boot-state previews** (loaders, desktops, text screens, …), not AtariLegend
+images; see *Screenshots: actual ZIP boot state* in the root README. AtariLegend's
+curated screenshots are separate and only appear in the AtariLegend dialog.
+The setup/settings form therefore puts a **Download
 from FTP** button next to *Browse…* on both `ScreenshotDirectory` and
 `GameinfoDirectory`:
 
