@@ -20,6 +20,7 @@ class DesktopConfig {
     this.patchDirectory = '',
     this.screenshotDirectory = '',
     this.gameinfoDirectory = '',
+    this.atariLegendDirectory = '',
     this.hatariExecutable = '',
     this.hatariConfigFile = '',
     this.hatariArgsTemplate = r'-c "{cfg}" --disk-a "{zip}"',
@@ -42,6 +43,12 @@ class DesktopConfig {
   final String patchDirectory;
   final String screenshotDirectory;
   final String gameinfoDirectory;
+
+  /// Directory holding the compact AtariLegend runtime cache
+  /// (`atarilegend.json`), built by the settings "Download AtariLegend data"
+  /// button from the weekly `.sql.gz` dump. Optional; no implicit fallback.
+  final String atariLegendDirectory;
+
   final String hatariExecutable;
   final String hatariConfigFile;
   final String hatariArgsTemplate;
@@ -119,6 +126,7 @@ class DesktopConfig {
       patchDirectory: (map['PatchDirectory'] ?? '') as String,
       screenshotDirectory: (map['ScreenshotDirectory'] ?? '') as String,
       gameinfoDirectory: (map['GameinfoDirectory'] ?? '') as String,
+      atariLegendDirectory: (map['AtariLegendDirectory'] ?? '') as String,
       hatariExecutable: (hatari['Executable'] ?? '') as String,
       hatariConfigFile: (hatari['ConfigFile'] ?? '') as String,
       hatariArgsTemplate:
@@ -147,6 +155,7 @@ class DesktopConfig {
     String? patchDirectory,
     String? screenshotDirectory,
     String? gameinfoDirectory,
+    String? atariLegendDirectory,
     String? hatariExecutable,
     String? hatariConfigFile,
     String? hatariArgsTemplate,
@@ -169,6 +178,8 @@ class DesktopConfig {
       patchDirectory: patchDirectory ?? this.patchDirectory,
       screenshotDirectory: screenshotDirectory ?? this.screenshotDirectory,
       gameinfoDirectory: gameinfoDirectory ?? this.gameinfoDirectory,
+      atariLegendDirectory:
+          atariLegendDirectory ?? this.atariLegendDirectory,
       hatariExecutable: hatariExecutable ?? this.hatariExecutable,
       hatariConfigFile: hatariConfigFile ?? this.hatariConfigFile,
       hatariArgsTemplate: hatariArgsTemplate ?? this.hatariArgsTemplate,
@@ -196,6 +207,7 @@ class DesktopConfig {
         'PatchDirectory': patchDirectory,
         'ScreenshotDirectory': screenshotDirectory,
         'GameinfoDirectory': gameinfoDirectory,
+        'AtariLegendDirectory': atariLegendDirectory,
         'Hatari': {
           'Executable': hatariExecutable,
           'ConfigFile': hatariConfigFile,
@@ -267,6 +279,10 @@ class DesktopConfig {
   /// implicit fallback: gameinfo data must be fetched explicitly (user
   /// decision 2026-10-17, see "Download from FTP" in the setup/settings form).
   String resolveGameinfoDirectory() => gameinfoDirectory;
+
+  /// The configured AtariLegend directory (or empty when not set). No implicit
+  /// fallback: the cache is built explicitly via the settings download button.
+  String resolveAtariLegendDirectory() => atariLegendDirectory;
 
   /// Absolute Hatari executable (`Hatari.Executable`), resolved against
   /// [appDir] when relative (SPEC.md R10); empty when not configured.

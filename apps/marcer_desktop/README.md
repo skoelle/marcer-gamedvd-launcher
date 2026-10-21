@@ -109,7 +109,8 @@ The setup/settings form lays the fields out as: **RootDirectory**,
 **PatchDirectory**, the **FTP** server (used both for game-folder downloads
 and for the catalog-data downloads), then **ScreenshotDirectory** and
 **GameinfoDirectory** — each with a **Download from FTP** button next to
-*Browse…* — and finally the Hatari settings plus the **Hatari installation**
+*Browse…* — then the **AtariLegendDirectory** with a **Download AtariLegend
+data** button, and finally the Hatari settings plus the **Hatari installation**
 and **TOS ROM** rows (download/install on demand, see below).
 
 | Field | Required | Notes |
@@ -118,6 +119,7 @@ and **TOS ROM** rows (download/install on demand, see below).
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
 | `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
+| `AtariLegendDirectory` | no | compact AtariLegend cache (`atarilegend.json`); filled by **Download AtariLegend data** (directory created when missing) |
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
 | `Hatari.ConfigFile` | no | empty ⇒ bundled `MarcerGameDvd-Hatari.cfg` |
 | `Hatari.ArgsTemplate` | no | must contain `{cfg}` and `{zip}` |
@@ -371,6 +373,30 @@ from FTP** button next to *Browse…* on both `ScreenshotDirectory` and
 
 `GameinfoDirectory` has **no implicit fallback**: if it is empty no gameinfo is
 loaded.
+
+## AtariLegend data (metadata enrichment)
+
+The weekly [AtariLegend](https://www.atarilegend.com/) database dump adds
+metadata the archive does not have (genre, developer, original credits,
+release data). The app **never ships or bundles** this data (license
+CC BY-NC-SA 4.0); it is fetched on demand:
+
+- the setup/settings form has an **AtariLegendDirectory** path directly below
+  *GameinfoDirectory* with a **Download AtariLegend data** button next to
+  *Browse…*.
+- the button resolves the newest `YYYY-MM-DD.sql.gz` from the AtariLegend
+  dump directory, downloads it, decompresses it (gzip) and parses only the
+  needed tables in a **background isolate**, then writes the compact cache
+  `atarilegend.json` (game id/name/slug, release year, publisher, genres,
+  developers, authors). The downloaded `.sql.gz` is **deleted** afterwards.
+- the target directory is created when missing; progress and **Cancel** show
+  inline, failures as a SnackBar.
+- while the fetch runs, **Save**, **Cancel** and **Exit** are disabled (and the
+  dialog cannot be dismissed).
+- the cache is small (~1.4 MB for ~6.200 games). This step only **stores** the
+  data; the catalog filters (developer/author/genre) and the "AtariLegend
+  details" panel are the next milestones — see
+  [`../../docs/ANALYSIS-atarilegend.md`](../../docs/ANALYSIS-atarilegend.md).
 
 ## Catalog-data update check
 

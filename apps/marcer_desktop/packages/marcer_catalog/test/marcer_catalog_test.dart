@@ -170,11 +170,13 @@ void main() {
         ..writeAsStringSync('''
         {"RootDirectory": "/r", "PatchDirectory": "/p",
          "ScreenshotDirectory": "/o", "GameinfoDirectory": "/d",
+         "AtariLegendDirectory": "/al",
          "ShowCandidates": false, "DefaultStatus": "done",
          "Window": {"width": 1024, "height": 768, "maximized": false}}''');
       final c = DesktopConfig.load(f.path);
       expect(c.rootDirectory, '/r');
       expect(c.screenshotDirectory, '/o');
+      expect(c.atariLegendDirectory, '/al');
       expect(c.windowWidth, 1024);
       expect(c.windowMaximized, isFalse);
       expect(c.hatariArgsTemplate, contains('{zip}'));
@@ -223,6 +225,17 @@ void main() {
           reason: 'no <Patch>/../Data fallback anymore');
       expect(c.copyWith(gameinfoDirectory: '/data').resolveGameinfoDirectory(),
           '/data');
+    });
+
+    test('resolveAtariLegendDirectory has no implicit fallback', () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync('{"RootDirectory": "/r"}');
+      final c = DesktopConfig.load(f.path);
+      expect(c.resolveAtariLegendDirectory(), '');
+      expect(
+          c.copyWith(atariLegendDirectory: '/al')
+              .resolveAtariLegendDirectory(),
+          '/al');
     });
 
     test('Ftp.Host parses an optional :port (default 21)', () {
@@ -294,6 +307,7 @@ void main() {
         patchDirectory: '/patch',
         screenshotDirectory: '/out',
         gameinfoDirectory: '/data',
+        atariLegendDirectory: '/atari-legend',
         hatariExecutable: '/hatari/bin/hatari',
         hatariConfigFile: '/cfg/hatari.cfg',
         hatariArgsTemplate: '-c "{cfg}" --disk-a "{zip}"',
@@ -314,6 +328,7 @@ void main() {
       expect(reloaded.patchDirectory, '/patch');
       expect(reloaded.screenshotDirectory, '/out');
       expect(reloaded.gameinfoDirectory, '/data');
+      expect(reloaded.atariLegendDirectory, '/atari-legend');
       expect(reloaded.hatariExecutable, '/hatari/bin/hatari');
       expect(reloaded.hatariConfigFile, '/cfg/hatari.cfg');
       expect(reloaded.hatariArgsTemplate, '-c "{cfg}" --disk-a "{zip}"');
@@ -340,6 +355,7 @@ void main() {
       expect(reloaded.patchDirectory, '');
       expect(reloaded.screenshotDirectory, '');
       expect(reloaded.gameinfoDirectory, '');
+      expect(reloaded.atariLegendDirectory, '');
       expect(reloaded.hatariConfigFile, '');
     });
   });

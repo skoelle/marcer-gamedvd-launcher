@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
+import 'package:marcer_desktop/atarilegend_fetcher.dart';
 import 'package:marcer_desktop/catalog_assets.dart';
 import 'package:marcer_desktop/hatari_installer.dart';
 import 'package:marcer_desktop/widgets/settings_form.dart';
@@ -45,6 +46,20 @@ class _FakeHatariDownloader implements HatariDownloader {
       ..writeAsBytesSync(List<int>.filled(8, 0x7F));
     return exe.path;
   }
+}
+
+/// Fake AtariLegend fetcher whose future only completes on demand.
+class _HangingAtariLegendFetcher implements AtariLegendFetcher {
+  final Completer<AtariLegendFetchResult> completer =
+      Completer<AtariLegendFetchResult>();
+
+  @override
+  Future<AtariLegendFetchResult> fetch({
+    required String targetDir,
+    AtariLegendProgress? onProgress,
+    bool Function()? isCancelled,
+  }) =>
+      completer.future;
 }
 
 Future<void> _pumpForm(WidgetTester tester, DesktopConfig initial,
@@ -236,5 +251,84 @@ void main() {
 
     expect(latest!.hatariExecutable, p.join('hatari', 'hatari.exe'));
     expect(find.text('Hatari is installed'), findsOneWidget);
+  });
+
+  testWidgets('AtariLegend directory is saved and download reports busy',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 2800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final dir = Directory.systemTemp.createTempSync('settings_form_al');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    final fetcher = _HangingAtariLegendFetcher();
+    DesktopConfig? latest;
+    bool? valid;
+    bool? busy;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: SettingsForm(
+            initial: DesktopConfig(
+              rootDirectory: dir.path,
+              atariLegendDirectory: dir.path,
+            ),
+            onChanged: (c, v) {
+              latest = c;
+              valid = v;
+            },
+            onBusyChanged: (b) => busy = b,
+            atariLegendFetcher: fetcher,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(valid, isTrue);
+    expect(latest!.atariLegendDirectory, dir.path);
+
+    final button = find.text('Download AtariLegend data');
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pump();
+    expect(busy, isTrue);
+
+    fetcher.completer.complete(AtariLegendFetchResult(
+      games: 42,
+      dumpFile: '2026-10-11.sql.gz',
+      cachePath: p.join(dir.path, 'atarilegend.json'),
+    ));
+    await tester.pumpAndSettle();
+    expect(busy, isFalse);
+  });
+
+  testWidgets('AtariLegend path may not exist yet (auto-create on download)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 2800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final dir = Directory.systemTemp.createTempSync('settings_form_al_create');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    DesktopConfig? latest;
+    bool? valid;
+    await _pumpForm(tester, DesktopConfig(rootDirectory: dir.path), (c, v) {
+      latest = c;
+      valid = v;
+    });
+
+    // Field order: root, patch, 5 FTP, screenshot, gameinfo, atariLegend.
+    await tester.enterText(
+        find.byType(TextField).at(9), '/definitely/missing/atarilegend');
+    await tester.pumpAndSettle();
+
+    expect(valid, isTrue, reason: 'the download creates the directory');
+    expect(latest!.atariLegendDirectory, '/definitely/missing/atarilegend');
   });
 }
