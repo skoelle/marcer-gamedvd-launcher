@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -65,38 +66,86 @@ class _FilterBarState extends State<FilterBar> {
   /// in-flight typing.
   late String _lastQuery;
 
-  /// Cached facet dropdown entries (static per section) and the section they
-  /// were built for.
-  final Map<String, List<DropdownMenuEntry<String>>> _facetEntries = {};
-  String? _facetEntriesSection;
+  /// Last seen filter revision; the bar only rebuilds when the filter state
+  /// changes (not on every controller notification such as selection moves or
+  /// the async layer-scan updates).
+  int _lastFilterRevision = -1;
+
+  /// Additional state the bar displays: the pending-curation count (Save (n))
+  /// and whether the AtariLegend cache is loaded (Genre/Developers facets).
+  int _lastPendingCount = -1;
+  bool _lastHasAtariLegend = false;
 
   @override
   void initState() {
     super.initState();
     _lastQuery = widget.controller.filter.q;
+    _lastFilterRevision = widget.controller.filterRevision;
+    _lastPendingCount = widget.controller.pendingStatusCount;
+    _lastHasAtariLegend = widget.controller.hasAtariLegend;
     _search.text = _lastQuery;
-    widget.controller.addListener(_syncSearch);
+    widget.controller.addListener(_onControllerChanged);
+    widget.updater?.addListener(_onUpdaterChanged);
+    widget.assetUpdater?.addListener(_onUpdaterChanged);
   }
 
   @override
   void didUpdateWidget(covariant FilterBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_syncSearch);
-      widget.controller.addListener(_syncSearch);
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
       _lastQuery = widget.controller.filter.q;
+      _lastFilterRevision = widget.controller.filterRevision;
+      _lastPendingCount = widget.controller.pendingStatusCount;
+      _lastHasAtariLegend = widget.controller.hasAtariLegend;
       _applyQueryToField(_lastQuery);
-      _facetEntries.clear();
-      _facetEntriesSection = null;
+      if (mounted) setState(() {});
+    }
+    if (oldWidget.updater != widget.updater) {
+      oldWidget.updater?.removeListener(_onUpdaterChanged);
+      widget.updater?.addListener(_onUpdaterChanged);
+    }
+    if (oldWidget.assetUpdater != widget.assetUpdater) {
+      oldWidget.assetUpdater?.removeListener(_onUpdaterChanged);
+      widget.assetUpdater?.addListener(_onUpdaterChanged);
     }
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
-    widget.controller.removeListener(_syncSearch);
+    widget.controller.removeListener(_onControllerChanged);
+    widget.updater?.removeListener(_onUpdaterChanged);
+    widget.assetUpdater?.removeListener(_onUpdaterChanged);
     _search.dispose();
     super.dispose();
+  }
+
+  void _onControllerChanged() {
+    _syncSearch();
+    final c = widget.controller;
+    var changed = false;
+    final rev = c.filterRevision;
+    if (rev != _lastFilterRevision) {
+      _lastFilterRevision = rev;
+      changed = true;
+    }
+    final pending = c.pendingStatusCount;
+    if (pending != _lastPendingCount) {
+      _lastPendingCount = pending;
+      changed = true;
+    }
+    final hasAtariLegend = c.hasAtariLegend;
+    if (hasAtariLegend != _lastHasAtariLegend) {
+      _lastHasAtariLegend = hasAtariLegend;
+      changed = true;
+    }
+    if (changed && mounted) setState(() {});
+  }
+
+  void _onUpdaterChanged() {
+    if (mounted) setState(() {});
   }
 
   /// Reflects an externally changed query (reset/reload) in the search field.
@@ -153,14 +202,6 @@ class _FilterBarState extends State<FilterBar> {
     final fields = kindFilters(f.section);
     // AtariLegend-only facets: hidden until the cache has been downloaded.
     final withAtariLegend = c.hasAtariLegend;
-    // The facet entry lists are static per section; rebuild them only when the
-    // section changes (the FilterBar rebuilds on every controller notify, and
-    // recreating thousands of DropdownMenuEntry objects each time was pure
-    // waste).
-    if (_facetEntriesSection != f.section) {
-      _facetEntriesSection = f.section;
-      _facetEntries.clear();
-    }
 
     return Material(
       color: const Color(0xFF1B1B1B),
@@ -558,57 +599,13 @@ class _FilterBarState extends State<FilterBar> {
     double width = 140,
     String Function(String)? labelOf,
   }) {
-    String label(String v) {
-      if (labelOf != null) return labelOf(v);
-      return v == 'any' ? anyLabel : v;
-    }
-
-    return SizedBox(
+    return _FacetMenu(
+      anyLabel: anyLabel,
+      value: value,
+      items: items,
+      onChanged: onChanged,
       width: width,
-      height: 28,
-      child: DropdownMenu<String>(
-        key: ValueKey('$anyLabel:$value'),
-        width: width,
-        initialSelection: items.contains(value) ? value : items.first,
-        enableFilter: true,
-        requestFocusOnTap: true,
-        // Open menu ≈ 3/4 of the screen height (shrinks for short lists).
-        menuHeight: MediaQuery.sizeOf(context).height * 0.75,
-        // Exact label match wins (reopening after a selection jumps to that
-        // entry); while typing the partial substring match keeps the
-        // highlight + Enter selection. Empty query → no highlight.
-        searchCallback: (entries, query) {
-          if (query.isEmpty) return null;
-          final exact =
-              entries.indexWhere((e) => e.label.toLowerCase() == query.toLowerCase());
-          if (exact != -1) return exact;
-          final q = query.toLowerCase();
-          return entries
-              .indexWhere((e) => e.label.toLowerCase().contains(q));
-        },
-        textStyle: const TextStyle(fontSize: 12, color: Colors.white),
-        inputDecorationTheme: const InputDecorationTheme(
-          isDense: true,
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(4))),
-          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        ),
-        // A plain centered arrow (the default suffix IconButton's 8px padding
-        // gets squeezed by the tight box and pushes the glyph to the corner).
-        // The whole field stays tappable and opens the menu.
-        decorationBuilder: (context, controller) => const InputDecoration(
-          suffixIcon: Icon(Icons.arrow_drop_down, size: 20),
-          suffixIconConstraints: BoxConstraints(
-              minWidth: 28, maxWidth: 28, minHeight: 28, maxHeight: 28),
-        ),
-        dropdownMenuEntries: _facetEntries.putIfAbsent(anyLabel, () => [
-          for (final v in items)
-            DropdownMenuEntry<String>(value: v, label: label(v)),
-        ]),
-        onSelected: (v) {
-          if (v != null) onChanged(v);
-        },
-      ),
+      labelOf: labelOf,
     );
   }
 
@@ -790,6 +787,257 @@ class _FilterBarState extends State<FilterBar> {
           ),
         ...trailing,
       ],
+    );
+  }
+}
+
+/// Compact searchable facet dropdown with a **virtualized** menu: only the
+/// visible rows are built. Used for the large facet lists (publisher, crew,
+/// cracker, language, year, genre, developer) instead of `DropdownMenu`, which
+/// eagerly builds a `MenuItemButton` for every entry on each build and lays
+/// all of them out when opened (very slow with ~1000 entries).
+class _FacetMenu extends StatefulWidget {
+  const _FacetMenu({
+    required this.anyLabel,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    this.width = 140,
+    this.labelOf,
+  });
+
+  final String anyLabel;
+  final String value;
+  final List<String> items;
+  final ValueChanged<String> onChanged;
+  final double width;
+  final String Function(String)? labelOf;
+
+  @override
+  State<_FacetMenu> createState() => _FacetMenuState();
+}
+
+class _FacetMenuState extends State<_FacetMenu> {
+  final MenuController _menu = MenuController();
+
+  String _label(String v) {
+    if (v == 'any') return widget.anyLabel;
+    return widget.labelOf?.call(v) ?? v;
+  }
+
+  void _open() {
+    _menu.open();
+  }
+
+  void _select(String value) {
+    _menu.close();
+    if (value != widget.value) widget.onChanged(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final menuWidth = math.min(280.0, MediaQuery.sizeOf(context).width - 32);
+    // Up to ¾ of the screen, but shrink for short lists (like the previous
+    // DropdownMenu did).
+    final menuHeight = math.min(
+        screenHeight * 0.75, widget.items.length * 28.0 + 64.0);
+    return SizedBox(
+      width: widget.width,
+      height: 28,
+      child: MenuAnchor(
+        controller: _menu,
+        style: MenuStyle(
+          backgroundColor:
+              const WidgetStatePropertyAll<Color>(Color(0xFF1B1B1B)),
+          padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+              EdgeInsets.zero),
+          minimumSize:
+              WidgetStatePropertyAll<Size>(Size(menuWidth, 0)),
+          maximumSize: WidgetStatePropertyAll<Size>(
+              Size(menuWidth, screenHeight * 0.75)),
+        ),
+        menuChildren: [
+          _FacetMenuPanel(
+            width: menuWidth,
+            height: menuHeight,
+            items: widget.items,
+            value: widget.value,
+            labelOf: _label,
+            onSelected: _select,
+            onClose: _menu.close,
+          ),
+        ],
+        builder: (context, controller, child) {
+          return InkWell(
+            onTap: () => controller.isOpen ? controller.close() : _open(),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFF3A3A3A)),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _label(widget.value),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                  ),
+                  const Icon(Icons.arrow_drop_down,
+                      size: 20, color: Colors.white70),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Menu body: filter field + lazily built `ListView` of the matching entries.
+class _FacetMenuPanel extends StatefulWidget {
+  const _FacetMenuPanel({
+    required this.width,
+    required this.height,
+    required this.items,
+    required this.value,
+    required this.labelOf,
+    required this.onSelected,
+    required this.onClose,
+  });
+
+  final double width;
+  final double height;
+  final List<String> items;
+  final String value;
+  final String Function(String) labelOf;
+  final ValueChanged<String> onSelected;
+  final VoidCallback onClose;
+
+  @override
+  State<_FacetMenuPanel> createState() => _FacetMenuPanelState();
+}
+
+class _FacetMenuPanelState extends State<_FacetMenuPanel> {
+  final TextEditingController _filter = TextEditingController();
+  late final ScrollController _scroll;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Open at the selected entry (like the previous DropdownMenu did).
+    final index = widget.items.indexOf(widget.value);
+    _scroll = ScrollController(
+        initialScrollOffset: index <= 0 ? 0.0 : index * 28.0);
+  }
+
+  @override
+  void dispose() {
+    _filter.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  List<String> get _filtered {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return widget.items;
+    return [
+      for (final v in widget.items)
+        if (widget.labelOf(v).toLowerCase().contains(q)) v,
+    ];
+  }
+
+  void _submit(List<String> items) {
+    if (items.isEmpty) return;
+    final q = _query.trim().toLowerCase();
+    final exact = items.firstWhere(
+      (v) => widget.labelOf(v).toLowerCase() == q,
+      orElse: () => items.first,
+    );
+    widget.onSelected(exact);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _filtered;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
+      },
+      child: SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+              child: TextField(
+                controller: _filter,
+                autofocus: true,
+                style: const TextStyle(fontSize: 12, color: Colors.white),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: 'Type to filter…',
+                  hintStyle: TextStyle(fontSize: 12, color: Colors.grey),
+                  border: OutlineInputBorder(),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                ),
+                onChanged: (v) => setState(() => _query = v),
+                onSubmitted: (_) => _submit(items),
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFF2A2A2A)),
+            Expanded(
+              child: items.isEmpty
+                  ? const Center(
+                      child: Text('No matches',
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey)),
+                    )
+                  : ListView.builder(
+                      controller: _scroll,
+                      primary: false,
+                      itemCount: items.length,
+                      itemExtent: 28,
+                      itemBuilder: (context, i) {
+                        final v = items[i];
+                        final selected = v == widget.value;
+                        return InkWell(
+                          onTap: () => widget.onSelected(v),
+                          child: Container(
+                            color: selected
+                                ? const Color(0xFF1E3A3A)
+                                : Colors.transparent,
+                            alignment: Alignment.centerLeft,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 10),
+                            child: Text(
+                              widget.labelOf(v),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: selected
+                                    ? Colors.cyan
+                                    : Colors.white70,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

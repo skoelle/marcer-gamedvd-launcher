@@ -254,9 +254,16 @@ class CatalogController extends ChangeNotifier {
     return cards[selectedIndex.clamp(0, cards.length - 1)];
   }
 
+  /// Incremented whenever the filter state changes. The filter bar listens to
+  /// this (instead of rebuilding on every controller notification) so that
+  /// selection moves and the async layer-scan notifications do not rebuild the
+  /// large facet dropdowns.
+  int filterRevision = 0;
+
   void _filtersChanged() {
     _catalogDirty = true;
     selectedIndex = 0;
+    filterRevision++;
     notifyListeners();
   }
 
@@ -373,6 +380,7 @@ class CatalogController extends ChangeNotifier {
     favoritesOnly = false;
     _catalogDirty = true;
     selectedIndex = 0;
+    filterRevision++;
     notifyListeners();
   }
 

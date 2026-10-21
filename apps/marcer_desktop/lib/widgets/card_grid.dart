@@ -75,9 +75,9 @@ class _CenterGridState extends State<CenterGrid> {
       _lastSelected = sel;
       _ensureVisible(sel);
     }
-    // No setState here: this widget lives inside HomePage's ListenableBuilder,
-    // which already rebuilds it on every controller notification. Calling
-    // setState as well caused a redundant double rebuild of the whole grid.
+    // HomePage no longer wraps the whole page in a ListenableBuilder, so the
+    // grid rebuilds itself on controller changes (filter, selection, badges).
+    if (mounted) setState(() {});
   }
 
   double _itemExtent(double width, int columns) {

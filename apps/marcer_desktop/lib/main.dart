@@ -353,14 +353,33 @@ class _HomePageState extends State<HomePage> {
   /// in the status bar.
   String? _appVersion;
 
+  // Structural controller state: the page structure only changes when the
+  // catalog becomes ready, the view mode toggles or the data notice appears.
+  // Filter/selection updates are handled by the individual panels' listeners,
+  // so the filter bar (and its large facet dropdowns) is not rebuilt on every
+  // controller notification (e.g. each async layer-scan notify while scrolling).
+  bool _lastReady = false;
+  bool _lastCatalogMode = true;
+  bool _lastGridMode = true;
+  String? _lastCatalogNotice;
+
   @override
   void initState() {
     super.initState();
     _config = widget.config;
     _controller = CatalogController(_config);
+    // A controller starts uninitialized: do not touch lazy fields such as
+    // `universe` (used by `catalogDataNotice`) before `init()` has completed.
+    _lastReady = false;
+    _lastCatalogMode = true;
+    _lastGridMode = true;
+    _lastCatalogNotice = null;
     _controller.beforeLaunch = _beforeLaunch;
     _controller.addListener(_onControllerChanged);
-    _controller.init();
+    // Start after the first frame: `init` notifies synchronously, and the
+    // listener may call setState (progress/structural), which is not allowed
+    // during the initial build.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _controller.init());
     _updater.addListener(_onUpdateChanged);
     _assetUpdater.config = _config;
     _loadAppVersion();
@@ -513,6 +532,24 @@ class _HomePageState extends State<HomePage> {
         _showingDownloadError = false;
       });
     }
+
+    // Only rebuild the page structure for structural changes. While loading,
+    // every notification updates the progress text; afterwards the panels
+    // (filter bar, grid, detail, status bar) listen on their own.
+    if (!_controller.ready) {
+      if (mounted) setState(() {});
+      return;
+    }
+    final structural = !_lastReady ||
+        _lastCatalogMode != _controller.catalogMode ||
+        _lastGridMode != _controller.gridMode ||
+        _lastCatalogNotice != _controller.catalogDataNotice;
+    if (!structural) return;
+    _lastReady = true;
+    _lastCatalogMode = _controller.catalogMode;
+    _lastGridMode = _controller.gridMode;
+    _lastCatalogNotice = _controller.catalogDataNotice;
+    if (mounted) setState(() {});
   }
 
   /// Opens the settings editor, persists the edited paths back to
@@ -545,6 +582,10 @@ class _HomePageState extends State<HomePage> {
       _config = config;
       _controller = CatalogController(config);
     });
+    _lastReady = false;
+    _lastCatalogMode = true;
+    _lastGridMode = true;
+    _lastCatalogNotice = null;
     _controller.beforeLaunch = _beforeLaunch;
     _controller.addListener(_onControllerChanged);
     _controller.init();
@@ -640,146 +681,156 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: _controller,
-      builder: (context, _) {
-        final c = _controller;
-        if (!c.ready) {
-          final err = c.initError;
-          if (err == null) {
-            return Scaffold(
-              body: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 16),
-                    Text(c.progress,
-                        style: const TextStyle(color: Colors.grey)),
-                  ],
-                ),
-              ),
-            );
-          }
-          // Loading failed: never leave the app stuck on the spinner — show
-          // the error with a retry (and a shortcut to the settings editor).
-          return Scaffold(
-            body: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline,
-                          color: Colors.orangeAccent, size: 36),
-                      const SizedBox(height: 12),
-                      const Text('Could not load the catalog',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      SelectableText(err,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.grey)),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          OutlinedButton(
-                            onPressed: _openSettings,
-                            child: const Text('Settings…'),
-                          ),
-                          const SizedBox(width: 12),
-                          FilledButton(
-                            onPressed: () => _controller.init(),
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
+    final c = _controller;
+    if (!c.ready) {
+      final err = c.initError;
+      if (err == null) {
         return Scaffold(
-          body: Column(
-            children: [
-              FilterBar(
-                controller: c,
-                searchFocus: _searchFocus,
-                onExitSearch: () => _centerFocus.requestFocus(),
-                onOpenSettings: _openSettings,
-                updater: _updater,
-                assetUpdater: _assetUpdater,
-                onOpenAssetUpdates: _openAssetUpdates,
-              ),
-              const Divider(height: 1),
-              if (c.catalogDataNotice != null) ...[
-                Container(
-                  width: double.infinity,
-                  color: const Color(0xFF3A2E12),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline,
-                          size: 16, color: Colors.orangeAccent),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(c.catalogDataNotice!,
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.orangeAccent)),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(c.progress, style: const TextStyle(color: Colors.grey)),
               ],
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!c.catalogMode) ...[
-                      SizedBox(width: 260, child: FolderTree(controller: c)),
-                      const VerticalDivider(width: 1),
-                    ],
-                    Expanded(
-                      child: c.gridMode
-                          ? CenterGrid(
-                              controller: c,
-                              onToggleHelp: _toggleHelp,
-                              onOpenLightbox: _openLightbox,
-                              onFocusSearch: () => _searchFocus.requestFocus(),
-                              focusNode: _centerFocus,
-                            )
-                          : EntryList(
-                              controller: c,
-                              onToggleHelp: _toggleHelp,
-                              onOpenLightbox: _openLightbox,
-                              onFocusSearch: () => _searchFocus.requestFocus(),
-                              focusNode: _centerFocus,
-                            ),
-                    ),
-                    const VerticalDivider(width: 1),
-                    SizedBox(
-                        width: 420,
-                        child: DetailPanel(
-                          controller: c,
-                          onOpenLightbox: _openLightbox,
-                        )),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              _StatusBar(controller: c, version: _appVersion),
-            ],
+            ),
           ),
         );
-      },
+      }
+      // Loading failed: never leave the app stuck on the spinner — show the
+      // error with a retry (and a shortcut to the settings editor).
+      return Scaffold(
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline,
+                      color: Colors.orangeAccent, size: 36),
+                  const SizedBox(height: 12),
+                  const Text('Could not load the catalog',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  SelectableText(err,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      OutlinedButton(
+                        onPressed: _openSettings,
+                        child: const Text('Settings…'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton(
+                        onPressed: () => _controller.init(),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // The page structure only rebuilds on structural changes (see
+    // `_onControllerChanged`); each panel listens to the controller itself.
+    final notice = c.catalogDataNotice;
+    return Scaffold(
+      body: Column(
+        children: [
+          FilterBar(
+            controller: c,
+            searchFocus: _searchFocus,
+            onExitSearch: () => _centerFocus.requestFocus(),
+            onOpenSettings: _openSettings,
+            updater: _updater,
+            assetUpdater: _assetUpdater,
+            onOpenAssetUpdates: _openAssetUpdates,
+          ),
+          const Divider(height: 1),
+          if (notice != null) ...[
+            Container(
+              width: double.infinity,
+              color: const Color(0xFF3A2E12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline,
+                      size: 16, color: Colors.orangeAccent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(notice,
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.orangeAccent)),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!c.catalogMode) ...[
+                  SizedBox(
+                    width: 260,
+                    child: ListenableBuilder(
+                      listenable: c,
+                      builder: (context, _) => FolderTree(controller: c),
+                    ),
+                  ),
+                  const VerticalDivider(width: 1),
+                ],
+                Expanded(
+                  child: c.gridMode
+                      ? CenterGrid(
+                          controller: c,
+                          onToggleHelp: _toggleHelp,
+                          onOpenLightbox: _openLightbox,
+                          onFocusSearch: () => _searchFocus.requestFocus(),
+                          focusNode: _centerFocus,
+                        )
+                      : EntryList(
+                          controller: c,
+                          onToggleHelp: _toggleHelp,
+                          onOpenLightbox: _openLightbox,
+                          onFocusSearch: () => _searchFocus.requestFocus(),
+                          focusNode: _centerFocus,
+                        ),
+                ),
+                const VerticalDivider(width: 1),
+                SizedBox(
+                  width: 420,
+                  child: ListenableBuilder(
+                    listenable: c,
+                    builder: (context, _) => DetailPanel(
+                      controller: c,
+                      onOpenLightbox: _openLightbox,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          ListenableBuilder(
+            listenable: c,
+            builder: (context, _) =>
+                _StatusBar(controller: c, version: _appVersion),
+          ),
+        ],
+      ),
     );
   }
 }

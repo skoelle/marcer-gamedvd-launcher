@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -89,5 +90,60 @@ void main() {
 
     expect(c.filter.q, '');
     expect(fieldText(tester), '');
+  });
+
+  testWidgets('facet menu filters and selects a publisher', (tester) async {
+    const rel =
+        'Title Sorted/Cracked Games - Title Sorted/P/Publisher Test/pt.zip';
+    File('${tmp.path}/out/index.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {
+        rel: {
+          'rel': rel,
+          'name': 'pt.zip',
+          'status': 'done',
+          'kind': 'game',
+          'layer': 'ROOT',
+          'preview': null,
+          'candidates': <String>[],
+        },
+      },
+    }));
+    File('${tmp.path}/data/games-cracked.json').writeAsStringSync(jsonEncode({
+      'games': [
+        {
+          'letter': 'P',
+          'folder': 'Publisher Test',
+          'layers': ['ROOT'],
+          'matched_via': 'folder',
+          'matched_title': 'Publisher Test',
+          'variants': [
+            {'publisher': 'Acme', 'release': '1990'},
+            {'publisher': 'Beta', 'release': '1991'},
+          ],
+        },
+      ],
+    }));
+
+    final c = await pumpFilterBar(tester);
+    expect(c.facets.publishers, containsAll(<String>['Acme', 'Beta']));
+
+    await tester.tap(find.text('Publisher: any'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Acme'), findsOneWidget);
+    expect(find.text('Beta'), findsOneWidget);
+
+    // The menu is virtualized; typing filters the list without rebuilding all
+    // entries (the filter field is the last TextField in the overlay).
+    await tester.enterText(find.byType(TextField).last, 'acme');
+    await tester.pump();
+    expect(find.text('Acme'), findsOneWidget);
+    expect(find.text('Beta'), findsNothing);
+
+    await tester.tap(find.text('Acme'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(c.filter.publisher, 'Acme');
   });
 }
