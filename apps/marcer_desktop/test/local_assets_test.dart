@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -230,6 +231,47 @@ void main() {
     ));
     await tester.pump();
     expect(find.text('Box scans (2)'), findsOneWidget);
+    expect(find.text('Manuals (1)'), findsOneWidget);
+  });
+
+  testWidgets('clears the chips immediately when the card changes',
+      (tester) async {
+    final first = Completer<LocalGameAssets>()
+      ..complete(const LocalGameAssets(boxscans: [
+        LocalBoxscanEdition('Boxscan', [
+          LocalImageRef(name: 'a.png', edition: 'Boxscan', loosePath: '/a.png'),
+        ]),
+      ]));
+    final second = Completer<LocalGameAssets>();
+
+    Widget build(Future<LocalGameAssets> assets) => MaterialApp(
+          home: Scaffold(
+            body: LocalAssetsChips(
+              assets: assets,
+              service: LocalAssetsService(),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(build(first.future));
+    await tester.pump();
+    expect(find.text('Box scans (1)'), findsOneWidget);
+
+    await tester.pumpWidget(build(second.future));
+    await tester.pump();
+    expect(find.text('Box scans (1)'), findsNothing);
+    expect(find.text('Manuals (1)'), findsNothing);
+
+    second.complete(const LocalGameAssets(manuals: [
+      LocalManualDoc(
+        stem: 'Alone',
+        label: 'Alone.pdf',
+        kind: LocalManualKind.pdf,
+        textVariant: false,
+      ),
+    ]));
+    await tester.pumpAndSettle();
+    expect(find.text('Box scans (1)'), findsNothing);
     expect(find.text('Manuals (1)'), findsOneWidget);
   });
 }

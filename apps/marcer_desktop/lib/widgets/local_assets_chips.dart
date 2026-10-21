@@ -23,6 +23,7 @@ class LocalAssetsChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<LocalGameAssets>(
+      key: ObjectKey(assets),
       future: assets,
       builder: (context, snapshot) {
         final data = snapshot.data;
