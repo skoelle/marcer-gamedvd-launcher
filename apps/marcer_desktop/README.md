@@ -56,6 +56,7 @@ export PATH="$HOME/flutter/bin:$PATH"
 cd packages/marcer_catalog && dart test   # data-layer unit tests
 flutter test                      # app unit tests
 flutter analyze                   # lint
+dart run tool/benchmark.dart      # catalog data-layer benchmark (real artifacts)
 ../../.venv/bin/python tool/generate_icons.py   # regenerate app icons
 ```
 
@@ -309,6 +310,17 @@ absent files:
 A card with at least one local ZIP is not marked, even if some variants are
 missing. The check is cached per session; files that appear or vanish while
 the app runs are re-evaluated after a download or a settings reload.
+
+**The grid never blocks on the filesystem.** Building a tile only reads the
+cached layer/missing state and requests a background scan of the card's
+folder(s) (bounded concurrency, one directory listing per folder instead of
+per-file `stat` calls); the `ROOT`/`PATCH`/`BOTH` and `MISSING` badges appear as
+soon as the scan result lands. This keeps scrolling smooth on slow/network
+mounts. The detail panel and launch path use the same cache (a fresh selection
+triggers the scan on demand).
+
+The offline data-layer benchmark against the real artifacts is
+`dart run tool/benchmark.dart` (see [Commands](#commands)).
 
 ## Download missing (FTP)
 

@@ -75,7 +75,9 @@ class _CenterGridState extends State<CenterGrid> {
       _lastSelected = sel;
       _ensureVisible(sel);
     }
-    setState(() {});
+    // No setState here: this widget lives inside HomePage's ListenableBuilder,
+    // which already rebuilds it on every controller notification. Calling
+    // setState as well caused a redundant double rebuild of the whole grid.
   }
 
   double _itemExtent(double width, int columns) {
@@ -384,12 +386,17 @@ class _CenterGridState extends State<CenterGrid> {
 
   Widget _cardTile(
       CatalogController c, GameCard card, bool selected, int index) {
-    final layer = c.cardLayer(card);
+    // Never touch the filesystem while building a tile: read the async layer
+    // cache and request a background scan for unknown folders. Badges appear
+    // as soon as the scan result arrives (throttled notify).
+    c.ensureCardScanned(card);
+    final layer = c.cachedCardLayer(card);
+    final missing = c.cachedCardMissing(card);
     final chips = <String>[
       if (c.isFavoriteCard(card)) 'FAVORITE',
       if (card.variants.length > 1) '×${card.variants.length}',
-      if (layer.isNotEmpty) layer,
-      if (c.cardMissing(card)) 'MISSING',
+      if (layer != null && layer.isNotEmpty) layer,
+      if (missing == true) 'MISSING',
       if (card.tosVersion != null && card.tosVersion!.isNotEmpty)
         'TOS ${card.tosVersion}',
       if (card.displayStatus.isNotEmpty) card.displayStatus,

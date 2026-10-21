@@ -113,6 +113,7 @@ void main() {
   });
 
   tearDown(() {
+    c.dispose();
     if (tmp.existsSync()) tmp.deleteSync(recursive: true);
   });
 
@@ -213,5 +214,50 @@ void main() {
     ));
     await c.init();
     expect(c.cardMissing(crackedCard('B', 'Beta')), isFalse);
+  });
+
+  test('cached layer/missing are unknown until the async scan lands', () async {
+    await c.init();
+    final alpha = crackedCard('A', 'Alpha');
+    // Before any scan: no synchronous filesystem access, unknown state.
+    expect(c.cachedCardLayer(alpha), isNull);
+    expect(c.cachedCardMissing(alpha), isNull);
+
+    c.ensureCardScanned(alpha);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+
+    expect(c.cachedCardLayer(alpha), 'ROOT');
+    expect(c.cachedCardMissing(alpha), isFalse);
+
+    final beta = crackedCard('B', 'Beta');
+    c.ensureCardScanned(beta);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(c.cachedCardLayer(beta), '');
+    expect(c.cachedCardMissing(beta), isTrue);
+  });
+
+  test('metadata-only cards resolve their folder asynchronously', () async {
+    await c.init();
+    final ghosts = c.universe.pd.firstWhere((x) => x.folder == 'Ghosts');
+    expect(c.cachedCardLayer(ghosts), isNull);
+    expect(c.cachedVariantsOfCard(ghosts), isNull);
+
+    c.ensureCardScanned(ghosts);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(c.cachedCardLayer(ghosts), 'ROOT');
+    expect(c.cachedCardMissing(ghosts), isFalse);
+    expect(c.cachedVariantsOfCard(ghosts)?.length, 1);
+
+    final pacman = c.universe.pd.firstWhere((x) => x.folder == 'PacMan');
+    c.ensureCardScanned(pacman);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(c.cachedCardLayer(pacman), '');
+    expect(c.cachedCardMissing(pacman), isTrue);
+  });
+
+  test('statusLine is memoized per section', () async {
+    await c.init();
+    final first = c.statusLine;
+    expect(identical(c.statusLine, first), isTrue);
   });
 }

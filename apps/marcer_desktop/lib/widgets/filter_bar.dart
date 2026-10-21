@@ -65,6 +65,11 @@ class _FilterBarState extends State<FilterBar> {
   /// in-flight typing.
   late String _lastQuery;
 
+  /// Cached facet dropdown entries (static per section) and the section they
+  /// were built for.
+  final Map<String, List<DropdownMenuEntry<String>>> _facetEntries = {};
+  String? _facetEntriesSection;
+
   @override
   void initState() {
     super.initState();
@@ -81,6 +86,8 @@ class _FilterBarState extends State<FilterBar> {
       widget.controller.addListener(_syncSearch);
       _lastQuery = widget.controller.filter.q;
       _applyQueryToField(_lastQuery);
+      _facetEntries.clear();
+      _facetEntriesSection = null;
     }
   }
 
@@ -146,6 +153,14 @@ class _FilterBarState extends State<FilterBar> {
     final fields = kindFilters(f.section);
     // AtariLegend-only facets: hidden until the cache has been downloaded.
     final withAtariLegend = c.hasAtariLegend;
+    // The facet entry lists are static per section; rebuild them only when the
+    // section changes (the FilterBar rebuilds on every controller notify, and
+    // recreating thousands of DropdownMenuEntry objects each time was pure
+    // waste).
+    if (_facetEntriesSection != f.section) {
+      _facetEntriesSection = f.section;
+      _facetEntries.clear();
+    }
 
     return Material(
       color: const Color(0xFF1B1B1B),
@@ -586,10 +601,10 @@ class _FilterBarState extends State<FilterBar> {
           suffixIconConstraints: BoxConstraints(
               minWidth: 28, maxWidth: 28, minHeight: 28, maxHeight: 28),
         ),
-        dropdownMenuEntries: [
+        dropdownMenuEntries: _facetEntries.putIfAbsent(anyLabel, () => [
           for (final v in items)
             DropdownMenuEntry<String>(value: v, label: label(v)),
-        ],
+        ]),
         onSelected: (v) {
           if (v != null) onChanged(v);
         },

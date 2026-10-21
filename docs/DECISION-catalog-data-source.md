@@ -80,6 +80,16 @@ published layer field (`catalog_controller.dart:503-510`), so locally present
 ZIPs are never falsely flagged `MISSING`; per-variant/card `MISSING` reflects a
 genuinely absent file in **both** layers.
 
+The grid never performs those checks synchronously while building a tile: it
+reads a cache (`cachedCardLayer`/`cachedCardMissing`) and requests a bounded
+background folder scan (`ensureCardScanned` → async `Directory.list` per
+folder, 6 workers, one listing instead of per-file `stat` calls, throttled
+notify). The layer/`MISSING` badges therefore appear asynchronously. This keeps
+scrolling smooth on slow/network mounts, where a cold per-file `exists` can
+cost hundreds of milliseconds (see `apps/marcer_desktop/tool/benchmark.dart`);
+the detail panel uses the same cache, while launch/favorites keep the
+synchronous check for the single card being acted on.
+
 ### 3.4 ZIPs in neither index nor gameinfo are invisible in the catalog
 A ZIP that exists in `ROOT`/`PATCH` but is absent from both the index and
 gameinfo never becomes a card — reloading does not help; the artifact must be

@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -112,6 +114,7 @@ class CatalogController extends ChangeNotifier {
       gameinfo = bundle.info;
       atariLegend = bundle.atariLegend;
       universe = bundle.universe;
+      _statusLineCache.clear();
 
       if (!Directory(config.rootDirectory).existsSync()) {
         notices.add('RootDirectory missing: ${config.rootDirectory}');
@@ -569,12 +572,47 @@ class CatalogController extends ChangeNotifier {
   /// reload.
   final Map<String, String> _zipLayerCache = {};
 
+  /// Async local-layer resolution state. Folders are listed in the background
+  /// (bounded concurrency) and their ZIP names/layers cached; the grid only
+  /// reads [cachedCardLayer]/[cachedCardMissing] and never blocks a frame on
+  /// the (possibly network) filesystem. The cache is per controller and not
+  /// persisted (a reload rebuilds it).
+  final Set<String> _scannedDirs = {};
+  final Map<String, List<String>> _scannedFolderZips = {};
+  final Set<String> _scanRequested = {};
+  final Queue<String> _scanQueue = Queue<String>();
+  int _scanWorkers = 0;
+  static const int _maxScanWorkers = 6;
+  bool _scanNotifyScheduled = false;
+  bool _disposed = false;
+
+  /// Normalizes a rel path to the '/'-separated index form (cache keys).
+  static String _relKey(String rel) => rel.replaceAll('\\', '/');
+
+  /// Directory part of a '/'-separated rel path ('' at the top level).
+  static String _dirOfRel(String rel) {
+    final norm = _relKey(rel);
+    final i = norm.lastIndexOf('/');
+    return i == -1 ? '' : norm.substring(0, i);
+  }
+
+  /// Cached local layer of [rel], or `null` while its folder has not been
+  /// scanned yet. Pure map lookup — safe to call from a tile builder.
+  String? cachedZipLayer(String rel) {
+    if (rel.isEmpty) return '';
+    final key = _relKey(rel);
+    if (!_scannedDirs.contains(_dirOfRel(key))) return null;
+    return _zipLayerCache[key] ?? '';
+  }
+
+
   /// Local overlay layer of the ZIP at [rel]: `BOTH` when present in root and
   /// patch, `ROOT`/`PATCH` when present in only one, `''` when absent. Both
   /// layers are checked regardless of the published layer field.
   String zipLayer(String rel) {
     if (rel.isEmpty) return '';
-    return _zipLayerCache.putIfAbsent(rel, () {
+    final key = _relKey(rel);
+    return _zipLayerCache.putIfAbsent(key, () {
       final inRoot = File(p.join(config.rootDirectory, rel)).existsSync();
       final patch = config.patchDirectory;
       final inPatch =
@@ -617,6 +655,151 @@ class CatalogController extends ChangeNotifier {
     return variants.every(variantMissing);
   }
 
+  static String _aggregateLayers(Set<String> layers) {
+    if (layers.isEmpty) return '';
+    return layers.length == 1 ? layers.first : 'BOTH';
+  }
+
+  /// Cache-only variant of [cardLayer]: returns `null` while the card's
+  /// folder(s) have not been scanned yet (the grid shows no badge then and a
+  /// background scan is requested via [ensureCardScanned]). Never touches the
+  /// filesystem, so it is safe to call from a tile builder.
+  String? cachedCardLayer(GameCard card) {
+    if (card.variants.isNotEmpty) {
+      final layers = <String>{};
+      for (final v in card.variants) {
+        final l = cachedZipLayer(v.rel);
+        if (l == null) return null;
+        if (l.isNotEmpty) layers.add(l);
+      }
+      return _aggregateLayers(layers);
+    }
+    final dir = cardFolderRel(card);
+    if (dir == null) return '';
+    final key = _relKey(dir);
+    if (!_scannedDirs.contains(key)) return null;
+    final layers = <String>{};
+    for (final rel in _scannedFolderZips[key] ?? const <String>[]) {
+      final l = _zipLayerCache[rel] ?? '';
+      if (l.isNotEmpty) layers.add(l);
+    }
+    return _aggregateLayers(layers);
+  }
+
+  /// Cache-only variant of [cardMissing]: `null` while unknown. Metadata-only
+  /// cards (no index variants) need their folder listing, which the background
+  /// scan provides.
+  bool? cachedCardMissing(GameCard card) {
+    if (card.variants.isNotEmpty) {
+      var allMissing = true;
+      for (final v in card.variants) {
+        final l = cachedZipLayer(v.rel);
+        if (l == null) return null;
+        if (l.isNotEmpty) allMissing = false;
+      }
+      return allMissing;
+    }
+    final dir = cardFolderRel(card);
+    if (dir == null) return true;
+    final key = _relKey(dir);
+    if (!_scannedDirs.contains(key)) return null;
+    final zips = _scannedFolderZips[key] ?? const <String>[];
+    if (zips.isEmpty) return true;
+    return zips.every((rel) => (_zipLayerCache[rel] ?? '').isEmpty);
+  }
+
+  /// Requests a background listing for the folder(s) of [card]. The result is
+  /// cached and a throttled [notifyListeners] refreshes the visible tiles.
+  void ensureCardScanned(GameCard card) {
+    if (_disposed) return;
+    if (card.variants.isNotEmpty) {
+      for (final v in card.variants) {
+        _enqueueScan(_dirOfRel(v.rel));
+      }
+    }
+    final dir = cardFolderRel(card);
+    if (dir != null) _enqueueScan(dir);
+  }
+
+  void _enqueueScan(String dir) {
+    if (_disposed) return;
+    final key = _relKey(dir);
+    if (key.isEmpty || key == '.' || key.contains('..')) return;
+    if (_scannedDirs.contains(key) || _scanRequested.contains(key)) return;
+    _scanRequested.add(key);
+    _scanQueue.add(key);
+    _pumpScan();
+  }
+
+  void _pumpScan() {
+    while (!_disposed &&
+        _scanWorkers < _maxScanWorkers &&
+        _scanQueue.isNotEmpty) {
+      final dir = _scanQueue.removeFirst();
+      _scanWorkers++;
+      _scanDir(dir).whenComplete(() {
+        _scanWorkers--;
+        _scanRequested.remove(dir);
+        _scheduleScanNotify();
+        if (!_disposed && _scanQueue.isNotEmpty) _pumpScan();
+      });
+    }
+  }
+
+  Future<void> _scanDir(String dir) async {
+    final rootNames =
+        await _listZipNames(p.join(config.rootDirectory, dir));
+    final patch = config.patchDirectory;
+    final patchNames = patch.isEmpty
+        ? const <String>{}
+        : await _listZipNames(p.join(patch, dir));
+    final rels = <String>[];
+    for (final name in {...rootNames, ...patchNames}) {
+      final rel = dir.isEmpty ? name : '$dir/$name';
+      final inRoot = rootNames.contains(name);
+      final inPatch = patchNames.contains(name);
+      _zipLayerCache[rel] =
+          (inRoot && inPatch) ? 'BOTH' : (inPatch ? 'PATCH' : 'ROOT');
+      rels.add(rel);
+    }
+    rels.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    _scannedFolderZips[dir] = List<String>.unmodifiable(rels);
+    _scannedDirs.add(dir);
+  }
+
+  Future<Set<String>> _listZipNames(String dirPath) async {
+    final out = <String>{};
+    try {
+      final dir = Directory(dirPath);
+      if (!await dir.exists()) return out;
+      await for (final e in dir.list(followLinks: false)) {
+        final name = p.basename(e.path);
+        if (name.isEmpty || name.startsWith('.') || name == '@eaDir') continue;
+        if (e is File && name.toLowerCase().endsWith('.zip')) out.add(name);
+      }
+    } catch (_) {
+      // Unreadable/missing folder — treated as empty (the card then shows
+      // MISSING once the scan is recorded).
+    }
+    return out;
+  }
+
+  void _scheduleScanNotify() {
+    if (_disposed || _scanNotifyScheduled) return;
+    _scanNotifyScheduled = true;
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      _scanNotifyScheduled = false;
+      if (!_disposed) notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _scanQueue.clear();
+    super.dispose();
+  }
+
   /// The ZIP a catalog card should launch: the crew/cracker-focused variant
   /// when a focus filter is active, otherwise the variant whose preview is the
   /// card preview (falling back to the first).
@@ -655,6 +838,21 @@ class CatalogController extends ChangeNotifier {
     if (cached != null) return cached;
     final dir = cardFolderRel(card);
     if (dir == null) return const [];
+    final key = _relKey(dir);
+    final scanned = _scannedFolderZips[key];
+    if (scanned != null) {
+      final out = [
+        for (final rel in scanned)
+          CardVariant(
+            rel: rel,
+            name: p.basename(rel),
+            status: '',
+            layer: _zipLayerCache[rel] ?? '',
+          ),
+      ];
+      _resolvedCardVariants[card] = out;
+      return out;
+    }
     final out = <CardVariant>[];
     for (final e in browser.list(dir)) {
       if (e.kind != EntryKind.zip) continue;
@@ -670,6 +868,31 @@ class CatalogController extends ChangeNotifier {
   }
 
   final Map<GameCard, List<CardVariant>> _resolvedCardVariants = {};
+
+  /// Cache-only [variantsOfCard]: returns `null` while a metadata-only card's
+  /// folder is still being scanned (never touches the filesystem). Cracked
+  /// cards return their index variants immediately.
+  List<CardVariant>? cachedVariantsOfCard(GameCard card) {
+    if (card.variants.isNotEmpty) return card.variants;
+    final cached = _resolvedCardVariants[card];
+    if (cached != null) return cached;
+    final dir = cardFolderRel(card);
+    if (dir == null) return const [];
+    final key = _relKey(dir);
+    final scanned = _scannedFolderZips[key];
+    if (scanned == null) return null;
+    final out = [
+      for (final rel in scanned)
+        CardVariant(
+          rel: rel,
+          name: p.basename(rel),
+          status: '',
+          layer: _zipLayerCache[rel] ?? '',
+        ),
+    ];
+    _resolvedCardVariants[card] = out;
+    return out;
+  }
 
   /// Optional pre-launch guard (set by the UI): when it returns `false` the
   /// launch is aborted. Used to offer a TOS ROM download before the first start
@@ -855,8 +1078,13 @@ class CatalogController extends ChangeNotifier {
   /// resolved pd/utils variants) so the next `cardMissing`/`cardLayer` call
   /// re-reads the freshly downloaded files from disk.
   void _refreshAfterDownload(String folder) {
+    final key = _relKey(folder);
     _zipLayerCache
-        .removeWhere((rel, _) => rel == folder || rel.startsWith('$folder/'));
+        .removeWhere((rel, _) => rel == key || rel.startsWith('$key/'));
+    _scannedFolderZips.removeWhere(
+        (dir, _) => dir == key || dir.startsWith('$key/'));
+    _scannedDirs.removeWhere((dir) => dir == key || dir.startsWith('$key/'));
+    _scanRequested.removeWhere((dir) => dir == key || dir.startsWith('$key/'));
     _resolvedCardVariants.clear();
   }
 
@@ -910,9 +1138,23 @@ class CatalogController extends ChangeNotifier {
   /// the done segment matches the dropdown result count. Every segment is
   /// scoped to the **active section** (per-section screenshot indices, user
   /// decision 2026-10-16); `gameinfo N folders` coverage stays cracked-only.
+  ///
+  /// Memoized per section: it is called on every rebuild (including each
+  /// selection move) and its counts scan the whole section, so recomputing it
+  /// repeatedly was a significant per-frame cost. Cleared when the universe is
+  /// rebuilt (curation) or reloaded.
   List<String> get statusLine {
-    final parts = <String>[];
     final section = filter.section;
+    final cached = _statusLineCache[section];
+    if (cached != null) return cached;
+    return _statusLineCache[section] =
+        List<String>.unmodifiable(_computeStatusLine(section));
+  }
+
+  final Map<String, List<String>> _statusLineCache = {};
+
+  List<String> _computeStatusLine(String section) {
+    final parts = <String>[];
     final sectionIndex = screenshots.forSection(section);
     final sectionCards = universe.cardsFor(section);
     if (catalogMode && gameinfo.length > 0) {
@@ -1271,6 +1513,7 @@ class CatalogController extends ChangeNotifier {
     );
     // New card objects — drop the lazy pd/utils variant cache (identity-keyed).
     _resolvedCardVariants.clear();
+    _statusLineCache.clear();
   }
 
   /// Persists the pending changes (shotgen lock, atomic `index.json` +

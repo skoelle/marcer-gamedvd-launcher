@@ -120,8 +120,12 @@ class DetailPanel extends StatelessWidget {
   }
 
   Widget _cardInfo(BuildContext context, CatalogController c, GameCard card) {
-    final variants = c.variantsOfCard(card);
-    final layer = c.cardLayer(card);
+    // Cache-only lookups + a background scan: selection never blocks on the
+    // (possibly network) filesystem. Badges/rows appear once the scan lands.
+    c.ensureCardScanned(card);
+    final variants = c.cachedVariantsOfCard(card) ?? const <CardVariant>[];
+    final layer = c.cachedCardLayer(card);
+    final missing = c.cachedCardMissing(card);
     final al = c.atariLegendForCard(card);
     // Gallery-style detail (no large preview — the lightbox shows the image).
     return Column(
@@ -142,8 +146,9 @@ class DetailPanel extends StatelessWidget {
                 children: [
                   if (c.isFavoriteCard(card))
                     _badge('FAVORITE', Colors.amber),
-                  if (layer.isNotEmpty) _badge(layer, _layerColorName(layer)),
-                  if (c.cardMissing(card)) _badge('MISSING', Colors.redAccent),
+                  if (layer != null && layer.isNotEmpty)
+                    _badge(layer, _layerColorName(layer)),
+                  if (missing == true) _badge('MISSING', Colors.redAccent),
                   if (card.tosVersion != null && card.tosVersion!.isNotEmpty)
                     _badge('TOS ${card.tosVersion}', Colors.deepOrange),
                   if (card.displayStatus.isNotEmpty)
@@ -153,7 +158,7 @@ class DetailPanel extends StatelessWidget {
                     _badge('${variants.length} variants', Colors.indigo),
                 ],
               ),
-              if (c.cardMissing(card)) ...[
+              if (missing == true) ...[
                 const SizedBox(height: 8),
                 _downloadButton(c, card),
               ],
@@ -250,10 +255,11 @@ class DetailPanel extends StatelessWidget {
 
   /// The ZIP shown in the "This ZIP" table: the crew/cracker-focused variant
   /// when a focus filter is active, else the variant that produced the card's
-  /// primary preview, else the first (indexes [CatalogController.variantsOfCard],
-  /// so pd/utils cards resolve their folder ZIPs on demand).
+  /// primary preview, else the first (cache-only, so selecting a card never
+  /// blocks on the filesystem; a background scan fills the data in).
   ZipVariantView? _primaryVariant(GameCard card) {
-    final variants = controller.variantsOfCard(card);
+    final variants =
+        controller.cachedVariantsOfCard(card) ?? const <CardVariant>[];
     if (variants.isEmpty) return null;
     var idx = (card.focusVariant ?? -1) >= 0 ? card.focusVariant! : -1;
     if (idx < 0 && card.previewPath != null) {
@@ -263,14 +269,15 @@ class DetailPanel extends StatelessWidget {
     }
     if (idx < 0 || idx >= variants.length) idx = 0;
     final v = variants[idx];
+    final layer = controller.cachedZipLayer(v.rel);
     return ZipVariantView(
       name: v.name,
       status: v.status,
       kind: v.kind,
-      layer: controller.variantLayer(v),
+      layer: layer ?? '',
       rel: v.rel,
       size: v.size,
-      missing: controller.variantMissing(v),
+      missing: layer != null && layer.isEmpty,
       tos: v.tos,
     );
   }
