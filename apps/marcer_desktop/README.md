@@ -11,10 +11,11 @@ lightbox (filmstrip + info panel). On desktop, **scrollbars stay visible**
 whenever a view overflows. **Read-only** consumer of all data roots except
 favorites and, on explicit Save, manual screenshot curation.
 
-The large facet menus (publisher, crew, cracker, language, year, genre,
-developers) are **virtualized** — only the visible rows are built — so opening
-them with ~1,000 entries stays instant; the filter bar rebuilds only when a
-filter changes, not on selection moves or background scan notifications.
+All filter dropdowns (facets, status, sort, raw/pasti/boxscan, TOS/Bad) are
+**virtualized** — only the visible rows are built — with a type-to-filter field
+and `↑`/`↓` + `Enter` navigation, so opening them with ~1,000 entries stays
+instant. The filter bar rebuilds only when a filter changes, not on selection
+moves or background scan notifications.
 
 ![Catalog grid](../../docs/images/catalog.png)
 

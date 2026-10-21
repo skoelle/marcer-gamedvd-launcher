@@ -277,73 +277,114 @@ class _FilterBarState extends State<FilterBar> {
                   // Status filter is available for every section now that
                   // pd/utils carry index-derived statuses (default `any`
                   // there, `default_status` for cracked).
-                  _statusDropdown(f.status, c.setStatus),
+                  _SelectMenu(
+                    value: f.status,
+                    items: ['with_screenshot', 'any', ...kStatusFilterKeys],
+                    labelOf: (v) => kStatusLabels[v] ?? v,
+                    onChanged: c.setStatus,
+                    width: 150,
+                  ),
                   if (withAtariLegend && fields.contains('genre'))
-                    _facetMenu(
-                      'Genre: any',
-                      f.genre,
-                      ['any', ...facets.genres],
-                      c.setGenre,
+                    _SelectMenu(
+                      value: f.genre,
+                      items: ['any', ...facets.genres],
+                      labelOf: (v) => v == 'any' ? 'Genre: any' : v,
+                      onChanged: c.setGenre,
                       width: 130,
                     ),
                   if (fields.contains('publisher'))
-                    _facetMenu(
-                      'Publisher: any',
-                      f.publisher,
-                      ['any', ...facets.publishers],
-                      c.setPublisher,
+                    _SelectMenu(
+                      value: f.publisher,
+                      items: ['any', ...facets.publishers],
+                      labelOf: (v) => v == 'any' ? 'Publisher: any' : v,
+                      onChanged: c.setPublisher,
                       width: 140,
                     ),
                   if (withAtariLegend && fields.contains('developer'))
-                    _facetMenu(
-                      'Developers: any',
-                      f.developer,
-                      ['any', ...facets.developers],
-                      c.setDeveloper,
+                    _SelectMenu(
+                      value: f.developer,
+                      items: ['any', ...facets.developers],
+                      labelOf: (v) => v == 'any' ? 'Developers: any' : v,
+                      onChanged: c.setDeveloper,
                       width: 140,
                     ),
                   if (fields.contains('crew'))
-                    _facetMenu(
-                      'Crew: any',
-                      f.crew,
-                      ['any', ...facets.crews],
-                      c.setCrew,
+                    _SelectMenu(
+                      value: f.crew,
+                      items: ['any', ...facets.crews],
+                      labelOf: (v) => v == 'any' ? 'Crew: any' : v,
+                      onChanged: c.setCrew,
                       width: 120,
                     ),
                   if (fields.contains('cracker'))
-                    _facetMenu(
-                      'Cracker: any',
-                      f.cracker,
-                      ['any', ...facets.crackers],
-                      c.setCracker,
+                    _SelectMenu(
+                      value: f.cracker,
+                      items: ['any', ...facets.crackers],
+                      labelOf: (v) => v == 'any' ? 'Cracker: any' : v,
+                      onChanged: c.setCracker,
                       width: 105,
                     ),
                   if (fields.contains('language'))
-                    _facetMenu(
-                      'Language: any',
-                      f.language,
-                      ['any', ...facets.languages],
-                      c.setLanguage,
+                    _SelectMenu(
+                      value: f.language,
+                      items: ['any', ...facets.languages],
+                      labelOf: (v) => v == 'any' ? 'Language: any' : v,
+                      onChanged: c.setLanguage,
                       width: 130,
                     ),
                   if (fields.contains('year'))
-                    _facetMenu(
-                      'Year: any',
-                      f.year,
-                      ['any', ...facets.years],
-                      c.setYear,
+                    _SelectMenu(
+                      value: f.year,
+                      items: ['any', ...facets.years],
+                      labelOf: (v) => v == 'any' ? 'Year: any' : v,
+                      onChanged: c.setYear,
                       width: 100,
                     ),
                   if (fields.contains('raw'))
-                    _triDropdown('raw', f.raw, (v) => c.setFlag('raw', v)),
+                    _SelectMenu(
+                      value: f.raw,
+                      items: const ['any', 'yes', 'no'],
+                      labelOf: (v) => 'raw: $v',
+                      onChanged: (v) => c.setFlag('raw', v),
+                      width: 100,
+                    ),
                   if (fields.contains('pasti'))
-                    _triDropdown('pasti', f.pasti, (v) => c.setFlag('pasti', v)),
+                    _SelectMenu(
+                      value: f.pasti,
+                      items: const ['any', 'yes', 'no'],
+                      labelOf: (v) => 'pasti: $v',
+                      onChanged: (v) => c.setFlag('pasti', v),
+                      width: 100,
+                    ),
                   if (fields.contains('boxscan'))
-                    _triDropdown(
-                        'boxscan', f.boxscan, (v) => c.setFlag('boxscan', v)),
+                    _SelectMenu(
+                      value: f.boxscan,
+                      items: const ['any', 'yes', 'no'],
+                      labelOf: (v) => 'boxscan: $v',
+                      onChanged: (v) => c.setFlag('boxscan', v),
+                      width: 100,
+                    ),
                   if (fields.contains('tos'))
-                    _tosDropdown(f.tos, c.setTos),
-                  _sortDropdown(f.sort, f.order, c.setSortOrder),
+                    _SelectMenu(
+                      value: f.tos,
+                      items: const ['any', 'has'],
+                      labelOf: (v) => 'TOS/Bad: $v',
+                      onChanged: c.setTos,
+                      width: 120,
+                    ),
+                  _SelectMenu(
+                    value: '${f.sort}:${f.order}',
+                    items: [
+                      for (final k in kSortKeys)
+                        for (final o in const ['asc', 'desc']) '$k:$o',
+                    ],
+                    labelOf: (v) => v.replaceFirst(':', ' '),
+                    onChanged: (v) {
+                      final i = v.lastIndexOf(':');
+                      c.setSortOrder(v.substring(0, i), v.substring(i + 1));
+                    },
+                    width: 120,
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -591,156 +632,6 @@ class _FilterBarState extends State<FilterBar> {
   /// Facet dropdown with type-to-filter: tapping opens an editable field,
   /// typing narrows the list and Enter picks the match (`DropdownMenu`
   /// `enableFilter`). Keeps the compact look of the other controls.
-  Widget _facetMenu(
-    String anyLabel,
-    String value,
-    List<String> items,
-    ValueChanged<String> onChanged, {
-    double width = 140,
-    String Function(String)? labelOf,
-  }) {
-    return _FacetMenu(
-      anyLabel: anyLabel,
-      value: value,
-      items: items,
-      onChanged: onChanged,
-      width: width,
-      labelOf: labelOf,
-    );
-  }
-
-  Widget _statusDropdown(String value, ValueChanged<String> onChanged) {
-    final keys = ['with_screenshot', 'any', ...kStatusFilterKeys];
-    return SizedBox(
-      width: 150,
-      height: 28,
-      child: DropdownButtonFormField<String>(
-        key: ValueKey('status:$value'),
-        initialValue: keys.contains(value) ? value : 'with_screenshot',
-        isExpanded: true,
-        isDense: true,
-        decoration: InputDecoration(
-          isDense: true,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        ),
-        style: const TextStyle(fontSize: 12, color: Colors.white),
-        items: [
-          for (final k in keys)
-            DropdownMenuItem(
-              value: k,
-              child: Text(kStatusLabels[k] ?? k,
-                  overflow: TextOverflow.ellipsis),
-            ),
-        ],
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
-      ),
-    );
-  }
-
-  /// Combined sort + order dropdown in the style of the other dropdowns,
-  /// entries `<key> asc` / `<key> desc` (e.g. `year desc`). Same width as
-  /// the TOS/Bad dropdown. Replaces the former sort facet menu plus the
-  /// separate asc/desc button.
-  Widget _sortDropdown(
-      String sort, String order, void Function(String, String) onChanged) {
-    const orders = ['asc', 'desc'];
-    final value = kSortKeys.contains(sort)
-        ? '$sort:$order'
-        : '${kSortKeys.first}:$order';
-    return SizedBox(
-      width: 120,
-      height: 28,
-      child: DropdownButtonFormField<String>(
-        key: ValueKey('sort:$value'),
-        initialValue: value,
-        isExpanded: true,
-        isDense: true,
-        decoration: InputDecoration(
-          isDense: true,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-        ),
-        style: const TextStyle(fontSize: 12, color: Colors.white),
-        items: [
-          for (final k in kSortKeys)
-            for (final o in orders)
-              DropdownMenuItem(
-                value: '$k:$o',
-                child: Text('$k $o', overflow: TextOverflow.ellipsis),
-              ),
-        ],
-        onChanged: (v) {
-          if (v == null) return;
-          final i = v.lastIndexOf(':');
-          onChanged(v.substring(0, i), v.substring(i + 1));
-        },
-      ),
-    );
-  }
-
-  Widget _triDropdown(
-      String flag, String value, ValueChanged<String> onChanged) {
-    return SizedBox(
-      width: 100,
-      height: 28,
-      child: DropdownButtonFormField<String>(
-        key: ValueKey('$flag:$value'),
-        initialValue: value,
-        isExpanded: true,
-        isDense: true,
-        decoration: InputDecoration(
-          isDense: true,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        ),
-        style: const TextStyle(fontSize: 12, color: Colors.white),
-        items: [
-          for (final v in const ['any', 'yes', 'no'])
-            DropdownMenuItem(
-                value: v, child: Text('$flag: $v', overflow: TextOverflow.ellipsis)),
-        ],
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
-      ),
-    );
-  }
-
-  Widget _tosDropdown(String value, ValueChanged<String> onChanged) {
-    return SizedBox(
-      width: 120,
-      height: 28,
-      child: DropdownButtonFormField<String>(
-        key: ValueKey('tos:$value'),
-        initialValue: value,
-        isExpanded: true,
-        isDense: true,
-        decoration: InputDecoration(
-          isDense: true,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        ),
-        style: const TextStyle(fontSize: 12, color: Colors.white),
-        items: const [
-          DropdownMenuItem(
-              value: 'any',
-              child: Text('TOS/Bad: any',
-                  maxLines: 1, overflow: TextOverflow.ellipsis)),
-          DropdownMenuItem(
-              value: 'has',
-              child: Text('TOS/Bad: has',
-                  maxLines: 1, overflow: TextOverflow.ellipsis)),
-        ],
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
-      ),
-    );
-  }
-
   Widget _letterRow(
     List<String> facetLetters,
     String current,
@@ -791,43 +682,31 @@ class _FilterBarState extends State<FilterBar> {
   }
 }
 
-/// Compact searchable facet dropdown with a **virtualized** menu: only the
-/// visible rows are built. Used for the large facet lists (publisher, crew,
-/// cracker, language, year, genre, developer) instead of `DropdownMenu`, which
-/// eagerly builds a `MenuItemButton` for every entry on each build and lays
-/// all of them out when opened (very slow with ~1000 entries).
-class _FacetMenu extends StatefulWidget {
-  const _FacetMenu({
-    required this.anyLabel,
+/// Compact searchable select dropdown with a **virtualized** menu: only the
+/// visible rows are built. Used for every filter dropdown (the large facet
+/// lists with ~1,000 entries as well as the short status/sort/tri-state/TOS
+/// lists), so the look is uniform and opening stays instant.
+class _SelectMenu extends StatefulWidget {
+  const _SelectMenu({
     required this.value,
     required this.items,
+    required this.labelOf,
     required this.onChanged,
     this.width = 140,
-    this.labelOf,
   });
 
-  final String anyLabel;
   final String value;
   final List<String> items;
+  final String Function(String) labelOf;
   final ValueChanged<String> onChanged;
   final double width;
-  final String Function(String)? labelOf;
 
   @override
-  State<_FacetMenu> createState() => _FacetMenuState();
+  State<_SelectMenu> createState() => _SelectMenuState();
 }
 
-class _FacetMenuState extends State<_FacetMenu> {
+class _SelectMenuState extends State<_SelectMenu> {
   final MenuController _menu = MenuController();
-
-  String _label(String v) {
-    if (v == 'any') return widget.anyLabel;
-    return widget.labelOf?.call(v) ?? v;
-  }
-
-  void _open() {
-    _menu.open();
-  }
 
   void _select(String value) {
     _menu.close();
@@ -838,8 +717,7 @@ class _FacetMenuState extends State<_FacetMenu> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final menuWidth = math.min(280.0, MediaQuery.sizeOf(context).width - 32);
-    // Up to ¾ of the screen, but shrink for short lists (like the previous
-    // DropdownMenu did).
+    // Up to ¾ of the screen, but shrink for short lists.
     final menuHeight = math.min(
         screenHeight * 0.75, widget.items.length * 28.0 + 64.0);
     return SizedBox(
@@ -852,45 +730,51 @@ class _FacetMenuState extends State<_FacetMenu> {
               const WidgetStatePropertyAll<Color>(Color(0xFF1B1B1B)),
           padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
               EdgeInsets.zero),
-          minimumSize:
-              WidgetStatePropertyAll<Size>(Size(menuWidth, 0)),
+          minimumSize: WidgetStatePropertyAll<Size>(Size(menuWidth, 0)),
           maximumSize: WidgetStatePropertyAll<Size>(
               Size(menuWidth, screenHeight * 0.75)),
         ),
         menuChildren: [
-          _FacetMenuPanel(
+          _SelectMenuPanel(
             width: menuWidth,
             height: menuHeight,
             items: widget.items,
             value: widget.value,
-            labelOf: _label,
+            labelOf: widget.labelOf,
             onSelected: _select,
             onClose: _menu.close,
           ),
         ],
         builder: (context, controller, child) {
-          return InkWell(
-            onTap: () => controller.isOpen ? controller.close() : _open(),
-            borderRadius: BorderRadius.circular(4),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF3A3A3A)),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _label(widget.value),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: Colors.white),
+          return Semantics(
+            button: true,
+            label: widget.labelOf(widget.value),
+            excludeSemantics: true,
+            child: InkWell(
+              onTap: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              borderRadius: BorderRadius.circular(4),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFF3A3A3A)),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.labelOf(widget.value),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.white),
+                      ),
                     ),
-                  ),
-                  const Icon(Icons.arrow_drop_down,
-                      size: 20, color: Colors.white70),
-                ],
+                    const Icon(Icons.arrow_drop_down,
+                        size: 20, color: Colors.white70),
+                  ],
+                ),
               ),
             ),
           );
@@ -901,8 +785,9 @@ class _FacetMenuState extends State<_FacetMenu> {
 }
 
 /// Menu body: filter field + lazily built `ListView` of the matching entries.
-class _FacetMenuPanel extends StatefulWidget {
-  const _FacetMenuPanel({
+/// Up/Down move a highlight (and scroll it into view), Enter selects it.
+class _SelectMenuPanel extends StatefulWidget {
+  const _SelectMenuPanel({
     required this.width,
     required this.height,
     required this.items,
@@ -921,21 +806,23 @@ class _FacetMenuPanel extends StatefulWidget {
   final VoidCallback onClose;
 
   @override
-  State<_FacetMenuPanel> createState() => _FacetMenuPanelState();
+  State<_SelectMenuPanel> createState() => _SelectMenuPanelState();
 }
 
-class _FacetMenuPanelState extends State<_FacetMenuPanel> {
+class _SelectMenuPanelState extends State<_SelectMenuPanel> {
   final TextEditingController _filter = TextEditingController();
   late final ScrollController _scroll;
   String _query = '';
+  int _highlight = 0;
 
   @override
   void initState() {
     super.initState();
-    // Open at the selected entry (like the previous DropdownMenu did).
+    // Open at the selected entry.
     final index = widget.items.indexOf(widget.value);
+    _highlight = index < 0 ? 0 : index;
     _scroll = ScrollController(
-        initialScrollOffset: index <= 0 ? 0.0 : index * 28.0);
+        initialScrollOffset: _highlight <= 0 ? 0.0 : _highlight * 28.0);
   }
 
   @override
@@ -954,22 +841,51 @@ class _FacetMenuPanelState extends State<_FacetMenuPanel> {
     ];
   }
 
-  void _submit(List<String> items) {
+  void _moveHighlight(int delta, List<String> items) {
+    if (items.isEmpty) return;
+    final next = (_highlight + delta).clamp(0, items.length - 1);
+    if (next == _highlight) return;
+    setState(() => _highlight = next);
+    _reveal(next);
+  }
+
+  void _reveal(int index) {
+    if (!_scroll.hasClients) return;
+    final offset = index * 28.0;
+    final pos = _scroll.position;
+    if (offset < pos.pixels) {
+      _scroll.animateTo(offset,
+          duration: const Duration(milliseconds: 80), curve: Curves.easeOut);
+    } else if (offset + 28 > pos.pixels + pos.viewportDimension) {
+      _scroll.animateTo(offset + 28 - pos.viewportDimension,
+          duration: const Duration(milliseconds: 80), curve: Curves.easeOut);
+    }
+  }
+
+  void _choose(List<String> items) {
     if (items.isEmpty) return;
     final q = _query.trim().toLowerCase();
-    final exact = items.firstWhere(
-      (v) => widget.labelOf(v).toLowerCase() == q,
-      orElse: () => items.first,
-    );
-    widget.onSelected(exact);
+    final exact = items.indexWhere(
+        (v) => widget.labelOf(v).toLowerCase() == q);
+    final index =
+        exact >= 0 ? exact : _highlight.clamp(0, items.length - 1);
+    widget.onSelected(items[index]);
   }
 
   @override
   Widget build(BuildContext context) {
     final items = _filtered;
+    final highlight = items.isEmpty ? 0 : _highlight.clamp(0, items.length - 1);
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+            _moveHighlight(1, items),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+            _moveHighlight(-1, items),
+        const SingleActivator(LogicalKeyboardKey.enter): () => _choose(items),
+        const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
+            _choose(items),
       },
       child: SizedBox(
         width: widget.width,
@@ -990,8 +906,13 @@ class _FacetMenuPanelState extends State<_FacetMenuPanel> {
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 ),
-                onChanged: (v) => setState(() => _query = v),
-                onSubmitted: (_) => _submit(items),
+                onChanged: (v) {
+                  setState(() {
+                    _query = v;
+                    _highlight = 0;
+                  });
+                  if (_scroll.hasClients) _scroll.jumpTo(0);
+                },
               ),
             ),
             const Divider(height: 1, color: Color(0xFF2A2A2A)),
@@ -999,8 +920,7 @@ class _FacetMenuPanelState extends State<_FacetMenuPanel> {
               child: items.isEmpty
                   ? const Center(
                       child: Text('No matches',
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.grey)),
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
                     )
                   : ListView.builder(
                       controller: _scroll,
@@ -1010,24 +930,33 @@ class _FacetMenuPanelState extends State<_FacetMenuPanel> {
                       itemBuilder: (context, i) {
                         final v = items[i];
                         final selected = v == widget.value;
-                        return InkWell(
-                          onTap: () => widget.onSelected(v),
-                          child: Container(
-                            color: selected
-                                ? const Color(0xFF1E3A3A)
-                                : Colors.transparent,
-                            alignment: Alignment.centerLeft,
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 10),
-                            child: Text(
-                              widget.labelOf(v),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: selected
-                                    ? Colors.cyan
-                                    : Colors.white70,
+                        final active = i == highlight;
+                        return Semantics(
+                          selected: selected,
+                          button: true,
+                          child: InkWell(
+                            onTap: () => widget.onSelected(v),
+                            child: Container(
+                              color: active
+                                  ? const Color(0xFF2A3A3A)
+                                  : (selected
+                                      ? const Color(0xFF1E3A3A)
+                                      : Colors.transparent),
+                              alignment: Alignment.centerLeft,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              child: Text(
+                                widget.labelOf(v),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: selected
+                                      ? Colors.cyan
+                                      : (active
+                                          ? Colors.white
+                                          : Colors.white70),
+                                ),
                               ),
                             ),
                           ),

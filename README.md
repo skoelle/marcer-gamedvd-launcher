@@ -38,10 +38,12 @@ Save, the manual screenshot curation described below.
   global filters: search, status, publisher, crew, cracker, language, year,
   tri-state `raw` / `pasti` / `boxscan`, `TOS/Bad`, and a combined sort
   dropdown (`name asc` … `crew desc`, same width as `TOS/Bad`).
-- **Type-to-filter facet dropdowns** — start typing to jump to a publisher,
-  crew, cracker, language or year. The open menu spans ¾ of the screen
-  height; reopening a facet after picking an entry jumps to exactly that
-  entry (while typing, the partial match filter works as before).
+- **Type-to-filter dropdowns** — every filter dropdown (publisher, crew,
+  cracker, language, year, genre/developers, status, sort, raw/pasti/boxscan,
+  TOS/Bad) opens a searchable, virtualized menu (only the visible rows are
+  built); the selected entry opens scrolled into view, `↑`/`↓` move the
+  highlight, `Enter` selects and the menu spans up to ¾ of the screen height.
+  Short lists get the same search field and look.
 - **Gallery-style detail sidebar** — Game info, the full Release-variants
   table (the open ZIP highlighted) and a "This ZIP" table (File, Status,
   **Kind**, Layer, Size, Path).

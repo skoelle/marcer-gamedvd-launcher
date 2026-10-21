@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_controller.dart';
@@ -145,5 +146,31 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(c.filter.publisher, 'Acme');
+  });
+
+  testWidgets('status menu selects by click and keyboard', (tester) async {
+    final c = await pumpFilterBar(tester);
+
+    // Click selection.
+    await tester.tap(find.text('with screenshot'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('pending'), findsOneWidget);
+    await tester.tap(find.text('pending'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(c.filter.status, 'pending');
+
+    // Keyboard: reopen (anchor shows 'pending'), ArrowDown moves the
+    // highlight to the next entry (skipped (disk 2+)), Enter selects it.
+    await tester.tap(find.text('pending'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(c.filter.status, 'skipped_disk_n');
   });
 }
