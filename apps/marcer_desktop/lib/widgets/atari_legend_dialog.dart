@@ -501,6 +501,7 @@ class _AtariLegendDialogState extends State<AtariLegendDialog>
               _ViewerItem(
                 url: atariLegendScreenshotUrl(game.slug, image),
                 label: 'Screenshot',
+                isScreenshot: true,
               ),
           ];
     showDialog<void>(
@@ -783,10 +784,18 @@ String _shortDate(String value) {
 }
 
 class _ViewerItem {
-  const _ViewerItem({required this.url, required this.label});
+  const _ViewerItem({
+    required this.url,
+    required this.label,
+    this.isScreenshot = false,
+  });
 
   final String url;
   final String label;
+
+  /// Screenshots are 320×200 and shown at exactly 2× (640×400); boxscans keep
+  /// their intrinsic size.
+  final bool isScreenshot;
 }
 
 /// Full-size AtariLegend image viewer: `←/→` navigate, `Esc` closes.
@@ -822,6 +831,23 @@ class _AtariLegendImageViewerState extends State<_AtariLegendImageViewer> {
 
   void _next() {
     if (_index < widget.items.length - 1) setState(() => _index++);
+  }
+
+  /// Screenshots are 320×200 PNGs: show them at exactly 2× (640×400), shrinking
+  /// to fit smaller windows (the AspectRatio keeps them undistorted). Boxscans
+  /// keep their intrinsic size.
+  Widget _viewerImage(_ViewerItem item) {
+    final image = widget.imageBuilder(context, item.url, fit: BoxFit.contain);
+    if (!item.isScreenshot) return Center(child: image);
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640, maxHeight: 400),
+        child: AspectRatio(
+          aspectRatio: 16 / 10, // Atari ST 320×200
+          child: image,
+        ),
+      ),
+    );
   }
 
   @override
@@ -870,10 +896,7 @@ class _AtariLegendImageViewerState extends State<_AtariLegendImageViewer> {
                 Expanded(
                   child: InteractiveViewer(
                     maxScale: 4,
-                    child: Center(
-                      child: widget.imageBuilder(context, item.url,
-                          fit: BoxFit.contain),
-                    ),
+                    child: _viewerImage(item),
                   ),
                 ),
                 Padding(

@@ -153,6 +153,20 @@ void main() {
     await tester.tap(find.text(shotUrl));
     await tester.pumpAndSettle();
     expect(find.text('Screenshot   1 / 2'), findsOneWidget);
+    // The 320×200 screenshot is shown at exactly 2× (640×400).
+    final screenshotBox = find.byWidgetPredicate(
+      (w) =>
+          w is ConstrainedBox &&
+          w.constraints.maxWidth == 640 &&
+          w.constraints.maxHeight == 400,
+    );
+    expect(screenshotBox, findsOneWidget);
+    final viewerAspect = find.descendant(
+      of: screenshotBox,
+      matching: find.byType(AspectRatio),
+    );
+    expect(viewerAspect, findsOneWidget);
+    expect(tester.getSize(viewerAspect), const Size(640, 400));
     await tester.tap(find.byIcon(Icons.chevron_right));
     await tester.pumpAndSettle();
     expect(find.text('Screenshot   2 / 2'), findsOneWidget);
