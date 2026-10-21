@@ -5,9 +5,18 @@ import 'card.dart';
 
 /// API filter names applicable to a section (gallery `kind_filters`).
 Set<String> kindFilters(String kind) => switch (kind) {
-      'pd' => {'publisher', 'language', 'year', 'tos'},
+      'pd' => {
+          'publisher',
+          'genre',
+          'developer',
+          'language',
+          'year',
+          'tos',
+        },
       'utils' => {
           'publisher',
+          'genre',
+          'developer',
           'crew',
           'cracker',
           'language',
@@ -17,6 +26,8 @@ Set<String> kindFilters(String kind) => switch (kind) {
         },
       _ => {
           'publisher',
+          'genre',
+          'developer',
           'crew',
           'cracker',
           'language',
@@ -37,6 +48,8 @@ class CatalogFilter {
     this.q = '',
     this.letter = 'any',
     this.publisher = 'any',
+    this.genre = 'any',
+    this.developer = 'any',
     this.crew = 'any',
     this.cracker = 'any',
     this.language = 'any',
@@ -54,6 +67,8 @@ class CatalogFilter {
   String q;
   String letter;
   String publisher;
+  String genre;
+  String developer;
   String crew;
   String cracker;
   String language;
@@ -76,6 +91,8 @@ class CatalogFilter {
       q.trim().isNotEmpty ||
       letter != 'any' ||
       publisher != 'any' ||
+      genre != 'any' ||
+      developer != 'any' ||
       crew != 'any' ||
       cracker != 'any' ||
       language != 'any' ||
@@ -94,6 +111,8 @@ class CatalogFilter {
     q = '';
     letter = 'any';
     publisher = 'any';
+    genre = 'any';
+    developer = 'any';
     crew = 'any';
     cracker = 'any';
     language = 'any';
@@ -112,6 +131,8 @@ class CatalogFilter {
         q: q,
         letter: letter,
         publisher: publisher,
+        genre: genre,
+        developer: developer,
         crew: crew,
         cracker: cracker,
         language: language,
@@ -161,6 +182,16 @@ bool matchesCard(GameCard c, CatalogFilter f) {
 
   if (f.publisher != 'any') {
     if (!fields.contains('publisher') || !c.publishers.contains(f.publisher)) {
+      return false;
+    }
+  }
+  // AtariLegend facets (available when the cache is present; unmatched cards
+  // never match an active genre/developer filter).
+  if (f.genre != 'any') {
+    if (!(c.atariLegend?.genres.contains(f.genre) ?? false)) return false;
+  }
+  if (f.developer != 'any') {
+    if (!(c.atariLegend?.developers.contains(f.developer) ?? false)) {
       return false;
     }
   }

@@ -4,6 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
+import '../theme.dart';
+
 /// One ZIP as shown in the gallery-style info panel ("This ZIP" table).
 class ZipVariantView {
   const ZipVariantView({
@@ -51,6 +53,8 @@ class GameInfoPanel extends StatelessWidget {
     this.onPlayVariant,
     this.variants = const [],
     this.onSelectGroup,
+    this.atariLegend,
+    this.onAtariLegend,
   });
 
   final InfoSummary? info;
@@ -79,6 +83,13 @@ class GameInfoPanel extends StatelessWidget {
   /// `'crew'` or `'cracker'`; hidden/no-op when null.
   final void Function(String value, String kind)? onSelectGroup;
 
+  /// Cached AtariLegend metadata for this card (`null` when unmatched); used
+  /// only to decide whether the AtariLegend button is shown.
+  final AtariLegendGame? atariLegend;
+
+  /// Opens the AtariLegend dialog; hidden when null (no match / no data).
+  final VoidCallback? onAtariLegend;
+
   @override
   Widget build(BuildContext context) {
     final info = this.info;
@@ -86,13 +97,13 @@ class GameInfoPanel extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       children: [
         if (info == null) ...[
-          _heading('No game info'),
+          _headingRow('No game info', trailing: _atariLegendButtonOrNull()),
           if (variant != null) ...[
-            _headingRow('This ZIP'),
+            _headingRow('This ZIP', trailing: _playButtonOrNull()),
             ..._zipTable(variant!),
           ],
         ] else ...[
-          _heading('Game info'),
+          _headingRow('Game info', trailing: _atariLegendButtonOrNull()),
           ..._infoRows(info, onSelectGroup),
           if (info.variants.length > 1) ...[
             const SizedBox(height: 8),
@@ -102,7 +113,7 @@ class GameInfoPanel extends StatelessWidget {
           ],
           if (variant != null) ...[
             const SizedBox(height: 8),
-            _headingRow('This ZIP'),
+            _headingRow('This ZIP', trailing: _playButtonOrNull()),
             ..._zipTable(variant!),
           ],
         ],
@@ -110,14 +121,59 @@ class GameInfoPanel extends StatelessWidget {
     );
   }
 
-  /// Heading with the optional blue-gradient "PLAY" split button on the right
-  /// (the main part uses the default variant, the arrow opens the variant menu).
-  Widget _headingRow(String text) => Row(
+  /// Heading with an optional trailing action on the right (e.g. the PLAY
+  /// split button or the AtariLegend button).
+  Widget _headingRow(String text, {Widget? trailing}) => Row(
         children: [
           Expanded(child: _heading(text)),
-          if (onPlay != null) _playButton(),
+          ?trailing,
         ],
       );
+
+  Widget? _playButtonOrNull() => onPlay == null ? null : _playButton();
+
+  Widget? _atariLegendButtonOrNull() =>
+      onAtariLegend == null ? null : _atariLegendButton();
+
+  /// Teal-gradient "AtariLegend" button (same shape/position as PLAY).
+  Widget _atariLegendButton() {
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF2BE0E0), kAtariLegendTeal],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: InkWell(
+          onTap: onAtariLegend,
+          borderRadius: BorderRadius.circular(4),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.open_in_new, size: 15, color: Colors.white),
+                SizedBox(width: 4),
+                Text(
+                  'AtariLegend',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _playButton() {
     final showDropdown = onPlayVariant != null && variants.isNotEmpty;

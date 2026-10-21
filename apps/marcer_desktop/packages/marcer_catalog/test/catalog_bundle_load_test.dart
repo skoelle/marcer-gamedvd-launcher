@@ -95,5 +95,44 @@ void main() {
     );
     expect(bundle.universe.cracked, isEmpty);
     expect(bundle.warnings, isNotEmpty);
+    expect(bundle.atariLegend.length, 0);
+  });
+
+  test('loads the AtariLegend cache when configured', () async {
+    final alDir = Directory('${tmp.path}/atarilegend')
+      ..createSync(recursive: true);
+    File('${alDir.path}/atarilegend.json').writeAsStringSync(jsonEncode({
+      'schema_version': 1,
+      'generated_at': 'now',
+      'source': {'file': 'x.sql.gz', 'dump_date': '2026-10-18'},
+      'games': [
+        {
+          'id': 22,
+          'name': 'Alpha',
+          'slug': 'alpha',
+          'year': 1990,
+          'publisher': 'AL Pub',
+          'genres': ['Simulation'],
+          'developers': ['Taito'],
+        },
+      ],
+    }));
+
+    final messages = <String>[];
+    final bundle = await CatalogBundle.load(
+      screenshotDir: out,
+      gameinfoDir: data,
+      atariLegendDir: alDir.path,
+      onProgress: messages.add,
+    );
+    expect(messages, contains('Loading AtariLegend data…'));
+    expect(bundle.atariLegend.length, 1);
+    expect(bundle.atariLegend.matchFolder('Alpha')?.id, 22);
+
+    final card = bundle.universe.cracked.single;
+    expect(card.atariLegend?.id, 22);
+    expect(card.publishers, contains('AL Pub'));
+    expect(bundle.universe.crackedFacets.genres, ['Simulation']);
+    expect(bundle.universe.crackedFacets.developers, ['Taito']);
   });
 }

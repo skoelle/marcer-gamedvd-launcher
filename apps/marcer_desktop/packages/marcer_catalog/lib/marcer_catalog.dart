@@ -9,6 +9,7 @@
 /// - screenshot index lookup per `SPEC-screenshot-generator.md`.
 library;
 
+export 'src/atarilegend.dart';
 export 'src/card.dart';
 export 'src/catalog_filter.dart';
 export 'src/catalog_universe.dart';

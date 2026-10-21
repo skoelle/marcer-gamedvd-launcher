@@ -36,6 +36,9 @@ Color consoleColor(String name, {Color fallback = const Color(0xFFFFFFFF)}) =>
 const Color kSelectedForeground = Color(0xFF000000); // Black
 const Color kSelectedBackground = Color(0xFF008080); // DarkCyan
 
+/// Accent of the AtariLegend metadata button/dialog (`#00D3D3`).
+const Color kAtariLegendTeal = Color(0xFF00D3D3);
+
 /// Entry color per `SPEC.md` §9.3 defaults (layer + kind), virtual = White.
 Color colorForEntry(Entry e) {
   if (e.isVirtual) return kConsoleColors['White']!;
@@ -89,5 +92,10 @@ ThemeData buildAppTheme() {
     canvasColor: const Color(0xFF121212),
     dividerColor: const Color(0xFF2A2A2A),
     visualDensity: VisualDensity.compact,
+    // Desktop scrollbars stay visible whenever the content is scrollable
+    // (previously they only appeared while scrolling).
+    scrollbarTheme: const ScrollbarThemeData(
+      thumbVisibility: WidgetStatePropertyAll(true),
+    ),
   );
 }

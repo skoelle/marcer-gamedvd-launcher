@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
+import '../atarilegend_fetcher.dart';
 import '../catalog_assets.dart';
 import '../ftp_downloader.dart';
 import '../hatari_installer.dart';
@@ -40,6 +41,7 @@ enum _Field {
   gameinfo,
   hatariExec,
   hatariCfg,
+  atariLegend,
 }
 
 class _PathField {
@@ -48,7 +50,9 @@ class _PathField {
       this.optionalHint,
       this.obscure = false,
       this.sectionHeader,
-      this.download});
+      this.download,
+      this.atariLegendDownload = false,
+      this.allowCreate = false});
 
   final _Field field;
   final String label;
@@ -64,6 +68,14 @@ class _PathField {
   /// When set, the field gets a "Download from FTP" button that fetches the
   /// newest archive of this asset into the field's directory.
   final CatalogAsset? download;
+
+  /// When true, the field gets a "Download AtariLegend data" button that
+  /// fetches the newest dump and writes the compact cache next to it.
+  final bool atariLegendDownload;
+
+  /// When true, a filled but not-yet-existing directory is not an error (the
+  /// download creates it). Empty still means "not configured".
+  final bool allowCreate;
 
   final TextEditingController controller = TextEditingController();
 }
@@ -90,6 +102,7 @@ class SettingsForm extends StatefulWidget {
     this.assetDownloader = const FtpCatalogAssets(),
     this.tosDownloader = const HttpTosRomDownloader(),
     this.hatariDownloader = const HttpHatariDownloader(),
+    this.atariLegendFetcher = const HttpAtariLegendFetcher(),
     this.hatariBuild,
   });
 
@@ -117,6 +130,10 @@ class SettingsForm extends StatefulWidget {
   /// Downloads and unpacks the prebuilt Hatari (injectable for tests).
   final HatariDownloader hatariDownloader;
 
+  /// Fetches the AtariLegend dump and builds the compact cache (injectable
+  /// for tests).
+  final AtariLegendFetcher atariLegendFetcher;
+
   /// Overrides the platform build lookup for the Hatari install row (tests);
   /// `null` uses [hatariBuildFor] for the current platform.
   final HatariBuild? hatariBuild;
@@ -133,6 +150,12 @@ class _SettingsFormState extends State<SettingsForm> {
   int _downloadDone = 0;
   int _downloadTotal = 0;
   bool _cancelRequested = false;
+
+  bool _fetchingAtariLegend = false;
+  String _atariLegendMessage = '';
+  int _atariLegendDone = 0;
+  int _atariLegendTotal = 0;
+  bool _atariLegendCancel = false;
 
   @override
   void initState() {
@@ -172,6 +195,12 @@ class _SettingsFormState extends State<SettingsForm> {
           optionalHint: 'game metadata JSON',
           download: CatalogAsset.gameinfo)
         ..controller.text = c.gameinfoDirectory,
+      _PathField(_Field.atariLegend, 'AtariLegendDirectory',
+          _PickerKind.directory,
+          optionalHint: 'compact metadata cache (atarilegend.json)',
+          atariLegendDownload: true,
+          allowCreate: true)
+        ..controller.text = c.atariLegendDirectory,
       _PathField(_Field.hatariExec, 'Hatari executable', _PickerKind.executable,
           sectionHeader: 'Hatari')
         ..controller.text = c.hatariExecutable,
@@ -214,6 +243,7 @@ class _SettingsFormState extends State<SettingsForm> {
         patchDirectory: _textOf(_Field.patch),
         screenshotDirectory: _textOf(_Field.screenshot),
         gameinfoDirectory: _textOf(_Field.gameinfo),
+        atariLegendDirectory: _textOf(_Field.atariLegend),
         hatariExecutable: _textOf(_Field.hatariExec),
         hatariConfigFile: _textOf(_Field.hatariCfg),
         ftpHost: _textOf(_Field.ftpHost),
@@ -236,7 +266,10 @@ class _SettingsFormState extends State<SettingsForm> {
     final ok = f.kind == _PickerKind.directory
         ? Directory(v).existsSync()
         : File(v).existsSync();
-    return ok ? FieldStatus.valid : FieldStatus.invalid;
+    if (ok) return FieldStatus.valid;
+    // Auto-created on download: a not-yet-existing directory is not an error.
+    if (f.allowCreate) return FieldStatus.none;
+    return FieldStatus.invalid;
   }
 
   /// Target directory of the downloadable [asset] field.
@@ -245,7 +278,7 @@ class _SettingsFormState extends State<SettingsForm> {
       : _textOf(_Field.gameinfo);
 
   Future<void> _downloadAsset(CatalogAsset asset, {bool force = false}) async {
-    if (_downloading != null) return;
+    if (_downloading != null || _fetchingAtariLegend) return;
     if (!currentConfig.ftpConfigured) {
       _snack('FTP host missing — enter the FTP server above first.');
       return;
@@ -304,6 +337,57 @@ class _SettingsFormState extends State<SettingsForm> {
     _snack('${asset.label} updated from ${result.archive}.');
     widget.onAssetDownloaded?.call(asset);
     _revalidate();
+  }
+
+  /// Downloads the newest AtariLegend dump and writes the compact metadata
+  /// cache into the configured directory (created when it does not exist).
+  Future<void> _downloadAtariLegend() async {
+    if (_downloading != null || _fetchingAtariLegend) return;
+    final target = _textOf(_Field.atariLegend);
+    if (target.isEmpty) {
+      _snack('Choose an AtariLegend directory first.');
+      return;
+    }
+
+    setState(() {
+      _fetchingAtariLegend = true;
+      _atariLegendMessage = 'Starting…';
+      _atariLegendDone = 0;
+      _atariLegendTotal = 0;
+      _atariLegendCancel = false;
+    });
+    widget.onBusyChanged?.call(true);
+    try {
+      final result = await widget.atariLegendFetcher.fetch(
+        targetDir: target,
+        onProgress: (message, done, total) {
+          if (!mounted) return;
+          setState(() {
+            _atariLegendMessage = message;
+            _atariLegendDone = done;
+            _atariLegendTotal = total;
+          });
+        },
+        isCancelled: () => _atariLegendCancel,
+      );
+      if (mounted) {
+        _snack('AtariLegend data: ${result.games} games '
+            '(${result.dumpFile}).');
+      }
+    } on AtariLegendFetchCancelled {
+      if (mounted) _snack('AtariLegend download cancelled.');
+    } catch (e) {
+      if (mounted) _snack('AtariLegend download failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _fetchingAtariLegend = false;
+          _atariLegendMessage = '';
+        });
+      }
+      widget.onBusyChanged?.call(false);
+      _revalidate();
+    }
   }
 
   /// Asks whether the already-applied (up-to-date) archive should be
@@ -442,10 +526,24 @@ class _SettingsFormState extends State<SettingsForm> {
                     SizedBox(
                       height: 40,
                       child: FilledButton.tonal(
-                        onPressed: _downloading == null
+                        onPressed: _downloading == null &&
+                                !_fetchingAtariLegend
                             ? () => _downloadAsset(field.download!)
                             : null,
                         child: const Text('Download from FTP'),
+                      ),
+                    ),
+                  ],
+                  if (field.atariLegendDownload) ...[
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 40,
+                      child: FilledButton.tonal(
+                        onPressed: _downloading == null &&
+                                !_fetchingAtariLegend
+                            ? _downloadAtariLegend
+                            : null,
+                        child: const Text('Download AtariLegend data'),
                       ),
                     ),
                   ],
@@ -453,6 +551,8 @@ class _SettingsFormState extends State<SettingsForm> {
               ),
               if (field.download != null && _downloading == field.download)
                 _downloadStatus(),
+              if (field.atariLegendDownload && _fetchingAtariLegend)
+                _atariLegendStatus(),
             ],
           ),
         ),
@@ -649,6 +749,39 @@ class _SettingsFormState extends State<SettingsForm> {
             const SizedBox(width: 4),
             TextButton(
               onPressed: () => setState(() => _cancelRequested = true),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+
+  Widget _atariLegendStatus() => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: _atariLegendTotal > 0
+                  ? LinearProgressIndicator(
+                      value: _atariLegendDone / _atariLegendTotal,
+                      minHeight: 6,
+                      backgroundColor: const Color(0xFF2A2A2A),
+                    )
+                  : const LinearProgressIndicator(
+                      minHeight: 6,
+                      backgroundColor: Color(0xFF2A2A2A),
+                    ),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                _atariLegendMessage,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.grey, fontSize: 11),
+              ),
+            ),
+            const SizedBox(width: 4),
+            TextButton(
+              onPressed: () => setState(() => _atariLegendCancel = true),
               child: const Text('Cancel'),
             ),
           ],

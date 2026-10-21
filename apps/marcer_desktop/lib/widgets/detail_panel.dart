@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
+import 'atari_legend_dialog.dart';
 import 'game_info_panel.dart';
 import 'status_kind_dialog.dart';
 
@@ -45,7 +46,7 @@ class DetailPanel extends StatelessWidget {
         }
         return KeyEventResult.ignored;
       },
-      child: _content(),
+      child: _content(context),
     );
   }
 
@@ -92,7 +93,7 @@ class DetailPanel extends StatelessWidget {
     c.applyStatusChange(rel, choice.status, choice.kind);
   }
 
-  Widget _content() {
+  Widget _content(BuildContext context) {
     final c = controller;
     if (c.catalogMode) {
       final card = c.selectedCard;
@@ -102,7 +103,7 @@ class DetailPanel extends StatelessWidget {
             ? const Center(
                 child: Text('No selection',
                     style: TextStyle(color: Colors.grey, fontSize: 13)))
-            : _cardInfo(c, card),
+            : _cardInfo(context, c, card),
       );
     }
     final entry = c.selectedEntry;
@@ -118,9 +119,10 @@ class DetailPanel extends StatelessWidget {
     );
   }
 
-  Widget _cardInfo(CatalogController c, GameCard card) {
+  Widget _cardInfo(BuildContext context, CatalogController c, GameCard card) {
     final variants = c.variantsOfCard(card);
     final layer = c.cardLayer(card);
+    final al = c.atariLegendForCard(card);
     // Gallery-style detail (no large preview — the lightbox shows the image).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -165,6 +167,11 @@ class DetailPanel extends StatelessWidget {
             variant: _primaryVariant(card),
             filter: c.filter,
             variants: kHatariVariants,
+            atariLegend: al,
+            onAtariLegend: al == null
+                ? null
+                : () => showAtariLegendDialog(context,
+                    game: al, textsLoader: c.atariLegendTexts),
             onPlay: () => c.launchSelected(),
             onPlayVariant: (variant) => c.launchSelected(variant: variant),
             // Group click: open the lightbox on that crew's/cracker's ZIP;

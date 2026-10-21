@@ -50,8 +50,9 @@ void main() {
     await _openDialog(tester, original, (r) => result = r);
 
     expect(find.text('Settings'), findsOneWidget);
-    // 7 path fields + 5 FTP fields (host/user/password/remote base/assets).
-    expect(find.byType(TextField), findsNWidgets(11));
+    // root+patch, 5 FTP fields, screenshot+gameinfo+atariLegend, hatari
+    // exec+cfg → 12 text fields.
+    expect(find.byType(TextField), findsNWidgets(12));
     // Invalid mandatory root + optional fields empty: Save is disabled.
     expect(_saveButton(tester).onPressed, isNull);
 

@@ -20,6 +20,7 @@ if [ ! -f "$CONFIG" ] && [ -f "$REPO_ROOT/local/paths.env" ]; then
   "PatchDirectory": "${MARCER_PATCH_DIR:-}",
   "ScreenshotDirectory": "${MARCER_OUT_DIR:-}",
   "GameinfoDirectory": "${MARCER_DATA_DIR:-}",
+  "AtariLegendDirectory": "${MARCER_ATARILEGEND_DIR:-}",
   "Hatari": {
     "Executable": "${MARCER_HATARI_BIN:-/usr/bin/hatari}",
     "ConfigFile": "",

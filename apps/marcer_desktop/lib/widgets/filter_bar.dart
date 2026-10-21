@@ -60,17 +60,57 @@ class _FilterBarState extends State<FilterBar> {
   final TextEditingController _search = TextEditingController();
   Timer? _debounce;
 
+  /// Last query seen from the controller; used to detect external resets
+  /// (`clear`, Backspace, a reloaded controller) without fighting the user's
+  /// in-flight typing.
+  late String _lastQuery;
+
   @override
   void initState() {
     super.initState();
-    _search.text = widget.controller.filter.q;
+    _lastQuery = widget.controller.filter.q;
+    _search.text = _lastQuery;
+    widget.controller.addListener(_syncSearch);
+  }
+
+  @override
+  void didUpdateWidget(covariant FilterBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_syncSearch);
+      widget.controller.addListener(_syncSearch);
+      _lastQuery = widget.controller.filter.q;
+      _applyQueryToField(_lastQuery);
+    }
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    widget.controller.removeListener(_syncSearch);
     _search.dispose();
     super.dispose();
+  }
+
+  /// Reflects an externally changed query (reset/reload) in the search field.
+  /// Only reacts when `filter.q` actually changed, so the debounce-delayed
+  /// typing is not overwritten by unrelated notifications.
+  void _syncSearch() {
+    final q = widget.controller.filter.q;
+    if (q == _lastQuery) return;
+    _lastQuery = q;
+    _applyQueryToField(q);
+  }
+
+  void _applyQueryToField(String q) {
+    // Drop a pending typed query so it cannot re-apply after a reset.
+    _debounce?.cancel();
+    if (_search.text != q) {
+      _search.value = TextEditingValue(
+        text: q,
+        selection: TextSelection.collapsed(offset: q.length),
+      );
+    }
   }
 
   void _onSearchChanged(String value) {
@@ -84,6 +124,9 @@ class _FilterBarState extends State<FilterBar> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       if (_search.text.isNotEmpty) {
+        // Cancel a pending debounce: otherwise it could re-apply the text
+        // after the query was reset here.
+        _debounce?.cancel();
         _search.clear();
         widget.controller.setQuery('');
         return KeyEventResult.handled;
@@ -101,6 +144,8 @@ class _FilterBarState extends State<FilterBar> {
     final f = c.filter;
     final facets = c.facets;
     final fields = kindFilters(f.section);
+    // AtariLegend-only facets: hidden until the cache has been downloaded.
+    final withAtariLegend = c.hasAtariLegend;
 
     return Material(
       color: const Color(0xFF1B1B1B),
@@ -149,12 +194,13 @@ class _FilterBarState extends State<FilterBar> {
                 children: [
                   _fixed(
                     SizedBox(
-                      width: 240,
+                      width: 174,
                       // Escape handling on the wrapper: key events bubble up
                       // from the TextField's own focus node below.
                       child: Focus(
                         onKeyEvent: _searchKeys,
                         child: TextField(
+                          key: const ValueKey('catalog-search'),
                           focusNode: widget.searchFocus,
                           controller: _search,
                           decoration: InputDecoration(
@@ -176,13 +222,29 @@ class _FilterBarState extends State<FilterBar> {
                   // pd/utils carry index-derived statuses (default `any`
                   // there, `default_status` for cracked).
                   _statusDropdown(f.status, c.setStatus),
+                  if (withAtariLegend && fields.contains('genre'))
+                    _facetMenu(
+                      'Genre: any',
+                      f.genre,
+                      ['any', ...facets.genres],
+                      c.setGenre,
+                      width: 130,
+                    ),
                   if (fields.contains('publisher'))
                     _facetMenu(
                       'Publisher: any',
                       f.publisher,
                       ['any', ...facets.publishers],
                       c.setPublisher,
-                      width: 170,
+                      width: 140,
+                    ),
+                  if (withAtariLegend && fields.contains('developer'))
+                    _facetMenu(
+                      'Developers: any',
+                      f.developer,
+                      ['any', ...facets.developers],
+                      c.setDeveloper,
+                      width: 140,
                     ),
                   if (fields.contains('crew'))
                     _facetMenu(
@@ -190,7 +252,7 @@ class _FilterBarState extends State<FilterBar> {
                       f.crew,
                       ['any', ...facets.crews],
                       c.setCrew,
-                      width: 150,
+                      width: 120,
                     ),
                   if (fields.contains('cracker'))
                     _facetMenu(
@@ -198,7 +260,7 @@ class _FilterBarState extends State<FilterBar> {
                       f.cracker,
                       ['any', ...facets.crackers],
                       c.setCracker,
-                      width: 150,
+                      width: 105,
                     ),
                   if (fields.contains('language'))
                     _facetMenu(
@@ -226,13 +288,21 @@ class _FilterBarState extends State<FilterBar> {
                   if (fields.contains('tos'))
                     _tosDropdown(f.tos, c.setTos),
                   _sortDropdown(f.sort, f.order, c.setSortOrder),
-                  _labelButton('★ Favorites', c.toggleFavoritesOnly,
-                      width: 96, active: c.favoritesOnly),
-                  _labelButton('clear', c.resetFilters, width: 52),
                 ],
               ),
               const SizedBox(height: 4),
-              _letterRow(facets.letters, f.letter, c.setLetter),
+              _letterRow(
+                facets.letters,
+                f.letter,
+                c.setLetter,
+                trailing: [
+                  const SizedBox(width: 8),
+                  _labelButton('★ Favorites', c.toggleFavoritesOnly,
+                      width: 96, active: c.favoritesOnly),
+                  const SizedBox(width: 2),
+                  _labelButton('clear', c.resetFilters, width: 52),
+                ],
+              ),
             ],
           ],
         ),
@@ -660,7 +730,11 @@ class _FilterBarState extends State<FilterBar> {
   }
 
   Widget _letterRow(
-      List<String> facetLetters, String current, ValueChanged<String> onPick) {
+    List<String> facetLetters,
+    String current,
+    ValueChanged<String> onPick, {
+    List<Widget> trailing = const [],
+  }) {
     const all = [
       'any',
       '0-9',
@@ -670,6 +744,7 @@ class _FilterBarState extends State<FilterBar> {
     return Wrap(
       spacing: 2,
       runSpacing: 2,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         for (final l in all)
           InkWell(
@@ -698,6 +773,7 @@ class _FilterBarState extends State<FilterBar> {
               ),
             ),
           ),
+        ...trailing,
       ],
     );
   }

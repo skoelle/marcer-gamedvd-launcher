@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'atarilegend.dart';
 import 'card.dart';
 import 'gameinfo.dart';
 import 'screenshot_index.dart';
@@ -17,6 +18,8 @@ class CatalogFacets {
     this.languages = const [],
     this.years = const [],
     this.letters = const [],
+    this.genres = const [],
+    this.developers = const [],
   });
 
   final List<String> publishers;
@@ -25,6 +28,10 @@ class CatalogFacets {
   final List<String> languages;
   final List<String> years;
   final List<String> letters;
+
+  /// AtariLegend genres/developers (available from the downloaded cache).
+  final List<String> genres;
+  final List<String> developers;
 }
 
 /// All catalog cards grouped per section plus their facets — the global
@@ -53,6 +60,7 @@ class CatalogUniverse {
     required ScreenshotIndices indices,
     required GameInfoIndex info,
     required String screenshotDir,
+    AtariLegendIndex? atariLegend,
     void Function(String message)? onProgress,
   }) {
     final fullPng = _fullPngFn(screenshotDir);
@@ -64,6 +72,7 @@ class CatalogUniverse {
       info: info,
       fullPng: fullPng,
       unionGameinfo: false,
+      atariLegend: atariLegend,
       onProgress: onProgress,
     );
     onProgress?.call('Building catalog — pd…');
@@ -73,6 +82,7 @@ class CatalogUniverse {
       info: info,
       fullPng: fullPng,
       unionGameinfo: true,
+      atariLegend: atariLegend,
       onProgress: onProgress,
     );
     onProgress?.call('Building catalog — utils…');
@@ -82,6 +92,7 @@ class CatalogUniverse {
       info: info,
       fullPng: fullPng,
       unionGameinfo: true,
+      atariLegend: atariLegend,
       onProgress: onProgress,
     );
 
@@ -180,6 +191,7 @@ _SectionBuild _buildIndexedSection({
   required GameInfoIndex info,
   required String? Function(String rel, String? baseName) fullPng,
   required bool unionGameinfo,
+  AtariLegendIndex? atariLegend,
   void Function(String)? onProgress,
 }) {
   final groups = <String, List<(String, ScreenshotEntry)>>{};
@@ -216,6 +228,7 @@ _SectionBuild _buildIndexedSection({
       items: items,
       game: game,
       fullPng: fullPng,
+      atariLegend: atariLegend?.matchFolder(folder),
     );
     cards.add(card);
     seen.add('${letter.toLowerCase()}|${folder.toLowerCase()}');
@@ -229,7 +242,11 @@ _SectionBuild _buildIndexedSection({
     for (final g in info.byKind(kind)) {
       final key = '${g.letter.toLowerCase()}|${g.folder.toLowerCase()}';
       if (seen.contains(key)) continue;
-      cards.add(buildSimpleCard(game: g, kind: kind));
+      cards.add(buildSimpleCard(
+        game: g,
+        kind: kind,
+        atariLegend: atariLegend?.matchFolder(g.folder),
+      ));
     }
   }
 
@@ -258,11 +275,22 @@ String _stem(String name) {
 /// `0-9`-first letter ordering.
 CatalogFacets _facets(List<GameCard> cards, String kind) {
   final pubs = <String>{}, crews = <String>{}, crackers = <String>{},
-      langs = <String>{}, years = <String>{}, letters = <String>{};
+      langs = <String>{}, years = <String>{}, letters = <String>{},
+      genres = <String>{}, developers = <String>{};
   final withCrew = kindFields(kind).contains('crew');
   final withCracker = kindFields(kind).contains('cracked_by');
   for (final c in cards) {
     if (c.letter.isNotEmpty) letters.add(c.letter);
+    final al = c.atariLegend;
+    if (al != null) {
+      if (al.publisher.trim().isNotEmpty) pubs.add(al.publisher.trim());
+      for (final g in al.genres) {
+        if (g.trim().isNotEmpty) genres.add(g.trim());
+      }
+      for (final d in al.developers) {
+        if (d.trim().isNotEmpty) developers.add(d.trim());
+      }
+    }
     for (final v in c.info?.variants ?? const <Map<String, dynamic>>[]) {
       String val(String key) => ((v[key] ?? '') as String).trim();
       if (val('publisher').isNotEmpty) pubs.add(val('publisher'));
@@ -283,6 +311,8 @@ CatalogFacets _facets(List<GameCard> cards, String kind) {
     crackers: lowerSort(crackers),
     languages: lowerSort(langs),
     years: (years.toList()..sort()),
+    genres: lowerSort(genres),
+    developers: lowerSort(developers),
     letters: (letters.toList()
       ..sort((a, b) {
         final fa = a != '0-9', fb = b != '0-9';
@@ -323,6 +353,7 @@ class CatalogBundle {
   CatalogBundle({
     required this.index,
     required this.info,
+    required this.atariLegend,
     required this.universe,
     required this.warnings,
   });
@@ -335,6 +366,7 @@ class CatalogBundle {
   static Future<CatalogBundle> load({
     required String screenshotDir,
     required String gameinfoDir,
+    String atariLegendDir = '',
     void Function(String message)? onProgress,
   }) {
     final receive = ReceivePort();
@@ -372,7 +404,8 @@ class CatalogBundle {
       try {
         isolate = await Isolate.spawn(
           _loadEntry,
-          _LoadRequest(receive.sendPort, screenshotDir, gameinfoDir),
+          _LoadRequest(
+              receive.sendPort, screenshotDir, gameinfoDir, atariLegendDir),
           onError: errors.sendPort,
         );
       } catch (e, st) {
@@ -389,6 +422,7 @@ class CatalogBundle {
   static CatalogBundle loadSync({
     required String screenshotDir,
     required String gameinfoDir,
+    String atariLegendDir = '',
     void Function(String message)? onProgress,
   }) {
     final warnings = <String>[];
@@ -410,16 +444,22 @@ class CatalogBundle {
       }
     }
 
+    onProgress?.call('Loading AtariLegend data…');
+    final atariLegend =
+        AtariLegendIndex.load(atariLegendDir, warnings: warnings);
+
     final universe = CatalogUniverse.build(
       indices: index,
       info: info,
       screenshotDir: screenshotDir,
+      atariLegend: atariLegend,
       onProgress: onProgress,
     );
     onProgress?.call('Finalizing…');
     return CatalogBundle(
       index: index,
       info: info,
+      atariLegend: atariLegend,
       universe: universe,
       warnings: warnings,
     );
@@ -427,17 +467,20 @@ class CatalogBundle {
 
   final ScreenshotIndices index;
   final GameInfoIndex info;
+  final AtariLegendIndex atariLegend;
   final CatalogUniverse universe;
   final List<String> warnings;
 }
 
 /// Request passed to the loader isolate ([CatalogBundle.load]).
 class _LoadRequest {
-  const _LoadRequest(this.port, this.screenshotDir, this.gameinfoDir);
+  const _LoadRequest(
+      this.port, this.screenshotDir, this.gameinfoDir, this.atariLegendDir);
 
   final SendPort port;
   final String screenshotDir;
   final String gameinfoDir;
+  final String atariLegendDir;
 }
 
 /// Isolate entry point: loads the bundle, streams progress messages through
@@ -446,6 +489,7 @@ void _loadEntry(_LoadRequest request) {
   final bundle = CatalogBundle.loadSync(
     screenshotDir: request.screenshotDir,
     gameinfoDir: request.gameinfoDir,
+    atariLegendDir: request.atariLegendDir,
     onProgress: request.port.send,
   );
   Isolate.exit(request.port, bundle);

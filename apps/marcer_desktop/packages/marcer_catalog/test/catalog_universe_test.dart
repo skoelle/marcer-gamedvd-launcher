@@ -54,7 +54,8 @@ void main() {
       {String crackedGames = '[]',
       String pdGames = '[]',
       Map<String, String> pdEntries = const {},
-      Map<String, String> utilsEntries = const {}}) {
+      Map<String, String> utilsEntries = const {},
+      AtariLegendIndex? atariLegend}) {
     File('$screenshotDir/index.json').writeAsStringSync(jsonEncode({
       'version': 1,
       'entries': {
@@ -81,7 +82,12 @@ void main() {
         .writeAsStringSync(jsonEncode({'schema_version': 1, 'kind': 'utils', 'games': []}));
     final index = ScreenshotIndices.load(screenshotDir);
     final info = GameInfoIndex.load(gameinfoDir);
-    return CatalogUniverse.build(indices: index, info: info, screenshotDir: screenshotDir);
+    return CatalogUniverse.build(
+      indices: index,
+      info: info,
+      screenshotDir: screenshotDir,
+      atariLegend: atariLegend,
+    );
   }
 
   group('CatalogUniverse.build (cracked cards)', () {
@@ -265,6 +271,41 @@ void main() {
       expect(u.pd.first.layer, 'ROOT');
       expect(u.crackedWithScreenshot, 1); // relB9 has no preview basename
       expect(u.crackedVariants, 2);
+    });
+  });
+
+  group('AtariLegend integration', () {
+    test('attaches the match, merges publisher, exposes genre/developer', () {
+      const cracked = '''
+      [{"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
+        "matched_via": "exact", "matched_title": "Alpha",
+        "variants": [{"title": "Alpha", "publisher": "Pub A"}]}]
+      ''';
+      final al = AtariLegendIndex.fromGames([
+        const AtariLegendGame(
+          id: 1,
+          name: 'Alpha',
+          slug: 'alpha',
+          publisher: 'AL Pub',
+          genres: ['Simulation'],
+          developers: ['Taito'],
+        ),
+      ]);
+      final u = buildUniverse(
+        {relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png')},
+        crackedGames: cracked,
+        atariLegend: al,
+      );
+      final card = u.cracked.first;
+      expect(card.atariLegend?.id, 1);
+      expect(card.publishers, containsAll(['Pub A', 'AL Pub']));
+      expect(u.crackedFacets.genres, ['Simulation']);
+      expect(u.crackedFacets.developers, ['Taito']);
+      expect(u.crackedFacets.publishers, containsAll(['Pub A', 'AL Pub']));
+      expect(matchesCard(card, CatalogFilter()..genre = 'Simulation'), isTrue);
+      expect(matchesCard(card, CatalogFilter()..developer = 'Taito'), isTrue);
+      expect(matchesCard(card, CatalogFilter()..publisher = 'AL Pub'), isTrue);
+      expect(matchesCard(card, CatalogFilter()..genre = 'Action'), isFalse);
     });
   });
 

@@ -3,11 +3,13 @@
 Inventory browser for the Marcer GameDVD archive: windowed master-detail UI,
 gameinfo metadata and screenshot previews, gallery-style global filters with a
 **catalog grid as the default view** (section tabs, search, facets incl.
-crew/cracker, sort, **★ Favorites**) and a gallery-style detail sidebar
+genre/developer/publisher/crew/cracker, sort, **★ Favorites**) and a
+gallery-style detail sidebar
 (Game info + Release variants + This ZIP); an optional overlay folder
 browser (`T` / Folders button) per `SPEC.md` §7, plus a gallery-style
-lightbox (filmstrip + info panel). **Read-only** consumer of all data roots
-except favorites and, on explicit Save, manual screenshot curation.
+lightbox (filmstrip + info panel). On desktop, **scrollbars stay visible**
+whenever a view overflows. **Read-only** consumer of all data roots except
+favorites and, on explicit Save, manual screenshot curation.
 
 ![Catalog grid](../../docs/images/catalog.png)
 
@@ -109,7 +111,8 @@ The setup/settings form lays the fields out as: **RootDirectory**,
 **PatchDirectory**, the **FTP** server (used both for game-folder downloads
 and for the catalog-data downloads), then **ScreenshotDirectory** and
 **GameinfoDirectory** — each with a **Download from FTP** button next to
-*Browse…* — and finally the Hatari settings plus the **Hatari installation**
+*Browse…* — then the **AtariLegendDirectory** with a **Download AtariLegend
+data** button, and finally the Hatari settings plus the **Hatari installation**
 and **TOS ROM** rows (download/install on demand, see below).
 
 | Field | Required | Notes |
@@ -118,6 +121,7 @@ and **TOS ROM** rows (download/install on demand, see below).
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
 | `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
+| `AtariLegendDirectory` | no | compact AtariLegend cache (`atarilegend.json`); filled by **Download AtariLegend data** (directory created when missing) |
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
 | `Hatari.ConfigFile` | no | empty ⇒ bundled `MarcerGameDvd-Hatari.cfg` |
 | `Hatari.ArgsTemplate` | no | must contain `{cfg}` and `{zip}` |
@@ -371,6 +375,68 @@ from FTP** button next to *Browse…* on both `ScreenshotDirectory` and
 
 `GameinfoDirectory` has **no implicit fallback**: if it is empty no gameinfo is
 loaded.
+
+## AtariLegend data (metadata enrichment)
+
+The weekly [AtariLegend](https://www.atarilegend.com/) database dump adds
+metadata the archive does not have (genre, developer, original credits,
+release data). The app **never ships or bundles** this data (license
+CC BY-NC-SA 4.0); it is fetched on demand:
+
+- the setup/settings form has an **AtariLegendDirectory** path directly below
+  *GameinfoDirectory* with a **Download AtariLegend data** button next to
+  *Browse…*.
+- the button resolves the newest `YYYY-MM-DD.sql.gz` from the AtariLegend
+  dump directory, downloads it, decompresses it (gzip) and parses only the
+  needed tables in a **background isolate**, then writes the compact cache
+  `atarilegend.json` (game id/name/slug, release year, publisher, genres,
+  conversion/original system, developers/authors with roles, aliases, plus the
+  **screenshot/boxscan references**) and the separate **`atarilegend-texts.json`**
+  (reviews, comments, magazine references, ~1.2 MB). The downloaded `.sql.gz`
+  is **deleted** afterwards.
+- the target directory is created when missing; progress and **Cancel** show
+  inline, failures as a SnackBar.
+- while the fetch runs, **Save**, **Cancel** and **Exit** are disabled (and the
+  dialog cannot be dismissed).
+- the metadata cache is ~4.4 MB for ~6.200 games; the text cache (~1.2 MB) is
+  **loaded lazily** the first time a Reviews/Magazines/Comments tab is opened
+  (kept for the session).
+- at startup the cache is read and each catalog card's **folder name** is
+  matched against the AtariLegend titles (aliases included; exact → prefix →
+  fuzzy). When matched, the detail sidebar and the lightbox show a teal
+  **AtariLegend** button at the top-right of the *Game info* heading (also on
+  *No game info*). It opens an in-app dialog with the cached metadata
+  (year, publisher, genres, conversion/original system, developers and authors
+  **one per line with their roles**, e.g. `Taito`/`Arcade`,
+  `Tatsumi`/`Game Conversion`, `Jas C Brooke`/`Music`) and an **Open on
+  atarilegend.com** button (external browser, `url_launcher`). The AKA titles
+  (`Speed Buggy` for Buggy Boy) are used for matching too.
+- the dialog is **tabbed**: **Info** (metadata/credits — Developers/Authors in
+  an aligned **3-column grid**, name above its role — **and** Boxscans +
+  Screenshots **at the same time**, no hero image). The Info header shows the
+  **community score** far right (`4.11 / 5`, `7 votes`; average of
+  `game_votes` normalized to /5) and the **publisher + developer logos** side
+  by side in the middle (hotlinked from `companies.imgext`), **Reviews (N)**
+  (date, scores, BBCode-rendered text, review link), **Magazines (N)** (issue,
+  page, score, archive.org link) and **Comments (N)** (text + date). The
+  `(N)` counts come from the metadata cache, so they are visible immediately.
+- images are hotlinked (nothing bundled); a thumbnail opens a full-size viewer
+  (`←`/`→`, `Esc`, zoom). The text data loads lazily on the first text tab.
+- the dump excludes the `users` table, so **reviews/comments show no author
+  names** (text/score/date only); the review/magazine links open the website.
+- **After updating from an older build, click Download AtariLegend data once
+  again**: cache schema **v5** adds the **community score** and the
+  publisher/developer **logo references** (v4 added the review/comment/magazine
+  counts, v3 the image references, v2 the roles/conversion/release-AKA aliases)
+  and the new `atarilegend-texts.json` provides reviews/comments/magazines.
+  Older caches still load but lack those fields and show an "outdated" warning.
+- the filter bar has **Genre** (after the status dropdown) and **Developers**
+  (after Publisher) dropdowns fed by the cache — **both are hidden until
+  AtariLegend data is loaded**; the **Publisher** dropdown and
+  match merge gameinfo and AtariLegend publishers (case-insensitive). An
+  **author** filter is not implemented (AtariLegend data is shown in the
+  dialog only) — see
+  [`../../docs/ANALYSIS-atarilegend.md`](../../docs/ANALYSIS-atarilegend.md).
 
 ## Catalog-data update check
 

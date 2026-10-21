@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'atarilegend.dart';
 import 'gameinfo.dart';
 import 'screenshot_index.dart';
 
@@ -201,6 +202,7 @@ class GameCard {
     required this.searchText,
     this.focusVariant,
     this.tosVersion,
+    this.atariLegend,
   });
 
   final String id;
@@ -219,6 +221,10 @@ class GameCard {
   final String? previewPath;
   final List<CardVariant> variants;
   final InfoSummary? info;
+
+  /// AtariLegend match for this card's folder (`null` without data/match);
+  /// supplies the genre/developer filters and the AtariLegend button.
+  final AtariLegendGame? atariLegend;
 
   final int yearNum;
   final List<String> publishers;
@@ -317,6 +323,7 @@ GameCard buildIndexedCard({
   required List<(String, ScreenshotEntry)> items,
   required GameInfo? game,
   required String? Function(String rel, String? baseName) fullPng,
+  AtariLegendGame? atariLegend,
 }) {
   items.sort((a, b) => a.$1.compareTo(b.$1));
   final variants = <CardVariant>[];
@@ -377,6 +384,7 @@ GameCard buildIndexedCard({
     variants: variants,
     info: info,
     kind: kind,
+    atariLegend: atariLegend,
   );
 }
 
@@ -403,7 +411,11 @@ String? _firstAnyPreview(List<CardVariant> variants) {
 
 /// Builds a pd/utils card from a gameinfo record (gallery
 /// `_build_simple_cards`).
-GameCard buildSimpleCard({required GameInfo game, required String kind}) {
+GameCard buildSimpleCard({
+  required GameInfo game,
+  required String kind,
+  AtariLegendGame? atariLegend,
+}) {
   final layers = game.layers;
   final layer =
       layers.length > 1 ? 'BOTH' : (layers.isEmpty ? '' : layers.first);
@@ -421,6 +433,7 @@ GameCard buildSimpleCard({required GameInfo game, required String kind}) {
     variants: const [],
     info: info,
     kind: kind,
+    atariLegend: atariLegend,
   );
 }
 
@@ -437,6 +450,7 @@ GameCard _finalizeCard({
   required List<CardVariant> variants,
   required InfoSummary? info,
   required String kind,
+  AtariLegendGame? atariLegend,
 }) {
   final years = <int>[];
   final pubs = <String>[], crews = <String>[], crackers = <String>[],
@@ -468,6 +482,15 @@ GameCard _finalizeCard({
     }
   }
   final yearNum = years.isEmpty ? 0 : years.reduce((a, b) => a < b ? a : b);
+
+  // Merge the AtariLegend publisher into the gameinfo publishers (the
+  // publisher filter/dropdown then matches either source). Keep the gameinfo
+  // spelling when both differ only by case.
+  final alPublisher = atariLegend?.publisher.trim() ?? '';
+  if (alPublisher.isNotEmpty &&
+      !pubs.any((p) => p.trim().toLowerCase() == alPublisher.toLowerCase())) {
+    pubs.add(alPublisher);
+  }
 
   final searchParts = <String>[
     name,
@@ -514,6 +537,7 @@ GameCard _finalizeCard({
     languageSort: _minLower(langs),
     searchText: searchParts.where((p) => p.isNotEmpty).join(' ').toLowerCase(),
     tosVersion: tosVersion,
+    atariLegend: atariLegend,
   );
 }
 

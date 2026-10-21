@@ -46,6 +46,7 @@ class CatalogController extends ChangeNotifier {
   late final OverlayBrowser browser;
   late ScreenshotIndices screenshots;
   late GameInfoIndex gameinfo;
+  AtariLegendIndex atariLegend = AtariLegendIndex.empty();
   late CatalogUniverse universe;
   FavoritesService? favorites;
 
@@ -100,6 +101,7 @@ class CatalogController extends ChangeNotifier {
       final bundle = await CatalogBundle.load(
         screenshotDir: cfg.screenshotDirectory,
         gameinfoDir: cfg.resolveGameinfoDirectory(),
+        atariLegendDir: cfg.resolveAtariLegendDirectory(),
         onProgress: (message) {
           progress = message;
           notifyListeners();
@@ -108,6 +110,7 @@ class CatalogController extends ChangeNotifier {
       notices.addAll(bundle.warnings);
       screenshots = bundle.index;
       gameinfo = bundle.info;
+      atariLegend = bundle.atariLegend;
       universe = bundle.universe;
 
       if (!Directory(config.rootDirectory).existsSync()) {
@@ -183,6 +186,18 @@ class CatalogController extends ChangeNotifier {
 
   CatalogFacets get facets => universe.facetsFor(filter.section);
 
+  /// True when AtariLegend data is loaded; the Genre/Developers filter
+  /// dropdowns are only shown then (otherwise they would offer just `any`).
+  bool get hasAtariLegend => atariLegend.length > 0;
+
+  Future<AtariLegendTexts>? _atariLegendTextsFuture;
+
+  /// Lazily loads the reviews/comments/magazines cache the first time the
+  /// AtariLegend details text tabs are opened (kept for the session).
+  Future<AtariLegendTexts> atariLegendTexts() =>
+      _atariLegendTextsFuture ??= Future(() =>
+          AtariLegendTexts.load(config.resolveAtariLegendDirectory()));
+
   bool get crewFocusActive => !favoritesOnly &&
       filter.crew != 'any' &&
       kindFilters(filter.section).contains('crew');
@@ -210,6 +225,8 @@ class CatalogController extends ChangeNotifier {
         ..status = 'any'
         ..letter = 'any'
         ..publisher = 'any'
+        ..genre = 'any'
+        ..developer = 'any'
         ..crew = 'any'
         ..cracker = 'any'
         ..language = 'any'
@@ -249,6 +266,8 @@ class CatalogController extends ChangeNotifier {
     filter.pasti = 'any';
     filter.boxscan = 'any';
     filter.tos = 'any';
+    filter.genre = 'any';
+    filter.developer = 'any';
     filter.crew = 'any';
     filter.cracker = 'any';
     // `cracker` sort is not meaningful for pd — fall back to name.
@@ -275,6 +294,16 @@ class CatalogController extends ChangeNotifier {
 
   void setPublisher(String value) {
     filter.publisher = value;
+    _filtersChanged();
+  }
+
+  void setGenre(String value) {
+    filter.genre = value;
+    _filtersChanged();
+  }
+
+  void setDeveloper(String value) {
+    filter.developer = value;
     _filtersChanged();
   }
 
@@ -448,6 +477,19 @@ class CatalogController extends ChangeNotifier {
       screenshots.candidatePathsFor(relOf(e));
 
   GameInfo? infoFor(Entry e) => gameinfo.lookupByRel(relOf(e));
+
+  /// AtariLegend match for a catalog card (matched by folder name, like the
+  /// `tools/atarilegend-gen` matcher). `null` when no data/matche.
+  AtariLegendGame? atariLegendForCard(GameCard card) =>
+      atariLegend.matchFolder(card.folder);
+
+  /// AtariLegend match for a folder-browser entry: the folder is
+  /// `<letter>/<folder>` of its rel path (same join as the screenshot index).
+  AtariLegendGame? atariLegendForEntry(Entry e) {
+    final parts = relOf(e).split('/');
+    if (parts.length >= 4) return atariLegend.matchFolder(parts[3]);
+    return atariLegend.matchFolder(e.name);
+  }
 
   String sectionOf(Entry e) {
     final rel = relOf(e);
