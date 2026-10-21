@@ -32,8 +32,9 @@ Plan: [`PLAN.md`](PLAN.md). Architecture decision:
   Real `desktop.config.json` is git-ignored.
 - `MarcerGameDvd-Hatari.cfg` — bundled Hatari config, shipped next to the
   executable and used when `Hatari.ConfigFile` is empty (launch fallback).
-- `run.sh` — seeds `desktop.config.json` from `../../local/paths.env` on
-  first run, then `flutter run -d linux`.
+- `run.sh` — **regenerates** `desktop.config.json` from
+  `../../local/paths.env` on every run (all path/FTP/Hatari values are
+  overwritten, so manual config edits are lost), then `flutter run -d linux`.
 
 The executable / app bundle is named **`MarcerGameDVDLauncher`**
 (`MarcerGameDVDLauncher.exe` on Windows, `MarcerGameDVDLauncher.app` on

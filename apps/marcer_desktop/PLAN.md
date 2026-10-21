@@ -186,9 +186,10 @@ git-ignored (same policy as `launcher.config.json`).
   (default `/Uploads/MarcerGameDVDLauncher-assets/`) and extracts it into the target directory
   (`lib/catalog_assets.dart`). Uploads never overwrite, so the newest archive is picked by
   the `yyyyMMdd-HHmmss` name timestamp.
-- `run.sh` still sources `local/paths.env` for developer convenience, but only to
-  **seed/print** a working `desktop.config.json` on first run — the app itself reads
-  only the config file.
+- `run.sh` sources `local/paths.env` for developer convenience and
+  **regenerates** a working `desktop.config.json` on **every** run (paths, FTP and
+  the Hatari executable are overwritten, so manual config edits are lost) — the app
+  itself reads only the config file.
 - **Config resolution (2026-10-11):** `desktop.config.json` is searched in order —
   (1) current working directory, (2) the executable's directory (portable ZIP
   release), (3) macOS: the folder containing the `.app` bundle. Release ZIPs ship
