@@ -149,7 +149,7 @@ class _FilterBarState extends State<FilterBar> {
                 children: [
                   _fixed(
                     SizedBox(
-                      width: 144,
+                      width: 174,
                       // Escape handling on the wrapper: key events bubble up
                       // from the TextField's own focus node below.
                       child: Focus(

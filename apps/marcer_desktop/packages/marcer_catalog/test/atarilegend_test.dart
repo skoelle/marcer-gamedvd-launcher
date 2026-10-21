@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:marcer_catalog/marcer_catalog.dart';
@@ -10,13 +11,22 @@ const String _sql = r'''
 CREATE TABLE `games` (
   `id` int(11) NOT NULL,
   `name` varchar(255) DEFAULT NULL,
-  `slug` varchar(255) NOT NULL
+  `slug` varchar(255) NOT NULL,
+  `port_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB;
 
 INSERT INTO `games` VALUES
-(22,'Buggy Boy','buggy-boy'),
-(1,'Gods','gods'),
-(3,'O''Brien\'s Quest','obrien');
+(22,'Buggy Boy','buggy-boy',1),
+(1,'Gods','gods',NULL),
+(3,'O''Brien\'s Quest','obrien',NULL);
+
+CREATE TABLE `ports` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `ports` VALUES
+(1,'Arcade');
 
 CREATE TABLE `game_releases` (
   `id` int(11) NOT NULL,
@@ -62,8 +72,16 @@ CREATE TABLE `game_developer` (
   `developer_role_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE `developer_roles` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `developer_roles` VALUES
+(2,'Arcade'),(6,'Game Conversion');
+
 INSERT INTO `game_developer` VALUES
-(270,22,NULL),(1070,22,NULL);
+(270,22,2),(1070,22,6);
 
 CREATE TABLE `individuals` (
   `id` int(11) NOT NULL,
@@ -80,6 +98,14 @@ CREATE TABLE `game_individual` (
   `individual_role_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE `individual_roles` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `individual_roles` VALUES
+(1,'Programming'),(2,'Music');
+
 INSERT INTO `game_individual` VALUES
 (1,22,243,2),(2,22,3280,1);
 
@@ -91,6 +117,15 @@ CREATE TABLE `game_akas` (
 
 INSERT INTO `game_akas` VALUES
 (1,22,'Speed Buggy');
+
+CREATE TABLE `game_release_akas` (
+  `id` int(11) NOT NULL,
+  `game_release_id` int(11) DEFAULT NULL,
+  `name` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO `game_release_akas` VALUES
+(1,1,'Speed Buggy US');
 ''';
 
 void main() {
@@ -145,13 +180,26 @@ void main() {
       expect(buggy.genres, ['Simulation', 'Driving']);
       expect(buggy.developers, ['Elite', 'Tatsumi']);
       expect(buggy.authors, ['Jas C Brooke', 'Martin W. Ward']);
-      expect(buggy.aliases, ['Speed Buggy']);
+      expect(
+          buggy.developerCredits.map((c) => '${c.name}|${c.role}'),
+          ['Elite|Arcade', 'Tatsumi|Game Conversion']);
+      expect(
+          buggy.authorCredits.map((c) => '${c.name}|${c.role}'),
+          ['Jas C Brooke|Music', 'Martin W. Ward|Programming']);
+      expect(buggy.conversion, 'Arcade');
+      expect(buggy.aliases, containsAll(['Speed Buggy', 'Speed Buggy US']));
     });
 
     test('ignores undated/null releases for year/publisher', () {
       final gods = cache.games.firstWhere((g) => g.id == 1);
       expect(gods.year, 1990);
       expect(gods.publisher, 'Y');
+    });
+
+    test('parsed aliases (incl. release AKAs) match the folder', () {
+      final idx = AtariLegendIndex.fromGames(cache.games);
+      expect(idx.matchFolder('Speed Buggy')?.id, 22);
+      expect(idx.matchFolder('Speed Buggy US')?.id, 22);
     });
 
     test('handles SQL-escaped titles', () {
@@ -165,6 +213,9 @@ void main() {
       final buggy = restored.games.firstWhere((g) => g.id == 22);
       expect(buggy.year, 1987);
       expect(buggy.genres, ['Simulation', 'Driving']);
+      expect(buggy.conversion, 'Arcade');
+      expect(buggy.developerCredits, hasLength(2));
+      expect(restored.schemaVersion, kAtariLegendSchemaVersion);
     });
   });
 
@@ -250,6 +301,24 @@ void main() {
       expect(idx.length, 1);
       expect(idx.matchFolder('Buggy Boy')?.id, 22);
       expect(idx.byId(22)?.slug, 'buggy-boy');
+    });
+
+    test('warns when the cached schema is outdated', () {
+      final tmp = Directory.systemTemp.createTempSync('al_index_old');
+      addTearDown(() {
+        if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+      });
+      File('${tmp.path}/atarilegend.json').writeAsStringSync(jsonEncode({
+        'schema_version': 1,
+        'generated_at': 'old',
+        'games': [
+          {'id': 22, 'name': 'Buggy Boy', 'slug': 'buggy-boy'},
+        ],
+      }));
+      final warnings = <String>[];
+      final idx = AtariLegendIndex.load(tmp.path, warnings: warnings);
+      expect(idx.length, 1, reason: 'old caches still load');
+      expect(warnings.any((w) => w.contains('outdated')), isTrue);
     });
   });
 }

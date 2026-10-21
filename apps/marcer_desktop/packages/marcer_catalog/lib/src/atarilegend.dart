@@ -19,7 +19,31 @@ import 'dart:io';
 const String kAtariLegendFileName = 'atarilegend.json';
 
 /// Cache schema version (bump on incompatible layout changes).
-const int kAtariLegendSchemaVersion = 1;
+///
+/// v2 adds developer/author **roles**, the original-system **conversion** and
+/// the `game_release_akas` (`name`) aliases; a v1 cache still loads but lacks
+/// those fields, so the app warns to download the data again.
+const int kAtariLegendSchemaVersion = 2;
+
+/// One credited person/company with an optional role (e.g. `Taito` / `Arcade`,
+/// `Jas C Brooke` / `Music`).
+class AtariLegendCredit {
+  const AtariLegendCredit({required this.name, this.role = ''});
+
+  factory AtariLegendCredit.fromJson(Map<String, dynamic> json) =>
+      AtariLegendCredit(
+        name: (json['name'] ?? '').toString(),
+        role: (json['role'] ?? '').toString(),
+      );
+
+  final String name;
+  final String role;
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        if (role.isNotEmpty) 'role': role,
+      };
+}
 
 /// One cached AtariLegend game.
 class AtariLegendGame {
@@ -32,6 +56,9 @@ class AtariLegendGame {
     this.genres = const [],
     this.developers = const [],
     this.authors = const [],
+    this.developerCredits = const [],
+    this.authorCredits = const [],
+    this.conversion = '',
     this.aliases = const [],
   });
 
@@ -41,6 +68,20 @@ class AtariLegendGame {
             .map((e) => e.toString())
             .where((e) => e.isNotEmpty)
             .toList();
+    List<AtariLegendCredit> credits(String key, List<String> fallback) {
+      final raw = (json[key] as List<dynamic>?) ?? const [];
+      if (raw.isEmpty) {
+        // v1 caches only carry the name lists (no roles).
+        return [for (final n in fallback) AtariLegendCredit(name: n)];
+      }
+      return [
+        for (final e in raw)
+          AtariLegendCredit.fromJson(Map<String, dynamic>.from(e as Map)),
+      ];
+    }
+
+    final developers = strings('developers');
+    final authors = strings('authors');
     return AtariLegendGame(
       id: (json['id'] as num?)?.toInt() ?? 0,
       name: (json['name'] ?? '').toString(),
@@ -48,8 +89,11 @@ class AtariLegendGame {
       year: (json['year'] as num?)?.toInt(),
       publisher: (json['publisher'] ?? '').toString(),
       genres: strings('genres'),
-      developers: strings('developers'),
-      authors: strings('authors'),
+      developers: developers,
+      authors: authors,
+      developerCredits: credits('developer_credits', developers),
+      authorCredits: credits('author_credits', authors),
+      conversion: (json['conversion'] ?? '').toString(),
       aliases: strings('aliases'),
     );
   }
@@ -60,10 +104,22 @@ class AtariLegendGame {
   final int? year;
   final String publisher;
   final List<String> genres;
+
+  /// Developer/author names (deduplicated) used by the filter facets.
   final List<String> developers;
   final List<String> authors;
 
-  /// Alternative titles (AtariLegend `game_akas`), also used for matching.
+  /// Credits with roles for the details dialog (may repeat a name, e.g. one
+  /// person with Music/Graphics/Programming).
+  final List<AtariLegendCredit> developerCredits;
+  final List<AtariLegendCredit> authorCredits;
+
+  /// Original system the game was converted from (`games.port_id` →
+  /// `ports.name`, e.g. `Arcade`).
+  final String conversion;
+
+  /// Alternative titles (AtariLegend `game_akas`/`game_release_akas`), also
+  /// used for matching.
   final List<String> aliases;
 
   Map<String, dynamic> toJson() => {
@@ -75,6 +131,12 @@ class AtariLegendGame {
         if (genres.isNotEmpty) 'genres': genres,
         if (developers.isNotEmpty) 'developers': developers,
         if (authors.isNotEmpty) 'authors': authors,
+        if (developerCredits.isNotEmpty)
+          'developer_credits':
+              developerCredits.map((c) => c.toJson()).toList(),
+        if (authorCredits.isNotEmpty)
+          'author_credits': authorCredits.map((c) => c.toJson()).toList(),
+        if (conversion.isNotEmpty) 'conversion': conversion,
         if (aliases.isNotEmpty) 'aliases': aliases,
       };
 }
@@ -290,6 +352,19 @@ List<String> _uniqStrings(Iterable<String?> values) {
   return out;
 }
 
+/// Deduplicates credits by (name, role); one person may appear with several
+/// roles (e.g. Music/Graphics/Programming).
+List<AtariLegendCredit> _uniqCredits(Iterable<AtariLegendCredit> credits) {
+  final out = <AtariLegendCredit>[];
+  final seen = <String>{};
+  for (final c in credits) {
+    if (c.name.isEmpty) continue;
+    final key = '${c.name.toLowerCase()}|${c.role.toLowerCase()}';
+    if (seen.add(key)) out.add(c);
+  }
+  return out;
+}
+
 /// Decompresses the downloaded dump bytes (gzip) into the SQL text.
 String decodeAtariLegendDump(List<int> gzBytes) =>
     utf8.decode(gzip.decode(gzBytes), allowMalformed: true);
@@ -324,6 +399,13 @@ AtariLegendCache parseAtariLegendCache(
   final individuals = {
     for (final r in _rows(sql, 'individuals')) r['id']: r['name']
   };
+  final developerRoles = {
+    for (final r in _rows(sql, 'developer_roles')) r['id']: r['name']
+  };
+  final individualRoles = {
+    for (final r in _rows(sql, 'individual_roles')) r['id']: r['name']
+  };
+  final ports = {for (final r in _rows(sql, 'ports')) r['id']: r['name']};
 
   final gameGenres = <String, List<String>>{};
   for (final r in _rows(sql, 'game_genre')) {
@@ -334,20 +416,26 @@ AtariLegendCache parseAtariLegendCache(
     }
   }
   final gameDevelopers = <String, List<String>>{};
+  final gameDeveloperCredits = <String, List<AtariLegendCredit>>{};
   for (final r in _rows(sql, 'game_developer')) {
     final gid = r['game_id'];
     final name = companies[r['company_id']];
-    if (gid != null && name != null) {
-      (gameDevelopers[gid] ??= <String>[]).add(name);
-    }
+    if (gid == null || name == null) continue;
+    final role = developerRoles[r['developer_role_id']] ?? '';
+    (gameDevelopers[gid] ??= <String>[]).add(name);
+    (gameDeveloperCredits[gid] ??= <AtariLegendCredit>[])
+        .add(AtariLegendCredit(name: name, role: role));
   }
   final gameAuthors = <String, List<String>>{};
+  final gameAuthorCredits = <String, List<AtariLegendCredit>>{};
   for (final r in _rows(sql, 'game_individual')) {
     final gid = r['game_id'];
     final name = individuals[r['individual_id']];
-    if (gid != null && name != null) {
-      (gameAuthors[gid] ??= <String>[]).add(name);
-    }
+    if (gid == null || name == null) continue;
+    final role = individualRoles[r['individual_role_id']] ?? '';
+    (gameAuthors[gid] ??= <String>[]).add(name);
+    (gameAuthorCredits[gid] ??= <AtariLegendCredit>[])
+        .add(AtariLegendCredit(name: name, role: role));
   }
   final gameAkas = <String, List<String>>{};
   for (final r in _rows(sql, 'game_akas')) {
@@ -369,7 +457,8 @@ AtariLegendCache parseAtariLegendCache(
   final releaseAkas = <String, List<String>>{};
   for (final r in _rows(sql, 'game_release_akas')) {
     final gid = releaseToGame[r['game_release_id']];
-    final name = r['aka_name'];
+    // The dump column is `name` (the tool's historical `aka_name` was wrong).
+    final name = r['name'];
     if (gid != null && name != null && name.isNotEmpty) {
       (releaseAkas[gid] ??= <String>[]).add(name);
     }
@@ -418,6 +507,9 @@ AtariLegendCache parseAtariLegendCache(
       genres: _uniqStrings(gameGenres[gid] ?? const []),
       developers: _uniqStrings(gameDevelopers[gid] ?? const []),
       authors: _uniqStrings(gameAuthors[gid] ?? const []),
+      developerCredits: _uniqCredits(gameDeveloperCredits[gid] ?? const []),
+      authorCredits: _uniqCredits(gameAuthorCredits[gid] ?? const []),
+      conversion: (ports[g['port_id']] ?? '').toString(),
       aliases: _uniqStrings([
         ...(gameAkas[gid] ?? const []),
         for (final r in releasesByGame[gid] ?? const []) r['name'] ?? '',
@@ -578,6 +670,11 @@ class AtariLegendIndex {
       if (cache.games.isEmpty) {
         warnings?.add('AtariLegend data: no games in ${file.path}');
         return AtariLegendIndex.empty();
+      }
+      if (cache.schemaVersion < kAtariLegendSchemaVersion) {
+        warnings?.add('AtariLegend data is outdated (schema '
+            '${cache.schemaVersion} < $kAtariLegendSchemaVersion) — click '
+            '"Download AtariLegend data" again');
       }
       return AtariLegendIndex.fromGames(cache.games);
     } catch (e) {

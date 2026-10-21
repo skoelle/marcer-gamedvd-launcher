@@ -389,7 +389,8 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   dump directory, downloads it, decompresses it (gzip) and parses only the
   needed tables in a **background isolate**, then writes the compact cache
   `atarilegend.json` (game id/name/slug, release year, publisher, genres,
-  developers, authors). The downloaded `.sql.gz` is **deleted** afterwards.
+  conversion/original system, developers/authors with roles, aliases). The
+  downloaded `.sql.gz` is **deleted** afterwards.
 - the target directory is created when missing; progress and **Cancel** show
   inline, failures as a SnackBar.
 - while the fetch runs, **Save**, **Cancel** and **Exit** are disabled (and the
@@ -400,8 +401,15 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   fuzzy). When matched, the detail sidebar and the lightbox show a teal
   **AtariLegend** button at the top-right of the *Game info* heading (also on
   *No game info*). It opens an in-app dialog with the cached metadata
-  (year, publisher, genres, developers, authors) and an **Open on
-  atarilegend.com** button (external browser, `url_launcher`).
+  (year, publisher, genres, conversion/original system, developers and authors
+  **one per line with their roles**, e.g. `Taito`/`Arcade`,
+  `Tatsumi`/`Game Conversion`, `Jas C Brooke`/`Music`) and an **Open on
+  atarilegend.com** button (external browser, `url_launcher`). The AKA titles
+  (`Speed Buggy` for Buggy Boy) are used for matching too.
+- **After updating from an older build, click Download AtariLegend data once
+  again**: cache schema **v2** adds the roles, the conversion system and the
+  missing release-AKA aliases (a v1 cache still loads, but without them and with
+  an "outdated" warning).
 - the filter bar has **Genre** (after the status dropdown) and **Developers**
   (after Publisher) dropdowns fed by the cache; the **Publisher** dropdown and
   match merge gameinfo and AtariLegend publishers (case-insensitive). An

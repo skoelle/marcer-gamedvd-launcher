@@ -52,6 +52,13 @@ class AtariLegendDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Fallback for v1 caches/constructed objects that only carry names.
+    final developers = game.developerCredits.isNotEmpty
+        ? game.developerCredits
+        : [for (final n in game.developers) AtariLegendCredit(name: n)];
+    final authors = game.authorCredits.isNotEmpty
+        ? game.authorCredits
+        : [for (final n in game.authors) AtariLegendCredit(name: n)];
     return AlertDialog(
       backgroundColor: const Color(0xFF0D0D0D),
       title: Row(
@@ -82,10 +89,10 @@ class AtariLegendDialog extends StatelessWidget {
                 _row('Publisher', game.publisher),
               if (game.genres.isNotEmpty)
                 _row('Genres', game.genres.join(', ')),
-              if (game.developers.isNotEmpty)
-                _row('Developers', game.developers.join(', ')),
-              if (game.authors.isNotEmpty)
-                _row('Authors', game.authors.join(', ')),
+              if (game.conversion.isNotEmpty)
+                _row('Conversion', game.conversion),
+              if (developers.isNotEmpty) _credits('Developers', developers),
+              if (authors.isNotEmpty) _credits('Authors', authors),
             ],
           ),
         ),
@@ -105,6 +112,41 @@ class AtariLegendDialog extends StatelessWidget {
             child: const Text('Open on atarilegend.com'),
           ),
       ],
+    );
+  }
+
+  /// Multi-line credits: each name on its own line with the role directly
+  /// below it (e.g. `Taito` / `Arcade`, `Tatsumi` / `Game Conversion`).
+  Widget _credits(String label, List<AtariLegendCredit> credits) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(label,
+                style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < credits.length; i++) ...[
+                  Text(credits[i].name,
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 12)),
+                  if (credits[i].role.isNotEmpty)
+                    Text(credits[i].role,
+                        style: const TextStyle(
+                            color: Colors.grey, fontSize: 11)),
+                  if (i < credits.length - 1) const SizedBox(height: 4),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

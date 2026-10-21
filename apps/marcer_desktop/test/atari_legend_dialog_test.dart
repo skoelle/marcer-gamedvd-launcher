@@ -18,7 +18,16 @@ void main() {
       publisher: 'Elite',
       genres: ['Simulation', 'Driving'],
       developers: ['Taito', 'Tatsumi'],
-      authors: ['Jas C Brooke'],
+      authors: ['Jas C Brooke', 'Martin W. Ward'],
+      conversion: 'Arcade',
+      developerCredits: [
+        AtariLegendCredit(name: 'Taito', role: 'Arcade'),
+        AtariLegendCredit(name: 'Tatsumi', role: 'Game Conversion'),
+      ],
+      authorCredits: [
+        AtariLegendCredit(name: 'Jas C Brooke', role: 'Music'),
+        AtariLegendCredit(name: 'Martin W. Ward', role: 'Programming'),
+      ],
     );
 
     await tester.pumpWidget(MaterialApp(
@@ -47,8 +56,16 @@ void main() {
     expect(find.text('Buggy Boy (1987)'), findsOneWidget);
     expect(find.text('Elite'), findsOneWidget);
     expect(find.text('Simulation, Driving'), findsOneWidget);
-    expect(find.text('Taito, Tatsumi'), findsOneWidget);
+    expect(find.text('Conversion'), findsOneWidget);
+    // Arcade appears twice: the conversion value and Taito's role.
+    expect(find.text('Arcade'), findsNWidgets(2));
+    expect(find.text('Taito'), findsOneWidget);
+    expect(find.text('Tatsumi'), findsOneWidget);
+    expect(find.text('Game Conversion'), findsOneWidget);
     expect(find.text('Jas C Brooke'), findsOneWidget);
+    expect(find.text('Martin W. Ward'), findsOneWidget);
+    expect(find.text('Music'), findsOneWidget);
+    expect(find.text('Programming'), findsOneWidget);
 
     await tester.tap(find.text('Open on atarilegend.com'));
     await tester.pumpAndSettle();
