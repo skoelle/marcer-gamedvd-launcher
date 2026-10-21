@@ -48,6 +48,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(selected?.name, 'Mono');
   });
+  testWidgets('no game info leaves a gap between AtariLegend and PLAY',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 420,
+          child: GameInfoPanel(
+            info: null,
+            atariLegend:
+                const AtariLegendGame(id: 22, name: 'Omega', slug: 'omega'),
+            onAtariLegend: () {},
+            variant: const ZipVariantView(
+              name: 'omega.zip',
+              status: 'done',
+              layer: 'ROOT',
+              rel: 'x/omega.zip',
+            ),
+            variants: kHatariVariants,
+            onPlay: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final atariLegend = tester.getRect(find.text('AtariLegend'));
+    final play = tester.getRect(find.text('PLAY'));
+    expect(play.top - atariLegend.bottom, greaterThanOrEqualTo(16));
+  });
 }
 
 void _atariLegendTests() {

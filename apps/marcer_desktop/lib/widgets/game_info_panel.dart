@@ -108,6 +108,7 @@ class GameInfoPanel extends StatelessWidget {
         if (info == null) ...[
           _headingRow('No game info', trailing: _atariLegendButtonOrNull()),
           if (variant != null) ...[
+            const SizedBox(height: 8),
             _headingRow('This ZIP', trailing: _playButtonOrNull()),
             ..._zipTable(variant!),
           ],
