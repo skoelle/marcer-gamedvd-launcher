@@ -271,9 +271,9 @@ Defined scopes:
   `Title Sorted/PD Games - Title Sorted` (merged with its patch counterpart).
 
 Every subcommand (`index`, `run`, `detect`, `reclassify`,
-`cleanup-drive-led`, `cleanup-duplicates`, `prune`) takes `--scope` and
-works exclusively on the selected scope's trees, index file and output
-subtree. There is deliberately
+`cleanup-drive-led`, `cleanup-duplicates`, `promote-app-screens`, `prune`)
+takes `--scope` and works exclusively on the selected scope's trees, index
+file and output subtree. There is deliberately
 **no "all scopes" mode**: running two scopes means running the command
 twice. This keeps each index file small, keeps per-entry index rewrites
 cheap, and means an experimental scope can never disturb the curated state
@@ -414,7 +414,10 @@ subcommand (section 8.7), a standalone offline pass that removes old
 drive-LED white screenshots and cleans the index, the
 `cleanup-duplicates` subcommand (section 8.8), an offline pass that removes
 pixel-exact duplicate candidates and updates the index/metadata, the
-`reclassify` subcommand (section 8.4.1), an offline pass that refines the
+`promote-app-screens` subcommand (section 8.9), an offline pass that
+promotes an open application-window candidate of a successful desktop retry
+to the preview, the `reclassify` subcommand (section 8.4.1), an offline
+pass that refines the
 entry kind of `desktop` entries, and the `prune`
 subcommand, which deletes `logs/<rel>.log` files and empty mirror
 directories of index entries that no longer exist (used after directory
@@ -1050,6 +1053,50 @@ entry:
   current entry. It is checked between candidates and entries, so long NAS
   passes visibly keep working without flooding the output.
 
+### 8.9 Promote application-window candidates (`promote-app-screens`)
+
+Utils frequently boot to a GEM desktop and show the real application only
+in a window after a successful desktop click retry. The mono classifier
+still labels such a window `desktop` / `textscreen` because it has only two
+colors. The offline subcommand `promote-app-screens` (no Hatari) turns the
+existing candidates into a proper preview:
+
+- **Scope:** every entry with `status: desktop` and candidates, regardless
+  of `click_result` (a `click-failed` retry can still contain a valid app
+  screen, e.g. ALT).
+- **Selection:** scan the `candidates` list backwards and skip everything
+  that is not an application screen:
+  - TTP command-line dialog (see below),
+  - GEM drive/folder (file) window, detected with the fixed `A:\`
+    title-path template `assets/gem-file-window.png`,
+  - blank/black screens (`analyze_image` kind `black`),
+  - plain TOS desktop (known mono TOS 1.04 pHash `ffbf9c9c9c888088`).
+  The last remaining candidate is promoted. No fixed candidate number is
+  used: the app screen is `_c01`, `_c02` or `_c03` depending on the entry,
+  and full-screen text applications (e.g. Atoric) are supported too.
+- **TTP launchers:** double-clicking a `.TTP` program opens GEM's
+  "ANWENDUNG ÖFFNEN" command-line dialog (Name/Parameter/OK/ABBRUCH),
+  which is also an open window. `is_ttp_dialog` template-matches the fixed
+  title/button rows (`assets/ttp-dialog-title.png`,
+  `assets/ttp-dialog-buttons.png`, German TOS 1.04). An entry with a TTP
+  candidate but no real app candidate is not promoted: it is reset to
+  `status: desktop` / `kind: desktop` (no longer `textscreen`).
+  `--candidate N` bypasses all filters for an explicit manual choice.
+- **Swap:** chosen candidate becomes `<base>.png`; the old preview is
+  renamed to the chosen candidate's name. Nothing is deleted (same fixed
+  filenames/behaviour as the desktop app's `M` curation).
+- **State:** index entry and metadata JSON get `status: done`,
+  `kind: game` (overridable with `--kind textscreen|darkscreen`), and
+  `preview_is_desktop: false`; `preview` and `candidates` keep their names.
+- **Options:** `--dry-run`, `--only <substring>`, `--list` (print chosen
+  candidate per entry), `--candidate N` (1-based, special cases), `--kind`.
+- **Limits:** the file-window template is tuned to the German mono TOS
+  1.04 `A:\` drive path; other drive letters or an English TOS image need
+  their own templates. Entries without any remaining app candidate are
+  counted as `no app` and stay `desktop`. A following
+  `cleanup-duplicates` pass removes exact duplicates created by the swap.
+- The output-dir lock is taken; Ctrl+C saves already-applied index changes.
+
 ---
 
 ## 9. Robustness
@@ -1083,8 +1130,13 @@ entry:
 - **Write safety:** the tool only writes under `MARCER_OUT_DIR` and the local
   staging directory. It never writes to `MARCER_ROOT_DIR`,
   `MARCER_PATCH_DIR`, or the repository working tree.
-- **Graceful interrupt:** Ctrl+C finishes the current entry per worker,
-  writes the index, and exits non-zero.
+- **Graceful interrupt:** the first Ctrl+C asks workers to finish their
+  current entry, writes the index, and exits non-zero. A second Ctrl+C
+  forces an immediate exit (the PID lock remains stale and is replaced on
+  the next start). FIFO writes use non-blocking `O_WRONLY|O_NONBLOCK`, so a
+  crashed/exited Hatari (no FIFO reader) fails the command instead of
+  blocking a worker forever; a dead Hatari is reaped during the entry
+  teardown.
 
 ---
 
@@ -1623,6 +1675,13 @@ A conforming implementation satisfies all of the following.
       (section 8.8), keeps the preview and the first occurrence, updates the
       index and metadata `candidates` lists, leaves missing/unreadable files
       alone and limits itself to the selected scope with `--only`/`--dry-run`.
+- [ ] F8 `promote-app-screens` examines every `desktop` entry with
+      candidates (section 8.9), scans backwards and skips TTP dialogs, GEM
+      file/drive windows, blank screens and the plain TOS desktop, then
+      promotes the remaining app screen (window or full-screen text) and
+      swaps it like the app's `M` curation. TTP-only entries are reset to
+      `desktop`/`desktop`; `--dry-run`/`--only`/`--list`/`--candidate N`
+      are supported.
 
 **Output**
 - [ ] O1 Output mirrors the source tree under `MARCER_OUT_DIR`.

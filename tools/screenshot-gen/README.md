@@ -61,6 +61,12 @@ tools/screenshot-gen/run.sh cleanup-duplicates --list      # print removed names
 tools/screenshot-gen/run.sh cleanup-duplicates --candidates-only
 tools/screenshot-gen/run.sh cleanup-duplicates --scope pd --only "10th Frame"
 
+# Promote the application-window candidate of successful desktop retries
+# (e.g. utils; offline, no Hatari):
+tools/screenshot-gen/run.sh promote-app-screens --scope utils --dry-run --list
+tools/screenshot-gen/run.sh promote-app-screens --scope utils
+tools/screenshot-gen/run.sh promote-app-screens --scope utils --only Alvi
+
 # Refine the entry kind of "desktop" entries (offline, no Hatari):
 tools/screenshot-gen/run.sh reclassify --dry-run          # kind counts only
 tools/screenshot-gen/run.sh reclassify                    # write index + JSON
@@ -73,6 +79,10 @@ tools/screenshot-gen/run.sh prune             # delete
 ```
 
 Interrupt with Ctrl+C at any time. Progress is saved after every entry.
+The first Ctrl+C asks the workers to finish their current entry; a second
+Ctrl+C forces an immediate exit (the PID lock then remains stale and is
+replaced on the next start). FIFO commands are non-blocking, so a crashed
+Hatari can no longer leave workers hanging forever.
 A later `run` skips completed entries (`done`, `desktop`, `no_usable_shots`)
 and retries unfinished or failed ones (`pending`, `interrupted`, `timeout`,
 `error`). The `no_usable_shots` entries are not retried by a normal run;
@@ -84,7 +94,8 @@ invocation (recorded in `tos_tried`); `--force` retries it anyway.
 
 The archive is processed in named **scopes** (config `scope_default` +
 `scopes`). Every subcommand (`index`, `run`, `detect`, `reclassify`,
-`cleanup-drive-led`, `cleanup-duplicates`, `prune`) works on exactly one
+`cleanup-drive-led`, `cleanup-duplicates`, `promote-app-screens`, `prune`)
+works on exactly one
 scope per invocation,
 selected with `--scope <name>`; without the flag the configured
 `scope_default` (cracked) is used. There is deliberately no "all scopes"
@@ -325,6 +336,47 @@ that removes those duplicates per entry:
 - While the pass is running it prints a compact progress line at most every
   10 seconds (`scanned/total`, changed entries, removed/would-remove files and
   the current entry), so even a long NAS pass shows that it is still working.
+
+### Promoting application windows (`promote-app-screens`)
+
+Utils often boot to a GEM desktop and show the actual application only in a
+window after a successful desktop click retry. The mono classifier still
+labels that window `desktop`/`textscreen` because it uses only two colors.
+The offline `promote-app-screens` pass (no Hatari) fixes those entries:
+
+- It checks **every** `status: desktop` entry with candidates, not only
+  successful click retries. This also catches apps whose click was reported
+  as `click-failed` but whose screenshot is still a valid application.
+- It scans the candidate list **backwards** and skips everything that is
+  not the application:
+  - TTP command-line dialog (see below),
+  - GEM drive/folder (file) window, detected via the fixed `A:\` title-path
+    crop (`assets/gem-file-window.png`),
+  - blank/black screens (`analyze_image` kind `black`),
+  - the plain TOS desktop (known mono TOS 1.04 pHash).
+  The last remaining candidate is promoted. There is no hard-coded candidate
+  number: the app screen is `_c01`, `_c02` or `_c03` depending on the entry,
+  and full-screen text applications are supported too.
+- The chosen image is swapped with the preview exactly like the app's `M`
+  curation: it becomes `<base>.png`, the old preview takes the chosen
+  candidate's name (nothing is deleted). The index/metadata become
+  `status: done` and `kind: game` (override with `--kind`).
+- **TTP launchers are not apps.** A `.TTP` program opens GEM's
+  "ANWENDUNG ÖFFNEN" command-line dialog (Name/Parameter/OK/ABBRUCH),
+  which is also an open window. The dialog is detected by template
+  matching (`assets/ttp-dialog-title.png` and
+  `assets/ttp-dialog-buttons.png`, German TOS 1.04). An entry with a TTP
+  candidate but no real app candidate is **not** promoted; it is reset to
+  `status: desktop` / `kind: desktop`, so it no longer appears as
+  `desktop textscreen`.
+- `--dry-run` reports only, `--list` prints the chosen candidate per entry,
+  `--only <substring>` limits the pass, and `--candidate N` (1-based) can
+  promote a specific candidate for special cases (bypassing all filters).
+- The summary reports `promoted`, `TTP reset`, `no app`, and skipped
+  `file`/`blank`/`desktop` candidates. After a run,
+  `cleanup-duplicates --scope utils` removes duplicates created by the swap.
+  The file-window and plain-desktop templates are tuned to the German
+  mono TOS 1.04 layout (`A:\` drive path).
 
 ### Drive-LED white screens (`--drive-led false`, `cleanup-drive-led`)
 

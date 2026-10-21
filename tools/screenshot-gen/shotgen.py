@@ -8,6 +8,7 @@ Implements SPEC-screenshot-generator.md:
   run                  process pending entries (interruptible, resumable)
   detect               find the program icon in existing desktop previews
   cleanup-duplicates   remove pixel-exact duplicate candidates (offline)
+  promote-app-screens  promote an open-window candidate to the preview
 
 Scopes (config ``scope_default`` + ``scopes``): every subcommand works
 on exactly one scope per invocation, selected with ``--scope`` (default:
@@ -805,8 +806,14 @@ CLICK_LOCK = threading.Lock()
 
 
 def fifo_write(fifo: Path, cmd: str) -> None:
-    with open(fifo, "w") as fh:
-        fh.write(cmd + "\n")
+    # Non-blocking: a dead Hatari (crashed/exited) leaves no FIFO reader,
+    # and a plain open("w") would block the worker forever. Raise OSError
+    # (ENXIO) instead so the caller can mark the entry and stop on Ctrl+C.
+    fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+    try:
+        os.write(fd, (cmd + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
 
 
 def _xdotool(args, display: str, timeout: int = 10):
@@ -1294,6 +1301,76 @@ def find_icon(path: Path, cfg: dict, template: str = "prg"):
         return None
     cx, cy, score, scale = best
     return {"sx": cx, "sy": cy, "score": round(score, 3), "scale": scale}
+
+
+TTP_TEMPLATE_FILES = (
+    "ttp-dialog-title.png",    # "ANWENDUNG ÖFFNEN" title row
+    "ttp-dialog-buttons.png",  # OK / ABBRUCH button row
+)
+TTP_TEMPLATE_MIN_SCORE = 0.90
+_TTP_TEMPLATES: list = []
+
+
+def ttp_templates():
+    """Return the cached grayscale templates of the TTP command dialog."""
+    if not _TTP_TEMPLATES:
+        from PIL import Image
+        for name in TTP_TEMPLATE_FILES:
+            path = ASSETS_DIR / name
+            if not path.exists():
+                continue
+            with Image.open(path) as tpl:
+                _TTP_TEMPLATES.append(tpl.convert("L").copy())
+    return _TTP_TEMPLATES
+
+
+def is_ttp_dialog(path: Path) -> bool:
+    """True when the screenshot shows GEM's TTP command-line dialog.
+
+    Double-clicking a ``.TTP`` program opens GEM's "ANWENDUNG ÖFFNEN"
+    dialog (Name/Parameter/OK/ABBRUCH). The dialog is an open window, so
+    the generic open-window rule would mistake it for an application
+    screen. The title and button rows are fixed (only the Name/Parameter
+    values vary), so template matching identifies it reliably.
+    """
+    for template in ttp_templates():
+        if find_template(path, template, TTP_TEMPLATE_MIN_SCORE) is not None:
+            return True
+    return False
+
+
+GEM_FILE_WINDOW_TEMPLATE = "gem-file-window.png"
+GEM_FILE_WINDOW_MIN_SCORE = 0.90
+_GEM_FILE_WINDOW: list = []
+# pHash of the plain mono TOS 1.04 desktop (no window). It is stable across
+# entries; candidates with this hash are the old preview / plain desktop.
+PLAIN_DESKTOP_PHASHES = {"ffbf9c9c9c888088"}
+
+
+def gem_file_window_template():
+    """Return the cached title-path template of a GEM file window."""
+    if not _GEM_FILE_WINDOW:
+        from PIL import Image
+        path = ASSETS_DIR / GEM_FILE_WINDOW_TEMPLATE
+        if path.exists():
+            with Image.open(path) as tpl:
+                _GEM_FILE_WINDOW.append(tpl.convert("L").copy())
+    return _GEM_FILE_WINDOW
+
+
+def is_gem_file_window(path: Path) -> bool:
+    """True for a GEM drive/folder (file) window.
+
+    The window title contains the ``A:\\`` drive path; the crop is fixed
+    across drive/folder windows and does not match application windows or
+    the TTP dialog. Used to avoid promoting the drive/folder window that
+    the click retry opened instead of the application screen.
+    """
+    for template in gem_file_window_template():
+        if find_template(path, template,
+                         GEM_FILE_WINDOW_MIN_SCORE) is not None:
+            return True
+    return False
 
 
 def find_desktop_click(path: Path, cfg: dict):
@@ -2727,6 +2804,202 @@ def cmd_cleanup_duplicates(cfg: dict, P: dict, args, scope: dict) -> int:
     return 0
 
 
+def cmd_promote_app_screens(cfg: dict, P: dict, args, scope: dict) -> int:
+    """Promote an application-window candidate to the preview.
+
+    Utils often boot into a GEM desktop and only show the application in a
+    window (or full-screen text screen) after the desktop click retry. The
+    mono classifier still calls such a screen ``desktop``/``textscreen``
+    because it has only two colors. This offline pass (no Hatari) looks at
+    every ``desktop`` entry with candidates and scans them backwards,
+    skipping TTP dialogs (:func:`is_ttp_dialog`), GEM drive/folder windows
+    (:func:`is_gem_file_window`), blank/black screens and the plain TOS
+    desktop (known pHash). The last remaining candidate is the application.
+
+    TTP programs show GEM's "ANWENDUNG ÖFFNEN" command-line dialog rather
+    than an application screen. An entry with only a TTP dialog is reset to
+    ``status: desktop`` / ``kind: desktop`` (no longer textscreen).
+
+    The chosen image and the old preview are swapped exactly like the app's
+    ``M`` curation: the chosen candidate becomes ``<base>.png`` and the old
+    preview takes its candidate name. The index and metadata become
+    ``status: done`` / ``kind: game`` (or ``--kind``).
+    """
+    out = Path(P["out"])
+    idx = load_index(out, scope["index"])
+    entries = idx["entries"]
+    lock = acquire_lock(out)
+    stats = {"scanned": 0, "promoted": 0, "ttp": 0, "no_app": 0,
+             "missing": 0, "metadata": 0, "errors": 0,
+             "skip_file": 0, "skip_blank": 0, "skip_desktop": 0}
+    dirty = False
+
+    try:
+        targets = [
+            rel for rel in sorted(entries)
+            if entries[rel].get("status") == "desktop"
+            and entries[rel].get("candidates")
+            and (not args.only or args.only.lower() in rel.lower())
+        ]
+        print(f"desktop entries with candidates: {len(targets)}", flush=True)
+        for rel in targets:
+            if STOP_EVENT.is_set():
+                print("interrupted", flush=True)
+                break
+            e = entries[rel]
+            stats["scanned"] += 1
+            preview = e.get("preview")
+            cands = list(e.get("candidates") or [])
+            mirror = out / Path(rel).parent
+            base = safe_filename(Path(rel).stem)
+            if not preview or not (mirror / preview).is_file():
+                stats["missing"] += 1
+                continue
+
+            chosen = None
+            if args.candidate:
+                if 1 <= args.candidate <= len(cands):
+                    name = cands[args.candidate - 1]
+                    if (mirror / name).is_file():
+                        chosen = name
+            else:
+                # Walk the candidates backwards and skip everything that is
+                # not an application screen: TTP command dialog, GEM file
+                # window, blank/black screen, plain TOS desktop. The last
+                # remaining candidate is the application (window or
+                # full-screen text screen).
+                ttp_name = None
+                for name in reversed(cands):
+                    path = mirror / name
+                    if not path.is_file():
+                        continue
+                    try:
+                        if is_ttp_dialog(path):
+                            ttp_name = ttp_name or name
+                            continue
+                        if is_gem_file_window(path):
+                            stats["skip_file"] += 1
+                            continue
+                        metrics = analyze_image(path, cfg)
+                        if metrics["kind"] == "black":
+                            stats["skip_blank"] += 1
+                            continue
+                        if metrics["phash"] in PLAIN_DESKTOP_PHASHES:
+                            stats["skip_desktop"] += 1
+                            continue
+                        chosen = name
+                        break
+                    except Exception as ex:
+                        stats["errors"] += 1
+                        print(f"  candidate check error {rel}/{name}: {ex}",
+                              file=sys.stderr, flush=True)
+
+                if chosen is None and ttp_name is not None:
+                    # A TTP program only opened GEM's command-line dialog,
+                    # not an application. Keep the desktop preview and mark
+                    # the entry as plain desktop instead of textscreen.
+                    stats["ttp"] += 1
+                    if args.list:
+                        print(f"  {rel}: TTP dialog {ttp_name} -> reset to "
+                              f"desktop/desktop")
+                    if args.dry_run:
+                        continue
+                    e["status"] = "desktop"
+                    e["kind"] = "desktop"
+                    meta = metadata_path(mirror, base)
+                    if meta is not None:
+                        try:
+                            with open(meta, "r", encoding="utf-8") as fh:
+                                md = json.load(fh)
+                            md["status"] = "desktop"
+                            md["kind"] = "desktop"
+                            md["preview_is_desktop"] = True
+                            write_json_atomic(meta, md)
+                            stats["metadata"] += 1
+                        except Exception as ex:
+                            stats["errors"] += 1
+                            print(f"  metadata error {rel}: {ex}",
+                                  file=sys.stderr, flush=True)
+                    dirty = True
+                    if (stats["promoted"] + stats["ttp"]) % 500 == 0:
+                        save_index(out, idx, scope["index"])
+                        dirty = False
+                    continue
+
+            if chosen is None:
+                stats["no_app"] += 1
+                if args.list:
+                    print(f"  skip {rel}: no application candidate")
+                continue
+
+            if args.list:
+                print(f"  {rel}: {preview} <= {chosen}")
+            if args.dry_run:
+                stats["promoted"] += 1
+                continue
+
+            preview_path = mirror / preview
+            candidate_path = mirror / chosen
+            tmp = mirror / f".{base}.promote.tmp.png"
+            try:
+                tmp.unlink(missing_ok=True)
+                os.replace(preview_path, tmp)
+                try:
+                    os.replace(candidate_path, preview_path)
+                    os.replace(tmp, candidate_path)
+                except OSError:
+                    if tmp.exists():
+                        if not preview_path.exists():
+                            os.replace(tmp, preview_path)
+                        elif not candidate_path.exists():
+                            os.replace(tmp, candidate_path)
+                    raise
+            except OSError as ex:
+                stats["errors"] += 1
+                print(f"  swap error {rel}: {ex}", file=sys.stderr,
+                      flush=True)
+                continue
+
+            e["status"] = "done"
+            e["kind"] = args.kind
+            meta = metadata_path(mirror, base)
+            if meta is not None:
+                try:
+                    with open(meta, "r", encoding="utf-8") as fh:
+                        md = json.load(fh)
+                    md["status"] = "done"
+                    md["kind"] = args.kind
+                    md["preview_is_desktop"] = False
+                    write_json_atomic(meta, md)
+                    stats["metadata"] += 1
+                except Exception as ex:
+                    stats["errors"] += 1
+                    print(f"  metadata error {rel}: {ex}",
+                          file=sys.stderr, flush=True)
+            stats["promoted"] += 1
+            dirty = True
+            if (stats["promoted"] + stats["ttp"]) % 500 == 0:
+                print(f"  ... {stats['promoted']} promoted, "
+                      f"{stats['ttp']} TTP reset", flush=True)
+                save_index(out, idx, scope["index"])
+                dirty = False
+    finally:
+        try:
+            if dirty and not args.dry_run:
+                save_index(out, idx, scope["index"])
+        finally:
+            release_lock(lock)
+
+    print(f"promote-app-screens[{scope['name']}]: scanned "
+          f"{stats['scanned']}, promoted {stats['promoted']}, TTP reset "
+          f"{stats['ttp']}, no app {stats['no_app']}, skipped file "
+          f"{stats['skip_file']}/blank {stats['skip_blank']}/desktop "
+          f"{stats['skip_desktop']}, missing {stats['missing']}, metadata "
+          f"{stats['metadata']}, errors {stats['errors']}"
+          + (" [dry-run, nothing changed]" if args.dry_run else ""))
+    return 0
+
+
 def cmd_reclassify(cfg: dict, P: dict, args, scope: dict) -> int:
     """Offline pass: split coarse ``desktop`` kinds into finer categories.
 
@@ -2915,6 +3188,9 @@ def main() -> int:
         return 2
 
     def _stop(signum, frame):
+        if STOP_EVENT.is_set():
+            print("\nforce exit", flush=True)
+            os._exit(130)
         STOP_EVENT.set()
         print("\ninterrupt: finishing up (Ctrl+C again to force)",
               flush=True)
@@ -3002,6 +3278,25 @@ def main() -> int:
     p_dedup.add_argument("--list", action="store_true",
                          help="print the removed candidate names per entry")
 
+    p_promote = sub.add_parser(
+        "promote-app-screens",
+        help="offline: promote the app-screen candidate of desktop entries "
+             "(skips TTP/file/blank/desktop candidates; no Hatari)")
+    _scope_arg(p_promote)
+    p_promote.add_argument("--dry-run", action="store_true",
+                           help="report what would be promoted, change nothing")
+    p_promote.add_argument("--only", type=str, default="",
+                           help="only paths containing this substring")
+    p_promote.add_argument("--list", action="store_true",
+                           help="print preview and chosen candidate per entry")
+    p_promote.add_argument("--candidate", type=int, default=0,
+                           help="use this 1-based candidate instead of the "
+                                "open-window rule")
+    p_promote.add_argument("--kind", type=str, default="game",
+                           choices=("game", "textscreen", "darkscreen"),
+                           help="kind to set on promoted entries (default: "
+                                "game)")
+
     p_recl = sub.add_parser(
         "reclassify",
         help="offline: split coarse desktop kinds into desktop/textscreen/"
@@ -3049,6 +3344,8 @@ def main() -> int:
         return cmd_cleanup_drive_led(cfg, P, args, scope)
     if args.cmd == "cleanup-duplicates":
         return cmd_cleanup_duplicates(cfg, P, args, scope)
+    if args.cmd == "promote-app-screens":
+        return cmd_promote_app_screens(cfg, P, args, scope)
     if args.cmd == "reclassify":
         return cmd_reclassify(cfg, P, args, scope)
     if args.cmd == "prune":
