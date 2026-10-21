@@ -354,8 +354,11 @@ something.
 - Both layers are merged (patch wins for the same path); hidden entries
   (`@eaDir`, dotfiles) are skipped and vanished/unreadable folders are treated
   as empty. The XLS `boxscan` filter flag stays independent metadata.
-- ZIP media is extracted on demand into a session temp cache; nothing is
-  pre-extracted or persisted. Background: [`docs/ANALYSIS-boxscan-manual-structure.md`](../../docs/ANALYSIS-boxscan-manual-structure.md).
+- ZIP media is extracted on demand into a session temp cache under
+  `<system temp>/marcer_local_assets_<pid>/` (only ZIP contents are copied —
+  loose files are used in place); **nothing is deleted automatically** and
+  nothing is persisted across runs (the OS may clean its temp directory on its
+  own). Background: [`docs/ANALYSIS-boxscan-manual-structure.md`](../../docs/ANALYSIS-boxscan-manual-structure.md).
 
 ## Download missing (FTP)
 

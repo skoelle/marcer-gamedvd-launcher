@@ -454,11 +454,9 @@ and must be skipped, matching the launcher's existing hidden-file filter.
 
 `OverlayDirectoryBrowser` lists **all** non-hidden directories and `*.zip`
 files. `Boxscan/` and `Manual/` therefore appear as navigable folders, and
-the edition ZIPs inside them appear as launchable entries — pressing Enter
-on `Boxscan/elite_v101.zip` would hand a box-scan archive to Hatari. Only
+the edition ZIPs inside them appear as entries like any other ZIP. Only
 loose non-ZIP files (PDFs, PNGs) are invisible, which is why
-`demo.sh` states "PDFs — should NOT appear". There is currently **no**
-`Boxscan`/`Manual` exclusion in the console launcher.
+`demo.sh` states "PDFs — should NOT appear".
 
 ### 7.2 Tools
 
@@ -466,8 +464,9 @@ loose non-ZIP files (PDFs, PNGs) are invisible, which is why
   `kryoflux` via `exclude_dirs` — correct, these titles have no game output.
 - `tools/gallery` / `apps/marcer_desktop`: expose a **`boxscan` tri-state
   facet** (`any`/`yes`/`no`) sourced from XLS column 10
-  (`ANALYSIS-game-data.md` section 3). This flag is metadata only — **no
-  tool reads the actual scan images today.** The flag and the folder are
+  (`ANALYSIS-game-data.md` section 3). This flag is metadata only; the
+  desktop app additionally reads the actual scan images through the
+  `Box scans`/`Manuals` chips (section 8). The flag and the folder are
   independent signals: a title can carry the XLS flag without a `Boxscan/`
   folder and vice versa.
 
@@ -478,12 +477,15 @@ loose non-ZIP files (PDFs, PNGs) are invisible, which is why
 > **Desktop app status (2026-10-21): implemented lazily per selected card.**
 > `lib/local_assets.dart` discovers both layers (case-insensitive `Boxscan`/
 > `Manual`/`Manuals`), lists loose files and ZIP central directories in a
-> background isolate and materializes media on demand; `GameInfoPanel` shows
+> background isolate and materializes media on demand into a session temp cache
+> under `<system temp>/marcer_local_assets_<pid>/` (no automatic cleanup;
+> nothing persisted across runs); `GameInfoPanel` shows
 > `Box scans (N)`/`Manuals (N)` chips
 > (`lib/widgets/local_assets_chips.dart`, `local_assets_dialog.dart`). Box
 > scans open an edition gallery + viewer; manuals group scan/text pairs, open
 > PDFs/DOC/TXT in the OS default app, show image-page manuals in the viewer and
-> `.msa` as info-only. See the desktop README "Box scans & manuals".
+> `.msa` as info-only; RAR/unknown formats are skipped silently. See the
+> desktop README "Box scans & manuals".
 
 Derived directly from sections 2–6:
 
@@ -496,10 +498,10 @@ Derived directly from sections 2–6:
    (`.pdf`, `.msa`, `.txt`, `.rar`, directories themselves). Do not assume a
    container folder; handle flat and nested ZIPs, and one optional edition
    directory level.
-3. **Edition grouping** — group collected images by their immediate parent
-   (container folder inside a ZIP, edition subfolder, or the `Boxscan/` folder
-   itself for loose files); use the ZIP stem as the edition label for
-   archived sets.
+3. **Edition grouping** — group loose images by their first subfolder inside
+   `Boxscan/` (or by the `Boxscan/` folder itself); group archived sets by
+   the ZIP stem (the edition label, section 4.6), regardless of an optional
+   container folder inside the ZIP.
 4. **Display** — thumbnails with bounded decode, aspect-preserving fit,
    no fixed aspect assumption (section 5); an ordered gallery per edition
    (front-first where inferable, otherwise name order). The same image
@@ -508,44 +510,42 @@ Derived directly from sections 2–6:
    by stem (3.5) and expose both variants to the user (scan = visual,
    `_text` = selectable text); inside each ZIP take the PDF (or the JPGs,
    3.7). Loose PDFs count too. `.msa`/`.MSA` entries are **disk images**,
-   not documents (6.4) — never show them in a PDF viewer. Tolerate RAR and
-   unknown formats by skipping with a note.
+   not documents (6.4) — never show them in a PDF viewer. RAR and unknown
+   formats are skipped silently (no UI note is shown).
 6. **Robustness** — case-insensitive matching everywhere; paths with spaces,
    `&`, commas, parentheses; tolerate folders vanishing mid-scan (6.3);
    tolerate half-broken scan/text pairs (6.3); skip hidden entries
    (`@eaDir`); never assume names carry front/back semantics.
 7. **Scope control** — the assets are large (10s of MB per game). Index
    paths lazily; do not pre-extract or pre-decode archives at startup.
-8. **Independence from the XLS flag** — decide explicitly whether the
-   `Boxscan` facet should become "has images" (folder-based) or stay
-   "XLS says yes" (metadata). Recommended: keep the XLS facet as-is and add
-   a separate, derived "scans available" badge so neither signal is lost.
-
-### 8.1 Console-launcher follow-up (separate change)
-
-Consider excluding `Boxscan/`, `Manual/`, `Kryoflux/` and similar companion
-folders from the console navigation (7.1), so scan archives can no longer be
-launched with Hatari. This is a `SPEC.md` behavior change and needs its own
-spec + README update.
+8. **Independence from the XLS flag** — the XLS facet stays "XLS says yes"
+   (metadata); on-disk availability is surfaced separately by the per-card
+   `Box scans`/`Manuals` chips (no grid badge). The two signals are never
+   merged.
 
 ---
 
 ## 9. Open Questions
 
-- [ ] Should box scans be readable offline only, or also cached/extracted
-      into `MARCER_DATA_DIR` alongside `games-*.json`?
+The desktop implementation (2026-10-21) answered the consumer questions below;
+the product/data questions that remain are listed separately.
+
+**Answered by the implementation:**
+- [x] Box scans are read-only and extracted on demand into a session temp
+      cache (`<system temp>/marcer_local_assets_<pid>/`); nothing is copied
+      into `MARCER_DATA_DIR` and nothing is persisted across runs.
+- [x] Manuals expose both the scan and the `_text` variant; the 5 half-broken
+      pairs are tolerated (the existing half is shown alone).
+- [x] The five `.msa` manual disks are shown as info-only disk images and are
+      never opened as documents.
+
+**Still open (product/data decisions):**
 - [ ] Should the edition grouping surface as a UI facet (publisher/region of
-      the *scan*) or only as a gallery tab per game?
+      the *scan*) or stay a gallery tab per game? (currently: gallery per game)
 - [ ] `Manuals` plural (1 case) — fix the data, or keep supporting both
-      spellings forever?
+      spellings forever? (the app already supports both)
 - [ ] The ~7 % ZIP-only and ~1 % mixed Boxscan folders in the patch layer:
       are more ZIPs planned, or is loose-image the long-term convention?
-- [ ] Manuals: expose the `_text` variant as a first-class "searchable text"
-      option, or only offer the scan (3.5)? And what to do with the 5
-      half-broken pairs?
-- [ ] Manuals: the five `.msa` manual disks (6.4) — park them as info-only,
-      or route them into the RAW/STX dump handling later?
-- [ ] Console launcher: exclude companion folders (8.1) — yes/no?
 
 ---
 
@@ -569,19 +569,22 @@ Re-verification: re-run the same listings; counts are expected to grow, the
 
 ---
 
-## Conformance Checklist (for the future consumer)
+## Conformance Checklist (verified against the desktop implementation)
 
-- [ ] Finds `Boxscan`/`boxscan`/`Box Scan` and `Manual`/`Manuals`
+Checked against `apps/marcer_desktop/lib/local_assets.dart` on 2026-10-21.
+
+- [x] Finds `Boxscan`/`boxscan`/`Box Scan` and `Manual`/`Manuals`
       case-insensitively in both layers
-- [ ] Merges root + patch assets per `SPEC.md` section 7
-- [ ] Collects loose images and recursive in-ZIP images; ignores PDFs/MSA/TXT/other
-- [ ] Handles flat ZIPs, container-folder ZIPs, and multi-level ZIPs
-- [ ] Handles one optional edition-directory level with label inheritance
-- [ ] Shows images aspect-preserving with bounded decode; no fixed aspect ratio
-- [ ] Pairs manual `<stem>.zip` with `<stem>_text.zip`; tolerates missing halves
-- [ ] Renders manual PDFs **and** image-page manuals (JPG-in-ZIP, 3.7)
-- [ ] Never treats `.msa`/`.MSA` as documents or launchable archives (6.4)
-- [ ] Tolerates RAR / unknown formats in `Manual/` by skipping with a note
-- [ ] Survives paths with spaces / `&` / commas / parentheses and vanishing folders
-- [ ] Skips hidden entries (`@eaDir`)
-- [ ] Does not conflate the XLS `Boxscan` flag with on-disk availability
+- [x] Merges root + patch assets per `SPEC.md` section 7 (patch wins)
+- [x] Collects loose images and recursive in-ZIP images; ignores PDFs/MSA/TXT/other
+- [x] Handles flat ZIPs, container-folder ZIPs, and multi-level ZIPs
+- [x] Handles one optional edition-directory level with label inheritance
+      (loose subfolders: first directory segment; ZIP contents: ZIP stem)
+- [x] Shows images aspect-preserving with bounded decode; no fixed aspect ratio
+- [x] Pairs manual `<stem>.zip` with `<stem>_text.zip`; tolerates missing halves
+- [x] Renders manual PDFs **and** image-page manuals (JPG-in-ZIP, 3.7)
+- [x] Never treats `.msa`/`.MSA` as documents or launchable archives (6.4)
+- [x] Skips RAR / unknown formats in `Manual/` silently (no UI note)
+- [x] Survives paths with spaces / `&` / commas / parentheses and vanishing folders
+- [x] Skips hidden entries (`@eaDir`)
+- [x] Does not conflate the XLS `Boxscan` flag with on-disk availability

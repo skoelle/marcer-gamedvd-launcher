@@ -1,5 +1,12 @@
 # PLAN: Marcer GameDVD Desktop App (Flutter, Surface A)
 
+Current state (2026-10-21): **`desktop-v0.5.0` released** — Marcer's curated
+box scans & manuals (lazy per-card discovery, edition gallery + viewer,
+scan/text manual pairs, `.msa` info-only) in the detail sidebar and lightbox;
+181 app `flutter test` + 124 package `dart test`, `flutter analyze` clean.
+Everything below is the historical plan snapshot from 2026-10-11/15; its test
+counts and "next" notes reflect that time.
+
 Status: **Phase 0 + Phase 3 (+ 3b catalog/grid/lightbox) + Phase 5 (launch) done
 (2026-10-11)** —
 Flutter 3.47.7 stable in `~/flutter`, `marcer_catalog` data layer with the
