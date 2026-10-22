@@ -154,8 +154,8 @@ bool matchesCard(GameCard c, CatalogFilter f) {
   final crewActive = f.crew != 'any' && fields.contains('crew');
   final crackerActive = f.cracker != 'any' && fields.contains('cracker');
   final focusActive = crewActive || crackerActive;
-  // Status/kind filters apply to every section (pd/utils cards carry an
-  // index-derived status now; the app's per-section default is `any` there).
+  // Status/kind filters apply to every section; all sections use the
+  // configured `DefaultStatus` on startup.
   if (f.status == 'with_screenshot') {
     // crew/cracker focus always shows the focused variant, even empty
     if (!focusActive && !c.screenshots) return false;
@@ -170,6 +170,10 @@ bool matchesCard(GameCard c, CatalogFilter f) {
         .any((v) => v.status == 'desktop' && v.kind == 'darkscreen')) {
       return false;
     }
+  } else if (f.status == 'desktop_any') {
+    if (!c.variants.any((v) => v.status == 'desktop')) return false;
+  } else if (f.status == 'no_usable_shots_any') {
+    if (!c.variants.any((v) => v.status == 'no_usable_shots')) return false;
   } else if (f.status == 'pending') {
     // App-only: a game counts as pending as soon as **any** of its ZIPs
     // is pending (the gallery's aggregated display_status would hide

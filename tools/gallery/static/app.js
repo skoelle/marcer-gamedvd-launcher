@@ -7,13 +7,16 @@ const STATUS_OPTIONS = [
   ["with_screenshot", "with screenshot"],
   ["any", "any status"],
   ["done", "done (game)"],
-  ["desktop", "desktop"],
-  ["no_usable_shots", "no usable shots"],
+  ["desktop", "desktop (only)"],
+  ["desktop_any", "desktop (any ZIP)"],
+  ["no_usable_shots", "no usable shots (only)"],
+  ["no_usable_shots_any", "no usable shots (any ZIP)"],
   ["interrupted", "interrupted"],
   ["pending", "pending"],
   ["skipped_disk_n", "skipped (disk 2+)"],
 ];
 const TRI_OPTIONS = [["any", "any"], ["yes", "yes"], ["no", "no"]];
+const STATUS_LABELS = Object.fromEntries(STATUS_OPTIONS);
 const LETTERS = ["0-9", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
 const SORT_KEYS = ["name", "year", "publisher", "cracker", "crew"];
 const SECTION_INDEX_NAMES = {
@@ -226,19 +229,23 @@ function renderStats(extra) {
   } else {
     parts.push(`<span class="st"><b>${idx.entries || 0}</b> index entries</span>`);
   }
-  const order = ["done", "desktop", "pending", "skipped_disk_n",
-    "no_usable_shots", "interrupted"];
+  const order = ["done", "desktop", "desktop_any", "pending",
+    "skipped_disk_n", "no_usable_shots", "no_usable_shots_any", "interrupted"];
   for (const k of order) {
     const games = gc[k] || 0;
     const zips = sc[k] || 0;
+    if (k.endsWith("_any")) {
+      const base = k.slice(0, -4);
+      if ((gc[base] || 0) === games && (sc[base] || 0) === zips) continue;
+    }
     if (!meta.gameinfo) {
       // no card join: only the ZIP level counts are known
-      if (zips) parts.push(`<span class="st">${esc(k)} <b>${zips}</b></span>`);
+      if (zips) parts.push(`<span class="st">${esc(STATUS_LABELS[k] || k)} <b>${zips}</b></span>`);
       continue;
     }
     if (!games && !zips) continue;
     // `done 2635 (8979 zips)` — games (ZIPs), like the desktop status bar
-    parts.push(`<span class="st">${esc(k)} <b>${games}</b> (${zips} zips)</span>`);
+    parts.push(`<span class="st">${esc(STATUS_LABELS[k] || k)} <b>${games}</b> (${zips} zips)</span>`);
   }
   // gameinfo coverage (matched folders) is cracked-only (desktop parity)
   if (section === "cracked" && meta.coverage

@@ -312,17 +312,20 @@ file manager.
 
 ## Status filter
 
-The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
-`desktop text`, `desktop black`, `pending`, `no usable shots`,
-`interrupted`, `skipped (disk 2+)`) is available in **all five sections**
-(cracked, pd, utils, magazine, falcon):
+The status dropdown (`with screenshot`, `any`, `done`, `desktop (only)`,
+`desktop (any ZIP)`, `desktop text`, `desktop black`, `pending`,
+`no usable shots (only)`, `no usable shots (any ZIP)`, `interrupted`,
+`skipped (disk 2+)`) is available in **all five sections** (cracked, pd,
+utils, magazine, falcon):
 
-- `pending` matches a game when **at least one** of its ZIPs is pending
-  (the same rule the gallery's status filter applies — the aggregated
-  card status would otherwise hide pending ZIPs inside otherwise-done
-  folders).
-- All other status values use the aggregated card status
-  (`done → desktop → no usable shots → interrupted → pending → skipped`).
+- `pending`, `desktop (any ZIP)` and `no usable shots (any ZIP)` match a
+  game when **at least one** of its ZIPs has that status.
+- `desktop (only)` and `no usable shots (only)` use the aggregated card
+  status (`done → desktop → no usable shots → interrupted → pending →
+  skipped`), i.e. they exclude folders that also have a higher-priority
+  status.
+- `done`, `interrupted` and `skipped (disk 2+)` use the aggregated card
+  status. `desktop text`/`desktop black` are strict per-ZIP kind filters.
 - The default is `with screenshot` for **all** sections; change `DefaultStatus` in
   `desktop.config.json` to use another preset on startup and after section switches.
 
@@ -352,10 +355,10 @@ the coverage `info N folders` / `N without info`):
 - `done 2635 (8979 zips)` — per status: number of **games** (cards) plus
   their **ZIP entries** in parentheses, counted for the active section.
   The games number equals the result count of the matching status dropdown
-  selection — `done`, `desktop`, `no usable shots`, `interrupted` and
-  `skipped (disk 2+)` use the aggregated card status, `pending` counts a
-  game when **any** of its ZIPs is pending (same rule as the filter; a game
-  can therefore appear in `pending` and `done` at once).
+  selection. `desktop`/`no usable shots` count the aggregated card status;
+  the corresponding `any ZIP` segments are shown when they differ and count
+  every card with at least one such ZIP. `pending` likewise counts any
+  pending ZIP, so a game can appear in multiple segments at once.
 - `gameinfo N folders`, `N without gameinfo` — gameinfo match coverage
   (`N` cracked folders matched by the gameinfo generator, `manifest.json`
   `matched_folders`; cracked only) / cards of the active section whose

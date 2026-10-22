@@ -15,6 +15,7 @@ void main() {
   const relA = 'Title Sorted/Cracked Games - Title Sorted/A/Alpha/a.zip';
   const relA2 = 'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha v2.zip';
   const relB = 'Title Sorted/Cracked Games - Title Sorted/B/Beta/beta.zip';
+  const relB2 = 'Title Sorted/Cracked Games - Title Sorted/B/Beta/beta2.zip';
   const relB9 = 'Title Sorted/Cracked Games - Title Sorted/0-9/999/999.zip';
 
   String entryJson(String rel, String status, String layer,
@@ -455,6 +456,41 @@ void main() {
       expect(matchesCard(mixed, CatalogFilter()..status = 'done'), isTrue);
     });
 
+    test('desktop and no-usable have only and any variants', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+        relA2: entryJson(relA2, 'desktop', 'ROOT', preview: 'a2.png'),
+        relB: entryJson(relB, 'done', 'ROOT', preview: 'beta.png'),
+        relB2: entryJson(relB2, 'no_usable_shots', 'ROOT'),
+      });
+      final mixedDesktop = u.cracked.firstWhere((c) => c.folder == 'Alpha');
+      final mixedNoUsable = u.cracked.firstWhere((c) => c.folder == 'Beta');
+      expect(mixedDesktop.displayStatus, 'done');
+      expect(mixedNoUsable.displayStatus, 'done');
+      expect(
+          matchesCard(
+              mixedDesktop, CatalogFilter()..status = 'desktop'),
+          isFalse);
+      expect(
+          matchesCard(
+              mixedDesktop, CatalogFilter()..status = 'desktop_any'),
+          isTrue);
+      expect(
+          matchesCard(
+              mixedNoUsable, CatalogFilter()..status = 'no_usable_shots'),
+          isFalse);
+      expect(
+          matchesCard(
+              mixedNoUsable, CatalogFilter()..status = 'no_usable_shots_any'),
+          isTrue);
+      expect(u.anyVariantCountFor('cracked', 'desktop'), 1);
+      expect(u.anyVariantZipCountFor('cracked', 'desktop'), 1);
+      expect(u.onlyVariantZipCountFor('cracked', 'desktop'), 0);
+      expect(u.anyVariantCountFor('cracked', 'no_usable_shots'), 1);
+      expect(u.anyVariantZipCountFor('cracked', 'no_usable_shots'), 1);
+      expect(u.onlyVariantZipCountFor('cracked', 'no_usable_shots'), 0);
+    });
+
     test('desktop umbrella keeps all kinds; text/black are strict', () {
       final u = buildUniverse({
         relA: entryJson(relA, 'desktop', 'ROOT', preview: 'a.png',
@@ -499,11 +535,23 @@ void main() {
     test('kStatusFilterKeys and kStatusLabels cover the kind filters', () {
       expect(
           kStatusFilterKeys,
-          containsAllInOrder(
-              ['done', 'desktop', 'desktop_text', 'desktop_black']));
+          containsAllInOrder([
+            'done',
+            'desktop',
+            'desktop_any',
+            'desktop_text',
+            'desktop_black',
+            'no_usable_shots',
+            'no_usable_shots_any',
+          ]));
       expect(kStatusLabels['done'], 'done');
+      expect(kStatusLabels['desktop'], 'desktop (only)');
+      expect(kStatusLabels['desktop_any'], 'desktop (any ZIP)');
       expect(kStatusLabels['desktop_text'], 'desktop text');
       expect(kStatusLabels['desktop_black'], 'desktop black');
+      expect(kStatusLabels['no_usable_shots'], 'no usable shots (only)');
+      expect(kStatusLabels['no_usable_shots_any'],
+          'no usable shots (any ZIP)');
     });
 
     test('letter and search query', () {

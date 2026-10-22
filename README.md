@@ -138,16 +138,17 @@ Save, the manual screenshot curation described below.
   `index-falcon.json`) and gameinfo
   generation time;
   the running app version (right-aligned).
-- **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
-  `desktop text` / `desktop black` / `pending` / … , available in **all
-  five sections** (cracked, pd, utils, magazine, falcon; all default to the
-  configured `DefaultStatus`, normally `with_screenshot`).
-  `pending` matches a game when **at least one** of its ZIPs is pending —
-  the same rule the gallery applies (a game can appear in `pending` and
-  `done` at once); every other status value uses the card aggregation
-  (`done → desktop → no usable shots → interrupted → pending → skipped`).
-  The two `desktop …` presets are app-only extras. The status bar reports
-  each status as games (ZIPs), so the games number equals the result count
+- **Status filter** — `with screenshot` / `any` / `done` / `desktop (only)` /
+  `desktop (any ZIP)` / `desktop text` / `desktop black` / `pending` /
+  `no usable shots (only)` / `no usable shots (any ZIP)` / … , available in
+  **all five sections** (cracked, pd, utils, magazine, falcon; all default to
+  the configured `DefaultStatus`, normally `with_screenshot`).
+  `pending`, `desktop (any ZIP)` and `no usable shots (any ZIP)` match when
+  **at least one** ZIP has that status; the `(only)` variants use the
+  aggregated card status (`done → desktop → no usable shots → interrupted →
+  pending → skipped`). The two `desktop …` kind presets are app-only extras.
+  The status bar reports each status as games (ZIPs), so the games number
+  equals the result count
   of the matching dropdown selection.
 - **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
   list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the

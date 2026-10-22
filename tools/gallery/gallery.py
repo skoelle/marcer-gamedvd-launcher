@@ -37,8 +37,10 @@ STATUS_ORDER = ["done", "desktop", "no_usable_shots", "interrupted",
                 "pending", "skipped_disk_n"]
 STATUS_LABELS = {
     "done": "done (game)",
-    "desktop": "desktop",
-    "no_usable_shots": "no usable shots",
+    "desktop": "desktop (only)",
+    "desktop_any": "desktop (any ZIP)",
+    "no_usable_shots": "no usable shots (only)",
+    "no_usable_shots_any": "no usable shots (any ZIP)",
     "interrupted": "interrupted",
     "pending": "pending",
     "skipped_disk_n": "skipped (disk 2+)",
@@ -651,6 +653,8 @@ class DataStore:
             for e in entries[sec].values():
                 s = e.get("status") or "unknown"
                 counts[s] = counts.get(s, 0) + 1
+            counts["desktop_any"] = counts.get("desktop", 0)
+            counts["no_usable_shots_any"] = counts.get("no_usable_shots", 0)
             return counts
 
         # per-status CARD (game) counts for the statistics bar — the ZIP
@@ -667,6 +671,12 @@ class DataStore:
             counts["pending"] = sum(
                 1 for c in cards
                 if any(v["status"] == "pending" for v in c["variants"]))
+            counts["desktop_any"] = sum(
+                1 for c in cards
+                if any(v["status"] == "desktop" for v in c["variants"]))
+            counts["no_usable_shots_any"] = sum(
+                1 for c in cards
+                if any(v["status"] == "no_usable_shots" for v in c["variants"]))
             return counts
 
         self.meta = {
@@ -724,6 +734,12 @@ def _matches(card, params, section, default_status="with_screenshot"):
     if st == "with_screenshot":
         # crew/cracker focus always shows the focused variant, even empty
         if not focus_active and not card["screenshots"]:
+            return False
+    elif st == "desktop_any":
+        if not any(v["status"] == "desktop" for v in card["variants"]):
+            return False
+    elif st == "no_usable_shots_any":
+        if not any(v["status"] == "no_usable_shots" for v in card["variants"]):
             return False
     elif st == "pending":
         # app parity: a card matches `pending` when ANY of its ZIPs is

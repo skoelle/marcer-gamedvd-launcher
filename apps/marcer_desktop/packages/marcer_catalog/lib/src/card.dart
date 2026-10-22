@@ -21,10 +21,12 @@ const List<String> kStatusOrder = [
 /// gallery keeps its own `STATUS_LABELS`).
 const Map<String, String> kStatusLabels = {
   'done': 'done',
-  'desktop': 'desktop',
+  'desktop': 'desktop (only)',
+  'desktop_any': 'desktop (any ZIP)',
   'desktop_text': 'desktop text',
   'desktop_black': 'desktop black',
-  'no_usable_shots': 'no usable shots',
+  'no_usable_shots': 'no usable shots (only)',
+  'no_usable_shots_any': 'no usable shots (any ZIP)',
   'interrupted': 'interrupted',
   'pending': 'pending',
   'skipped_disk_n': 'skipped (disk 2+)',
@@ -37,9 +39,11 @@ const Map<String, String> kStatusLabels = {
 const List<String> kStatusFilterKeys = [
   'done',
   'desktop',
+  'desktop_any',
   'desktop_text',
   'desktop_black',
   'no_usable_shots',
+  'no_usable_shots_any',
   'interrupted',
   'pending',
   'skipped_disk_n',

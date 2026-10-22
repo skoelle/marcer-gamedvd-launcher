@@ -1323,22 +1323,46 @@ class CatalogController extends ChangeNotifier {
     if (catalogMode) {
       final zipCounts = screenshots.statusCountsFor(section);
       final gameCounts = universe.statusCountsFor(section);
-      for (final k in const [
-        'done',
-        'desktop',
-        'pending',
-        'skipped_disk_n',
-        'no_usable_shots',
-        'interrupted',
-      ]) {
-        // pending uses the app's any-variant rule (not the displayStatus
-        // aggregate) so the segment equals the dropdown's pending count.
-        final games = k == 'pending'
-            ? universe.pendingAnyVariantCountFor(section)
-            : (gameCounts[k] ?? 0);
-        final zips = zipCounts[k] ?? 0;
-        if (games > 0 || zips > 0) parts.add('$k $games ($zips zips)');
+      void addSegment(String label, int games, int zips) {
+        if (games > 0 || zips > 0) parts.add('$label $games ($zips zips)');
       }
+
+      addSegment(
+          'done',
+          universe.anyVariantCountFor(section, 'done'),
+          universe.anyVariantZipCountFor(section, 'done'));
+      final desktopOnly = gameCounts['desktop'] ?? 0;
+      final desktopZips = universe.onlyVariantZipCountFor(section, 'desktop');
+      final desktopAny = universe.anyVariantCountFor(section, 'desktop');
+      final desktopAnyZips =
+          universe.anyVariantZipCountFor(section, 'desktop');
+      addSegment('desktop', desktopOnly, desktopZips);
+      if (desktopAny != desktopOnly || desktopAnyZips != desktopZips) {
+        addSegment('desktop any', desktopAny, desktopAnyZips);
+      }
+      addSegment(
+          'pending',
+          universe.pendingAnyVariantCountFor(section),
+          zipCounts['pending'] ?? 0);
+      addSegment(
+          'skipped_disk_n',
+          gameCounts['skipped_disk_n'] ?? 0,
+          universe.onlyVariantZipCountFor(section, 'skipped_disk_n'));
+      final noUsableOnly = gameCounts['no_usable_shots'] ?? 0;
+      final noUsableZips =
+          universe.onlyVariantZipCountFor(section, 'no_usable_shots');
+      final noUsableAny =
+          universe.anyVariantCountFor(section, 'no_usable_shots');
+      final noUsableAnyZips =
+          universe.anyVariantZipCountFor(section, 'no_usable_shots');
+      addSegment('no usable shots', noUsableOnly, noUsableZips);
+      if (noUsableAny != noUsableOnly || noUsableAnyZips != noUsableZips) {
+        addSegment('no usable shots any', noUsableAny, noUsableAnyZips);
+      }
+      addSegment(
+          'interrupted',
+          gameCounts['interrupted'] ?? 0,
+          universe.onlyVariantZipCountFor(section, 'interrupted'));
       // Cracked gameinfo coverage from the manifest (matched folders).
       if (section == 'cracked') {
         final matched = gameinfo.matchedFolders;

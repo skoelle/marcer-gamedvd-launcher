@@ -202,10 +202,24 @@ class CatalogUniverse {
   /// segment so it matches the dropdown result count.
   int get pendingAnyVariantCount => pendingAnyVariantCountFor('cracked');
 
-  /// Cards of [section] with at least one `pending` ZIP variant.
-  int pendingAnyVariantCountFor(String section) => cardsFor(section)
-      .where((c) => c.variants.any((v) => v.status == 'pending'))
+  /// Cards of [section] with at least one ZIP variant in [status].
+  int anyVariantCountFor(String section, String status) => cardsFor(section)
+      .where((c) => c.variants.any((v) => v.status == status))
       .length;
+
+  /// ZIPs of [section] whose status is [status] (across all cards).
+  int anyVariantZipCountFor(String section, String status) => cardsFor(section)
+      .fold(0, (sum, c) => sum + c.variants.where((v) => v.status == status).length);
+
+  /// ZIPs in cards whose aggregated [displayStatus] is [status].
+  int onlyVariantZipCountFor(String section, String status) =>
+      cardsFor(section)
+          .where((c) => c.displayStatus == status)
+          .fold(0, (sum, c) => sum + c.variants.where((v) => v.status == status).length);
+
+  /// Cards of [section] with at least one `pending` ZIP variant.
+  int pendingAnyVariantCountFor(String section) =>
+      anyVariantCountFor(section, 'pending');
 
   /// Cracked cards without gameinfo (gallery `sections.cracked.no_info`).
   int get crackedNoInfo => noInfoFor('cracked');
