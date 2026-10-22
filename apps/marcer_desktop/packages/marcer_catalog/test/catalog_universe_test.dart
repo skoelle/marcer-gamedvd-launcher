@@ -504,6 +504,29 @@ void main() {
               .indexWhere((v) => v.status == 'no_usable_shots'));
     });
 
+    test('interrupted and skipped filters match any ZIP', () {
+      final u = buildUniverse({
+        relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
+        relA2: entryJson(relA2, 'interrupted', 'ROOT', preview: 'a2.png'),
+        relB: entryJson(relB, 'done', 'ROOT', preview: 'beta.png'),
+        relB2: entryJson(relB2, 'skipped_disk_n', 'ROOT', preview: 'beta2.png'),
+      });
+      final interrupted = u.cracked.firstWhere((c) => c.folder == 'Alpha');
+      final skipped = u.cracked.firstWhere((c) => c.folder == 'Beta');
+      expect(interrupted.displayStatus, 'done');
+      expect(skipped.displayStatus, 'done');
+      expect(matchesCard(interrupted, CatalogFilter()..status = 'interrupted'),
+          isTrue);
+      expect(matchesCard(skipped, CatalogFilter()..status = 'skipped_disk_n'),
+          isTrue);
+      expect(u.anyVariantCountFor('cracked', 'interrupted'), 1);
+      expect(u.anyVariantZipCountFor('cracked', 'interrupted'), 1);
+      expect(u.onlyVariantZipCountFor('cracked', 'interrupted'), 0);
+      expect(u.anyVariantCountFor('cracked', 'skipped_disk_n'), 1);
+      expect(u.anyVariantZipCountFor('cracked', 'skipped_disk_n'), 1);
+      expect(u.onlyVariantZipCountFor('cracked', 'skipped_disk_n'), 0);
+    });
+
     test('desktop umbrella keeps all kinds; text/black are strict', () {
       final u = buildUniverse({
         relA: entryJson(relA, 'desktop', 'ROOT', preview: 'a.png',

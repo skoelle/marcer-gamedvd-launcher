@@ -179,6 +179,10 @@ bool matchesCard(GameCard c, CatalogFilter f) {
     // is pending (the gallery's aggregated display_status would hide
     // pending ZIPs behind done folders — user decision 2026-10-15).
     if (!c.variants.any((v) => v.status == 'pending')) return false;
+  } else if (f.status == 'interrupted' || f.status == 'skipped_disk_n') {
+    // Same any-ZIP rule: these are ZIP-level failure/skip states, so a card
+    // with a done ZIP must still be reachable from the filter.
+    if (!c.variants.any((v) => v.status == f.status)) return false;
   } else if (f.status != 'any' && c.displayStatus != f.status) {
     return false;
   }

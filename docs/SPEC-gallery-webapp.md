@@ -282,10 +282,11 @@ A game folder aggregates the statuses of its ZIPs:
 - The card preview/2×2 ordering follows the active status filter: done-first
   for `with screenshot`/`any`/`done`, selected status first for concrete
   filters (`desktop`, `no usable shots`, `pending`, …).
-- `display_status` (drives the badge and the `only` status filters), first
-  match wins: `done` → `desktop` → `no_usable_shots` → `interrupted` →
-  `pending` → `skipped_disk_n`. The `desktop_any`/`no_usable_shots_any`
-  filters inspect the individual ZIP statuses instead.
+- `display_status` (drives the badge and the `done`/`desktop`/
+  `no_usable_shots` only filters), first match wins: `done` → `desktop` →
+  `no_usable_shots` → `interrupted` → `pending` → `skipped_disk_n`. The
+  `desktop_any`/`no_usable_shots_any`/`pending`/`interrupted`/
+  `skipped_disk_n` filters inspect the individual ZIP statuses instead.
 - `screenshots` (bool): at least one variant has any preview (including
   `no_usable_shots`, which keeps its last capture, section 8.5 of
   `SPEC-screenshot-generator.md`).
@@ -417,10 +418,11 @@ error body `{ "error": "<message>" }`.
   keys to the human labels used in the status filter.
 - `game_status_counts[section]` counts the section's **cards** per
   aggregated `display_status` (`desktop`/`no_usable_shots` = only), plus
-  `desktop_any`/`no_usable_shots_any` and `pending` using the any-variant
-  rule of section 5.3, so every statistics-bar segment equals its filter's
-  result count (desktop-app parity). Without gameinfo the statistics bar
-  ignores it and shows the ZIP-level counts only.
+  `desktop_any`/`no_usable_shots_any`, `pending`, `interrupted` and
+  `skipped_disk_n` using the any-variant rule of section 5.3, so every
+  statistics-bar segment equals its filter's result count (desktop-app
+  parity). Without gameinfo the statistics bar ignores it and shows the
+  ZIP-level counts only.
 - `sections[section]` additionally carries `cards` and `with_screenshot`
   (cards, index-backed) and `no_info` (cards without gameinfo), which the
   statistics bar uses for the `M / N with screenshot` and `N without info`
@@ -462,14 +464,15 @@ Semantics:
   `default_status`), so the grid shows screenshot cards first. `status=any`
   shows the full archive (including `pending` placeholders) — the statistics
   bar always shows the active section's counts.
-- `status=pending`, `status=desktop_any` and
-  `status=no_usable_shots_any` match a card when **any** of its ZIPs has
-  that status (not the `display_status` aggregate: a folder with a `done`
-  ZIP plus a `pending`/`desktop`/`no_usable_shots` ZIP is shown in both
-  views). `status=desktop` and `status=no_usable_shots` match the aggregated
+- `status=pending`, `status=desktop_any`, `status=no_usable_shots_any`,
+  `status=interrupted` and `status=skipped_disk_n` match a card when **any**
+  of its ZIPs has that status (not the `display_status` aggregate: a folder
+  with a `done` ZIP plus a `pending`/`desktop`/`no_usable_shots`/
+  `interrupted`/`skipped_disk_n` ZIP is shown in both views).
+  `status=desktop` and `status=no_usable_shots` match the aggregated
   `display_status` (only), so they exclude folders with a higher-priority
-  status. `done`, `interrupted` and `skipped_disk_n` match the aggregated
-  `display_status` (desktop-app parity).
+  status. `done` matches the aggregated `display_status` (desktop-app
+  parity).
 - `entry` returns exactly one card (regardless of filters/pagination) with
   an additional `position` field: the card's index in the filtered list
   under the requested `sort`/`order` (defaults `name`/`asc`), or `null`
@@ -770,10 +773,11 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
   the section's card count), then one segment per status formatted as
   `done <games> (<zips> zips)` — games from `game_status_counts[section]`,
   ZIPs from `status_counts[section]`; segments with zero games and zero ZIPs
-  are omitted. The `pending`, `desktop any` and `no usable shots any`
-  segments use the any-variant rule; the `desktop any`/`no usable shots any`
-  segments are shown only when they differ from the corresponding `only`
-  counts. In screenshots-only mode (no join) only the raw ZIP counts are
+  are omitted. The `pending`, `interrupted`, `skipped_disk_n`, `desktop any`
+  and `no usable shots any` segments use the any-variant rule; the
+  `desktop any`/`no usable shots any` segments are shown only when they
+  differ from the corresponding `only` counts. In screenshots-only mode (no
+  join) only the raw ZIP counts are
   shown (`done 1467`).
 - Gameinfo coverage is shown as `info <matched> folders` (cracked only)
   plus `<no_info> without info` (cards without gameinfo, per section).
@@ -1048,9 +1052,9 @@ A conforming implementation satisfies all of the following.
       use the selected status first).
 - [x] D4 Year extraction follows section 4.5 (`unknown` handling).
 - [x] D5 Variant payloads carry `kind`; `game_status_counts` follows the
-      any-variant `pending`/`desktop_any`/`no_usable_shots_any` rules
-      (sections 5.2/5.3), and those filters match per ZIP, not via
-      `display_status`.
+      any-variant `pending`/`interrupted`/`skipped_disk_n`/`desktop_any`/
+      `no_usable_shots_any` rules (sections 5.2/5.3), and those filters match
+      per ZIP, not via `display_status`.
 
 **API**
 - [x] A1 All endpoints of section 5 exist with the documented parameters.

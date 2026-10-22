@@ -324,8 +324,11 @@ utils, magazine, falcon):
   status (`done → desktop → no usable shots → interrupted → pending →
   skipped`), i.e. they exclude folders that also have a higher-priority
   status.
-- `done`, `interrupted` and `skipped (disk 2+)` use the aggregated card
-  status. `desktop text`/`desktop black` are strict per-ZIP kind filters.
+- `interrupted` and `skipped (disk 2+)` also match when **at least one**
+  ZIP has that status, so a `done` folder containing a failed/skipped ZIP
+  remains reachable.
+- `done` uses the aggregated card status. `desktop text`/`desktop black`
+  are strict per-ZIP kind filters.
 - The default is `with screenshot` for **all** sections; change `DefaultStatus` in
   `desktop.config.json` to use another preset on startup and after section switches.
 

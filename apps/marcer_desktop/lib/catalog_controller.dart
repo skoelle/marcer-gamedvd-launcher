@@ -1385,8 +1385,8 @@ class CatalogController extends ChangeNotifier {
           zipCounts['pending'] ?? 0);
       addSegment(
           'skipped_disk_n',
-          gameCounts['skipped_disk_n'] ?? 0,
-          universe.onlyVariantZipCountFor(section, 'skipped_disk_n'));
+          universe.anyVariantCountFor(section, 'skipped_disk_n'),
+          universe.anyVariantZipCountFor(section, 'skipped_disk_n'));
       final noUsableOnly = gameCounts['no_usable_shots'] ?? 0;
       final noUsableZips =
           universe.onlyVariantZipCountFor(section, 'no_usable_shots');
@@ -1400,8 +1400,8 @@ class CatalogController extends ChangeNotifier {
       }
       addSegment(
           'interrupted',
-          gameCounts['interrupted'] ?? 0,
-          universe.onlyVariantZipCountFor(section, 'interrupted'));
+          universe.anyVariantCountFor(section, 'interrupted'),
+          universe.anyVariantZipCountFor(section, 'interrupted'));
       // Cracked gameinfo coverage from the manifest (matched folders).
       if (section == 'cracked') {
         final matched = gameinfo.matchedFolders;

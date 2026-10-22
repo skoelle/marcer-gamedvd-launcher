@@ -671,6 +671,12 @@ class DataStore:
             counts["pending"] = sum(
                 1 for c in cards
                 if any(v["status"] == "pending" for v in c["variants"]))
+            counts["interrupted"] = sum(
+                1 for c in cards
+                if any(v["status"] == "interrupted" for v in c["variants"]))
+            counts["skipped_disk_n"] = sum(
+                1 for c in cards
+                if any(v["status"] == "skipped_disk_n" for v in c["variants"]))
             counts["desktop_any"] = sum(
                 1 for c in cards
                 if any(v["status"] == "desktop" for v in c["variants"]))
@@ -746,6 +752,11 @@ def _matches(card, params, section, default_status="with_screenshot"):
         # pending (the display_status aggregate would hide pending ZIPs
         # of folders that already have a done ZIP)
         if not any(v["status"] == "pending" for v in card["variants"]):
+            return False
+    elif st in ("interrupted", "skipped_disk_n"):
+        # ZIP-level failure/skip states: a card with a done ZIP must still be
+        # reachable from the filter.
+        if not any(v["status"] == st for v in card["variants"]):
             return False
     elif st != "any" and card["display_status"] != st:
         return False

@@ -145,10 +145,11 @@ Save, the manual screenshot curation described below.
   `no usable shots (only)` / `no usable shots (any ZIP)` / … , available in
   **all five sections** (cracked, pd, utils, magazine, falcon; all default to
   the configured `DefaultStatus`, normally `with_screenshot`).
-  `pending`, `desktop (any ZIP)` and `no usable shots (any ZIP)` match when
-  **at least one** ZIP has that status; the `(only)` variants use the
-  aggregated card status (`done → desktop → no usable shots → interrupted →
-  pending → skipped`). The two `desktop …` kind presets are app-only extras.
+  `pending`, `desktop (any ZIP)`, `no usable shots (any ZIP)`,
+  `interrupted` and `skipped (disk 2+)` match when **at least one** ZIP has
+  that status; the `(only)` variants use the aggregated card status
+  (`done → desktop → no usable shots → interrupted → pending → skipped`).
+  The two `desktop …` kind presets are app-only extras.
   The status bar reports each status as games (ZIPs), so the games number
   equals the result count
   of the matching dropdown selection.
