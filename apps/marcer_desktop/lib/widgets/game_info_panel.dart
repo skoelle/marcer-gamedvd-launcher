@@ -40,9 +40,9 @@ class ZipVariantView {
 }
 
 /// Gallery-style detail panel (`SPEC-gallery-webapp.md` §6.5 `lb-side`):
-/// **Game info** table, **Release variants** table (matching row highlighted)
-/// and the **This ZIP** table. Shared by the lightbox side panel and the
-/// right-hand detail panel.
+/// **Game info** table, the **This ZIP** table and the **Release variants**
+/// table (matching row highlighted). Shared by the lightbox side panel and
+/// the right-hand detail panel.
 class GameInfoPanel extends StatelessWidget {
   const GameInfoPanel({
     super.key,
@@ -115,16 +115,16 @@ class GameInfoPanel extends StatelessWidget {
         ] else ...[
           _headingRow('Game info', trailing: _atariLegendButtonOrNull()),
           ..._infoRows(info, onSelectGroup),
+          if (variant != null) ...[
+            const SizedBox(height: 8),
+            _headingRow('This ZIP', trailing: _playButtonOrNull()),
+            ..._zipTable(variant!),
+          ],
           if (info.variants.length > 1) ...[
             const SizedBox(height: 8),
             _heading('Release variants (${info.variants.length})'),
             const SizedBox(height: 4),
             _variantsTable(info, variant, filter, onSelectGroup),
-          ],
-          if (variant != null) ...[
-            const SizedBox(height: 8),
-            _headingRow('This ZIP', trailing: _playButtonOrNull()),
-            ..._zipTable(variant!),
           ],
         ],
       ],

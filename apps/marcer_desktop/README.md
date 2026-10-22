@@ -6,7 +6,7 @@ manuals**, gallery-style global filters with a
 **catalog grid as the default view** (section tabs, search, facets incl.
 genre/developer/publisher/crew/cracker, sort, **★ Favorites**) and a
 gallery-style detail sidebar
-(Game info + Release variants + This ZIP); an optional overlay folder
+(Game info + This ZIP + Release variants); an optional overlay folder
 browser (`T` / Folders button) per `SPEC.md` §7, plus a gallery-style
 lightbox (filmstrip + info panel). On desktop, **scrollbars stay visible**
 whenever a view overflows. **Read-only** consumer of all data roots except

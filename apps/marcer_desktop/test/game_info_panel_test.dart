@@ -48,6 +48,45 @@ void main() {
     await tester.pumpAndSettle();
     expect(selected?.name, 'Mono');
   });
+  testWidgets('shows This ZIP before Release variants', (tester) async {
+    final info = InfoSummary.fromGame(GameInfo(
+      folder: 'Alpha',
+      letter: 'A',
+      layers: const ['ROOT'],
+      matchedVia: 'exact',
+      matchedTitle: 'Alpha',
+      variants: const [
+        {'title': 'Alpha v1'},
+        {'title': 'Alpha v2'},
+      ],
+      kind: 'cracked',
+    ));
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 420,
+          height: 800,
+          child: GameInfoPanel(
+            info: info,
+            variant: const ZipVariantView(
+              name: 'a.zip',
+              status: 'done',
+              layer: 'ROOT',
+              rel: 'x/a.zip',
+            ),
+            variants: kHatariVariants,
+            onPlay: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final thisZip = tester.getTopLeft(find.text('This ZIP'));
+    final release = tester.getTopLeft(find.text('Release variants (2)'));
+    expect(thisZip.dy, lessThan(release.dy));
+  });
+
   testWidgets('no game info leaves a gap between AtariLegend and PLAY',
       (tester) async {
     await tester.pumpWidget(MaterialApp(

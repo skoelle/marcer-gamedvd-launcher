@@ -49,9 +49,9 @@ Save, the manual screenshot curation described below.
   built); the selected entry opens scrolled into view, `↑`/`↓` move the
   highlight, `Enter` selects and the menu spans up to ¾ of the screen height.
   Short lists get the same search field and look.
-- **Gallery-style detail sidebar** — Game info, the full Release-variants
-  table (the open ZIP highlighted) and a "This ZIP" table (File, Status,
-  **Kind**, Layer, Size, Path).
+- **Gallery-style detail sidebar** — Game info, the "This ZIP" table (File,
+  Status, **Kind**, Layer, Size, Path) and the full Release-variants table
+  (the open ZIP highlighted).
 - **⭐ Marcer's curated box scans & manuals** — the hand-curated `Boxscan/` and
   `Manual/` folders shipped with the archive are a first-class part of the app.
   Clickable `Box scans (N)` / `Manuals (N)` chips in the detail sidebar and
