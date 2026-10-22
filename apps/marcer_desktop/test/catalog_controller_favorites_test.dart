@@ -9,7 +9,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_controller.dart';
 
 /// Favorites behavior of [CatalogController] (user decisions 2026-10-15):
-/// per-section files, cross-section ★ filter, any-variant card favorite,
+/// per-section files, section-scoped ★ filter/folders, any-variant favorite,
 /// lazy pd ZIP resolution and foreign (other-OS) line pass-through.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -116,7 +116,7 @@ void main() {
         reason: 'must not fall back to the "too high" patch-root file');
 
     // Flat favorites view: our entry only, with extension, folder and section.
-    c.setPath(kFavoritesRel);
+    c.setPath(favoritesRelFor('cracked'));
     final entries = c.visibleEntries;
     expect(entries, hasLength(1), reason: 'foreign line is not rendered');
     expect(entries.single.name, 'a.zip');
@@ -127,7 +127,7 @@ void main() {
     expect(c.sectionOf(entries.single), 'Cracked');
   });
 
-  test('★ lists favorites of all sections and ignores status/facets', () async {
+  test('★ lists the active section and ignores status/facets', () async {
     await c.init();
     c.toggleFavoriteSelected(); // cracked card → cracked section file
     expect(
@@ -145,20 +145,52 @@ void main() {
     expect(c.catalogCards, isEmpty);
 
     c.toggleFavoritesOnly();
-    expect(c.catalogCards, hasLength(2));
-    expect(c.catalogCards.map((card) => card.kind).toSet(),
-        {'cracked', 'pd'});
-    expect(c.countText, '2 favorites');
+    expect(c.catalogCards, hasLength(1));
+    expect(c.catalogCards.single.kind, 'cracked');
+    expect(c.countText, '1 favorites');
+
+    // Switching section applies the ★ filter to that section.
+    c.setSection('pd');
+    expect(c.catalogCards, hasLength(1));
+    expect(c.catalogCards.single.kind, 'pd');
 
     // The text search stays active inside the ★ filter.
     c.setQuery('zzz-nope');
     expect(c.catalogCards, isEmpty);
     c.setQuery('');
-    expect(c.catalogCards, hasLength(2));
+    expect(c.catalogCards, hasLength(1));
 
     c.resetFilters();
     expect(c.favoritesOnly, isFalse);
+    c.setSection('cracked');
     expect(c.catalogCards, hasLength(1));
+  });
+
+  test('root shows one Favorites folder per section', () async {
+    await c.init();
+    c.toggleFavoriteSelected(); // cracked
+    c.setSection('pd');
+    c.toggleFavoriteSelected(); // pd
+
+    c.toggleView(); // folder browser
+    c.setPath('');
+    final virtual = c.visibleEntries.where((e) => e.isVirtual).toList();
+    expect(virtual.map((e) => e.name).toList(),
+        ['Favorites (games)', 'Favorites (pd)']);
+
+    final games = virtual.firstWhere((e) => e.name == 'Favorites (games)');
+    c.setPath(c.favoritesRelForEntry(games)!);
+    expect(c.visibleEntries, hasLength(1));
+    expect(c.visibleEntries.single.name, 'a.zip');
+    expect(c.favoritesViewSection, 'cracked');
+    c.parent();
+    expect(c.currentRel, '');
+
+    final pd = virtual.firstWhere((e) => e.name == 'Favorites (pd)');
+    c.setPath(c.favoritesRelForEntry(pd)!);
+    expect(c.visibleEntries, hasLength(1));
+    expect(c.visibleEntries.single.name, 'pacman.zip');
+    expect(c.favoritesViewSection, 'pd');
   });
 
   test(

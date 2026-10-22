@@ -91,8 +91,9 @@ class _HelpOverlayState extends State<HelpOverlay> {
   overlay folder browser. Navigation is strictly limited to RootDirectory.
   In the lightbox Space/P launches the shown ZIP and * favorites it;
   every filmstrip thumb carries its own favorite star (click to toggle).
-  The ★ Favorites filter lists your favorite games of all sections
-  (search still applies; facets and status are ignored).
+  The ★ Favorites filter lists the favorite games of the active section
+  (search still applies; facets and status are ignored). The folder
+  browser shows one Favorites folder per section.
   M swaps the shown candidate into the main image; C edits a ZIP's
   status/kind (pending until the Save (n) button in the filter bar).
 

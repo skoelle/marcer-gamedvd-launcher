@@ -68,6 +68,17 @@ void main() {
     expect(f.paths, ['/a/alpha.zip', '/z/Beta.zip']);
   });
 
+  test('pathsForSection filters the union by section tree', () {
+    write(crackedFile, '/games/Cracked Games - Title Sorted/a.zip\n');
+    write(pdFile, '/games/PD Games - Title Sorted/p.zip\n');
+    final f = loadService();
+    expect(f.pathsForSection('cracked'),
+        ['/games/Cracked Games - Title Sorted/a.zip']);
+    expect(f.pathsForSection('pd'),
+        ['/games/PD Games - Title Sorted/p.zip']);
+    expect(f.pathsForSection('utils'), isEmpty);
+  });
+
   test('new entries land in the section file of their tree', () {
     final f = loadService();
     expect(f.toggle('/games/Cracked Games - Title Sorted/A/Alpha/alpha.zip'),

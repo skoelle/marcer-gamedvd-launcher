@@ -157,10 +157,10 @@ Save, the manual screenshot curation described below.
   writes the relative `Hatari.Executable` path back to the config. Linux has no
   official prebuilt binary (manual/system install).
 - **Favorites** (`*` on the selected ZIP/card, in the detail panel or on a
-  filmstrip star) with `FAVORITE` badges, the virtual `Favorites` folder in
-  the browser view and a **★ Favorites** filter that lists your favorite
-  games of **all** sections at once (status and facets are ignored there, the
-  text search stays active). A card counts as favorite as soon as **any** of
+  filmstrip star) with `FAVORITE` badges, one virtual `Favorites` folder per
+  section in the browser view and a **★ Favorites** filter that lists the
+  favorite games of the **active section** (status and facets are ignored
+  there, the text search stays active). A card counts as favorite as soon as **any** of
   its ZIPs is starred, and launching it plays that starred ZIP when exactly
   one variant is favorited; pd/utils cards resolve their folder ZIPs on
   demand, so they can be starred and launched like cracked games. Persisted

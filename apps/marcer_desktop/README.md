@@ -244,8 +244,10 @@ missing one is offered when that variant is launched).
 `*` favorites the selected ZIP/catalog card (also from the detail panel and
 from the ★/☆ star on every lightbox filmstrip thumb). A card shows as
 favorite as soon as **any** of its ZIPs is starred; the **★ Favorites**
-filter lists your favorites of **all** sections at once (facets and status
-are ignored there, the text search stays active). Cards without raw variants
+filter lists the favorites of the **active section** (facets and status are
+ignored there, the text search stays active). The folder browser shows one
+virtual `Favorites` folder per section that has favorites
+(`Favorites (games)`, `Favorites (pd)`, `Favorites (utils)`). Cards without raw variants
 (pd/utils) resolve their folder ZIPs on demand, so they can be starred and
 launched like cracked games. Launching a favorited card plays the starred ZIP
 when exactly one variant is favorited.

@@ -120,6 +120,10 @@ class FavoritesService {
     return _union = List<String>.unmodifiable(sorted);
   }
 
+  /// Favorites that belong to [section] (per its root-relative path tree).
+  Iterable<String> pathsForSection(String section) =>
+      paths.where((path) => _sectionOfPath(path) == section);
+
   int get length => paths.length;
   bool get isEmpty => paths.isEmpty;
   bool get isNotEmpty => paths.isNotEmpty;

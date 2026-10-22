@@ -42,7 +42,7 @@ class _FolderTreeState extends State<FolderTree> {
 
   void _followCurrentPath() {
     final rel = widget.controller.currentRel;
-    if (rel == kFavoritesRel || rel.isEmpty) return;
+    if (rel.startsWith(kFavoritesRelPrefix) || rel.isEmpty) return;
     if (_pendingFollow == rel) return;
     _pendingFollow = rel;
     final parts = rel.split('/');
@@ -58,7 +58,12 @@ class _FolderTreeState extends State<FolderTree> {
     final c = widget.controller;
     final children = <_Node>[];
     if (rel.isEmpty && c.showFavoritesFolder) {
-      children.add(_Node(rel: kFavoritesRel, entry: c.virtualFavoritesEntry));
+      for (final entry in c.virtualFavoritesEntries) {
+        final favRel = c.favoritesRelForEntry(entry);
+        if (favRel != null) {
+          children.add(_Node(rel: favRel, entry: entry));
+        }
+      }
     }
     children.addAll(c.childrenOf(rel).map((e) => _Node(rel: rel.isEmpty ? e.name : '$rel/${e.name}', entry: e)));
 

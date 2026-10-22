@@ -16,9 +16,12 @@ import 'hatari_launcher.dart';
 import 'index_editor.dart';
 import 'local_assets.dart';
 
-/// Sentinel rel-path for the virtual `Favorites` view (`SPEC.md` §11.3);
-/// cannot collide with a real directory name (NUL is invalid in paths).
-const String kFavoritesRel = '\u0000favorites';
+/// Sentinel rel-path prefix for the per-section virtual `Favorites` views.
+/// NUL cannot collide with a real directory name.
+const String kFavoritesRelPrefix = '\u0000favorites:';
+
+/// Sentinel rel-path of the virtual `Favorites` view of [section].
+String favoritesRelFor(String section) => '$kFavoritesRelPrefix$section';
 
 /// Top-level view of the app: the global gallery-like catalog grid (default)
 /// or the optional overlay folder browser.
@@ -219,15 +222,15 @@ class CatalogController extends ChangeNotifier {
   bool get focusActive => crackerFocusActive || crewFocusActive;
 
   /// Filtered + sorted cards of the active section (memoized until the next
-  /// filter change); the ★ [favoritesOnly] filter lists favorites of **all**
-  /// sections at once — status/facets/flags are ignored then, the text
-  /// search and the sort stay active (user decision 2026-10-15).
+  /// filter change); the ★ [favoritesOnly] filter lists favorites of the
+  /// **active section** — status/facets/flags are ignored then, the text
+  /// search and the sort stay active.
   List<GameCard> get catalogCards {
     if (!_catalogDirty && _catalogCache != null) return _catalogCache!;
     final List<GameCard> cards;
     if (favoritesOnly) {
       final favCards = [
-        for (final card in universe.allCards)
+        for (final card in universe.cardsFor(filter.section))
           if (isFavoriteCard(card)) card,
       ];
       final f = filter.copy()
@@ -392,28 +395,61 @@ class CatalogController extends ChangeNotifier {
 
   // ------------------------------------------------------------ entry lists
 
-  bool get inFavoritesView => currentRel == kFavoritesRel;
+  bool get inFavoritesView => currentRel.startsWith(kFavoritesRelPrefix);
 
-  /// Favorites folder visible at root and first (SPEC §11.3 / C24).
+  /// Section of the current virtual Favorites view, or `''`.
+  String get favoritesViewSection => inFavoritesView
+      ? currentRel.substring(kFavoritesRelPrefix.length)
+      : '';
+
+  /// Display name of the virtual Favorites folder of [section].
+  String favoritesFolderLabel(String section) =>
+      'Favorites (${section == 'cracked' ? 'games' : section})';
+
+  /// Rel-path of a virtual Favorites [entry], or null for other entries.
+  String? favoritesRelForEntry(Entry entry) {
+    if (!entry.isVirtual) return null;
+    for (final section in kSections) {
+      if (entry.name == favoritesFolderLabel(section)) {
+        return favoritesRelFor(section);
+      }
+    }
+    return null;
+  }
+
+  /// One virtual Favorites folder per section that currently has favorites.
+  List<Entry> get virtualFavoritesEntries => [
+        for (final section in kSections)
+          if (favorites?.pathsForSection(section).isNotEmpty ?? false)
+            Entry(
+              name: favoritesFolderLabel(section),
+              kind: EntryKind.directory,
+              inRoot: true,
+              inPatch: false,
+              isVirtual: true,
+            ),
+      ];
+
+  /// Favorites folders visible at root and first (one per section).
   bool get showFavoritesFolder =>
-      currentRel.isEmpty && (favorites?.isEmpty ?? true) == false;
+      currentRel.isEmpty && virtualFavoritesEntries.isNotEmpty;
 
   List<Entry> get _baseEntries {
     if (inFavoritesView) return _favoritesEntries();
     final cached = _entryCache[currentRel] ?? browser.list(currentRel);
     _entryCache[currentRel] = cached;
-    // Virtual Favorites folder at root, first entry (SPEC §11.3 / C24).
-    if (currentRel.isEmpty && showFavoritesFolder) {
-      return [virtualFavoritesEntry, ...cached];
+    if (showFavoritesFolder) {
+      return [...virtualFavoritesEntries, ...cached];
     }
     return cached;
   }
 
   List<Entry> _favoritesEntries() {
     final favs = favorites;
-    if (favs == null) return const [];
+    final section = favoritesViewSection;
+    if (favs == null || section.isEmpty) return const [];
     final out = <Entry>[];
-    for (final path in favs.paths) {
+    for (final path in favs.pathsForSection(section)) {
       final rel = _relFromAbsolute(path);
       // Foreign line (other OS/other roots, kept in the file for console
       // interop): not reachable here — no entry is built for it.
@@ -1182,14 +1218,6 @@ class CatalogController extends ChangeNotifier {
     return dirs;
   }
 
-  Entry get virtualFavoritesEntry => Entry(
-        name: 'Favorites',
-        kind: EntryKind.directory,
-        inRoot: true,
-        inPatch: false,
-        isVirtual: true,
-      );
-
   Entry? get selectedEntry {
     if (catalogMode) return null;
     final visible = visibleEntries;
@@ -1315,13 +1343,13 @@ class CatalogController extends ChangeNotifier {
     final name = visible.isEmpty
         ? ''
         : visible[selectedIndex.clamp(0, visible.length - 1)].name;
-    _lastSelections[inFavoritesView ? kFavoritesRel : currentRel] =
+    _lastSelections[currentRel] =
         _SelMemory(selectedIndex, name);
   }
 
   void _restoreSelection() {
     final mem =
-        _lastSelections[inFavoritesView ? kFavoritesRel : currentRel];
+        _lastSelections[currentRel];
     final visible = visibleEntries;
     if (visible.isEmpty) {
       selectedIndex = 0;
@@ -1345,7 +1373,9 @@ class CatalogController extends ChangeNotifier {
     if (e.kind == EntryKind.directory) {
       _saveSelection();
       if (e.isVirtual) {
-        currentRel = kFavoritesRel;
+        final rel = favoritesRelForEntry(e);
+        if (rel == null) return false;
+        currentRel = rel;
       } else {
         currentRel = currentRel.isEmpty ? e.name : '$currentRel/${e.name}';
       }
@@ -1365,7 +1395,11 @@ class CatalogController extends ChangeNotifier {
     }
     if (currentRel.isEmpty) return; // R17: silent no-op at root
     _saveSelection();
-    currentRel = browser.parent(currentRel);
+    if (inFavoritesView) {
+      currentRel = '';
+    } else {
+      currentRel = browser.parent(currentRel);
+    }
     _restoreSelection();
     notifyListeners();
   }
@@ -1531,7 +1565,8 @@ class CatalogController extends ChangeNotifier {
   /// (grid badges, ★ filter, virtual Favorites folder).
   void toggleFavoritePath(String path) {
     favorites?.toggle(path);
-    _entryCache.remove(kFavoritesRel);
+    _entryCache.removeWhere(
+        (key, _) => key.startsWith(kFavoritesRelPrefix));
     _favoriteFolderRelsCache = null;
     _catalogDirty = true;
     notifyListeners();
@@ -1691,7 +1726,7 @@ class CatalogController extends ChangeNotifier {
 
   /// Path shown in the status bar.
   String get displayPath => inFavoritesView
-      ? 'Favorites'
+      ? favoritesFolderLabel(favoritesViewSection)
       : (currentRel.isEmpty ? '/' : '/$currentRel');
 }
 
