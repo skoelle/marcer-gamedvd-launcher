@@ -134,14 +134,14 @@ Save, the manual screenshot curation described below.
   segments (`3287 folders`, `3211 with screenshot`), status counts as
   `done <games> (<zips> zips)`, gameinfo coverage (`gameinfo N folders` /
   `N without gameinfo`), the active index mtime (`index.json` /
-  `index-pd.json` / `index-utils.json` / `index-magazine.json`) and gameinfo
+  `index-pd.json` / `index-utils.json` / `index-magazine.json` /
+  `index-falcon.json`) and gameinfo
   generation time;
   the running app version (right-aligned).
 - **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
   `desktop text` / `desktop black` / `pending` / … , available in **all
-  five sections** (cracked, pd, utils, magazine, falcon; cracked defaults to
-  the configured `DefaultStatus`, normally `with_screenshot`, the others to
-  `any`).
+  five sections** (cracked, pd, utils, magazine, falcon; all default to the
+  configured `DefaultStatus`, normally `with_screenshot`).
   `pending` matches a game when **at least one** of its ZIPs is pending —
   the same rule the gallery applies (a game can appear in `pending` and
   `done` at once); every other status value uses the card aggregation

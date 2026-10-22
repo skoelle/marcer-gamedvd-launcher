@@ -279,7 +279,7 @@ filter lists the favorites of the **active section** (facets and status are
 ignored there, the text search stays active). The folder browser shows one
 virtual `Favorites` folder per section that has favorites
 (`Favorites (games)`, `Favorites (pd)`, `Favorites (utils)`,
-`Favorites (magazine)`). Cards without raw variants
+`Favorites (magazine)`, `Favorites (falcon)`). Cards without raw variants
 (pd/utils) resolve their folder ZIPs on demand, so they can be starred and
 launched like cracked games. Launching a favorited card plays the starred ZIP
 when exactly one variant is favorited.

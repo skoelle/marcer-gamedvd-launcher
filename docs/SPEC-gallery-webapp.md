@@ -40,8 +40,8 @@ Everything else is *(untested)* and must be confirmed during implementation.
 4. Offer full keyboard control of the grid and the lightbox, plus deep links
    (`?entry=…`) that open a specific entry directly.
 5. Cover all metadata catalogs: cracked games (with screenshots), PD
-   games and utilities (metadata-only, without screenshots) plus the
-   filename-only magazine cover disks section.
+   games and utilities (metadata-only, without screenshots), the
+   filename-only magazine cover disks section and the Falcon 030 section.
 6. Be fast with the full catalog (tens of thousands of entries) and run
    locally from the repository tooling (`.venv`, `run.sh`, `local/paths.env`).
 
@@ -347,26 +347,30 @@ error body `{ "error": "<message>" }`.
     "cracked": { "entries": 22938, "mtime": 1780000000 },
     "pd":      { "entries": 2846,  "mtime": 1780000000 },
     "utils":   { "entries": 7689,  "mtime": 1780000000 },
-    "magazine":{ "entries": 229,   "mtime": 1780000000 }
+    "magazine":{ "entries": 229,   "mtime": 1780000000 },
+    "falcon":  { "entries": 0,     "mtime": null }
   },
   "status_counts": {
     "cracked": { "done": 1467, "desktop": 2947, "pending": 14827, "...": 0 },
     "pd":      { "...": 0 },
     "utils":   { "...": 0 },
-    "magazine":{ "pending": 228, "skipped_disk_n": 1 }
+    "magazine":{ "pending": 228, "skipped_disk_n": 1 },
+    "falcon":  { "...": 0 }
   },
   "game_status_counts": {
     "cracked": { "done": 881, "desktop": 400, "pending": 1500, "...": 0 },
     "pd":      { "...": 0 },
     "utils":   { "...": 0 },
-    "magazine":{ "pending": 209 }
+    "magazine":{ "pending": 209 },
+    "falcon":  { "...": 0 }
   },
   "status_labels": { "done": "done (game)", "with_screenshot": "with screenshot", "...": "..." },
   "sections": {
     "cracked": { "games": 3108, "cards": 3108, "with_screenshot": 881, "no_info": 615 },
     "pd":      { "games": 1901, "cards": 1901, "with_screenshot": 0,   "no_info": 0 },
     "utils":   { "games": 3546, "cards": 3546, "with_screenshot": 0,   "no_info": 0 },
-    "magazine":{ "games": 0,    "cards": 209,  "with_screenshot": 0,   "no_info": 209 }
+    "magazine":{ "games": 0,    "cards": 209,  "with_screenshot": 0,   "no_info": 209 },
+    "falcon":  { "games": 0,    "cards": 0,    "with_screenshot": 0,   "no_info": 0 }
   },
   "coverage": { "matched_folders": 3108, "unmatched_folders": 181 },
   "facets": {
@@ -382,7 +386,8 @@ error body `{ "error": "<message>" }`.
     "utils":{ "publishers": ["..."], "crews": ["..."],
               "crackers": ["..."], "letters": ["..."] },
     "magazine": { "years": ["1994", "..."],
-                  "letters": ["ST Action", "ST Computer", "..."] }
+                  "letters": ["ST Action", "ST Computer", "..."] },
+    "falcon":   { "letters": ["0-9", "A", "..."] }
   },
   "show_candidates": true,
   "default_status": "with_screenshot",
@@ -392,7 +397,7 @@ error body `{ "error": "<message>" }`.
 ```
 
 - `index`, `status_counts`, `game_status_counts` and `sections` are **per
-  section** maps keyed by `cracked`/`pd`/`utils`/`magazine`; the statistics
+  section** maps keyed by `cracked`/`pd`/`utils`/`magazine`/`falcon`; the statistics
   bar and footer read the entry for the active section (`desktop-app parity`,
   where the status bar is section-aware). `magazine` has no gameinfo, so its
   `games` count is `0` and `no_info` equals its card count.
@@ -427,7 +432,7 @@ Query parameters (all optional, defaults in parentheses):
 | Parameter | Values | Applies to |
 |---|---|---|
 | `section` | `cracked` (default) \| `pd` \| `utils` \| `magazine` \| `falcon` | view selection |
-| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default `with_screenshot` for `cracked`, `any` for the others) |
+| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default from `default_status`, normally `with_screenshot`) |
 | `q` | free text | all |
 | `letter` | `0-9` … `Z` (or facet value) \| `any` (default) | all (magazine: magazine name; falcon: letter) |
 | `publisher`, `crew`, `cracker`, `language`, `year` | facet value \| `any` (default) | cracked (+pd/utils where the field exists; magazine: `year` only) |
@@ -591,9 +596,9 @@ lightbox, whose side panel carries the same metadata.
 ### 6.2 Page structure (top to bottom)
 
 1. **Header**: title + statistics bar (section 6.7).
-2. **Section tabs**: `games` (cracked) | `pd` | `utils` | `magazines`
-   (a tab is hidden when its section has no cards; labels match the desktop
-   app's section tabs).
+2. **Section tabs**: `games` (cracked) | `pd` | `utils` | `magazines` |
+   `falcon` (a tab is hidden when its section has no cards; labels match the
+   desktop app's section tabs).
 3. **Control bar**: search input, status select, facet filters
    (publisher/crew/cracker/language/year/flags/tos), one **combined
    sort+order dropdown** with the ten entries `<key> asc|desc`
@@ -767,10 +772,10 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | Tab | Source | Cards | Notes |
 |---|---|---|---|
 | games | join of `index.json` + `games-cracked.json` | grouped, with previews | default view (label `games`, section key `cracked`) |
-| pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
-| utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
-| magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `any`); `letter` = magazine name, `year` from the file name |
-| falcon | `index-falcon.json` (index-only, no gameinfo) | grouped by `(letter, folder)` like the cracked view | status filter (default `any`); Falcon titles launch with the Falcon machine/TOS 4.04 (desktop) |
+| pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`) |
+| utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`) |
+| magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `with_screenshot`); `letter` = magazine name, `year` from the file name |
+| falcon | `index-falcon.json` (index-only, no gameinfo) | grouped by `(letter, folder)` like the cracked view | status filter (default `with_screenshot`); Falcon titles launch with the Falcon machine/TOS 4.04 (desktop) |
 
 - Letter navigation, search, sorting, the status filter and the
   publisher/language/year facets work in all sections; the remaining
@@ -786,7 +791,7 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
   parameters.
 - Switching tabs preserves `q`, `sort`, `order`, `letter` where applicable,
   resets incompatible filters and falls the status filter back to the
-  section default (`with_screenshot` for cracked, `any` for the others).
+  configured `default_status` (normally `with_screenshot`).
 
 ### 6.9 Deep links
 

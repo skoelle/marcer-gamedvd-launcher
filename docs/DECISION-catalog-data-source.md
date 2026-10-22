@@ -45,54 +45,44 @@ indices plus gameinfo — without any filesystem scan.**
   gameinfo), grouped by `(letter, folder)` like the cracked view.
 - No source tree is walked while building the universe.
 
-References: `CatalogUniverse.build` / `CatalogBundle.loadSync`
-(`packages/marcer_catalog/lib/src/catalog_universe.dart:27-53`, `:314-345`);
-cracked index-only (`:61`), pd/utils union (`:68`, `:75`, `:211-217`). The
-gallery webapp follows the same model (`tools/gallery/gallery.py`).
+References: `CatalogUniverse.build` / `CatalogBundle.loadSync` in
+`packages/marcer_catalog/lib/src/catalog_universe.dart`. The gallery webapp
+follows the same model (`tools/gallery/gallery.py`).
 
 The filesystem is only consulted **lazily and per entry**, never as a full scan:
 ZIP existence (`zipExists`) and pd/utils folder ZIP resolution (`variantsOfCard`)
 touch the disk on demand and cache the result for the controller's lifetime
-(`apps/marcer_desktop/lib/catalog_controller.dart:491-575`).
+(`CatalogController.zipExists` / `variantsOfCard` in
+`apps/marcer_desktop/lib/catalog_controller.dart`).
 
 ## 3. Consequences
 
-### 3.1 The displayed layer is the *published* layer, not the local one
-`ROOT` / `PATCH` / `BOTH` on cards, in the detail panel and in the lightbox
-comes from the index entry's `layer` (screenshot index) or the gameinfo `layers`
-list — never from probing the local filesystem. Aggregation: a single distinct
-layer is shown as-is, several collapse to `BOTH`
-(`packages/marcer_catalog/lib/src/card.dart:345-347`, `:381-384`).
+### 3.1 The displayed layer is resolved from the local filesystem
+`ROOT` / `PATCH` / `BOTH` on catalog cards, in the detail panel and in the
+lightbox come from the actual local files, not from the index/gameinfo
+`layer` field. `CatalogController.zipLayer` checks `RootDirectory` and
+`PatchDirectory` per ZIP; `variantLayer`/`cardLayer` aggregate the result and
+collapse mixed variants to `BOTH`. The grid reads the asynchronous
+`cachedCardLayer` cache and requests a bounded background folder scan
+(`ensureCardScanned`), so tile building never blocks on a network mount.
 
-References: `card_grid.dart:390`, `detail_panel.dart:142`/`:196`,
-`game_lightbox.dart:523`/`:573`, `game_info_panel.dart:345`.
+The published `layer` field is still retained in the data model and is used
+by the overlay folder browser, where the entry itself already comes from the
+local overlay.
 
-### 3.2 Launching is robust regardless of the published layer
-The launch path prefers the patch copy only when a patch directory is configured
-**and** the variant's published layer is `PATCH`/`BOTH` **and** that file exists;
-otherwise it falls back to `RootDirectory/<rel>`
-(`apps/marcer_desktop/lib/catalog_controller.dart:479-487`).
-
-So a consumer whose ZIPs all live in `ROOT` (empty/different patch layer) still
-launches correctly from reused index/gameinfo data — the mismatching layer
-**badges** are cosmetic only. (The reverse — published `ROOT` but the file is
-physically in the patch layer — is not covered by this fallback.)
+### 3.2 Launching prefers the local patch copy
+The launch path uses the patch copy whenever a patch directory is configured
+**and** the file exists, regardless of the published layer; otherwise it
+falls back to `RootDirectory/<rel>` (`CatalogController.zipPathForVariant`).
+This matches SPEC R14 and keeps reused index/gameinfo data launchable when the
+consumer's local ZIP layout differs from the publisher's.
 
 ### 3.3 MISSING detection is filesystem-based and layer-independent
-`zipExists` checks `RootDirectory` first, then `PatchDirectory`, ignoring the
-published layer field (`catalog_controller.dart:503-510`), so locally present
-ZIPs are never falsely flagged `MISSING`; per-variant/card `MISSING` reflects a
-genuinely absent file in **both** layers.
-
-The grid never performs those checks synchronously while building a tile: it
-reads a cache (`cachedCardLayer`/`cachedCardMissing`) and requests a bounded
-background folder scan (`ensureCardScanned` → async `Directory.list` per
-folder, 6 workers, one listing instead of per-file `stat` calls, throttled
-notify). The layer/`MISSING` badges therefore appear asynchronously. This keeps
-scrolling smooth on slow/network mounts, where a cold per-file `exists` can
-cost hundreds of milliseconds (see `apps/marcer_desktop/tool/benchmark.dart`);
-the detail panel uses the same cache, while launch/favorites keep the
-synchronous check for the single card being acted on.
+`zipLayer` checks both `RootDirectory` and `PatchDirectory`, so locally
+present ZIPs are never falsely flagged `MISSING`; per-variant/card `MISSING`
+reflects a genuinely absent file in **both** layers. The grid uses the cached
+async scan, while launch/favorites use the synchronous helper for the single
+card being acted on.
 
 ### 3.4 ZIPs in neither index nor gameinfo are invisible in the catalog
 A ZIP that exists in `ROOT`/`PATCH` but is absent from both the index and
@@ -103,23 +93,23 @@ the **overlay folder browser** (`T`), which is the one mode that scans the trees
 `lib/src/entry.dart:34-41`).
 
 Gameinfo-only `pd`/`utils` cards show as dimmed placeholder tiles without
-preview, status or kind (`card.dart:386-397`; `card_grid.dart:381-383`,
-`:409`), so an untracked ZIP added to the catalog would inherit the same
-second-class appearance unless it is indexed for screenshots too.
+preview, status or kind (`GameCard` placeholder path in `card.dart` /
+`card_grid.dart`), so an untracked ZIP added to the catalog would inherit the
+same second-class appearance unless it is indexed for screenshots too.
 
 ## 4. Deferred / Follow-up Ideas
 
 Recorded 2026-10-17; decided to keep the current behavior for now.
 
 1. **Local index / filesystem sync (idea).** Build a per-user local index (or an
-   on-demand tree scan) so the catalog can (a) surface ZIPs missing from the
-   artifacts, (b) report the *real* local layer instead of the published one,
-   and (c) reconcile the launch path fully. Natural docking points already
-   exist in the lazy FS helpers (`zipExists`, `variantsOfCard`, `zipLayer`).
-   Trade-off: without a screenshot such cards are thin placeholder tiles
-   (§3.4) and match no status/facet filter, so the value is limited — the
-   overlay browser already covers "browse what is really there". Deferred until
-   a concrete need justifies the added scanning/consistency cost.
+   on-demand tree scan) so the catalog can surface ZIPs that are missing from
+   the artifacts. Local layer resolution and the patch-first launch path are
+   already implemented (§3.1–§3.3). Natural docking points exist in the lazy FS
+   helpers (`zipExists`, `variantsOfCard`, `zipLayer`). Trade-off: without a
+   screenshot such cards are thin placeholder tiles (§3.4) and match no
+   status/facet filter, so the value is limited — the overlay browser already
+   covers "browse what is really there". Deferred until a concrete need
+   justifies the added scanning/consistency cost.
 2. **"N ZIPs not indexed" counter (idea).** A lighter-weight completeness hint
    (count only, no per-ZIP cards) could point users at unindexed files without
    changing the catalog model.
