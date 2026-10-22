@@ -209,6 +209,15 @@ The Play dropdown offers Falcon variants: **RGB** (default), **VGA**
 **FPU** (`--fpu 68882`). Optional `Falcon` config block in `desktop.config.json`:
 `TosFile`, `Memsize`, `Monitor`, `Dsp`, `CpuClock`, `Fpu`, `ExtraArgs`.
 
+### Magazine GEMDOS cover disks
+
+ST-Computer cover disks are GEMDOS file collections, not floppy images. The
+magazine section detects this at launch (`lib/st_gemdos_launcher.dart`) and
+starts them like Falcon GEMDOS titles but with the ST machine/config: the ZIP
+is extracted and its largest program autostarted with `-d` + `--auto` (floppy
+drives off). Real floppy cover disks (ST Action, The One, Zero, Start Micro)
+keep the normal `--disk-a` path.
+
 ## Hatari (download & install)
 
 When no Hatari executable is configured/found, the app offers to install a

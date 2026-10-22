@@ -22,7 +22,8 @@
       ],
       "exclude_dirs": [
         "dupes"
-      ]
+      ],
+      "boot": "auto"
     },
     "falcon": {
       "trees": [

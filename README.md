@@ -39,7 +39,8 @@ Save, the manual screenshot curation described below.
   tri-state `raw` / `pasti` / `boxscan`, `TOS/Bad`, and a combined sort
   dropdown (`name asc` … `crew desc`, same width as `TOS/Bad`). The
   `magazines` tab shows the `Bonus/Magazine Cover Disks` collection
-  (index-magazine.json) with one filename-derived card per issue; the
+  (index-magazine.json) with one filename-derived card per issue (ST-Computer
+  GEMDOS cover disks are extracted and launched via `-d`/`--auto`); the
   `falcon` tab shows `Falcon 030/Title Sorted` (index-falcon.json) and
   launches its titles as a Falcon 030 (TOS 4.04).
 - **Type-to-filter dropdowns** — every filter dropdown (publisher, crew,

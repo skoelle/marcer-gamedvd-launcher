@@ -17,6 +17,7 @@ import 'ftp_downloader.dart';
 import 'hatari_launcher.dart';
 import 'index_editor.dart';
 import 'local_assets.dart';
+import 'st_gemdos_launcher.dart';
 
 /// Sentinel rel-path prefix for the per-section virtual `Favorites` views.
 /// NUL cannot collide with a real directory name.
@@ -1044,6 +1045,13 @@ class CatalogController extends ChangeNotifier {
     return sectionOfRel(sectionTrees, rel) == 'falcon';
   }
 
+  /// True for magazine cover disks (ST-Computer GEMDOS archives need the
+  /// extract + `-d`/`--auto` launch instead of `--disk-a`).
+  bool isMagazinePath(String path) {
+    final rel = _relFromAbsolute(path) ?? normalizeRelSeparators(path);
+    return sectionOfRel(sectionTrees, rel) == 'magazine';
+  }
+
   /// Launches [zipPath] with Hatari (non-blocking). Falcon titles use the
   /// dedicated Falcon launch path (own machine/TOS, GEMDOS autostart). Sets
   /// [launchError] when the configuration or ZIP is invalid; [launching] while
@@ -1056,7 +1064,9 @@ class CatalogController extends ChangeNotifier {
     }
     final result = useFalcon
         ? await launchFalcon(config, zipPath, variant: variant)
-        : await launchHatari(config, zipPath, variant: variant);
+        : isMagazinePath(zipPath)
+            ? await launchStGemdos(config, zipPath, variant: variant)
+            : await launchHatari(config, zipPath, variant: variant);
     if (result.error != null) {
       launchError = result.error;
       notifyListeners();

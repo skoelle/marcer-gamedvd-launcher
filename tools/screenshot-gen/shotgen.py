@@ -78,6 +78,7 @@ DEFAULT_CONFIG = {
             "exclude_dirs": [
                 "dupes",
             ],
+            "boot": "auto",
         },
         "falcon": {
             "trees": [
@@ -243,6 +244,7 @@ def resolve_scopes(cfg: dict) -> tuple:
             profile = spec.get("profile") or {}
             tos_default = spec.get("tos_default")
             timepoints = spec.get("timepoints")
+            boot = spec.get("boot")
         else:
             sys.exit(f"error: scopes.{name} must be an object with a "
                      f"trees list")
@@ -253,7 +255,7 @@ def resolve_scopes(cfg: dict) -> tuple:
         scopes[name] = {"name": name, "trees": trees, "index": index,
                         "exclude_dirs": exclude, "profile": profile,
                         "tos_default": tos_default,
-                        "timepoints": timepoints}
+                        "timepoints": timepoints, "boot": boot}
     if default not in scopes:
         sys.exit(f"error: scope_default {default!r} is not defined in "
                  f"scopes ({', '.join(sorted(scopes))})")
@@ -608,13 +610,14 @@ def _safe_extract(zf, dest: Path) -> None:
             shutil.copyfileobj(src, out)
 
 
-def prepare_falcon_boot(stage: Path, staged_zip: Path, stem: str):
-    """Return ``(mode, args)`` for one Falcon ZIP.
+def prepare_boot(stage: Path, staged_zip: Path, stem: str):
+    """Return ``(mode, args)`` for one bootable ZIP.
 
     ``mode`` is ``"floppy"`` (disk image(s) inside the ZIP) or ``"gemdos"``
     (the ZIP is extracted and the picked program autostarted). GEMDOS boots
-    disable the floppy drives so Falcon TOS 4.04 does not raise the
-    "Drive A: is not responding" dialog that would block the autostart.
+    disable the floppy drives: Falcon TOS 4.04 would otherwise raise a modal
+    "Drive A: is not responding" dialog that blocks the autostart (harmless
+    for ST, where it also avoids probing an empty drive).
     """
     names, sizes = _zip_entries(staged_zip)
     images = [n for n in names if Path(n).suffix.lower() in FLOPPY_EXTS]
@@ -2263,13 +2266,13 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
         tos_image = tos_image or P["tos"]
         log(f"tos {tos_version}: {tos_image}")
 
-        # Boot medium: Falcon titles are mostly GEMDOS hard-disk archives
-        # (not floppy images), so they are extracted and autostarted with
-        # `-d` + `--auto`; floppy ZIPs keep the ST `--disk-a` behaviour.
+        # Boot medium: Falcon and magazine cover disks may be GEMDOS
+        # hard-disk archives (not floppy images), so they are extracted and
+        # autostarted with `-d` + `--auto`; floppy ZIPs keep `--disk-a`.
         if machine == "falcon" or boot_mode in ("auto", "gemdos"):
-            boot_kind, boot_args = prepare_falcon_boot(
+            boot_kind, boot_args = prepare_boot(
                 stage, staged, Path(rel).stem)
-            log(f"falcon boot: {boot_kind} {boot_args}")
+            log(f"boot: {boot_kind} {boot_args}")
         else:
             boot_args = ["--disk-a", str(staged)]
 

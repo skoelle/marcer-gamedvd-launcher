@@ -337,6 +337,13 @@ four-digit year is extracted where present. The magazine folder name is used
 as the card's letter facet (magazine filter). This yields 209 cards
 (47 ST Action, 84 ST Computer, 33 Start Micro, 22 The One, 23 Zero).
 
+The scope uses `boot: "auto"`: cover disks that are **GEMDOS file
+collections** (not floppy images), e.g. all ST Computer issues
+(`1990_01/BASEFIND/…`, `1995_02/ELEKTROL.EX/ELEX.PRG`), are extracted and
+their largest boot program autostarted with `-d` + `--auto` (floppy drives
+off). Floppy-image disks (ST Action, The One, Zero, Start Micro) keep
+`--disk-a`.
+
 #### 4.4.2 Falcon 030 (`falcon` scope)
 
 `Falcon 030/Title Sorted` holds Falcon 030 titles (706 indexed ZIPs, verified
@@ -1445,7 +1452,8 @@ MARCER_DISPLAY=...
 `tools/screenshot-gen/config.example.json` (committed, contains no paths):
 `scope_default` + `scopes` (per scope: tree list, optional index file name,
 optional scope-local `exclude_dirs` merged with the global list, optional
-scope-local `tos_default`, `timepoints` and an optional `profile`
+scope-local `tos_default`, `timepoints`, `boot` (`auto` = detect GEMDOS vs
+floppy per ZIP, sections 4.4.1/4.4.2) and an optional `profile`
 deep-merged over the
 global one; the
 default scope maps to `index.json`, every other scope to

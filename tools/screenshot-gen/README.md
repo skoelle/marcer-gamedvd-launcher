@@ -117,7 +117,10 @@ Each scope has its own tree list and its own index file:
 
 The `magazine` scope additionally sets `"exclude_dirs": ["dupes"]` so the
 per-magazine `Dupes/` sub-folders (alternate dumps) never reach the index;
-the scope-specific list is merged with the global `exclude_dirs`.
+the scope-specific list is merged with the global `exclude_dirs`. It also
+sets `"boot": "auto"`: cover disks that are GEMDOS file collections (e.g.
+ST Computer) are extracted and their largest program autostarted with
+`-d` + `--auto` (floppy-image disks keep `--disk-a`).
 
 The `falcon` scope runs Hatari as a Falcon (`scopes.falcon.profile`:
 `machine falcon`, 14 MB, `--dsp emu`, Videl RGB, CPU 16 MHz) with its own
@@ -589,7 +592,7 @@ Scope configuration:
     "utils":   { "trees": ["Title Sorted/Utilitys - Title Sorted"] },
     "pd":      { "trees": ["Title Sorted/PD Games - Title Sorted"] },
     "magazine": { "trees": ["Bonus/Magazine Cover Disks"],
-                  "exclude_dirs": ["dupes"] },
+                  "exclude_dirs": ["dupes"], "boot": "auto" },
     "falcon":   { "trees": ["Falcon 030/Title Sorted"],
                   "index": "index-falcon.json",
                   "tos_default": "4.04",
