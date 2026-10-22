@@ -155,7 +155,24 @@ bool Win32Window::Show() {
   // restore a window that Dart already maximized (waitUntilReadyToShow
   // callback) back to its normal size — Windows-only startup flicker
   // "maximized, then small again".
-  return ShowWindow(window_handle_, SW_SHOW);
+  bool shown = ShowWindow(window_handle_, SW_SHOW);
+  // Windows: the Flutter view's render surface can keep the pre-resize size
+  // after a fast startup (the window is already at its final/work-area size
+  // when the first frame arrives, so the UI appears stretched/"too large" and
+  // cut off until a manual resize). A 1px child resize forces the embedder to
+  // rebuild the surface at the final client size; it is exactly what a manual
+  // resize does. Runs once, from the first-frame callback.
+  if (child_content_ != nullptr) {
+    RECT rect = GetClientArea();
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+    if (width > 1 && height > 1) {
+      MoveWindow(child_content_, rect.left, rect.top, width + 1, height + 1,
+                 TRUE);
+      MoveWindow(child_content_, rect.left, rect.top, width, height, TRUE);
+    }
+  }
+  return shown;
 }
 
 // static

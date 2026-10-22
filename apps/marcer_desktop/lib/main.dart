@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'catalog_controller.dart';
@@ -18,6 +19,7 @@ import 'self_updater.dart';
 import 'asset_updater.dart';
 import 'theme.dart';
 import 'tos_rom.dart';
+import 'window_layout.dart';
 import 'widgets/card_grid.dart';
 import 'widgets/detail_panel.dart';
 import 'widgets/entry_list.dart';
@@ -106,19 +108,45 @@ Future<void> main() async {
   }
   await windowManager.ensureInitialized();
   final maximized = config?.windowMaximized ?? true;
+  final requestedSize = Size(
+    (config?.windowWidth ?? 1280).toDouble(),
+    (config?.windowHeight ?? 800).toDouble(),
+  );
+  WindowPlacement? workArea;
+  try {
+    workArea = displayWorkArea(await screenRetriever.getPrimaryDisplay());
+  } catch (_) {
+    workArea = null;
+  }
+  // Windows: fill the work area synchronously before maximizing. The async
+  // maximize alone can leave the first Flutter surface at the pre-maximize
+  // size when the system is busy, which stretches the UI ("everything too
+  // large", cut off) until the user manually resizes the window.
+  final winArea = maximized && Platform.isWindows ? workArea : null;
+  final startSize = winArea != null
+      ? winArea.size
+      : workArea != null
+          ? clampWindowSize(requestedSize, workArea.size)
+          : requestedSize;
   await windowManager.waitUntilReadyToShow(
     WindowOptions(
-      size: Size(
-        (config?.windowWidth ?? 1280).toDouble(),
-        (config?.windowHeight ?? 800).toDouble(),
-      ),
+      size: startSize,
       center: !maximized,
       title: 'MarcerGameDVDLauncher',
     ),
     () async {
-      if (maximized) await windowManager.maximize();
+      if (winArea != null) {
+        await windowManager.setBounds(Rect.fromLTWH(winArea.position.dx,
+            winArea.position.dy, winArea.size.width, winArea.size.height));
+      } else if (maximized) {
+        await windowManager.maximize();
+      }
       await windowManager.show();
       await windowManager.focus();
+      // Set the real maximize state after the work-area bounds. The window
+      // already fits, so a late/dropped async maximize no longer hides
+      // content.
+      if (winArea != null) await windowManager.maximize();
     },
   );
   runApp(MarcerDesktopApp(

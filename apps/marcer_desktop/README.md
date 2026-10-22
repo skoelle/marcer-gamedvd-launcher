@@ -154,7 +154,7 @@ and **TOS ROM** rows (download/install on demand, see below).
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset for **all** sections (default `with_screenshot`) |
 | `Window.width/height` | no | initial/restore window size (default 1280×800) |
-| `Window.maximized` | no | start maximized (default `true`; `false` ⇒ `width`×`height`, centered) |
+| `Window.maximized` | no | start maximized (default `true`; Windows first fills the primary display's work area synchronously, then maximizes; `false` ⇒ `width`×`height`, centered, clamped to the work area) |
 
 ## Launch (Hatari)
 

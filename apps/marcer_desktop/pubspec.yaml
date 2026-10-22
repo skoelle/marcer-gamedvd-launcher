@@ -17,6 +17,7 @@ dependencies:
   marcer_catalog:
     path: packages/marcer_catalog
   window_manager: ^0.5.2
+  screen_retriever: ^0.2.2
   file_picker: ^11.0.3
   ftpconnect: ^3.0.0
   url_launcher: ^6.3.0

@@ -237,6 +237,14 @@ git-ignored (same policy as `launcher.config.json`).
   ("maximized, then small again"). The runner now uses `SW_SHOW` (current
   state), plus a post-first-frame `isMaximized()` safeguard in `main.dart`
   (`maximize()` is a no-op when the state already holds).
+  **Windows startup surface (2026-10-22):** under load the async `maximize()`
+  could leave the first Flutter surface at the pre-maximize size (the UI
+  looked stretched/"too large" and was cut off until a manual resize). On
+  Windows the app now synchronously sets the window to the primary display's
+  work area (`window_layout.dart`, `screen_retriever`) before maximizing, and
+  the runner nudges the Flutter child by 1px after the first frame
+  (`win32_window.cpp`) so the embedder rebuilds the surface at the final
+  size. Non-maximized restore sizes are clamped to the work area.
 
 ---
 
