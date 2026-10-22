@@ -73,7 +73,15 @@
     "desktop_green_frac_min": 0.02,
     "textscreen_min_white": 0.5,
     "white_pixel_min": 230,
-    "phash_max_distance": 6
+    "phash_max_distance": 6,
+    "falcon_boot_logo_phash": "870703f8f8f8f807",
+    "falcon_boot_logo_max_distance": 2,
+    "falcon_boot_logo_green_min": 0.20,
+    "falcon_boot_logo_stage_white_min": 0.20,
+    "falcon_boot_logo_white_min": 0.98,
+    "falcon_boot_logo_max_colors": 2,
+    "falcon_boot_logo_max_x": 0.30,
+    "falcon_boot_logo_max_y": 0.45
   },
   "score_weights": {
     "entropy": 0.4,

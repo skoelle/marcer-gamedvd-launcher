@@ -66,6 +66,11 @@ tools/screenshot-gen/run.sh cleanup-duplicates --list      # print removed names
 tools/screenshot-gen/run.sh cleanup-duplicates --candidates-only
 tools/screenshot-gen/run.sh cleanup-duplicates --scope pd --only "10th Frame"
 
+# Remove the static Falcon TOS 4.04 boot screens (offline, no Hatari;
+# new captures already filter them out):
+tools/screenshot-gen/run.sh cleanup-boot-logo --scope falcon --dry-run --list
+tools/screenshot-gen/run.sh cleanup-boot-logo --scope falcon
+
 # Promote the application-window candidate of successful desktop retries
 # (e.g. utils; offline, no Hatari):
 tools/screenshot-gen/run.sh promote-app-screens --scope utils --dry-run --list
@@ -99,7 +104,8 @@ invocation (recorded in `tos_tried`); `--force` retries it anyway.
 
 The archive is processed in named **scopes** (config `scope_default` +
 `scopes`). Every subcommand (`index`, `run`, `detect`, `reclassify`,
-`cleanup-drive-led`, `cleanup-duplicates`, `promote-app-screens`, `prune`)
+`cleanup-drive-led`, `cleanup-duplicates`, `cleanup-boot-logo`,
+`promote-app-screens`, `prune`)
 works on exactly one
 scope per invocation,
 selected with `--scope <name>`; without the flag the configured
@@ -126,6 +132,9 @@ ST Computer) are extracted and their largest program autostarted with
 The `falcon` scope runs Hatari as a Falcon (`scopes.falcon.profile`:
 `machine falcon`, 14 MB, `--dsp emu`, Videl RGB, CPU 16 MHz) with its own
 TOS 4.04 (`MARCER_TOS404_IMG`) and its own timepoints (`[15, 30, 60]`).
+TOS 4.04 keeps its static boot screens (white Atari-logo screen; plain
+green Videl stage) visible at 15 s and 30 s, so new captures detect and
+reject them (SPEC §8.1); `cleanup-boot-logo` removes them from older shots.
 Falcon titles are mostly GEMDOS hard-disk archives, so they are extracted
 and booted with `-d` + `--auto` (a picked boot program) and the floppy drives
 disabled (`--drive-a off --drive-b off`, otherwise TOS 4.04 shows a blocking
@@ -396,6 +405,33 @@ that removes those duplicates per entry:
 - While the pass is running it prints a compact progress line at most every
   10 seconds (`scanned/total`, changed entries, removed/would-remove files and
   the current entry), so even a long NAS pass shows that it is still working.
+
+### Falcon boot screens (`cleanup-boot-logo`)
+
+TOS 4.04 shows static boot screens at the early Falcon timepoints: the white
+Atari-logo screen (black logo in the upper-left) and a plain green Videl
+stage (solid green area plus white, no dark content). They are
+pixel-identical on every capture and tell nothing about the ZIP, so
+`analyze_image` rejects them for the Falcon scope before preview selection
+(SPEC §8.1). The logo is matched by pHash (`filters.falcon_boot_logo_phash`)
+with a white/2-colour/top-left geometry fallback for a changed crop or zoom;
+the plain stage is detected as a 2-colour green+white screen without dark
+pixels. Rejected shots stay in the metadata `shots` history (`boot_logo:
+true`, `dropped: "boot_logo"`) but never become the preview or a candidate.
+
+`cleanup-boot-logo` is the offline pass (no Hatari) for entries captured
+before that rule existed:
+
+- It only runs when the scope profile is `machine: falcon`; other scopes
+  print a hint and do nothing.
+- Boot-screen candidates are deleted and removed from the index and the
+  per-entry metadata `candidates` list. Candidate names are not renumbered,
+  so gaps in the `_cNN` series are normal.
+- If the preview itself were a boot screen, the best-scoring non-boot
+  candidate is promoted and status/kind are recomputed; with no alternative
+  the boot preview is kept and reported.
+- `--dry-run`/`--list`/`--only` work like the other cleanup passes and the
+  output-dir lock is acquired.
 
 ### Promoting application windows (`promote-app-screens`)
 

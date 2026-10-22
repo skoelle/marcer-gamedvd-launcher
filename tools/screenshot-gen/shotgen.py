@@ -8,6 +8,7 @@ Implements SPEC-screenshot-generator.md:
   run                  process pending entries (interruptible, resumable)
   detect               find the program icon in existing desktop previews
   cleanup-duplicates   remove pixel-exact duplicate candidates (offline)
+  cleanup-boot-logo    remove static Falcon boot-logo candidates (offline)
   promote-app-screens  promote an open-window candidate to the preview
 
 Scopes (config ``scope_default`` + ``scopes``): every subcommand works
@@ -163,6 +164,19 @@ DEFAULT_CONFIG = {
         "textscreen_min_white": 0.5,
         "white_pixel_min": 230,
         "phash_max_distance": 6,
+        # Falcon TOS 4.04 boot screens: the white screen with the black
+        # Atari logo top-left (matched by pHash, with a geometry fallback
+        # when crop/zoom changes the hash) and the plain green Videl
+        # stage (2 colours, no dark content). Both are static, identical
+        # on every capture and useless for the catalog.
+        "falcon_boot_logo_phash": "870703f8f8f8f807",
+        "falcon_boot_logo_max_distance": 2,
+        "falcon_boot_logo_green_min": 0.20,
+        "falcon_boot_logo_stage_white_min": 0.20,
+        "falcon_boot_logo_white_min": 0.98,
+        "falcon_boot_logo_max_colors": 2,
+        "falcon_boot_logo_max_x": 0.30,
+        "falcon_boot_logo_max_y": 0.45
     },
     "score_weights": {"entropy": 0.4, "colors": 0.3, "edges": 0.3},
     "click_retry": {
@@ -1110,7 +1124,59 @@ def has_drive_led(rgb) -> bool:
     return bool(xs.min() >= w * 0.9 and ys.max() <= h * 0.1)
 
 
-def analyze_image(path: Path, cfg: dict) -> dict:
+def is_falcon_boot_logo(rgb, metrics: dict, cfg: dict) -> bool:
+    """True for a Falcon TOS 4.04 boot screen.
+
+    Two static stages are recognized: the white screen with the black
+    Atari logo in the upper-left corner, and the plain Videl boot stage
+    (solid green area plus white, no dark pixels). Both carry no
+    information about the ZIP, but TOS keeps them visible long enough that
+    they land on the early screenshot timepoints. The logo is matched by
+    pHash (primary) with a geometry fallback for a changed crop/zoom:
+    almost all white, at most two colours, and dark pixels confined to the
+    top-left corner.
+    """
+    import numpy as np
+
+    if metrics.get("kind") != "desktop":
+        return False
+    f = cfg.get("filters") or {}
+    ref = str(f.get("falcon_boot_logo_phash") or "").strip()
+    maxd = int(f.get("falcon_boot_logo_max_distance", 2))
+    if ref:
+        try:
+            if phash_distance(metrics["phash"], ref) <= maxd:
+                return True
+        except Exception:
+            pass
+    # plain Videl boot stage: only pure green and white, no dark content
+    if metrics.get("unique_colors", 99) <= 2:
+        gf = metrics.get("green_frac", 0.0)
+        wf = metrics.get("white_frac", 0.0)
+        if (gf >= f.get("falcon_boot_logo_green_min", 0.20)
+                and wf >= f.get("falcon_boot_logo_stage_white_min", 0.20)
+                and gf + wf >= 0.95):
+            a = np.asarray(rgb.convert("RGB")).astype(int)
+            if not (a.sum(axis=2) < 200).any():
+                return True
+    if metrics.get("white_frac", 0.0) < f.get(
+            "falcon_boot_logo_white_min", 0.98):
+        return False
+    if metrics.get("unique_colors", 1 << 30) > f.get(
+            "falcon_boot_logo_max_colors", 2):
+        return False
+    a = np.asarray(rgb.convert("RGB")).astype(int)
+    h, w = a.shape[:2]
+    dark = a.sum(axis=2) < 200
+    if not dark.any() or dark.mean() > 0.02:
+        return False
+    ys, xs = np.where(dark)
+    return bool(xs.max() < w * f.get("falcon_boot_logo_max_x", 0.30)
+                and ys.max() < h * f.get("falcon_boot_logo_max_y", 0.45))
+
+
+def analyze_image(path: Path, cfg: dict,
+                  detect_boot_logo: bool = False) -> dict:
     from PIL import Image, ImageFilter, ImageStat
     import imagehash
 
@@ -1166,12 +1232,15 @@ def analyze_image(path: Path, cfg: dict) -> dict:
     score = (w["entropy"] * min(entropy / 8.0, 1.0)
              + w["colors"] * min(n_colors / 64.0, 1.0)
              + w["edges"] * min(edges / 64.0, 1.0))
-    return {"kind": kind, "mean": round(mean, 4), "std": round(std, 2),
-            "entropy": round(entropy, 3), "unique_colors": n_colors,
-            "edges": round(edges, 2), "green_frac": round(green / n, 4),
-            "white_frac": round(white_frac, 4),
-            "phash": phash, "score": round(score, 4),
-            "drive_led": drive_led}
+    result = {"kind": kind, "mean": round(mean, 4), "std": round(std, 2),
+              "entropy": round(entropy, 3), "unique_colors": n_colors,
+              "edges": round(edges, 2), "green_frac": round(green / n, 4),
+              "white_frac": round(white_frac, 4),
+              "phash": phash, "score": round(score, 4),
+              "drive_led": drive_led}
+    if detect_boot_logo:
+        result["boot_logo"] = is_falcon_boot_logo(rgb, result, cfg)
+    return result
 
 
 def refine_desktop_kind(kind: str, metrics: dict, cfg: dict) -> str:
@@ -2610,17 +2679,35 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             grabs = sorted(outdir.glob("*.png"))
             for g in grabs:
                 try:
-                    m = analyze_image(g, cfg)
+                    m = analyze_image(g, cfg,
+                                      detect_boot_logo=(machine == "falcon"))
                 except Exception as ex:
                     log(f"analyze failed {g.name}: {ex}")
                     continue
                 m["file"] = g.name
                 shots_meta.append(m)
                 log(f"{g.name}: kind={m['kind']} colors={m['unique_colors']} "
-                    f"score={m['score']} mean={m['mean']} std={m['std']}")
+                    f"score={m['score']} mean={m['mean']} std={m['std']}"
+                    + (" boot_logo" if m.get("boot_logo") else ""))
 
-            # drop black
-            survivors = [m for m in shots_meta if m["kind"] != "black"]
+            # drop black and the leading Falcon boot screens (no ZIP
+            # content). Only the first non-black captures can be boot
+            # stages; a later 2-colour green/white look-alike is kept as
+            # real content.
+            leading_boot = True
+            for m in shots_meta:
+                if m["kind"] == "black":
+                    continue
+                if leading_boot and m.get("boot_logo"):
+                    m["dropped"] = "boot_logo"
+                    continue
+                leading_boot = False
+                m.pop("boot_logo", None)
+            survivors = [m for m in shots_meta
+                         if m["kind"] != "black" and not m.get("boot_logo")]
+            logo_files = {m["file"] for m in shots_meta
+                          if m.get("boot_logo")}
+            usable_grabs = [g for g in grabs if g.name not in logo_files]
 
             # phash dedup (keep first occurrence in time order)
             deduped = []
@@ -2648,11 +2735,12 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                 # `<base>.png`, so the entry shows an image instead of an
                 # empty placeholder; the chosen grab is not duplicated as
                 # a candidate (preview and candidates stay disjoint, as in
-                # the success branch).
-                if grabs:
+                # the success branch). The static Falcon boot logo is not
+                # a reviewable shot and is never stored.
+                if usable_grabs:
                     if cfg["keep_candidates"]:
                         ci = 0
-                        for g in grabs[:-1]:
+                        for g in usable_grabs[:-1]:
                             ci += 1
                             cname = f"{base}_c{ci:02d}.png"
                             drop_case_variants(mirror_dir, (cname,))
@@ -2662,16 +2750,29 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                         if old_preview.exists():
                             # a previous run's preview (e.g. a forced
                             # rerun of a done entry) becomes a candidate
-                            # instead of an unreferenced orphan file
-                            ci += 1
-                            old = f"{base}_c{ci:02d}.png"
-                            drop_case_variants(mirror_dir, (old,))
-                            os.replace(old_preview, mirror_dir / old)
-                            candidates.append(old)
+                            # instead of an unreferenced orphan file; a
+                            # stale Falcon boot logo is dropped instead
+                            old_is_logo = False
+                            if machine == "falcon":
+                                try:
+                                    old_is_logo = bool(analyze_image(
+                                        old_preview, cfg,
+                                        detect_boot_logo=True).get(
+                                            "boot_logo"))
+                                except Exception:
+                                    pass
+                            if old_is_logo:
+                                old_preview.unlink(missing_ok=True)
+                            else:
+                                ci += 1
+                                old = f"{base}_c{ci:02d}.png"
+                                drop_case_variants(mirror_dir, (old,))
+                                os.replace(old_preview, mirror_dir / old)
+                                candidates.append(old)
                     # the preview gate is independent of keep_candidates
                     # (the success branch writes a preview either way)
                     drop_case_variants(mirror_dir, (preview_name,))
-                    shutil.copy2(grabs[-1], mirror_dir / preview_name)
+                    shutil.copy2(usable_grabs[-1], mirror_dir / preview_name)
                     preview = preview_name
                 elif (mirror_dir / preview_name).exists():
                     # no capture at all: keep the existing preview rather
@@ -2713,17 +2814,29 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                     # (drive window, folder window, program window), so the
                     # path to a successful click stays traceable
                     for sp in chain_shots:
-                        if isinstance(sp, Path):
+                        if isinstance(sp, Path) and sp.name not in logo_files:
                             _add_candidate(sp.name, outdir)
                     if target.exists():
                         # keep the previous preview (e.g. an old desktop
                         # shot) as an additional candidate instead of
-                        # silently overwriting it
-                        ci += 1
-                        old = f"{base}_c{ci:02d}.png"
-                        drop_case_variants(mirror_dir, (old,))
-                        os.replace(target, mirror_dir / old)
-                        candidates.append(old)
+                        # silently overwriting it; a stale Falcon boot
+                        # logo is worthless and is dropped instead
+                        old_is_logo = False
+                        if machine == "falcon":
+                            try:
+                                old_is_logo = bool(analyze_image(
+                                    target, cfg,
+                                    detect_boot_logo=True).get("boot_logo"))
+                            except Exception:
+                                pass
+                        if old_is_logo:
+                            target.unlink(missing_ok=True)
+                        else:
+                            ci += 1
+                            old = f"{base}_c{ci:02d}.png"
+                            drop_case_variants(mirror_dir, (old,))
+                            os.replace(target, mirror_dir / old)
+                            candidates.append(old)
                 shutil.copy2(outdir / pick["file"], target)
 
         def _commit():
@@ -3462,6 +3575,166 @@ def cmd_cleanup_duplicates(cfg: dict, P: dict, args, scope: dict) -> int:
     return 0
 
 
+def cmd_cleanup_boot_logo(cfg: dict, P: dict, args, scope: dict) -> int:
+    """Remove the static Falcon boot screens from the index (offline).
+
+    Falcon TOS 4.04 keeps its Atari-logo and plain green Videl boot
+    screens visible at the early screenshot timepoints. New captures
+    already filter them out (SPEC 8.1); this pass cleans shots captured
+    before that rule existed: every candidate that matches a boot screen
+    is deleted and removed from the index and the per-entry metadata JSON.
+
+    The preview is normally never a boot screen (a real shot outranks it).
+    If it is, the best non-boot candidate is promoted and
+    ``status``/``kind`` are recomputed; with no other candidate the boot
+    preview is kept and reported instead of leaving the entry without an
+    image.
+    """
+    prof = scope_profile(cfg, scope)
+    if prof.get("machine") != "falcon":
+        print(f"cleanup-boot-logo[{scope['name']}]: not a Falcon scope "
+              f"(machine {prof.get('machine')!r}), nothing to do")
+        return 0
+
+    out = Path(P["out"])
+    idx = load_index(out, scope["index"])
+    entries = idx["entries"]
+    lock = acquire_lock(out)
+    stats = {"scanned": 0, "entries": 0, "removed": 0, "promoted": 0,
+             "keep_preview": 0, "missing": 0, "unreadable": 0,
+             "metadata": 0, "errors": 0}
+
+    def _analyze(path: Path):
+        try:
+            return analyze_image(path, cfg, detect_boot_logo=True)
+        except Exception:
+            return None
+
+    try:
+        targets = [rel for rel in sorted(entries)
+                   if (not args.only
+                       or args.only.lower() in rel.lower())]
+        for rel in targets:
+            if STOP_EVENT.is_set():
+                print("interrupted", flush=True)
+                break
+            e = entries[rel]
+            prev = e.get("preview")
+            cands = list(e.get("candidates") or [])
+            if not prev and not cands:
+                continue
+            stats["scanned"] += 1
+            mirror = out / Path(rel).parent
+            base = safe_filename(Path(rel).stem)
+            meta = metadata_path(mirror, base)
+
+            preview_metrics = None
+            if prev:
+                pp = mirror / prev
+                if not pp.exists():
+                    stats["missing"] += 1
+                else:
+                    preview_metrics = _analyze(pp)
+                    if preview_metrics is None:
+                        stats["unreadable"] += 1
+            preview_logo = bool(preview_metrics
+                                and preview_metrics.get("boot_logo"))
+
+            cand_metrics = {}
+            logo_cands = []
+            for c in cands:
+                cp = mirror / c
+                if not cp.exists():
+                    stats["missing"] += 1
+                    continue
+                m = _analyze(cp)
+                if m is None:
+                    stats["unreadable"] += 1
+                    continue
+                cand_metrics[c] = m
+                if m.get("boot_logo"):
+                    logo_cands.append(c)
+
+            if not preview_logo and not logo_cands:
+                continue
+
+            keep_preview = bool(preview_logo)
+            promoted = None
+            if preview_logo:
+                non_logo = [(c, m) for c, m in cand_metrics.items()
+                            if not m.get("boot_logo")]
+                if non_logo:
+                    promoted = max(non_logo,
+                                   key=lambda cm: cm[1].get("score", 0))[0]
+                    keep_preview = False
+
+            removed = list(dict.fromkeys(
+                logo_cands + ([promoted] if promoted else [])))
+            stats["entries"] += 1
+            stats["removed"] += len(removed)
+            if promoted:
+                stats["promoted"] += 1
+            if keep_preview:
+                stats["keep_preview"] += 1
+            if getattr(args, "list", False):
+                print(f"  {rel}: -{', '.join(removed) if removed else '-'}"
+                      + (f" promote {promoted}" if promoted else "")
+                      + (" (preview is boot logo)" if keep_preview else ""),
+                      flush=True)
+            if args.dry_run:
+                continue
+
+            if promoted:
+                shutil.copy2(mirror / promoted, mirror / prev)
+                m = cand_metrics[promoted]
+                kind = refine_desktop_kind(m["kind"], m, cfg)
+                e["kind"] = kind
+                e["status"] = ("desktop" if kind in
+                               ("desktop", "textscreen", "darkscreen")
+                               else "done")
+            for name in removed:
+                try:
+                    (mirror / name).unlink(missing_ok=True)
+                except OSError as ex:
+                    stats["errors"] += 1
+                    print(f"  unlink error {rel}/{name}: {ex}",
+                          file=sys.stderr, flush=True)
+
+            remove_set = set(removed)
+            e["candidates"] = [c for c in cands if c not in remove_set]
+            if meta is not None:
+                try:
+                    with open(meta, "r", encoding="utf-8") as fh:
+                        md = json.load(fh)
+                    md["candidates"] = e["candidates"]
+                    if promoted:
+                        md["status"] = e["status"]
+                        md["kind"] = e["kind"]
+                        md["preview_is_desktop"] = bool(
+                            e["kind"] in ("desktop", "textscreen",
+                                          "darkscreen"))
+                    write_json_atomic(meta, md)
+                    stats["metadata"] += 1
+                except Exception as ex:
+                    stats["errors"] += 1
+                    print(f"  metadata error {rel}: {ex}",
+                          file=sys.stderr, flush=True)
+
+        if not args.dry_run:
+            save_index(out, idx, scope["index"])
+    finally:
+        release_lock(lock)
+
+    print(f"cleanup-boot-logo[{scope['name']}]: scanned {stats['scanned']}, "
+          f"entries {stats['entries']}, removed {stats['removed']} files, "
+          f"promoted {stats['promoted']}, kept preview "
+          f"{stats['keep_preview']}, metadata {stats['metadata']}, missing "
+          f"{stats['missing']}, unreadable {stats['unreadable']}, errors "
+          f"{stats['errors']}"
+          + (" [dry-run, nothing changed]" if args.dry_run else ""))
+    return 0
+
+
 def cmd_promote_app_screens(cfg: dict, P: dict, args, scope: dict) -> int:
     """Promote an application-window candidate to the preview.
 
@@ -3940,6 +4213,18 @@ def main() -> int:
     p_dedup.add_argument("--list", action="store_true",
                          help="print the removed candidate names per entry")
 
+    p_blogo = sub.add_parser(
+        "cleanup-boot-logo",
+        help="delete the static Falcon boot-logo candidates and clean the "
+             "index (offline, no Hatari)")
+    _scope_arg(p_blogo)
+    p_blogo.add_argument("--dry-run", action="store_true",
+                         help="report what would be removed, change nothing")
+    p_blogo.add_argument("--only", type=str, default="",
+                         help="only paths containing this substring")
+    p_blogo.add_argument("--list", action="store_true",
+                         help="print the removed candidate names per entry")
+
     p_promote = sub.add_parser(
         "promote-app-screens",
         help="offline: promote the app-screen candidate of desktop entries "
@@ -4007,6 +4292,8 @@ def main() -> int:
         return cmd_cleanup_drive_led(cfg, P, args, scope)
     if args.cmd == "cleanup-duplicates":
         return cmd_cleanup_duplicates(cfg, P, args, scope)
+    if args.cmd == "cleanup-boot-logo":
+        return cmd_cleanup_boot_logo(cfg, P, args, scope)
     if args.cmd == "promote-app-screens":
         return cmd_promote_app_screens(cfg, P, args, scope)
     if args.cmd == "reclassify":

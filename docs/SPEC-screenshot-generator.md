@@ -283,7 +283,8 @@ Defined scopes:
   (section 4.4.2). Verified 2026-10-22: 706 indexed ZIPs.
 
 Every subcommand (`index`, `run`, `detect`, `reclassify`,
-`cleanup-drive-led`, `cleanup-duplicates`, `promote-app-screens`, `prune`)
+`cleanup-drive-led`, `cleanup-duplicates`, `cleanup-boot-logo`,
+`promote-app-screens`, `prune`)
 takes `--scope` and works exclusively on the selected scope's trees, index
 file and output subtree. There is deliberately
 **no "all scopes" mode**: running two scopes means running the command
@@ -364,6 +365,15 @@ image(s) use `--disk-a`; with two images (disk A/B) the first two are
 extracted and mounted as `--disk-a`/`--disk-b`. The ST mono logic is skipped
 for the Videl profile. The scope uses its own timepoints `[15, 30, 60]`
 (the TOS desktop is still visible at 10 s, games appear at 30/60 s).
+
+TOS 4.04 keeps its **boot screens** visible at the early timepoints — in
+practice at 15 s and 30 s; the actual game/desktop only appears at 60 s.
+Two static stages occur: the white screen with the black Atari logo in the
+upper-left and a plain Videl stage (solid green area plus white, no dark
+content). Both carry no information about the ZIP. The capture pipeline
+recognizes them (section 8.1) and never uses them as preview or candidate;
+`cleanup-boot-logo` (section 8.8.1) removes shots captured before that rule
+existed.
 
 The UIs group the index entries with the generic `(letter, folder)` rule
 (`Falcon 030/Title Sorted/<letter>/<game>`); no gameinfo/AtariLegend join is
@@ -483,6 +493,8 @@ subcommand (section 8.7), a standalone offline pass that removes old
 drive-LED white screenshots and cleans the index, the
 `cleanup-duplicates` subcommand (section 8.8), an offline pass that removes
 pixel-exact duplicate candidates and updates the index/metadata, the
+`cleanup-boot-logo` subcommand (section 8.8.1), an offline pass that removes
+the static Falcon boot-logo candidates, the
 `promote-app-screens` subcommand (section 8.9), an offline pass that
 promotes an open application-window candidate of a successful desktop retry
 to the preview, the `reclassify` subcommand (section 8.4.1), an offline
@@ -924,6 +936,29 @@ All thresholds are configurable in the tool config with these defaults.
   video output — those screens are uniform. Darkness alone is not proof
   of a missing picture: the darkest accepted previews in the live index
   sit just above mean 0.02 with std >= 12.9, i.e. real content on black.
+- **Falcon boot screens (Falcon scope only).** The static TOS 4.04 boot
+  screens (section 4.4.2) are rejected like a black shot: they are not
+  content of the ZIP and must never become the preview or a candidate.
+  Two stages are recognized:
+  - **Atari logo:** pHash match against the known logo screen
+    (`filters.falcon_boot_logo_phash`, default max distance 2), with a
+    geometry fallback for a changed crop/zoom: at least 98 % white
+    pixels, at most 2 colours, and all dark pixels confined to the
+    upper-left area (max 30 % width / 45 % height, dark pixel fraction
+    <= 2 %).
+  - **Plain Videl stage:** at most 2 colours, at least 20 % green and
+    20 % near-white pixels covering at least 95 % of the image, and no
+    dark pixels at all (`filters.falcon_boot_logo_green_min`,
+    `filters.falcon_boot_logo_stage_white_min`).
+
+  Only the **leading** non-black captures are checked, so a later
+  2-colour green/white game screen is never discarded as a boot screen.
+  Rejected shots are recorded in the metadata `shots` history with
+  `boot_logo: true` and `dropped: "boot_logo"`, but are excluded before
+  dedup and preview selection. An entry whose only captures are boot
+  screens therefore ends as `no_usable_shots` without storing a boot
+  screen as its preview; its candidates exclude the boot-screen grabs as
+  well.
 
 ### 8.2 Reject: near-duplicates
 
@@ -1154,6 +1189,29 @@ entry:
   current entry. It is checked between candidates and entries, so long NAS
   passes visibly keep working without flooding the output.
 
+### 8.8.1 Falcon boot-logo cleanup (`cleanup-boot-logo`)
+
+New Falcon captures reject the static TOS 4.04 boot screens (Atari logo
+and plain green Videl stage) during analysis (section 8.1). The offline
+subcommand `cleanup-boot-logo` (no Hatari) cleans entries captured before
+that rule existed:
+
+- It only runs on a scope whose effective profile has
+  `machine: falcon`; other scopes print a hint and do nothing.
+- Every preview and `_cNN` candidate is checked with the same detector.
+  Candidate matches are deleted and removed from the scope index and the
+  metadata `candidates` list; names are not renumbered (gaps are allowed,
+  section 8.8).
+- The preview is normally a real shot and therefore never matches. If it
+  does, the best-scoring non-logo candidate is promoted in place (its file
+  becomes `<base>.png`, the old preview file is overwritten) and
+  `status`/`kind`/`preview_is_desktop` are recomputed from that candidate.
+  Without a non-logo candidate the logo preview is kept and reported
+  instead of leaving the entry without an image.
+- Missing/unreadable files are skipped and reported. `--dry-run` only
+  reports, `--list` prints the removed candidate names per entry,
+  `--only <substring>` limits the pass, and the output-dir lock is taken.
+
 ### 8.9 Promote application-window candidates (`promote-app-screens`)
 
 Utils frequently boot to a GEM desktop and show the real application only
@@ -1348,7 +1406,9 @@ entry — that status never carries a kind, section 8.5). `status` stays
 `desktop` for all three desktop sub-kinds. `monitor` is `mono` when the
 entry was booted in mono mode (section 4.6), otherwise `color`. `tos` is
 the version label the entry was booted with (`1.04`, `1.02`, …; section
-7.5); it is always written in the metadata.
+7.5); it is always written in the metadata. A rejected Falcon boot screen
+(section 8.1) stays in the `shots` history with `boot_logo: true` and
+`dropped: "boot_logo"`; it never appears as preview or candidate.
 
 The file is written only for entries that end as `done` or `desktop`.
 An entry ending as `no_usable_shots` (section 8.5) can have a preview but
@@ -1786,6 +1846,11 @@ A conforming implementation satisfies all of the following.
       (section 8.8), keeps the preview and the first occurrence, updates the
       index and metadata `candidates` lists, leaves missing/unreadable files
       alone and limits itself to the selected scope with `--only`/`--dry-run`.
+- [ ] F7a Falcon boot screens (Atari logo and plain green Videl stage) are
+      rejected before preview selection (section 8.1) and
+      `cleanup-boot-logo` removes old boot-screen candidates on the Falcon
+      scope, promoting a non-logo preview if one ever matched
+      (section 8.8.1).
 - [ ] F8 `promote-app-screens` examines every `desktop` entry with
       candidates (section 8.9), scans backwards and skips TTP dialogs, GEM
       file/drive windows, blank screens and the plain TOS desktop, then
