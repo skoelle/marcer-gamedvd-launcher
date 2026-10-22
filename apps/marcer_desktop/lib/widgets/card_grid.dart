@@ -301,11 +301,14 @@ class _CenterGridState extends State<CenterGrid> {
   Widget _thumbGrid(
       CatalogController c, GameCard card, int index,
       List<({int index, String path})> thumbs) {
+    void openVariant(({int index, String path}) t) {
+      c.moveSelectionTo(index);
+      widget.onOpenLightbox(t.index, 0);
+    }
+
     Widget cell(({int index, String path}) t) => GestureDetector(
-          onTap: () {
-            c.moveSelectionTo(index);
-            widget.onOpenLightbox(t.index, 0);
-          },
+          onTap: () => openVariant(t),
+          onDoubleTap: () => openVariant(t),
           child: Padding(
             padding: const EdgeInsets.all(2),
             child: Container(
@@ -476,6 +479,7 @@ class _CenterGridState extends State<CenterGrid> {
             for (var i = 0; i < cands.length && i < 6; i++)
               GestureDetector(
                 onTap: () => onPick(i),
+                onDoubleTap: () => onPick(i),
                 child: Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: const Color(0xFF2A2A2A)),
