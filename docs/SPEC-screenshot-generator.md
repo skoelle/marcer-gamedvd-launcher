@@ -608,11 +608,30 @@ used per screenshot.
 ### 7.3 Key injection (future extension, not MVP)
 
 Some titles do not auto-boot and stay on the TOS desktop or a loader prompt
-(observed in the smoke test). Keyboard key injection and `--auto` autostart
-are **much later** work (M7) and remain out of scope. The implemented
-alternative is the icon click retry of section 7.4.
+(observed in the smoke test). Keyboard key injection remains **much later**
+work (M7); `--auto` autostart is implemented for GEMDOS archives and floppy
+images via the auto retry (section 7.4). The other alternative is the icon
+click retry of section 7.4.
 
-### 7.4 Desktop click retry (implemented, verified)
+### 7.4 Desktop retry (implemented, verified)
+
+**Click-free alternative (`run --retry-desktop-auto`).** Instead of clicking,
+the image/archive is scanned before boot:
+
+- GEMDOS archives (Falcon, magazine ST-Computer) are extracted and the
+  largest program autostarted with `-d` + `--auto C:\…`.
+- Floppy `.msa`/`.st` images are decoded (MSA track lengths + RLE) and their
+  FAT12 directory read. A disk's own `AUTO/` program wins, else the largest
+  launchable `.PRG`/`.TOS`/`.TTP`/`.APP`; Hatari gets
+  `--disk-a <image> --auto "A:\<path>"` (drive B included for a second
+  image). Self-extracting archives (LZH/STZip SFX, which only unpack onto the
+  write-protected disk) are skipped.
+- `.stx`/`.ipf`/non-DOS/empty images and SFX-only disks yield no candidate:
+  the entry is marked `auto_retried` / `auto_result: no_program` and stays
+  `desktop` (the click retry below remains for those). No `xdotool`/`detect`
+  run is required.
+
+**Icon click retry (`detect` + `run --retry-desktop`).**
 
 For entries whose first run ended as kind `desktop`, the program icon on the
 GEM desktop can be clicked once so the title actually starts. This is a two

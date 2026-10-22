@@ -31,6 +31,7 @@ import os
 import re
 import shutil
 import signal
+import struct
 import subprocess
 import sys
 import tempfile
@@ -633,6 +634,193 @@ def prepare_boot(stage: Path, staged_zip: Path, stem: str):
         _safe_extract(zf, extract)
     atari_path = "C:\\" + boot.replace("/", "\\")
     return "gemdos", no_floppy + ["-d", str(extract), "--auto", atari_path]
+
+
+# --------------------------------------------------------------------------
+# floppy image scan for --retry-desktop-auto
+# --------------------------------------------------------------------------
+
+# Floppy images whose FAT12 directory can be read (`.stx`/`.ipf` are
+# copy-protected and have no plain filesystem).
+FAT_FLOPPY_EXTS = {".msa", ".st"}
+
+
+def _msa_to_raw(msa: bytes) -> bytes:
+    """Decode an MSA image to a raw ST sector dump (or pass `.st` through)."""
+    if len(msa) < 10 or msa[:2] != b"\x0e\x0f":
+        return msa
+    spt, sides_flag, start, end = struct.unpack(">HHHH", msa[2:10])
+    sides = sides_flag + 1
+    pos = 10
+    raw = bytearray()
+    for _track in range(start, end + 1):
+        for _side in range(sides):
+            if pos + 2 > len(msa):
+                return bytes(raw)
+            length = struct.unpack(">H", msa[pos:pos + 2])[0]
+            pos += 2
+            chunk = msa[pos:pos + length]
+            pos += length
+            if length == 512 * spt:
+                raw += chunk
+                continue
+            i = 0
+            out = bytearray()
+            while i < len(chunk):
+                b = chunk[i]
+                if b == 0xE5 and i + 3 < len(chunk):
+                    val = chunk[i + 1]
+                    run = struct.unpack(">H", chunk[i + 2:i + 4])[0]
+                    i += 4
+                    out += bytes([val]) * run
+                else:
+                    out.append(b)
+                    i += 1
+            raw += out
+    return bytes(raw)
+
+
+def _fat12_files(raw: bytes):
+    """Return ``[(path, size)]`` from the FAT12 root/sub-directories."""
+    if len(raw) < 512:
+        return []
+    bps = struct.unpack_from("<H", raw, 11)[0]
+    spc = raw[13]
+    reserved = struct.unpack_from("<H", raw, 14)[0]
+    nfats = raw[16]
+    root_entries = struct.unpack_from("<H", raw, 17)[0]
+    spf = struct.unpack_from("<H", raw, 22)[0]
+    if bps != 512 or spc == 0 or spf == 0 or root_entries == 0:
+        return []
+    root_secs = (root_entries * 32 + bps - 1) // bps
+    fat_start = reserved * bps
+    root_start = (reserved + nfats * spf) * bps
+    data_start = root_start + root_secs * bps
+    fat = raw[fat_start:fat_start + spf * bps]
+
+    def chain(cluster):
+        out = []
+        while 2 <= cluster < 0xFF8:
+            out.append(cluster)
+            off = cluster + cluster // 2
+            if off + 1 >= len(fat):
+                break
+            value = fat[off] | (fat[off + 1] << 8)
+            cluster = (value >> 4) if (cluster & 1) else (value & 0xFFF)
+        return out
+
+    def cluster_bytes(cluster):
+        start = data_start + (cluster - 2) * spc * bps
+        return raw[start:start + spc * bps]
+
+    def head_bytes(cluster):
+        out = bytearray()
+        for c in chain(cluster):
+            out += cluster_bytes(c)
+            if len(out) >= 4096:
+                break
+        return bytes(out[:4096])
+
+    files = []
+
+    def parse(blob, prefix):
+        for off in range(0, len(blob) - 31, 32):
+            e = blob[off:off + 32]
+            if e[0] == 0:
+                break
+            if e[0] == 0xE5:
+                continue
+            attr = e[11]
+            if attr & 0x08:
+                continue
+            name = e[0:8].decode("latin1").rstrip()
+            ext = e[8:11].decode("latin1").rstrip()
+            if not name or name in (".", ".."):
+                continue
+            full = name + ("." + ext if ext else "")
+            start_cluster = struct.unpack_from("<H", e, 26)[0]
+            size = struct.unpack_from("<I", e, 28)[0]
+            if attr & 0x10:
+                if start_cluster == 0:
+                    continue
+                sub = b"".join(cluster_bytes(c)
+                               for c in chain(start_cluster))
+                parse(sub, prefix + full + "/")
+            else:
+                files.append((prefix + full, size,
+                              head_bytes(start_cluster)))
+
+    parse(raw[root_start:root_start + root_entries * 32], "")
+    return files
+
+
+def _is_sfx(head: bytes) -> bool:
+    """True for self-extracting archives (LZH/STZip/ZIP SFX).
+
+    Those only unpack files (often onto the write-protected floppy) and are
+    not a playable program, so the floppy program pick skips them.
+    """
+    hl = head.lower()
+    return (b"sfx" in hl[:64] or b"self extracting" in hl
+            or b"stzip" in hl)
+
+
+def _floppy_program(raw: bytes):
+    """Largest launchable program on a floppy image (AUTO/ preferred).
+
+    Self-extracting archives are skipped; a disk with only SFX packs has no
+    launchable program and the entry stays on the desktop.
+    """
+    progs = [(n, s, h) for n, s, h in _fat12_files(raw)
+             if Path(n).suffix.lower() in BOOT_EXTS and not _is_sfx(h)]
+    if not progs:
+        return None
+    auto = [p for p in progs if p[0].lower().startswith("auto/")]
+    pool = auto or progs
+    pool.sort(key=lambda t: -t[1])
+    return pool[0][0]
+
+
+def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str):
+    """Return ``(mode, args, program)`` for ``--retry-desktop-auto``.
+
+    GEMDOS archives reuse the normal extract + ``-d``/``--auto`` path.
+    Floppy ZIPs are scanned through their FAT12 directory: the disk's
+    ``AUTO/`` program wins, else the largest launchable program. Images
+    without a readable FAT (`.stx`/`.ipf`, non-DOS disks) yield no candidate
+    (the click retry remains for those).
+    """
+    names, _sizes = _zip_entries(staged_zip)
+    boots = [n for n in names if Path(n).suffix.lower() in BOOT_EXTS]
+    if boots:
+        mode, args = prepare_boot(stage, staged_zip, stem)
+        program = args[args.index("--auto") + 1] if "--auto" in args else None
+        return mode, args, program
+
+    images = [n for n in names if Path(n).suffix.lower() in FLOPPY_EXTS]
+    readable = [n for n in images
+                if Path(n).suffix.lower() in FAT_FLOPPY_EXTS]
+    if not readable:
+        return None, None, None
+    readable.sort(key=lambda n: (_disk_index(n), n.lower()))
+    a_name = readable[0]
+    ordered = sorted(images, key=lambda n: (_disk_index(n), n.lower()))
+    b_name = next((n for n in ordered if n != a_name), None)
+    with zipfile.ZipFile(staged_zip) as zf:
+        raw = _msa_to_raw(zf.read(a_name))
+        program = _floppy_program(raw)
+        if not program:
+            return None, None, None
+        args = []
+        for label, name in (("a", a_name), ("b", b_name)):
+            if name is None:
+                continue
+            ext = Path(name).suffix or ".st"
+            dest = Path(stage) / f"disk_{label}{ext}"
+            _extract_member(zf, name, dest)
+            args += [f"--disk-{label}", str(dest)]
+    atari_path = "A:\\" + program.replace("/", "\\")
+    return "floppy", args + ["--auto", atari_path], atari_path
 
 
 # --------------------------------------------------------------------------
@@ -2183,7 +2371,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                   force: bool = False, tos_version: str = "",
                   tos_image: str = "", monitor_info=None,
                   profile: dict = None, boot_mode: str = "",
-                  timepoints: list = None) -> None:
+                  timepoints: list = None, auto_retry: bool = False) -> None:
     def commit(fn):
         # With parallel jobs, entry mutation must be serialized against
         # index saves performed by other workers (avoids torn index state).
@@ -2242,6 +2430,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     status, kind = "error", None
     shots_meta, preview, candidates = [], None, []
     click_result = None
+    auto_program = None
     chain_shots = []
 
     click_cfg = cfg.get("click_retry") or {}
@@ -2269,7 +2458,21 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
         # Boot medium: Falcon and magazine cover disks may be GEMDOS
         # hard-disk archives (not floppy images), so they are extracted and
         # autostarted with `-d` + `--auto`; floppy ZIPs keep `--disk-a`.
-        if machine == "falcon" or boot_mode in ("auto", "gemdos"):
+        if auto_retry:
+            auto_mode, auto_args, auto_program = prepare_auto_retry(
+                stage, staged, Path(rel).stem)
+            if auto_args is None:
+                def _no_program():
+                    entry["auto_retried"] = True
+                    entry["auto_result"] = "no_program"
+                    entry["last_run"] = time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                commit(_no_program)
+                log("auto retry: no launchable program found")
+                return
+            boot_kind, boot_args = auto_mode, auto_args
+            log(f"auto retry: {boot_kind} {boot_args}")
+        elif machine == "falcon" or boot_mode in ("auto", "gemdos"):
             boot_kind, boot_args = prepare_boot(
                 stage, staged, Path(rel).stem)
             log(f"boot: {boot_kind} {boot_args}")
@@ -2535,6 +2738,13 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             entry["zip_contents"] = zip_contents
             entry["capture_method"] = "cmd-fifo"
             entry["monitor"] = monitor
+            if auto_retry:
+                entry["auto_retried"] = True
+                entry["auto_result"] = status
+                if auto_program:
+                    entry["auto_program"] = auto_program
+                else:
+                    entry.pop("auto_program", None)
             # TOS marker (section 7.5/10.4): only a successful capture with a
             # non-default TOS is recorded (sparse; absent = the default TOS).
             # A failed attempt remembers its version in `tos_tried` so a
@@ -2577,6 +2787,9 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "click": entry.get("click"),
             "click_retried": bool(entry.get("click_retried")),
             "click_result": click_result,
+            "auto_retried": bool(entry.get("auto_retried")),
+            "auto_result": entry.get("auto_result"),
+            "auto_program": entry.get("auto_program"),
             "capture_method": "cmd-fifo",
             "shots": shots_meta,
             "zip_contents": zip_contents,
@@ -2631,7 +2844,7 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   index_name: str = INDEX_NAME, tos_version: str = "",
                   tos_image: str = "", monitor_map: dict = None,
                   profile: dict = None, boot_mode: str = "",
-                  timepoints: list = None):
+                  timepoints: list = None, auto_retry: bool = False):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
@@ -2698,7 +2911,8 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                               tos_version=tos_version, tos_image=tos_image,
                               monitor_info=(monitor_map or {}).get(e["rel"]),
                               profile=profile, boot_mode=boot_mode,
-                              timepoints=timepoints)
+                              timepoints=timepoints,
+                              auto_retry=auto_retry)
                 with state_lock:
                     save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
@@ -2764,6 +2978,13 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 continue
             if e.get("click_retried") and not args.force:
                 continue
+        elif args.retry_desktop_auto:
+            # scan the image/archive for a launchable program and start it
+            # with --auto (no GEM desktop clicks)
+            if e["status"] != "desktop":
+                continue
+            if e.get("auto_retried") and not args.force:
+                continue
         elif args.retry_no_usable:
             if e["status"] != "no_usable_shots":
                 continue
@@ -2809,7 +3030,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 tos_version=tos_version, tos_image=tos_image,
                 monitor_map=monitor_map,
                 profile=scope_prof, boot_mode=boot_mode,
-                timepoints=scope.get("timepoints"))
+                timepoints=scope.get("timepoints"),
+                auto_retry=args.retry_desktop_auto)
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -2843,7 +3065,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                               tos_version=tos_version, tos_image=tos_image,
                               monitor_info=monitor_map.get(e["rel"]),
                               profile=scope_prof, boot_mode=boot_mode,
-                              timepoints=scope.get("timepoints"))
+                              timepoints=scope.get("timepoints"),
+                              auto_retry=args.retry_desktop_auto)
                 save_index(out, idx, scope["index"])
                 done_counts[e["status"]] = done_counts.get(e["status"], 0) + 1
                 if STOP_EVENT.is_set():
@@ -3666,6 +3889,10 @@ def main() -> int:
                        help="retry desktop-only entries with a detected icon: "
                             "click it once after boot, then capture "
                             "(requires a prior 'detect' run)")
+    p_run.add_argument("--retry-desktop-auto", action="store_true",
+                       help="retry desktop-only entries by scanning the image/"
+                            "archive for a launchable program and starting it "
+                            "with --auto (no GEM desktop clicks)")
     p_run.add_argument("--retry-no-usable", action="store_true",
                        help="retry only entries that ended as no_usable_shots "
                             "(not reprocessed by a normal run)")
@@ -3756,10 +3983,11 @@ def main() -> int:
     if args.cmd == "run" and args.jobs < 1:
         ap.error("--jobs must be >= 1")
     retry_flags = [getattr(args, f, False) for f in
-                   ("retry_desktop", "retry_no_usable", "retry_drive_led")]
+                   ("retry_desktop", "retry_desktop_auto", "retry_no_usable",
+                    "retry_drive_led")]
     if sum(1 for v in retry_flags if v) > 1:
-        ap.error("--retry-desktop, --retry-no-usable and --retry-drive-led "
-                 "are mutually exclusive")
+        ap.error("--retry-desktop, --retry-desktop-auto, --retry-no-usable "
+                 "and --retry-drive-led are mutually exclusive")
     cfg = load_config()
     scope_default, scopes = resolve_scopes(cfg)
     scope_name = (args.scope or scope_default).strip()

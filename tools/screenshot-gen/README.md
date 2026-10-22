@@ -52,6 +52,7 @@ tools/screenshot-gen/run.sh run --scope pd --jobs 4 --limit 16
 # existing desktop previews, then boot once more and click it:
 tools/screenshot-gen/run.sh detect         # offline icon detection (no Hatari)
 tools/screenshot-gen/run.sh run --retry-desktop   # click + capture (one attempt)
+tools/screenshot-gen/run.sh run --scope magazine --retry-desktop-auto --jobs 4
 
 # Remove blank white previews that only show Hatari's drive-LED overlay:
 tools/screenshot-gen/run.sh cleanup-drive-led --dry-run   # report only
@@ -172,6 +173,27 @@ lock, so parallel workers never overwrite each other's updates, and Ctrl+C
 stops every worker after its current entry. Keep total CPU below ~90%,
 otherwise the wall-clock screenshot timepoints may drift. `--jobs 1` (the
 default) is the classic serial behavior.
+
+### Desktop auto retry (`run --retry-desktop-auto`)
+
+A click-free alternative to the GEM desktop click chain. It selects the
+`desktop` entries and, before booting, finds the program to start:
+
+- **GEMDOS archives** (Falcon, magazine ST-Computer): extract and autostart
+  the largest program with `-d` + `--auto C:\…`.
+- **Floppy images** (`.msa`/`.st`): the FAT12 directory is scanned in memory
+  (MSA header + track RLE, standard BPB/FAT). A disk's own `AUTO/` program
+  wins, else the largest launchable `.PRG`/`.TOS`/`.TTP`/`.APP`. Hatari is
+  started with `--disk-a <image> --auto "A:\<path>"` (plus drive B for a
+  second image). Self-extracting archives (LZH/STZip "SFX", which only unpack
+  onto the write-protected floppy) are skipped.
+- **Unreadable images** (`.stx`/`.ipf`, non-DOS disks, empty images) and
+  SFX-only disks have no detectable program: the entry is marked
+  `auto_retried` / `auto_result: no_program` and stays `desktop` (the
+  `--retry-desktop` click path remains for those).
+
+Completed attempts store `auto_retried`, `auto_result` and `auto_program`;
+`--force` re-runs them. No `xdotool`/`detect` run is required.
 
 ### Desktop click retry (`detect` + `run --retry-desktop`)
 
