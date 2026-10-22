@@ -41,6 +41,8 @@ indices plus gameinfo — without any filesystem scan.**
   folders (metadata-only cards, no screenshots).
 - `magazine` cards come from `index-magazine.json` only (index-only, no
   gameinfo): one card per magazine issue, grouped by a filename parser.
+- `falcon` cards come from `index-falcon.json` only (index-only, no
+  gameinfo), grouped by `(letter, folder)` like the cracked view.
 - No source tree is walked while building the universe.
 
 References: `CatalogUniverse.build` / `CatalogBundle.loadSync`

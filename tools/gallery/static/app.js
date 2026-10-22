@@ -18,7 +18,7 @@ const LETTERS = ["0-9", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
 const SORT_KEYS = ["name", "year", "publisher", "cracker", "crew"];
 const SECTION_INDEX_NAMES = {
   cracked: "index.json", pd: "index-pd.json", utils: "index-utils.json",
-  magazine: "index-magazine.json",
+  magazine: "index-magazine.json", falcon: "index-falcon.json",
 };
 
 const SECTION_CONTROLS = {
@@ -28,6 +28,7 @@ const SECTION_CONTROLS = {
   utils: ["status", "publisher", "crew", "cracker", "language", "year",
           "raw", "tos"],
   magazine: ["status", "year"],
+  falcon: ["status"],
 };
 const FACET_LABELS = {
   status: "Status", publisher: "Publisher", crew: "Crew",
@@ -245,8 +246,8 @@ function renderStats(extra) {
     parts.push(`<span class="st">info <b>${meta.coverage.matched_folders}</b> folders</span>`);
   }
   const noInfo = sec.no_info || 0;
-  // magazine cards are filename-only by design — never report missing gameinfo
-  if (noInfo && section !== "magazine") {
+  // magazine/falcon cards are index-only by design — never report missing info
+  if (noInfo && section !== "magazine" && section !== "falcon") {
     parts.push(`<span class="st">${noInfo} without info</span>`);
   }
   if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
@@ -1084,7 +1085,7 @@ async function boot() {
   const secMeta = (meta && meta.sections) || {};
   const secHasData = (s) => !!(secMeta[s] && (secMeta[s].games || secMeta[s].cards));
   $("tabs").hidden = !(secHasData("pd") || secHasData("utils") ||
-    secHasData("magazine"));
+    secHasData("magazine") || secHasData("falcon"));
   for (const b of $("tabs").querySelectorAll("button")) {
     const s = b.dataset.section;
     b.hidden = s !== "cracked" && !secHasData(s);

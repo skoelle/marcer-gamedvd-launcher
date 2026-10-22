@@ -187,7 +187,7 @@ class DetailPanel extends StatelessWidget {
             info: card.info,
             variant: _primaryVariant(card),
             filter: c.filter,
-            variants: kHatariVariants,
+            variants: card.kind == 'falcon' ? kFalconVariants : kHatariVariants,
             atariLegend: al,
             onAtariLegend: al == null
                 ? null

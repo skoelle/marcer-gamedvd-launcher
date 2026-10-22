@@ -10,6 +10,7 @@ import 'package:flutter/painting.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
+import 'falcon_launcher.dart';
 import 'favorites_paths.dart';
 import 'favorites_service.dart';
 import 'ftp_downloader.dart';
@@ -539,10 +540,10 @@ class CatalogController extends ChangeNotifier {
 
   /// AtariLegend match for a catalog card (matched by folder name, like the
   /// `tools/atarilegend-gen` matcher). `null` when no data/matche — and
-  /// always `null` for magazine cards (their folder key is an issue number,
-  /// not a game folder).
+  /// always `null` for magazine/falcon cards (their folders are not gameinfo
+  /// folders).
   AtariLegendGame? atariLegendForCard(GameCard card) {
-    if (card.kind == 'magazine') return null;
+    if (card.kind == 'magazine' || card.kind == 'falcon') return null;
     return atariLegend.matchFolder(card.folder);
   }
 
@@ -550,7 +551,8 @@ class CatalogController extends ChangeNotifier {
   /// `<letter>/<folder>` of its rel path (same join as the screenshot index).
   AtariLegendGame? atariLegendForEntry(Entry e) {
     final rel = relOf(e);
-    if (sectionOfRel(sectionTrees, rel) == 'magazine') return null;
+    final section = sectionOfRel(sectionTrees, rel);
+    if (section == 'magazine' || section == 'falcon') return null;
     final parts = rel.split('/');
     if (parts.length >= 4) return atariLegend.matchFolder(parts[3]);
     return atariLegend.matchFolder(e.name);
@@ -591,6 +593,7 @@ class CatalogController extends ChangeNotifier {
         'cracked' => 'Cracked',
         'pd' => 'PD',
         'magazine' => 'Magazine',
+        'falcon' => 'Falcon',
         _ => 'Utils',
       };
     }
@@ -1030,14 +1033,30 @@ class CatalogController extends ChangeNotifier {
 
   /// Optional pre-launch guard (set by the UI): when it returns `false` the
   /// launch is aborted. Used to offer a TOS ROM download before the first start
-  /// (the [HatariVariant] selects which TOS the run needs).
-  Future<bool> Function(HatariVariant? variant)? beforeLaunch;
+  /// (the [HatariVariant] selects which TOS the run needs; [falcon] requests
+  /// the Falcon TOS 4.04 instead of the ST TOS).
+  Future<bool> Function(HatariVariant? variant, bool falcon)? beforeLaunch;
 
-  /// Launches [zipPath] with Hatari (non-blocking). Sets [launchError] when the
-  /// configuration or ZIP is invalid; [launching] while the process runs.
-  Future<void> launchZip(String zipPath, {HatariVariant? variant}) async {
-    if (beforeLaunch != null && !await beforeLaunch!(variant)) return;
-    final result = await launchHatari(config, zipPath, variant: variant);
+  /// True when [path] (absolute or root/patch-relative) lies inside the Falcon
+  /// section tree, so the Falcon launch path is used instead of the ST one.
+  bool isFalconPath(String path) {
+    final rel = _relFromAbsolute(path) ?? normalizeRelSeparators(path);
+    return sectionOfRel(sectionTrees, rel) == 'falcon';
+  }
+
+  /// Launches [zipPath] with Hatari (non-blocking). Falcon titles use the
+  /// dedicated Falcon launch path (own machine/TOS, GEMDOS autostart). Sets
+  /// [launchError] when the configuration or ZIP is invalid; [launching] while
+  /// the process runs.
+  Future<void> launchZip(String zipPath,
+      {HatariVariant? variant, bool? falcon}) async {
+    final useFalcon = falcon ?? isFalconPath(zipPath);
+    if (beforeLaunch != null && !await beforeLaunch!(variant, useFalcon)) {
+      return;
+    }
+    final result = useFalcon
+        ? await launchFalcon(config, zipPath, variant: variant)
+        : await launchHatari(config, zipPath, variant: variant);
     if (result.error != null) {
       launchError = result.error;
       notifyListeners();
@@ -1315,9 +1334,11 @@ class CatalogController extends ChangeNotifier {
         final matched = gameinfo.matchedFolders;
         if (matched != null) parts.add('gameinfo $matched folders');
       }
-      // Magazine cards are filename-only by design — never report them as
-      // missing gameinfo.
-      final noInfo = section == 'magazine' ? 0 : universe.noInfoFor(section);
+      // Magazine/falcon cards are index-only by design — never report them
+      // as missing gameinfo.
+      final noInfo = (section == 'magazine' || section == 'falcon')
+          ? 0
+          : universe.noInfoFor(section);
       if (noInfo > 0) {
         parts.add('$noInfo without gameinfo');
       }

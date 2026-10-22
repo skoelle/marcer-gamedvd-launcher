@@ -34,12 +34,14 @@ Save, the manual screenshot curation described below.
 
 - **Gallery-style catalog grid** as the default view — every game as a card
   with its best screenshot, section tabs (`games` / `pd` / `utils` /
-  `magazines`; `games` is the former `cracked` section) and
+  `magazines` / `falcon`; `games` is the former `cracked` section) and
   global filters: search, status, publisher, crew, cracker, language, year,
   tri-state `raw` / `pasti` / `boxscan`, `TOS/Bad`, and a combined sort
   dropdown (`name asc` … `crew desc`, same width as `TOS/Bad`). The
   `magazines` tab shows the `Bonus/Magazine Cover Disks` collection
-  (index-magazine.json) with one filename-derived card per issue.
+  (index-magazine.json) with one filename-derived card per issue; the
+  `falcon` tab shows `Falcon 030/Title Sorted` (index-falcon.json) and
+  launches its titles as a Falcon 030 (TOS 4.04).
 - **Type-to-filter dropdowns** — every filter dropdown (publisher, crew,
   cracker, language, year, genre/developers, status, sort, raw/pasti/boxscan,
   TOS/Bad) opens a searchable, virtualized menu (only the visible rows are
@@ -136,8 +138,9 @@ Save, the manual screenshot curation described below.
   the running app version (right-aligned).
 - **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
   `desktop text` / `desktop black` / `pending` / … , available in **all
-  four sections** (cracked, pd, utils, magazine; all default to the configured
-  `DefaultStatus`, normally `with_screenshot`).
+  five sections** (cracked, pd, utils, magazine, falcon; cracked defaults to
+  the configured `DefaultStatus`, normally `with_screenshot`, the others to
+  `any`).
   `pending` matches a game when **at least one** of its ZIPs is pending —
   the same rule the gallery applies (a game can appear in `pending` and
   `done` at once); every other status value uses the card aggregation
@@ -455,7 +458,7 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 | [`tools/asset-manifest`](tools/asset-manifest/README.md) | Lists the newest `screenshots-*.zip` / `gameinfo-*.zip` on the Marcer FTP (read-only: connect + list, never uploads) and publishes a `latest.json` pointer as a GitHub release asset on the fixed `catalog-latest` prerelease (used by the desktop update check). | [`tools/asset-manifest/README.md`](tools/asset-manifest/README.md) |
 | [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`; entry kinds are `game`, `desktop`, `textscreen`, `darkscreen`,
 `no_game_image` (offline `reclassify` pass; offline `cleanup-duplicates` pass removes pixel-exact duplicate candidates, updates index + metadata and prints a 10-second progress line; offline `promote-app-screens` pass scans `desktop` candidates backwards (skipping TTP dialogs, GEM file windows, blank screens and the plain desktop) and promotes the remaining app screen, resetting TTP-only entries to desktop/desktop; drive-LED resets re-captured via
-`run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview; old titles that hang on TOS 1.04 are re-captured via `run --retry-no-usable --tos 1.02` (a success records a sparse `tos: "1.02"` marker shown as a `TOS 1.02` badge in the gallery/desktop app, failed attempts go to `tos_tried`); the root/patch overlay merge is case-insensitive for file **and** folder names, so each directory has exactly one canonical output spelling; processing happens in named **scopes** — one scope per invocation via `--scope`, default `cracked` on `index.json`, the opt-in `utils` scope (`Title Sorted/Utilitys - Title Sorted`) on `index-utils.json`, the opt-in `pd` scope (`Title Sorted/PD Games - Title Sorted`) on `index-pd.json`, the opt-in `magazine` scope (`Bonus/Magazine Cover Disks`, scope-local `exclude_dirs: ["dupes"]`) on `index-magazine.json`; monitor mode comes from the gameinfo `screen_format` rules (`MARCER_DATA_DIR/games-<scope>.json`: utils mono unless `Not Mono`/`Low`/`Mid`, including utils entries without a gameinfo match, pd mono only for all-`High` folders) with the `mono_dir_suffix` folder check as fallback; mono boots Hatari `--mono --tos-res high` (ST high res 640x400), and the rules affect future captures only). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
+`run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview; old titles that hang on TOS 1.04 are re-captured via `run --retry-no-usable --tos 1.02` (a success records a sparse `tos: "1.02"` marker shown as a `TOS 1.02` badge in the gallery/desktop app, failed attempts go to `tos_tried`); the root/patch overlay merge is case-insensitive for file **and** folder names, so each directory has exactly one canonical output spelling; processing happens in named **scopes** — one scope per invocation via `--scope`, default `cracked` on `index.json`, the opt-in `utils` scope (`Title Sorted/Utilitys - Title Sorted`) on `index-utils.json`, the opt-in `pd` scope (`Title Sorted/PD Games - Title Sorted`) on `index-pd.json`, the opt-in `magazine` scope (`Bonus/Magazine Cover Disks`, scope-local `exclude_dirs: ["dupes"]`) on `index-magazine.json`, the opt-in `falcon` scope (`Falcon 030/Title Sorted`, own TOS 4.04 + Falcon profile, GEMDOS titles extracted and autostarted with `-d`/`--auto`) on `index-falcon.json`; monitor mode comes from the gameinfo `screen_format` rules (`MARCER_DATA_DIR/games-<scope>.json`: utils mono unless `Not Mono`/`Low`/`Mid`, including utils entries without a gameinfo match, pd mono only for all-`High` folders) with the `mono_dir_suffix` folder check as fallback; mono boots Hatari `--mono --tos-res high` (ST high res 640x400), and the rules affect future captures only). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
 
 ---
 
@@ -517,7 +520,7 @@ The design and specification documents live in [`docs/`](docs/README.md):
 | [`docs/ANALYSIS-boxscan-manual-structure.md`](docs/ANALYSIS-boxscan-manual-structure.md) | Analysis of the `Boxscan/` and `Manual/` companion folders (location, naming, ZIP/loose-file structure, edge cases, consumer requirements). |
 | [`docs/DECISION-app-architecture.md`](docs/DECISION-app-architecture.md) | Why the desktop app is Flutter, the gallery webapp is Python + HTML, and the couch surface is planned. |
 | [`docs/SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) | Behavioral spec of the gallery webapp (`tools/gallery`) — the design reference for the desktop catalog. |
-| [`docs/SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) | Screenshot pipeline and the `index.json`/`index-pd.json`/`index-utils.json`/`index-magazine.json` artifacts consumed by both UIs. |
+| [`docs/SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) | Screenshot pipeline and the `index.json`/`index-pd.json`/`index-utils.json`/`index-magazine.json`/`index-falcon.json` artifacts consumed by both UIs. |
 | [`docs/BUGS.md`](docs/BUGS.md) | Known issues and their resolution status. |
 
 Per-app/per-tool docs stay next to their code: [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md), [`apps/marcer_console/README.md`](apps/marcer_console/README.md), and each `tools/*/README.md`.

@@ -23,6 +23,22 @@
       "exclude_dirs": [
         "dupes"
       ]
+    },
+    "falcon": {
+      "trees": [
+        "Falcon 030/Title Sorted"
+      ],
+      "index": "index-falcon.json",
+      "tos_default": "4.04",
+      "timepoints": [15, 30, 60],
+      "profile": {
+        "name": "falcon",
+        "machine": "falcon",
+        "memsize": "14",
+        "zoom": "1",
+        "monitor": "rgb",
+        "extra_args": ["--dsp", "emu", "--cpuclock", "16"]
+      }
     }
   },
   "mono_dir_suffix": "Mono",
@@ -43,7 +59,8 @@
   "tos_default": "1.04",
   "tos_images": {
     "1.04": "MARCER_TOS_IMG",
-    "1.02": "MARCER_TOS102_IMG"
+    "1.02": "MARCER_TOS102_IMG",
+    "4.04": "MARCER_TOS404_IMG"
   },
   "disk_skip_regex": "(?i)(?:^|[\\s\\-_.])(?:disk|side|disc)[\\s\\-_.]*(?:[2-9]|b|ii|iii)(?:$|[\\s\\-_.])",
   "filters": {

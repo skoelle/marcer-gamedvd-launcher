@@ -51,6 +51,9 @@ const List<TosRomOption> kTosRomOptions = [
       'https://www.atariworld.org/files/images/tos162uk.zip'),
   TosRomOption('1.62', 'Deutsch',
       'https://www.atariworld.org/files/images/tos162de.zip'),
+  // TOS 4.04 (Falcon, 512 KB, Multilanguage) — used by the Falcon section.
+  TosRomOption('4.04', 'Multilanguage',
+      'https://www.atariworld.org/files/images/tos404.zip'),
 ];
 
 /// The TOS versions the default (`TOS.IMG`) download dialog offers: only

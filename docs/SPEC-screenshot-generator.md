@@ -275,6 +275,12 @@ Defined scopes:
   `exclude_dirs: ["dupes"]` so the per-magazine `Dupes/` dump folders are
   skipped (section 4.4.1). Verified 2026-10-22: 229 indexed ZIPs, 1
   `skipped_disk_n`.
+- `falcon` (opt-in via `--scope falcon`):
+  `Falcon 030/Title Sorted`, index `index-falcon.json`, own TOS 4.04
+  (`MARCER_TOS404_IMG`) and a per-scope profile (`machine falcon`, 14 MB,
+  `--dsp emu`, Videl RGB, CPU 16 MHz). Falcon titles are mostly GEMDOS
+  hard-disk archives and are extracted + autostarted with `-d`/`--auto`
+  (section 4.4.2). Verified 2026-10-22: 706 indexed ZIPs.
 
 Every subcommand (`index`, `run`, `detect`, `reclassify`,
 `cleanup-drive-led`, `cleanup-duplicates`, `promote-app-screens`, `prune`)
@@ -289,7 +295,8 @@ verified 2026-10-16: 12,429 indexed ZIPs, pilot run of 50 entries with
 
 Explicitly out of scope for now (no scope defined):
 
-- `Bonus` (except the `magazine` scope), `Tools`, `Falcon 030`
+- `Bonus` (except the `magazine` scope), `Tools`, the `Falcon 030/Crew
+  Sorted` and `Falcon 030/Misc` trees
 - All `Crew Sorted` trees
 - Everything else
 
@@ -305,8 +312,9 @@ are removed automatically) and `prune` (section 5) to clean leftovers.
 
 Scope is defined in the tool config (section 11.2), so extending later is a
 config change, not a code change. Note for UI consumers: the gallery and
-desktop app read `index.json` (cracked), `index-pd.json`, `index-utils.json`
-and `index-magazine.json` (section 4.4.1); any further scope index file is
+desktop app read `index.json` (cracked), `index-pd.json`, `index-utils.json`,
+`index-magazine.json` (section 4.4.1) and `index-falcon.json` (section
+4.4.2); any further scope index file is
 invisible to them until a future join step.
 
 #### 4.4.1 Magazine cover disks (`magazine` scope)
@@ -328,6 +336,31 @@ file name (`ST Action 41`, `ST Computer 1995-02`, `Zero Issue 16`), and a
 four-digit year is extracted where present. The magazine folder name is used
 as the card's letter facet (magazine filter). This yields 209 cards
 (47 ST Action, 84 ST Computer, 33 Start Micro, 22 The One, 23 Zero).
+
+#### 4.4.2 Falcon 030 (`falcon` scope)
+
+`Falcon 030/Title Sorted` holds Falcon 030 titles (706 indexed ZIPs, verified
+2026-10-22). They are a different machine: the scope uses its own profile
+(`machine falcon`, 14 MB ST RAM, `--dsp emu`, Videl `--monitor rgb`, CPU
+16 MHz) and its own TOS 4.04 (`MARCER_TOS404_IMG`), never the ST profile/TOS.
+
+Most Falcon titles are **GEMDOS hard-disk archives** (a `.PRG`/`.TOS`/`.TTP`/
+`.APP` boot file plus data files), not floppy images. `process_entry`
+therefore extracts such a ZIP into the staging directory and boots Hatari
+with `-d <dir>` + `--auto C:\<PROG>` and both floppy drives disabled
+(`--drive-a off --drive-b off`) — without that Falcon TOS 4.04 raises a modal
+"Drive A: is not responding" dialog that blocks the autostart. The boot pick
+prefers a stem match, then a stem containment match, then a numbered
+multi-part set's lowest part (`AAZOHM1.TOS` before 2/3), else the largest;
+STZip self-extracting archives are deprioritized. ZIPs holding only floppy
+image(s) use `--disk-a`; with two images (disk A/B) the first two are
+extracted and mounted as `--disk-a`/`--disk-b`. The ST mono logic is skipped
+for the Videl profile. The scope uses its own timepoints `[15, 30, 60]`
+(the TOS desktop is still visible at 10 s, games appear at 30/60 s).
+
+The UIs group the index entries with the generic `(letter, folder)` rule
+(`Falcon 030/Title Sorted/<letter>/<game>`); no gameinfo/AtariLegend join is
+performed. The section is index-only.
 
 ### 4.5 Multi-disk sets (user decision)
 
@@ -516,12 +549,12 @@ Notes:
 - A profile defines: machine type, TOS source (env var), RAM, monitor,
   borders, zoom, fast-boot, extra CLI args, time points list, and optional
   per-entry key injection steps (future).
-- Profile selection: default `st`. A future config map can assign profiles by
-  path pattern (for example Falcon trees). No special profiles are needed for
-  the current scope.
-- The Falcon case (`Falcon 030` tree, Falcon machine, Falcon TOS) is out of
-  scope now. It is listed as a future extension because EmuTOS has weak Falcon
-  support and Falcon TOS is not available in this environment (risk R4).
+- Profile selection: default `st`; a scope may override individual profile
+  keys (`scopes.<name>.profile`, deep-merged) and its TOS
+  (`scopes.<name>.tos_default`).
+- The `falcon` scope uses a `falcon` profile (`machine falcon`, 14 MB, DSP
+  emu, Videl RGB, CPU 16 MHz) and TOS 4.04 (`MARCER_TOS404_IMG`); its
+  GEMDOS titles are extracted and autostarted (section 4.4.2).
 
 ### 6.4 Screenshot timing configuration
 
@@ -1410,8 +1443,11 @@ MARCER_DISPLAY=...
 ### 11.2 Tool config file
 
 `tools/screenshot-gen/config.example.json` (committed, contains no paths):
-`scope_default` + `scopes` (per scope: tree list, optional index file name
-and optional scope-local `exclude_dirs` merged with the global list; the
+`scope_default` + `scopes` (per scope: tree list, optional index file name,
+optional scope-local `exclude_dirs` merged with the global list, optional
+scope-local `tos_default`, `timepoints` and an optional `profile`
+deep-merged over the
+global one; the
 default scope maps to `index.json`, every other scope to
 `index-<name>.json`, section 4.4; legacy `scope_trees` is still accepted
 when no `scopes` entry exists), `mono_dir_suffix` (folder suffix that
@@ -1419,7 +1455,8 @@ triggers `--mono --tos-res high`, section 4.6), `screen_format_monitor`
 (per-scope gameinfo rules that win over the suffix, section 4.6),
 `tos_default` +
 `tos_images` (version label → environment variable of its ROM image,
-section 7.5), `exclude_dirs` (sub-directory names never
+section 7.5; includes `4.04` for the Falcon scope), `exclude_dirs`
+(sub-directory names never
 scanned, section 4.4), time points, timeouts, filter thresholds (the
 black/empty thresholds `black_mean_max`, `black_std_max`,
 `black_std_content_min` of section 8.1 and the desktop sub-kind thresholds
@@ -1467,8 +1504,8 @@ Risks:
    Keyboard key injection and `--auto` remain M7.
 3. **Disk-2-plus skip patterns** may false-positive on game names that contain
    the word `disk`. Patterns must stay conservative and configurable.
-4. **Falcon titles** need Falcon TOS, which is not available here. Falcon
-   stays out of scope until a legal Falcon TOS image is provided.
+4. **Falcon titles** use TOS 4.04 (`MARCER_TOS404_IMG`, downloaded from the
+   same source as the ST TOS) and the `falcon` scope (section 4.4.2).
 5. **NFS latency** for output writes (thousands of small PNG and JSON files).
    Mitigation: mirrored tree, per-entry writes, no global transactions needed.
 6. **Hatari version drift.** Verified against 2.4.1. Newer versions rename or

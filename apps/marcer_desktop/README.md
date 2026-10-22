@@ -53,7 +53,7 @@ macOS); the Dart package name stays `marcer_desktop`.
 - Linux desktop toolchain: `clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev`
 - Data roots reachable (see `local/paths.env`): game tree, patch tree,
   screenshot archive (`index.json`, `index-pd.json`, `index-utils.json`,
-  `index-magazine.json` + PNGs), gameinfo `Data/` dir.
+  `index-magazine.json`, `index-falcon.json` + PNGs), gameinfo `Data/` dir.
   All optional — missing artifacts degrade to empty states.
 
 ## Commands
@@ -141,7 +141,7 @@ and **TOS ROM** rows (download/install on demand, see below).
 |---|---|---|
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
-| `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`/`index-magazine.json`, PNGs) |
+| `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`/`index-magazine.json`/`index-falcon.json`, PNGs) |
 | `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
 | `AtariLegendDirectory` | no | compact AtariLegend cache (`atarilegend.json`); filled by **Download AtariLegend data** (directory created when missing) |
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
@@ -190,6 +190,25 @@ shows a **`TOS 1.02`** badge (grid tile, detail panel, lightbox header) and a
 then **preselects the matching variant** (Low Res TOS 1.02), so the default
 Standard attempt is skipped; the dropdown still lets you choose another variant.
 
+### Falcon 030
+
+The `falcon` section (`Falcon 030/Title Sorted`) is a different machine and
+**never uses the ST `Hatari.ArgsTemplate`/config**. It boots
+`--machine falcon` with its own TOS 4.04 (`Falcon.TosFile`, default
+`TOS404.IMG`; the pre-launch guard offers the download), 14 MB, `--dsp emu`,
+Videl RGB and CPU 16 MHz. Because most Falcon titles are GEMDOS hard-disk
+archives, the ZIP is inspected: a floppy-image ZIP goes to `--disk-a`, while a
+GEMDOS ZIP is extracted into a session temp directory and autostarted with
+`-d <dir>` + `--auto C:\<PROG>` and the floppy drives off
+(`--drive-a off --drive-b off`, otherwise Falcon TOS 4.04 blocks the start
+with a "Drive A: is not responding" dialog). The boot program is picked by
+name / numbered-set lowest part (STZip self-extractors skipped) / largest; a
+floppy-image ZIP goes to `--disk-a`, two images mount as drive A and B.
+The Play dropdown offers Falcon variants: **RGB** (default), **VGA**
+(`--monitor vga`), **4 MB** (`--memsize 4`), **DSP off** (`--dsp none`) and
+**FPU** (`--fpu 68882`). Optional `Falcon` config block in `desktop.config.json`:
+`TosFile`, `Memsize`, `Monitor`, `Dsp`, `CpuClock`, `Fpu`, `ExtraArgs`.
+
 ## Hatari (download & install)
 
 When no Hatari executable is configured/found, the app offers to install a
@@ -234,9 +253,12 @@ Hatari's working directory (the bundled config looks for `TOS.IMG` there). The
 **STE** Play variant needs **TOS 1.62** (`TOS162.IMG`), the **Low Res TOS
 1.02** variant **TOS 1.02** (`TOS102.IMG`) and the **Low Res TOS 1.00**
 variant **TOS 1.00** (`TOS100.IMG`) — each offered filtered to that version
-when the file is missing. The ⚙ settings editor's **TOS ROM** row reflects
+when the file is missing. The **Falcon** section needs **TOS 4.04**
+(`TOS404.IMG`, Multilanguage) and offers it filtered to that version as well.
+The ⚙ settings editor's **TOS ROM** row reflects
 only `TOS.IMG`; the variant TOS files
-(`TOS162.IMG`/`TOS102.IMG`/`TOS100.IMG`) are managed by the Play variants (a
+(`TOS162.IMG`/`TOS102.IMG`/`TOS100.IMG`/`TOS404.IMG`) are managed by the Play
+variants / the Falcon section (a
 missing one is offered when that variant is launched).
 
 ## Favorites
@@ -283,8 +305,8 @@ file manager.
 
 The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
 `desktop text`, `desktop black`, `pending`, `no usable shots`,
-`interrupted`, `skipped (disk 2+)`) is available in **all four sections**
-(cracked, pd, utils, magazine):
+`interrupted`, `skipped (disk 2+)`) is available in **all five sections**
+(cracked, pd, utils, magazine, falcon):
 
 - `pending` matches a game when **at least one** of its ZIPs is pending
   (the same rule the gallery's status filter applies — the aggregated
@@ -313,8 +335,9 @@ the coverage `info N folders` / `N without info`):
 - `3287 folders` — games (cards) of the active section; cracked cards are
   built from `index.json`, pd/utils cards are the union of their own
   index (`index-pd.json` / `index-utils.json`) and gameinfo-only folders,
-  and magazine cards come from `index-magazine.json` (one card per issue,
-  filename-derived); every game folder with at least one ZIP is one card.
+  magazine cards come from `index-magazine.json` (one card per issue,
+  filename-derived) and falcon cards from `index-falcon.json`; every game
+  folder with at least one ZIP is one card.
 - `3211 with screenshot` — games of the section with a preview (prefer
   `done` game shot, else first `done`, else first `desktop`).
 - `done 2635 (8979 zips)` — per status: number of **games** (cards) plus
@@ -329,8 +352,8 @@ the coverage `info N folders` / `N without info`):
   `matched_folders`; cracked only) / cards of the active section whose
   gameinfo join is empty.
 - `index.json: …` (or `index-pd.json` / `index-utils.json` /
-  `index-magazine.json` for those sections), `gameinfo: …` — active index
-  mtime and gameinfo generation timestamp.
+  `index-magazine.json` / `index-falcon.json` for those sections),
+  `gameinfo: …` — active index mtime and gameinfo generation timestamp.
 
 ## Missing ZIPs
 

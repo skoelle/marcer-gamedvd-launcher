@@ -94,15 +94,16 @@ Rules:
 - Variable values never appear in committed files, logs or documentation
   (same rule as SPEC-screenshot-generator.md section 11).
 
-### 2.2 Screenshot indices (`<OUT>/index.json`, `index-pd.json`, `index-utils.json`, `index-magazine.json`)
+### 2.2 Screenshot indices (`<OUT>/index.json`, `index-pd.json`, `index-utils.json`, `index-magazine.json`, `index-falcon.json`)
 
-*(verified, measured 2026-10-11; per-section split 2026-10-16; magazine 2026-10-22)*
+*(verified, measured 2026-10-11; per-section split 2026-10-16; magazine 2026-10-22; falcon 2026-10-22)*
 
-- Four files with identical structure, one per section:
+- Five files with identical structure, one per section:
   `index.json` (cracked, back-compat name), `index-pd.json` (PD games),
-  `index-utils.json` (utilities) and `index-magazine.json` (magazine cover
-  disks, index-only without gameinfo). Missing cracked `index.json` refuses
-  startup (section 2.1); missing pd/utils/magazine indices yield empty
+  `index-utils.json` (utilities), `index-magazine.json` (magazine cover
+  disks) and `index-falcon.json` (Falcon 030/Title Sorted) — the last two
+  index-only without gameinfo. Missing cracked `index.json` refuses
+  startup (section 2.1); missing pd/utils/magazine/falcon indices yield empty
   sections (pd/utils cards then come from gameinfo only). Per-section mtimes
   are reported in `/api/meta` (section 5.2).
 - Cracked `index.json`: size ≈ 12 MB, parsed in ≈ 0.16 s *(verified)*.
@@ -425,10 +426,10 @@ Query parameters (all optional, defaults in parentheses):
 
 | Parameter | Values | Applies to |
 |---|---|---|
-| `section` | `cracked` (default) \| `pd` \| `utils` \| `magazine` | view selection |
-| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default from `default_status`, normally `with_screenshot`) |
+| `section` | `cracked` (default) \| `pd` \| `utils` \| `magazine` \| `falcon` | view selection |
+| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default `with_screenshot` for `cracked`, `any` for the others) |
 | `q` | free text | all |
-| `letter` | `0-9` … `Z` (or facet value) \| `any` (default) | all (magazine: magazine name) |
+| `letter` | `0-9` … `Z` (or facet value) \| `any` (default) | all (magazine: magazine name; falcon: letter) |
 | `publisher`, `crew`, `cracker`, `language`, `year` | facet value \| `any` (default) | cracked (+pd/utils where the field exists; magazine: `year` only) |
 | `raw`, `pasti`, `boxscan` | `any` (default) \| `yes` \| `no` | cracked |
 | `tos` | `any` (default) \| `has` (only entries with a `tos_bad` note) | cracked |
@@ -765,9 +766,10 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | Tab | Source | Cards | Notes |
 |---|---|---|---|
 | games | join of `index.json` + `games-cracked.json` | grouped, with previews | default view (label `games`, section key `cracked`) |
-| pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`) |
-| utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`) |
-| magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `with_screenshot`); `letter` = magazine name, `year` from the file name |
+| pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
+| utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
+| magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `any`); `letter` = magazine name, `year` from the file name |
+| falcon | `index-falcon.json` (index-only, no gameinfo) | grouped by `(letter, folder)` like the cracked view | status filter (default `any`); Falcon titles launch with the Falcon machine/TOS 4.04 (desktop) |
 
 - Letter navigation, search, sorting, the status filter and the
   publisher/language/year facets work in all sections; the remaining
@@ -776,9 +778,14 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
   Disks`) has no metadata: its cards come from `index-magazine.json` grouped
   per issue by a filename parser (`ST Action 41`, `ST Computer 1995-02`,
   `Zero Issue 16`), mirroring `packages/marcer_catalog/lib/src/magazine.dart`.
+- The `falcon` section (section key `falcon`, `Falcon 030/Title Sorted`) is
+  index-only from `index-falcon.json`, grouped with the generic
+  `(letter, folder)` rule; the desktop app launches its titles as a Falcon
+  (`--machine falcon`, TOS 4.04, GEMDOS autostart), never with the ST
+  parameters.
 - Switching tabs preserves `q`, `sort`, `order`, `letter` where applicable,
   resets incompatible filters and falls the status filter back to the
-  configured `default_status` (normally `with_screenshot`).
+  section default (`with_screenshot` for cracked, `any` for the others).
 
 ### 6.9 Deep links
 

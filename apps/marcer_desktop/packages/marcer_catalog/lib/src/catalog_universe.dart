@@ -55,10 +55,12 @@ class CatalogUniverse {
     required this.pd,
     required this.utils,
     required this.magazine,
+    required this.falcon,
     required this.crackedFacets,
     required this.pdFacets,
     required this.utilsFacets,
     required this.magazineFacets,
+    required this.falconFacets,
     required Map<String, Map<String, int>> statusCountsBySection,
   }) : _countsBySection = statusCountsBySection;
 
@@ -111,6 +113,16 @@ class CatalogUniverse {
       atariLegend: null,
       onProgress: onProgress,
     );
+    onProgress?.call('Building catalog — falcon…');
+    final falcon = _buildIndexedSection(
+      kind: 'falcon',
+      index: indices.forSection('falcon'),
+      info: info,
+      fullPng: fullPng,
+      unionGameinfo: false,
+      atariLegend: null,
+      onProgress: onProgress,
+    );
 
     onProgress?.call('Building catalog — facets…');
     return CatalogUniverse._(
@@ -118,15 +130,18 @@ class CatalogUniverse {
       pd: pd.cards,
       utils: utils.cards,
       magazine: magazine.cards,
+      falcon: falcon.cards,
       crackedFacets: _facets(cracked.cards, 'cracked'),
       pdFacets: _facets(pd.cards, 'pd'),
       utilsFacets: _facets(utils.cards, 'utils'),
       magazineFacets: _facets(magazine.cards, 'magazine'),
+      falconFacets: _facets(falcon.cards, 'falcon'),
       statusCountsBySection: {
         'cracked': cracked.statusCounts,
         'pd': pd.statusCounts,
         'utils': utils.statusCounts,
         'magazine': magazine.statusCounts,
+        'falcon': falcon.statusCounts,
       },
     );
   }
@@ -135,10 +150,12 @@ class CatalogUniverse {
   final List<GameCard> pd;
   final List<GameCard> utils;
   final List<GameCard> magazine;
+  final List<GameCard> falcon;
   final CatalogFacets crackedFacets;
   final CatalogFacets pdFacets;
   final CatalogFacets utilsFacets;
   final CatalogFacets magazineFacets;
+  final CatalogFacets falconFacets;
   final Map<String, Map<String, int>> _countsBySection;
 
   /// Aggregated `displayStatus` counts over cracked cards (status bar games
@@ -153,12 +170,14 @@ class CatalogUniverse {
 
   /// Every card of every section (the `★ Favorites` filter lists all
   /// sections at once).
-  List<GameCard> get allCards => [...cracked, ...pd, ...utils, ...magazine];
+  List<GameCard> get allCards =>
+      [...cracked, ...pd, ...utils, ...magazine, ...falcon];
 
   List<GameCard> cardsFor(String section) => switch (section) {
         'pd' => pd,
         'utils' => utils,
         'magazine' => magazine,
+        'falcon' => falcon,
         _ => cracked,
       };
 
@@ -166,6 +185,7 @@ class CatalogUniverse {
         'pd' => pdFacets,
         'utils' => utilsFacets,
         'magazine' => magazineFacets,
+        'falcon' => falconFacets,
         _ => crackedFacets,
       };
 
@@ -365,6 +385,7 @@ CatalogFacets _facets(List<GameCard> cards, String kind) {
 Set<String> kindFields(String kind) => switch (kind) {
       'pd' => {'publisher', 'language', 'release', 'tos_bad'},
       'magazine' => const {},
+      'falcon' => const {},
       'utils' => {
           'publisher',
           'crew',

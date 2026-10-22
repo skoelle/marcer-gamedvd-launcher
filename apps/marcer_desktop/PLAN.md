@@ -15,7 +15,7 @@ index, `GameCard` build, facets, `CatalogFilter`/`matchesCard`/`sortCards`,
 fuzzy crew/cracker focus, config incl. `ShowCandidates`/`DefaultStatus`,
 Hatari launch command building).
 Master-detail UI: **gallery-style catalog grid is the default view** (section
-tabs games (`cracked`) / pd / utils / magazines, search, status/publisher/crew/cracker/
+tabs games (`cracked`) / pd / utils / magazines / falcon, search, status/publisher/crew/cracker/
 language/year dropdowns — the facet dropdowns support **type-to-filter/jump**,
 tri-state raw/pasti/boxscan, TOS/Bad, combined sort+order dropdown (key ×
 asc/desc), letter row, clear), right-hand

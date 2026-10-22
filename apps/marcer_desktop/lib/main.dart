@@ -605,8 +605,9 @@ class _HomePageState extends State<HomePage> {
 
   /// Pre-launch guard chain: ensure Hatari itself is installed first, then the
   /// TOS ROM the run needs. Returns `false` to abort the launch.
-  Future<bool> _beforeLaunch(HatariVariant? variant) async {
+  Future<bool> _beforeLaunch(HatariVariant? variant, bool falcon) async {
     if (!await _ensureHatari()) return false;
+    if (falcon) return _ensureTosFor('4.04', _config.falconTosFile);
     return _ensureTos(variant);
   }
 
@@ -646,15 +647,22 @@ class _HomePageState extends State<HomePage> {
   /// `true` when the image is present (or was just installed), `false` to
   /// abort the launch.
   Future<bool> _ensureTos(HatariVariant? variant) async {
-    final cfg = _config;
     final fileName = variant?.tosFileName ?? kTosImageFileName;
     final versions = (variant == null || variant.tosVersions.isEmpty)
         ? kDefaultTosVersions
         : variant.tosVersions;
+    return _ensureTosFor(versions.first, fileName, versions: versions);
+  }
+
+  /// Ensures a specific TOS image ([fileName]) exists, offering the download
+  /// dialog with [versions] when it is missing.
+  Future<bool> _ensureTosFor(String version, String fileName,
+      {List<String>? versions}) async {
+    final cfg = _config;
     if (File(tosImagePath(cfg, fileName: fileName)).existsSync()) return true;
     if (!mounted) return false;
     return showTosRomDialog(context,
-        config: cfg, versions: versions, fileName: fileName);
+        config: cfg, versions: versions ?? [version], fileName: fileName);
   }
 
   Future<void> _toggleHelpAsync() async {

@@ -56,6 +56,7 @@ void main() {
       Map<String, String> pdEntries = const {},
       Map<String, String> utilsEntries = const {},
       Map<String, String> magazineEntries = const {},
+      Map<String, String> falconEntries = const {},
       AtariLegendIndex? atariLegend}) {
     File('$screenshotDir/index.json').writeAsStringSync(jsonEncode({
       'version': 1,
@@ -79,6 +80,12 @@ void main() {
       'version': 1,
       'entries': {
         for (final e in magazineEntries.entries) e.key: jsonDecode(e.value),
+      },
+    }));
+    File('$screenshotDir/index-falcon.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {
+        for (final e in falconEntries.entries) e.key: jsonDecode(e.value),
       },
     }));
     File('$gameinfoDir/games-cracked.json').writeAsStringSync(
@@ -941,6 +948,52 @@ void main() {
     test('kind filters: year only, no cracker/crew', () {
       expect(kindFilters('magazine'), {'year'});
       expect(kindFields('magazine'), isEmpty);
+    });
+  });
+
+  group('CatalogUniverse.build (falcon cards)', () {
+    const falconA =
+        'Falcon 030/Title Sorted/A/Another World/Another World - F030.zip';
+    const falconA2 =
+        'Falcon 030/Title Sorted/A/Another World/Another World - Original.zip';
+    const falconB = 'Falcon 030/Title Sorted/B/Bad Mood/Bad Mood v3.07a.zip';
+
+    test('groups by (letter, folder) like the cracked section', () {
+      final u = buildUniverse({}, falconEntries: {
+        falconA: entryJson(falconA, 'done', 'ROOT', preview: 'a.png'),
+        falconA2: entryJson(falconA2, 'pending', 'ROOT'),
+        falconB: entryJson(falconB, 'done', 'PATCH', preview: 'b.png'),
+      });
+      expect(u.falcon.length, 2);
+      final aw = u.falcon.firstWhere((c) => c.folder == 'Another World');
+      expect(aw.letter, 'A');
+      expect(aw.kind, 'falcon');
+      expect(aw.variants.length, 2);
+      expect(aw.displayStatus, 'done');
+      final bm = u.falcon.firstWhere((c) => c.folder == 'Bad Mood');
+      expect(bm.displayStatus, 'done');
+      expect(bm.layer, 'PATCH');
+    });
+
+    test('index-only: no gameinfo join, no AtariLegend', () {
+      final u = buildUniverse({}, falconEntries: {
+        falconA: entryJson(falconA, 'done', 'ROOT', preview: 'a.png'),
+      });
+      final card = u.falcon.single;
+      expect(card.info, isNull);
+      expect(card.atariLegend, isNull);
+      expect(u.falconFacets.letters, ['A']);
+      expect(kindFilters('falcon'), isEmpty);
+      expect(kindFields('falcon'), isEmpty);
+    });
+
+    test('cardsFor/facetsFor/allCards resolve the falcon section', () {
+      final u = buildUniverse({}, falconEntries: {
+        falconA: entryJson(falconA, 'done', 'ROOT', preview: 'a.png'),
+      });
+      expect(u.cardsFor('falcon'), u.falcon);
+      expect(u.facetsFor('falcon'), u.falconFacets);
+      expect(u.allCards, contains(u.falcon.first));
     });
   });
 }

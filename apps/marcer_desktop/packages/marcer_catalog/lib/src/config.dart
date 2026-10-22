@@ -24,6 +24,13 @@ class DesktopConfig {
     this.hatariExecutable = '',
     this.hatariConfigFile = '',
     this.hatariArgsTemplate = r'-c "{cfg}" --disk-a "{zip}"',
+    this.falconTosFile = 'TOS404.IMG',
+    this.falconMemsize = '14',
+    this.falconMonitor = 'rgb',
+    this.falconDsp = 'emu',
+    this.falconCpuClock = '16',
+    this.falconFpu = 'none',
+    this.falconExtraArgs = '',
     this.ftpHost = '',
     this.ftpUser = '',
     this.ftpPassword = '',
@@ -52,6 +59,22 @@ class DesktopConfig {
   final String hatariExecutable;
   final String hatariConfigFile;
   final String hatariArgsTemplate;
+
+  /// Falcon 030 launch settings (the `Falcon` config block). Falcon is a
+  /// completely different machine: it never uses the ST `Hatari.ConfigFile`/
+  /// [hatariArgsTemplate] but a dedicated command line (`--machine falcon`,
+  /// its own TOS 4.04, GEMDOS HD autostart). Defaults match the code
+  /// variants; the block is optional.
+  final String falconTosFile;
+  final String falconMemsize;
+  final String falconMonitor;
+  final String falconDsp;
+  final String falconCpuClock;
+  final String falconFpu;
+
+  /// Extra raw command-line arguments appended to every Falcon launch
+  /// (split like [hatariArgsTemplate]); empty by default.
+  final String falconExtraArgs;
 
   /// FTP download of missing game folders (DetailPanel "Download missing").
   /// Plain FTP; [ftpHost] is `host` or `host:port` (the port defaults to 21,
@@ -116,6 +139,7 @@ class DesktopConfig {
     final raw = File(configPath).readAsStringSync();
     final map = jsonDecode(raw) as Map<String, dynamic>;
     final hatari = (map['Hatari'] as Map<String, dynamic>?) ?? const {};
+    final falcon = (map['Falcon'] as Map<String, dynamic>?) ?? const {};
     final window = (map['Window'] as Map<String, dynamic>?) ?? const {};
     final ftp = (map['Ftp'] as Map<String, dynamic>?) ?? const {};
     final resolvedAppDir = appDir.isNotEmpty
@@ -131,6 +155,13 @@ class DesktopConfig {
       hatariConfigFile: (hatari['ConfigFile'] ?? '') as String,
       hatariArgsTemplate:
           (hatari['ArgsTemplate'] ?? r'-c "{cfg}" --disk-a "{zip}"') as String,
+      falconTosFile: (falcon['TosFile'] ?? 'TOS404.IMG') as String,
+      falconMemsize: (falcon['Memsize'] ?? '14') as String,
+      falconMonitor: (falcon['Monitor'] ?? 'rgb') as String,
+      falconDsp: (falcon['Dsp'] ?? 'emu') as String,
+      falconCpuClock: (falcon['CpuClock'] ?? '16') as String,
+      falconFpu: (falcon['Fpu'] ?? 'none') as String,
+      falconExtraArgs: (falcon['ExtraArgs'] ?? '') as String,
       ftpHost: (ftp['Host'] ?? '') as String,
       ftpUser: (ftp['User'] ?? '') as String,
       ftpPassword: (ftp['Password'] ?? '') as String,
@@ -159,6 +190,13 @@ class DesktopConfig {
     String? hatariExecutable,
     String? hatariConfigFile,
     String? hatariArgsTemplate,
+    String? falconTosFile,
+    String? falconMemsize,
+    String? falconMonitor,
+    String? falconDsp,
+    String? falconCpuClock,
+    String? falconFpu,
+    String? falconExtraArgs,
     String? ftpHost,
     String? ftpUser,
     String? ftpPassword,
@@ -183,6 +221,13 @@ class DesktopConfig {
       hatariExecutable: hatariExecutable ?? this.hatariExecutable,
       hatariConfigFile: hatariConfigFile ?? this.hatariConfigFile,
       hatariArgsTemplate: hatariArgsTemplate ?? this.hatariArgsTemplate,
+      falconTosFile: falconTosFile ?? this.falconTosFile,
+      falconMemsize: falconMemsize ?? this.falconMemsize,
+      falconMonitor: falconMonitor ?? this.falconMonitor,
+      falconDsp: falconDsp ?? this.falconDsp,
+      falconCpuClock: falconCpuClock ?? this.falconCpuClock,
+      falconFpu: falconFpu ?? this.falconFpu,
+      falconExtraArgs: falconExtraArgs ?? this.falconExtraArgs,
       ftpHost: ftpHost ?? this.ftpHost,
       ftpUser: ftpUser ?? this.ftpUser,
       ftpPassword: ftpPassword ?? this.ftpPassword,
@@ -212,6 +257,15 @@ class DesktopConfig {
           'Executable': hatariExecutable,
           'ConfigFile': hatariConfigFile,
           'ArgsTemplate': hatariArgsTemplate,
+        },
+        'Falcon': {
+          'TosFile': falconTosFile,
+          'Memsize': falconMemsize,
+          'Monitor': falconMonitor,
+          'Dsp': falconDsp,
+          'CpuClock': falconCpuClock,
+          'Fpu': falconFpu,
+          'ExtraArgs': falconExtraArgs,
         },
         'Ftp': {
           'Host': ftpHost,
@@ -303,6 +357,17 @@ class DesktopConfig {
     if (appDir.isEmpty) return kBundledHatariConfig;
     return '$appDir/$kBundledHatariConfig';
   }
+
+  /// Absolute path of the Falcon TOS image (`Falcon.TosFile`, default
+  /// `TOS404.IMG`) in the Hatari working directory (or [appDir]).
+  String resolveFalconTosPath() {
+    final base =
+        hatariWorkingDirectory.isNotEmpty ? hatariWorkingDirectory : appDir;
+    return base.isEmpty ? falconTosFile : '$base/$falconTosFile';
+  }
+
+  /// True when the Falcon TOS image exists (see [resolveFalconTosPath]).
+  bool falconTosInstalled() => File(resolveFalconTosPath()).existsSync();
 
   String _resolveAgainstAppDir(String path) {
     if (path.trim().isEmpty) return '';

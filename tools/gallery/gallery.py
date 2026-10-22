@@ -55,6 +55,7 @@ SECTION_INDEX_NAMES = {
     "pd": "index-pd.json",
     "utils": "index-utils.json",
     "magazine": "index-magazine.json",
+    "falcon": "index-falcon.json",
 }
 
 
@@ -410,6 +411,7 @@ def kind_fields(kind):
         "utils": {"publisher", "crew", "cracked_by", "language", "release",
                   "raw_dump", "tos_bad"},
         "magazine": set(),
+        "falcon": set(),
     }[kind]
 
 
@@ -422,6 +424,7 @@ def kind_filters(kind):
         "utils": {"publisher", "crew", "cracker", "language", "year", "raw",
                   "tos"},
         "magazine": {"year"},
+        "falcon": set(),
     }[kind]
 
 
@@ -630,6 +633,8 @@ class DataStore:
             "utils", union_gameinfo=True)
         self.cards["magazine"] = _build_indexed_cards(
             entries["magazine"], [], "magazine", union_gameinfo=False)
+        self.cards["falcon"] = _build_indexed_cards(
+            entries["falcon"], [], "falcon", union_gameinfo=False)
         self.facets = {kind: _facets(self.cards[kind], kind)
                        for kind in SECTION_INDEX_NAMES}
 

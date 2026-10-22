@@ -101,6 +101,17 @@ void main() {
       expect(discoverSectionTrees(browser),
           {'magazine': 'Bonus/Magazine Cover Disks'});
     });
+
+    test('discovers the Falcon Title Sorted tree under Falcon 030', () {
+      final falcon = '${tmp.path}/falcon';
+      Directory('$falcon/Falcon 030/Title Sorted/A/Another World')
+          .createSync(recursive: true);
+      Directory('$falcon/Falcon 030/Crew Sorted/Cracks')
+          .createSync(recursive: true);
+      final browser = OverlayBrowser(rootDir: falcon);
+      expect(discoverSectionTrees(browser),
+          {'falcon': 'Falcon 030/Title Sorted'});
+    });
   });
 
   group('sectionOfRel', () {

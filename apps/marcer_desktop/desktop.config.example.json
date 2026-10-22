@@ -9,6 +9,15 @@
     "ConfigFile": "",
     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
   },
+  "Falcon": {
+    "TosFile": "TOS404.IMG",
+    "Memsize": "14",
+    "Monitor": "rgb",
+    "Dsp": "emu",
+    "CpuClock": "16",
+    "Fpu": "none",
+    "ExtraArgs": ""
+  },
   "Ftp": {
     "Host": "ftp.example.com",
     "User": "anonymous",

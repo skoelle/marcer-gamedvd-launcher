@@ -4,8 +4,11 @@
 import 'entry.dart';
 import 'overlay.dart';
 
+/// Root-relative tree of the Falcon 030 section on the GameDVD.
+const String kFalconTreeName = 'Falcon 030/Title Sorted';
+
 /// Section tree name prefixes (gallery directory names on the GameDVD):
-/// `Cracked…`, `PD…`, `Util…`.
+/// `Cracked…`, `PD…`, `Util…`, `Magazine…`.
 String? sectionOfTreeName(String name) {
   if (name.startsWith('Cracked')) return 'cracked';
   if (name.startsWith('PD')) return 'pd';
@@ -55,6 +58,16 @@ Map<String, String> discoverSectionTrees(OverlayBrowser browser) {
   for (final e in browser.list('')) {
     if (e.kind != EntryKind.directory) continue;
     consider(e.name);
+    // Falcon titles live under `Falcon 030/Title Sorted` (the `Falcon 030`
+    // root also holds Crew Sorted/Misc trees, which are not a section).
+    if (e.name == 'Falcon 030') {
+      for (final c in browser.list(e.name)) {
+        if (c.kind == EntryKind.directory && c.name == 'Title Sorted') {
+          candidates.putIfAbsent('falcon', () => []).add(kFalconTreeName);
+        }
+      }
+      continue;
+    }
     // Trees may sit one level deeper (e.g. under `Title Sorted`); do not
     // descend into an already matched tree (its children are letters).
     final matched = sectionOfTreeName(e.name) != null;

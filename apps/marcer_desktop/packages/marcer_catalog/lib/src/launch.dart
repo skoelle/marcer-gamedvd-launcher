@@ -65,6 +65,34 @@ const List<HatariVariant> kHatariVariants = [
   ),
 ];
 
+/// The built-in Falcon 030 Play variants (split Play button dropdown). Falcon
+/// is a different machine with its own TOS 4.04 and a GEMDOS/floppy boot
+/// path; the ST [kHatariVariants] never apply. The default (RGB, 14 MB, DSP
+/// emu) carries no extra args; each variant overrides one setting.
+const List<HatariVariant> kFalconVariants = [
+  HatariVariant(name: 'RGB', description: 'Falcon, Videl RGB, 14 MB'),
+  HatariVariant(
+    name: 'VGA',
+    description: 'Falcon, Videl VGA',
+    extraArgs: ['--monitor', 'vga'],
+  ),
+  HatariVariant(
+    name: '4 MB',
+    description: 'Falcon, 4 MB ST RAM',
+    extraArgs: ['--memsize', '4'],
+  ),
+  HatariVariant(
+    name: 'DSP off',
+    description: 'Falcon, DSP emulation off',
+    extraArgs: ['--dsp', 'none'],
+  ),
+  HatariVariant(
+    name: 'FPU',
+    description: 'Falcon, 68882 FPU',
+    extraArgs: ['--fpu', '68882'],
+  ),
+];
+
 /// Builds the Hatari command for one ZIP (SPEC.md §12.1).
 ///
 /// `{cfg}` → the Hatari config file (`Hatari.ConfigFile`, or the bundled

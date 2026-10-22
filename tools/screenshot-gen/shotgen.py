@@ -79,6 +79,22 @@ DEFAULT_CONFIG = {
                 "dupes",
             ],
         },
+        "falcon": {
+            "trees": [
+                "Falcon 030/Title Sorted",
+            ],
+            "index": "index-falcon.json",
+            "tos_default": "4.04",
+            "timepoints": [15, 30, 60],
+            "profile": {
+                "name": "falcon",
+                "machine": "falcon",
+                "memsize": "14",
+                "zoom": "1",
+                "monitor": "rgb",
+                "extra_args": ["--dsp", "emu", "--cpuclock", "16"],
+            },
+        },
     },
     # Directory names ending with this suffix (case-insensitive, matched
     # against the entry's game folder, e.g. "Abalone - Mono") are booted
@@ -129,6 +145,7 @@ DEFAULT_CONFIG = {
     "tos_images": {
         "1.04": "MARCER_TOS_IMG",
         "1.02": "MARCER_TOS102_IMG",
+        "4.04": "MARCER_TOS404_IMG",
     },
     "disk_skip_regex": (
         r"(?i)(?:^|[\s\-_.])(?:disk|side|disc)[\s\-_.]*"
@@ -223,6 +240,9 @@ def resolve_scopes(cfg: dict) -> tuple:
             trees = [str(t) for t in (spec.get("trees") or [])]
             index = spec.get("index")
             exclude = [str(d) for d in (spec.get("exclude_dirs") or [])]
+            profile = spec.get("profile") or {}
+            tos_default = spec.get("tos_default")
+            timepoints = spec.get("timepoints")
         else:
             sys.exit(f"error: scopes.{name} must be an object with a "
                      f"trees list")
@@ -231,7 +251,9 @@ def resolve_scopes(cfg: dict) -> tuple:
         if not index:
             index = "index.json" if name == default else f"index-{name}.json"
         scopes[name] = {"name": name, "trees": trees, "index": index,
-                        "exclude_dirs": exclude}
+                        "exclude_dirs": exclude, "profile": profile,
+                        "tos_default": tos_default,
+                        "timepoints": timepoints}
     if default not in scopes:
         sys.exit(f"error: scope_default {default!r} is not defined in "
                  f"scopes ({', '.join(sorted(scopes))})")
@@ -417,6 +439,197 @@ def build_monitor_map(cfg: dict, P: dict, scope: dict, entries):
         f"{counts['mono']} mono, {counts['color']} color "
         f"(rules {counts['rules']}, suffix {counts['suffix']}, "
         f"default {counts['default']})")
+
+
+# --------------------------------------------------------------------------
+# falcon / GEMDOS boot preparation
+# --------------------------------------------------------------------------
+
+# Floppy disk images Hatari can read from inside a ZIP.
+FLOPPY_EXTS = {".st", ".msa", ".stx", ".ipf", ".ctr", ".raw"}
+# GEMDOS programs that can be autostarted with `--auto`.
+BOOT_EXTS = {".prg", ".tos", ".ttp", ".app", ".gtp"}
+
+
+def scope_profile(cfg: dict, scope: dict) -> dict:
+    """Return the effective Hatari profile of a scope.
+
+    The global ``profile`` is the base; a scope may override individual
+    keys via ``scopes.<name>.profile`` (deep-merged, e.g. machine falcon).
+    """
+    prof = json.loads(json.dumps(cfg.get("profile") or {}))
+    _deep_merge(prof, scope.get("profile") or {})
+    return prof
+
+
+def _norm_prog(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+
+
+def _zip_entries(zip_path):
+    """Return ``(names, sizes)`` for the file entries of a ZIP."""
+    names, sizes = [], {}
+    with zipfile.ZipFile(zip_path) as zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            names.append(info.filename)
+            sizes[info.filename] = info.file_size
+    return names, sizes
+
+
+def _read_head(zf, name: str, n: int = 16) -> bytes:
+    try:
+        with zf.open(name) as fh:
+            return fh.read(n)
+    except Exception:
+        return b""
+
+
+def _is_stzip(zf, name: str) -> bool:
+    """True for Atari STZip self-extracting archives (they only unpack)."""
+    return _read_head(zf, name, 5).lower().startswith(b"stzip")
+
+
+def _disk_index(name: str) -> int:
+    """Sort key that prefers disk 1 / A over 2 / B (`..._a.st`, `disk1`)."""
+    base = _norm_prog(Path(name).stem)
+    m = re.search(r"(\d+)$", base)
+    if m:
+        return int(m.group(1))
+    if base.endswith("a"):
+        return 1
+    if base.endswith("b"):
+        return 2
+    return 99
+
+
+def _part_number(name: str):
+    """Return ``(part, prefix)`` for a disk-like boot name, else ``(None, base)``.
+
+    ``AAZOHM1`` -> ``(1, "aazohm")``, ``GameA`` -> ``(1, "game")``; a name
+    without a trailing number/letter keeps ``part=None``.
+    """
+    base = _norm_prog(Path(name).stem)
+    m = re.search(r"(\d+)$", base)
+    if m:
+        return int(m.group(1)), base[:m.start()]
+    if base.endswith("a"):
+        return 1, base[:-1]
+    if base.endswith("b"):
+        return 2, base[:-1]
+    return None, base
+
+
+def pick_boot_program(zf, names, sizes, stem):
+    """Pick the program to autostart from a GEMDOS ZIP.
+
+    Prefers a boot file whose normalized stem matches the ZIP stem, then a
+    stem containment match (skipping STZip self-extractors), then the only
+    boot file. Among several candidates a numbered multi-part set
+    (`AAZOHM1/2/3.TOS`) picks its lowest part; otherwise the largest file
+    wins. Returns the ZIP-relative name or ``None``.
+    """
+    boots = [n for n in names if Path(n).suffix.lower() in BOOT_EXTS]
+    if not boots:
+        return None
+    target = _norm_prog(stem)
+    for n in boots:
+        if _norm_prog(Path(n).stem) == target and not _is_stzip(zf, n):
+            return n
+    contain = []
+    if target:
+        for n in boots:
+            ns = _norm_prog(Path(n).stem)
+            if ns and (target in ns or ns in target) and not _is_stzip(zf, n):
+                contain.append(n)
+    if len(contain) == 1:
+        return contain[0]
+    real = [n for n in boots if not _is_stzip(zf, n)]
+    pool = contain or real or boots
+    if len(pool) == 1:
+        return pool[0]
+    # Numbered multi-part sets: a group only counts when at least two of its
+    # members carry a part number (so `FPATCH` + `FPATCH2` is not a set);
+    # then the lowest part wins.
+    groups = {}
+    for n in pool:
+        part, prefix = _part_number(n)
+        groups.setdefault(prefix, []).append((part, n))
+    best = None
+    best_part = None
+    for items in groups.values():
+        numbered = [(p, n) for p, n in items if p is not None]
+        if len(numbered) >= 2:
+            part, name = min(numbered, key=lambda t: t[0])
+            if best_part is None or part < best_part:
+                best, best_part = name, part
+    if best is not None:
+        return best
+    pool.sort(key=lambda n: -sizes.get(n, 0))
+    return pool[0]
+
+
+def _extract_member(zf, name: str, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with zf.open(name) as src, open(dest, "wb") as out:
+        shutil.copyfileobj(src, out)
+
+
+def _floppy_args(zf, stage: Path, staged_zip: Path, images) -> list:
+    """Mount the floppy image(s) of a ZIP.
+
+    One image → let Hatari read the ZIP directly; several (disk A/B) →
+    extract the first two and mount them as drive A and B.
+    """
+    ordered = sorted(images, key=lambda n: (_disk_index(n), n.lower()))
+    if len(ordered) == 1:
+        return ["--disk-a", str(staged_zip)]
+    args = []
+    for label, name in (("a", ordered[0]), ("b", ordered[1])):
+        ext = Path(name).suffix or ".st"
+        dest = Path(stage) / f"disk_{label}{ext}"
+        _extract_member(zf, name, dest)
+        args += [f"--disk-{label}", str(dest)]
+    return args
+
+
+def _safe_extract(zf, dest: Path) -> None:
+    """Extract a ZIP, rejecting absolute/traversal member paths."""
+    dest = dest.resolve()
+    for info in zf.infolist():
+        if info.is_dir():
+            continue
+        target = (dest / info.filename).resolve()
+        if dest != target and dest not in target.parents:
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with zf.open(info) as src, open(target, "wb") as out:
+            shutil.copyfileobj(src, out)
+
+
+def prepare_falcon_boot(stage: Path, staged_zip: Path, stem: str):
+    """Return ``(mode, args)`` for one Falcon ZIP.
+
+    ``mode`` is ``"floppy"`` (disk image(s) inside the ZIP) or ``"gemdos"``
+    (the ZIP is extracted and the picked program autostarted). GEMDOS boots
+    disable the floppy drives so Falcon TOS 4.04 does not raise the
+    "Drive A: is not responding" dialog that would block the autostart.
+    """
+    names, sizes = _zip_entries(staged_zip)
+    images = [n for n in names if Path(n).suffix.lower() in FLOPPY_EXTS]
+    no_floppy = ["--drive-a", "off", "--drive-b", "off"]
+    with zipfile.ZipFile(staged_zip) as zf:
+        boot = pick_boot_program(zf, names, sizes, stem)
+        if images and not boot:
+            return "floppy", _floppy_args(zf, stage, staged_zip, images)
+        if boot is None:
+            return "gemdos", list(no_floppy)
+        extract = Path(stage) / "gemdos"
+        extract.mkdir(parents=True, exist_ok=True)
+        _safe_extract(zf, extract)
+    atari_path = "C:\\" + boot.replace("/", "\\")
+    return "gemdos", no_floppy + ["-d", str(extract), "--auto", atari_path]
 
 
 # --------------------------------------------------------------------------
@@ -1965,7 +2178,9 @@ def perform_click_chain(P, cfg, click_cfg, click_info, fifo, outdir,
 def process_entry(cfg: dict, P: dict, entry: dict, log,
                   state_lock=None, click_retry: bool = False,
                   force: bool = False, tos_version: str = "",
-                  tos_image: str = "", monitor_info=None) -> None:
+                  tos_image: str = "", monitor_info=None,
+                  profile: dict = None, boot_mode: str = "",
+                  timepoints: list = None) -> None:
     def commit(fn):
         # With parallel jobs, entry mutation must be serialized against
         # index saves performed by other workers (avoids torn index state).
@@ -1979,6 +2194,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     layer = entry["layer"]
     rel_path = Path(rel)
     parts = rel_path.parts
+    tp_list = list(timepoints or cfg["timepoints"])
 
     # Monitor selection: gameinfo screen_format rules are resolved once per
     # run and passed in; without a rule the historic folder-suffix check
@@ -2040,14 +2256,27 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
         except zipfile.BadZipFile:
             zip_contents = []
 
-        prof = cfg["profile"]
+        prof = profile or cfg["profile"]
+        machine = prof.get("machine", "st")
+        prof_monitor = str(prof.get("monitor") or "").strip().lower()
         tos_version = (tos_version or cfg.get("tos_default") or "1.04").strip()
         tos_image = tos_image or P["tos"]
         log(f"tos {tos_version}: {tos_image}")
+
+        # Boot medium: Falcon titles are mostly GEMDOS hard-disk archives
+        # (not floppy images), so they are extracted and autostarted with
+        # `-d` + `--auto`; floppy ZIPs keep the ST `--disk-a` behaviour.
+        if machine == "falcon" or boot_mode in ("auto", "gemdos"):
+            boot_kind, boot_args = prepare_falcon_boot(
+                stage, staged, Path(rel).stem)
+            log(f"falcon boot: {boot_kind} {boot_args}")
+        else:
+            boot_args = ["--disk-a", str(staged)]
+
         cmd = [
             P["hatari"],
             "--tos", tos_image,
-            "--machine", prof["machine"],
+            "--machine", machine,
             "--memsize", prof["memsize"],
             "--sound", "off",
             "--statusbar", "off",
@@ -2056,17 +2285,22 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "--fast-boot", "on",
             "--confirm-quit", "off",
             "--zoom", prof["zoom"],
-            "--disk-a", str(staged),
+        ] + boot_args + [
             "--screenshot-dir", str(outdir),
             "--cmd-fifo", str(fifo),
             "--log-file", str(hatari_log),
             "--log-level", "info",
         ] + prof.get("extra_args", [])
-        if is_mono:
+        if prof_monitor in ("rgb", "vga", "tv", "mono"):
+            # Falcon Videl monitor from the scope profile (no ST mono logic).
+            cmd += ["--monitor", prof_monitor]
+            monitor, monitor_source = prof_monitor, "profile"
+            log(f"monitor {monitor} ({monitor_source})")
+        elif is_mono:
             # --mono selects the monochrome monitor (TOS then boots to
             # high res); --tos-res high forces 640x400 explicitly.
             cmd += ["--mono", "--tos-res", "high"]
-        if monitor_source != "default":
+        if monitor_source != "default" and not prof_monitor:
             log(f"monitor {monitor} ({monitor_source})"
                 + (" --mono --tos-res high" if is_mono else ""))
 
@@ -2080,8 +2314,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
         entry_timeout = (click_cfg.get("entry_timeout_s", 120)
                          if do_click else cfg["entry_timeout_s"])
         deadline = t0 + entry_timeout
-        schedule = [click_cfg.get("probe_time", 10)] if do_click else list(
-            cfg["timepoints"])
+        schedule = [click_cfg.get("probe_time", 10)] if do_click else list(tp_list)
         tp_i = 0
         probe_done = False
         clicked = False
@@ -2136,7 +2369,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                         t0 = time.monotonic()
                         deadline = t0 + entry_timeout
                         schedule = list(click_cfg.get(
-                            "timepoints_after_click", cfg["timepoints"]))
+                            "timepoints_after_click", tp_list))
                         tp_i = 0
                     else:
                         # chain failed (no program icon in the opened
@@ -2153,7 +2386,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                             entry["click_retried"] = True
                             entry["click_result"] = click_result
                         commit(_mark_no_click)
-                    schedule = [t for t in cfg["timepoints"] if t > tp]
+                    schedule = [t for t in tp_list if t > tp]
                     tp_i = 0
 
         sleep_until(time.monotonic() + 2)
@@ -2393,7 +2626,9 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   pending: list, jobs: int, t_start: float,
                   done_counts: dict, displays: list,
                   index_name: str = INDEX_NAME, tos_version: str = "",
-                  tos_image: str = "", monitor_map: dict = None):
+                  tos_image: str = "", monitor_map: dict = None,
+                  profile: dict = None, boot_mode: str = "",
+                  timepoints: list = None):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
@@ -2458,7 +2693,9 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                               click_retry=args.retry_desktop,
                               force=args.force,
                               tos_version=tos_version, tos_image=tos_image,
-                              monitor_info=(monitor_map or {}).get(e["rel"]))
+                              monitor_info=(monitor_map or {}).get(e["rel"]),
+                              profile=profile, boot_mode=boot_mode,
+                              timepoints=timepoints)
                 with state_lock:
                     save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
@@ -2502,8 +2739,11 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
             print(f"Xvfb started on {disp} (pid {xv.pid})", flush=True)
             xvfbs.append(xv)
 
-    tos_version = (args.tos or cfg.get("tos_default") or "1.04").strip()
+    tos_version = (args.tos or scope.get("tos_default")
+                   or cfg.get("tos_default") or "1.04").strip()
     tos_image = tos_image_for(cfg, P, tos_version)
+    scope_prof = scope_profile(cfg, scope)
+    boot_mode = scope.get("boot", "")
     if tos_version != (cfg.get("tos_default") or "1.04"):
         print(f"TOS override: {tos_version}", flush=True)
 
@@ -2564,7 +2804,9 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 cfg, P, args, out, idx, pending, jobs, t_start, done_counts,
                 displays, index_name=scope["index"],
                 tos_version=tos_version, tos_image=tos_image,
-                monitor_map=monitor_map)
+                monitor_map=monitor_map,
+                profile=scope_prof, boot_mode=boot_mode,
+                timepoints=scope.get("timepoints"))
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -2596,7 +2838,9 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                               click_retry=args.retry_desktop,
                               force=args.force,
                               tos_version=tos_version, tos_image=tos_image,
-                              monitor_info=monitor_map.get(e["rel"]))
+                              monitor_info=monitor_map.get(e["rel"]),
+                              profile=scope_prof, boot_mode=boot_mode,
+                              timepoints=scope.get("timepoints"))
                 save_index(out, idx, scope["index"])
                 done_counts[e["status"]] = done_counts.get(e["status"], 0) + 1
                 if STOP_EVENT.is_set():

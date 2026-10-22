@@ -191,6 +191,17 @@ class _GameLightboxState extends State<GameLightbox> {
     return null;
   }
 
+  /// Play-variant dropdown entries: Falcon cards/entries use the Falcon
+  /// variants (own machine/TOS), everything else the ST variants.
+  List<HatariVariant> get _launchVariants {
+    final item = _item;
+    if (item is GameCard && item.kind == 'falcon') return kFalconVariants;
+    if (item is Entry && widget.controller.sectionOf(item) == 'Falcon') {
+      return kFalconVariants;
+    }
+    return kHatariVariants;
+  }
+
   String get _title {
     final item = _item;
     if (item is GameCard) return item.name;
@@ -906,7 +917,7 @@ class _GameLightboxState extends State<GameLightbox> {
             ),
       filter: widget.controller.filter,
       onPlay: v == null ? null : _launchCurrent,
-      variants: kHatariVariants,
+      variants: _launchVariants,
       onPlayVariant:
           v == null ? null : (variant) => _launchCurrent(variant: variant),
       // Group click: switch to that crew's/cracker's variant; no matching

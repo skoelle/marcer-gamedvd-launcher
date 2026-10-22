@@ -12,10 +12,11 @@ const Map<String, String> kSectionIndexNames = {
   'pd': 'index-pd.json',
   'utils': 'index-utils.json',
   'magazine': 'index-magazine.json',
+  'falcon': 'index-falcon.json',
 };
 
 /// Section keys in UI order (gallery tabs), matching [kSectionIndexNames].
-const List<String> kSections = ['cracked', 'pd', 'utils', 'magazine'];
+const List<String> kSections = ['cracked', 'pd', 'utils', 'magazine', 'falcon'];
 
 /// Screenshot index lookup (`SPEC-screenshot-generator.md`, `index.json`).
 ///

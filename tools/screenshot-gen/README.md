@@ -15,7 +15,8 @@ full specification.
   (`Pillow`, `imagehash`, `numpy`, `scipy`)
 - Environment in `local/paths.env` (git-ignored):
   `MARCER_ROOT_DIR`, `MARCER_PATCH_DIR`, `MARCER_OUT_DIR`, `MARCER_TOS_IMG`
-  (default TOS 1.04) and, for the TOS-1.02 retry, `MARCER_TOS102_IMG`.
+  (default TOS 1.04), for the TOS-1.02 retry `MARCER_TOS102_IMG` and for the
+  Falcon scope `MARCER_TOS404_IMG` (TOS 4.04).
   Optional `MARCER_DATA_DIR` (the gameinfo directory with
   `games-<scope>.json`) enables the `screen_format` monitor rules.
 
@@ -112,15 +113,28 @@ Each scope has its own tree list and its own index file:
 | `utils` (`--scope utils`) | `Title Sorted/Utilitys - Title Sorted` | `index-utils.json` |
 | `pd` (`--scope pd`) | `Title Sorted/PD Games - Title Sorted` | `index-pd.json`   |
 | `magazine` (`--scope magazine`) | `Bonus/Magazine Cover Disks` | `index-magazine.json` |
+| `falcon` (`--scope falcon`) | `Falcon 030/Title Sorted` | `index-falcon.json` |
 
 The `magazine` scope additionally sets `"exclude_dirs": ["dupes"]` so the
 per-magazine `Dupes/` sub-folders (alternate dumps) never reach the index;
 the scope-specific list is merged with the global `exclude_dirs`.
 
+The `falcon` scope runs Hatari as a Falcon (`scopes.falcon.profile`:
+`machine falcon`, 14 MB, `--dsp emu`, Videl RGB, CPU 16 MHz) with its own
+TOS 4.04 (`MARCER_TOS404_IMG`) and its own timepoints (`[15, 30, 60]`).
+Falcon titles are mostly GEMDOS hard-disk archives, so they are extracted
+and booted with `-d` + `--auto` (a picked boot program) and the floppy drives
+disabled (`--drive-a off --drive-b off`, otherwise TOS 4.04 shows a blocking
+"Drive A:" dialog). The boot pick skips STZip self-extractors and prefers a
+numbered set's lowest part. ZIPs holding a single floppy image use `--disk-a`;
+two images are mounted as drive A/B. The ST `--mono` logic does not apply to
+the Videl.
+
 The default scope always maps to `index.json` — that is the file the
 gallery and the desktop app read (the cracked view); other scope index
-files were invisible to them until the `magazine` section was added
-(`index-magazine.json`, now read by both UIs). Every other scope uses
+files were invisible to them until the `magazine`/`falcon` sections were
+added (`index-magazine.json`, `index-falcon.json`, now read by both UIs).
+Every other scope uses
 `index-<name>.json`, overridable per scope with an explicit `"index"`
 key. One scope never reads or writes another scope's index, so a utils
 run cannot corrupt or bloat the curated cracked state (and each
@@ -575,7 +589,14 @@ Scope configuration:
     "utils":   { "trees": ["Title Sorted/Utilitys - Title Sorted"] },
     "pd":      { "trees": ["Title Sorted/PD Games - Title Sorted"] },
     "magazine": { "trees": ["Bonus/Magazine Cover Disks"],
-                  "exclude_dirs": ["dupes"] }
+                  "exclude_dirs": ["dupes"] },
+    "falcon":   { "trees": ["Falcon 030/Title Sorted"],
+                  "index": "index-falcon.json",
+                  "tos_default": "4.04",
+                  "profile": { "name": "falcon", "machine": "falcon",
+                               "memsize": "14", "monitor": "rgb",
+                               "extra_args": ["--dsp", "emu",
+                                              "--cpuclock", "16"] } }
   },
   "mono_dir_suffix": "Mono",
   "screen_format_monitor": {
