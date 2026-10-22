@@ -68,6 +68,19 @@ dart run tool/benchmark.dart      # catalog data-layer benchmark (real artifacts
 ../../.venv/bin/python tool/generate_icons.py   # regenerate app icons
 ```
 
+## Self-update
+
+Release builds check the GitHub `desktop-v*` releases after startup and show
+an amber `⬆ <version>` badge when a newer version exists. Clicking it downloads
+the platform ZIP, swaps the bundle in place (user config, favorites and
+`TOS.IMG` are untouched) and relaunches the app.
+
+On Linux/macOS the new binary is started detached and the app waits until the
+OS has spawned it before exiting; Windows uses the two-phase Task Scheduler
+helper. If an update ever leaves no window, start the app once manually — the
+new version is already installed, and `*.old` leftovers are removed on the next
+start.
+
 ## macOS
 
 The app is **not sandboxed** on macOS (`macos/Runner/*.entitlements`): it reads

@@ -658,7 +658,7 @@ class SelfUpdateController extends ChangeNotifier {
 
       phase = UpdatePhase.restarting;
       notifyListeners();
-      relaunch(installDir);
+      await relaunch(installDir, log: log);
       log.line('relaunched; exiting app now');
       exit(0);
     } catch (e) {
@@ -859,12 +859,19 @@ Future<void> extractZipToDir(File zipFile, Directory into) async {
 /// platforms, `MarcerGameDVDLauncher[.exe]`; on macOS the binary inside
 /// the replaced `.app` — the executable file name is unchanged, so
 /// `basename(Platform.resolvedExecutable)` identifies it).
-void relaunch(String installDir) {
+Future<void> relaunch(String installDir, {UpdateLog? log}) {
   final exeName = p.basename(Platform.resolvedExecutable);
   final exe = Platform.isMacOS
       ? p.join(installDir, 'MarcerGameDVDLauncher.app', 'Contents',
           'MacOS', exeName)
       : p.join(installDir, exeName);
+  return relaunchExecutable(exe, log: log);
+}
+
+/// Starts [exe] detached and completes only once the OS has spawned it.
+/// Callers must await this before exiting: a non-awaited `Process.start`
+/// followed by `exit` can abort the spawn.
+Future<void> relaunchExecutable(String exe, {UpdateLog? log}) async {
   if (Platform.isLinux || Platform.isMacOS) {
     try {
       Process.runSync('chmod', ['+x', exe]);
@@ -872,5 +879,10 @@ void relaunch(String installDir) {
       // best effort — extraction may already have preserved the bit
     }
   }
-  Process.start(exe, []);
+  final process = await Process.start(
+    exe,
+    const [],
+    mode: ProcessStartMode.detached,
+  ).timeout(const Duration(seconds: 5));
+  log?.line('relaunch pid=${process.pid}');
 }

@@ -451,4 +451,38 @@ void main() {
       expect(log.path, p.join(Directory.systemTemp.path, 'MarcerUpdater.log'));
     });
   });
+
+  group('relaunchExecutable', () {
+    late Directory sandbox;
+
+    setUp(() {
+      sandbox = Directory.systemTemp.createTempSync('selfupdate_relaunch_');
+    });
+
+    tearDown(() {
+      try {
+        sandbox.deleteSync(recursive: true);
+      } catch (_) {}
+    });
+
+    test('waits for the detached process to start', () async {
+      final marker = File(p.join(sandbox.path, 'started'));
+      final script = File(p.join(sandbox.path, 'MarcerGameDVDLauncher'))
+        ..writeAsStringSync('#!/bin/sh\nprintf started > "${marker.path}"\n');
+
+      await relaunchExecutable(script.path);
+
+      for (var i = 0; i < 50 && !marker.existsSync(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      expect(marker.existsSync(), isTrue);
+    }, skip: !Platform.isLinux && !Platform.isMacOS);
+
+    test('fails for a missing executable', () async {
+      await expectLater(
+        relaunchExecutable(p.join(sandbox.path, 'missing')),
+        throwsA(isA<ProcessException>()),
+      );
+    }, skip: !Platform.isLinux && !Platform.isMacOS);
+  });
 }

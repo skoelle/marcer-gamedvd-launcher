@@ -191,9 +191,12 @@ Save, the manual screenshot curation described below.
   `desktop-v*` releases after startup; when a newer version exists, an amber
   `⬆ <version>` button appears left of the Folders button. Click to download
   the platform ZIP, swap it in place (user config, favorites and `TOS.IMG`
-  are never touched) and restart the app automatically. Failures show a
-  dialog; leftover `*.old` files are cleaned up on the next start. On
-  Windows the swap runs in a hidden helper after the app exits (the running
+  are never touched) and restart the app automatically. On Linux/macOS the
+  app starts the new binary detached and waits for the spawn before exiting;
+  if an update ever leaves no window, start the app once manually — the new
+  version is already installed. Failures show a dialog; leftover `*.old`
+  files are cleaned up on the next start. On Windows the swap runs in a
+  hidden helper after the app exits (the running
   app locks its mapped libraries `data\app.so` / `flutter_windows.dll`). The
   app runs inside a job object, so the helper is started through a one-shot
   **Task Scheduler** task (a plain child process would be killed with the
