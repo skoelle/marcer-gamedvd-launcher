@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 
 import '../theme.dart';
 
-/// Help overlay with the exact text of `SPEC.md` §9.4 (DarkGray background,
-/// White text, any key dismisses).
+/// Desktop help overlay (DarkGray background, White text, any key dismisses).
+/// Lists the catalog/folder, lightbox and mouse controls.
 class HelpOverlay extends StatefulWidget {
   const HelpOverlay({super.key, required this.onClose});
 
@@ -62,35 +62,54 @@ class _HelpOverlayState extends State<HelpOverlay> {
             alignment: Alignment.center,
             child: Container(
               padding: const EdgeInsets.all(24),
-              child: const Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('  Help — Key Bindings',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold)),
-                  SizedBox(height: 12),
-                  Text('''   ↑ / ↓          Move selection (row in grid view)
-   ← / →          Move selection left / right (grid)
-   PgUp / PgDn    Jump one page up / down
-   Enter / →      Open folder / show gallery lightbox
-   Backspace      Parent directory (clears filters in catalog view)
-   *              Toggle favorite (selected ZIP / lightbox variant / star)
-   M              Make shown candidate the main image (lightbox)
-   C              Change status/kind of the shown ZIP (lightbox/detail)
-   P              Launch the selected ZIP with Hatari
-   /              Focus the search field
-   T              Toggle catalog grid / folder view
-   ?              Show this help
-   ESC / q        Exit the program
+              constraints: const BoxConstraints(maxWidth: 780),
+              child: const SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('  Help — Keys & Controls',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold)),
+                    SizedBox(height: 12),
+                    Text('''   CATALOG / FOLDER VIEW
+   ↑ / ↓            Move selection (row in grid view)
+   ← / →            Move selection / parent in folder view
+   Home / End       First / last card (grid)
+   PgUp / PgDn      Jump one page up / down
+   Enter / →        Open folder / show the lightbox
+   Backspace / ←    Parent directory (clears filters in catalog view)
+   *                Toggle favorite
+   P                Launch the selected ZIP with Hatari
+   /                Focus the search field
+   T                Toggle catalog grid / folder view
+   ?                Show this help
+   ESC / q          Exit the program
+
+   LIGHTBOX
+   ← / →            Previous / next card
+   ↑ / ↓            Previous / next variant
+   PgUp / PgDn      Previous / next image
+   Space / P        Launch the shown ZIP
+   *                Favorite the shown variant
+   M                Make the shown candidate the main image
+   C                Edit the shown ZIP's status/kind
+   ESC              Close the lightbox
+   ?                Show this help
+
+   MOUSE / DETAILS
+   Filmstrip        Thumbnail switches variant; star toggles favorite
+   Candidate strip  Selects an image
+   AtariLegend      Metadata, box scans, screenshots, reviews, magazines
+   Box scans /      Curated local assets (viewer / OS default app)
+   Manuals
+   ROOT / PATCH     Open the game folder in the file manager
 
   The default view is the gallery-style catalog grid (section tabs,
   search, dropdowns). Press T (or the Folders button) for the optional
   overlay folder browser. Navigation is strictly limited to RootDirectory.
-  In the lightbox Space/P launches the shown ZIP and * favorites it;
-  every filmstrip thumb carries its own favorite star (click to toggle).
   The ★ Favorites filter lists the favorite games of the active section
   (search still applies; facets and status are ignored). The folder
   browser shows one Favorites folder per section.
@@ -98,8 +117,9 @@ class _HelpOverlayState extends State<HelpOverlay> {
   status/kind (pending until the Save (n) button in the filter bar).
 
   Press any key to continue...''',
-                      style: TextStyle(color: Colors.white, fontSize: 14)),
-                ],
+                        style: TextStyle(color: Colors.white, fontSize: 14)),
+                  ],
+                ),
               ),
             ),
           ),

@@ -365,6 +365,7 @@ optional (needed to launch, not to browse).
 |---|---|
 | `↑` / `↓` | Move the selection (one row in grid view) |
 | `←` / `→` | Move the selection left / right (grid) |
+| `Home` / `End` | First / last card (grid) |
 | `PgUp` / `PgDn` | Jump one page up / down |
 | `Enter` / `→` | Open the folder / show the lightbox |
 | `Backspace` | Parent directory (in catalog view: clear filters) |
@@ -375,13 +376,15 @@ optional (needed to launch, not to browse).
 | `/` | Focus the search field |
 | `T` | Toggle catalog grid / folder view |
 | `?` | Show the help overlay |
-| `ESC` / `q` | Exit |
+| `ESC` / `q` | Exit (in the lightbox/dialogs, `ESC` closes that view) |
 
 In the **lightbox**: `←`/`→` switch card, `↑`/`↓` switch variant, `PgUp`/`PgDn`
 switch image, `Space`/`P` launch the shown ZIP (the favorited ZIP of that card
 when exactly one variant is starred), `*` favorite the shown variant (or click
 a filmstrip star), `M` make the shown candidate the main image, `C` edit
-status/kind, `Esc` closes.
+status/kind, `?` opens help and `Esc` closes. Clickable controls: filmstrip
+thumbnails/stars, candidate strip, AtariLegend, `Box scans`/`Manuals` chips,
+and the ROOT/PATCH folder icons (open the game folder).
 
 > **Manual curation & shotgen compatibility** — `M` is an immediate file swap
 > (no index write; names never change). `C` changes stay in memory until the

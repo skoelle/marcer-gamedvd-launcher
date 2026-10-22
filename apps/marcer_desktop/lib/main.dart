@@ -657,17 +657,18 @@ class _HomePageState extends State<HomePage> {
         config: cfg, versions: versions, fileName: fileName);
   }
 
-  void _toggleHelp() {
+  Future<void> _toggleHelpAsync() async {
     if (_showHelp) return; // modal; any key or a barrier tap closes it
     setState(() => _showHelp = true);
-    HelpOverlay.show(context, () {
+    await HelpOverlay.show(context, () {
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-    }).whenComplete(() {
-      // Resets on every dismissal path (key, barrier tap), so `?` works
-      // again after either one.
-      if (mounted) setState(() => _showHelp = false);
     });
+    // Resets on every dismissal path (key, barrier tap), so `?` works
+    // again after either one.
+    if (mounted) setState(() => _showHelp = false);
   }
+
+  void _toggleHelp() => unawaited(_toggleHelpAsync());
 
   void _openLightbox(int variant, int image) {
     final c = _controller;
@@ -677,7 +678,8 @@ class _HomePageState extends State<HomePage> {
     } else if (c.selectedCard == null) {
       return;
     }
-    GameLightbox.show(context, c, variant: variant, image: image);
+    GameLightbox.show(context, c,
+        variant: variant, image: image, onToggleHelp: _toggleHelpAsync);
   }
 
   @override

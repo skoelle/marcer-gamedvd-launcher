@@ -264,6 +264,17 @@ Storage (one absolute path per line, same format as the console launcher):
   → CWD) is still read; entries of the other OS (e.g. Windows `Y:\…`
   lines in a shared file) are preserved on save but not shown.
 
+## Keyboard & mouse
+
+`?` opens the in-app help overlay from the catalog, folder list and lightbox.
+The lightbox uses `←/→` for cards, `↑/↓` for variants, `PgUp/PgDn` for images,
+`Space`/`P` to launch, `*` to favorite, `M` to promote the shown candidate,
+`C` to edit status/kind, `Esc` to close and `?` for help. Mouse controls:
+filmstrip thumbnails switch variants, their stars toggle favorites, the
+candidate strip selects an image, AtariLegend / Box scans / Manuals chips open
+their dialogs, and the ROOT/PATCH folder icons open the game folder in the OS
+file manager.
+
 ## Status filter
 
 The status dropdown (`with screenshot`, `any`, `done`, `desktop`,

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:async';
 import 'dart:io' as io;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -22,15 +23,17 @@ import 'status_kind_dialog.dart';
 /// candidate strip and a 330px info panel with the release-variants table
 /// (selected ZIP highlighted) and a "This ZIP" table.
 /// `←/→` move through cards/entries, `↑/↓` through variants, `PgUp/PgDn`
-/// through the images of the active variant, `M` swaps the shown candidate
-/// into the main image, `C` edits the variant's status/kind (pending until
-/// Save), `Esc` closes.
+/// through the images of the active variant, `Space/P` launches, `*`
+/// favorites, `M` swaps the shown candidate into the main image, `C` edits
+/// the variant's status/kind (pending until Save), `?` opens help and `Esc`
+/// closes.
 class GameLightbox extends StatefulWidget {
   const GameLightbox({
     super.key,
     required this.controller,
     this.initialVariant = 0,
     this.initialImage = 0,
+    this.onToggleHelp,
   });
 
   final CatalogController controller;
@@ -40,11 +43,16 @@ class GameLightbox extends StatefulWidget {
   final int initialVariant;
   final int initialImage;
 
+  /// Opens the shared help overlay; the lightbox restores its focus when the
+  /// future completes.
+  final Future<void> Function()? onToggleHelp;
+
   static Future<void> show(
     BuildContext context,
     CatalogController c, {
     int variant = 0,
     int image = 0,
+    Future<void> Function()? onToggleHelp,
   }) {
     return showDialog<void>(
       context: context,
@@ -54,6 +62,7 @@ class GameLightbox extends StatefulWidget {
         controller: c,
         initialVariant: variant,
         initialImage: image,
+        onToggleHelp: onToggleHelp,
       ),
     );
   }
@@ -316,6 +325,15 @@ class _GameLightboxState extends State<GameLightbox> {
     }
     if (key == LogicalKeyboardKey.keyC) {
       _changeStatusCurrent();
+      return KeyEventResult.handled;
+    }
+    if (event.character == '?') {
+      final help = widget.onToggleHelp;
+      if (help != null) {
+        unawaited(help().whenComplete(() {
+          if (mounted) _focus.requestFocus();
+        }));
+      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
