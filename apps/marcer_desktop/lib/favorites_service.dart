@@ -50,15 +50,22 @@ String resolveFavoritesPath({
 /// tree (console layout: `…/<section tree>/favorites.txt`) plus a
 /// legacy/unknown-section file.
 ///
-/// UTF-8 files, one absolute path per line, sorted case-insensitively, keyed
-/// by the ZIP's effective path (R26). All files are read (their union is the
-/// favorite set) and only the touched files are rewritten, so entries written
-/// by the console launcher on another OS (e.g. Windows `Y:\…` lines) are
-/// preserved verbatim. Save failures never crash (R25): the in-memory set
-/// stays updated, only the disk write is lost ([lastSaveError]).
+/// UTF-8 files, one root-relative path per line (POSIX separators), sorted
+/// case-insensitively, keyed by the ZIP's effective path (R26). Absolute
+/// legacy lines are accepted and normalized on the next save; paths outside
+/// both roots stay absolute and are preserved. All files are read (their
+/// union is the favorite set) and only the touched files are rewritten.
+/// Save failures never crash (R25): the in-memory set stays updated, only the
+/// disk write is lost ([lastSaveError]).
 class FavoritesService {
-  FavoritesService._(this._fileForSection, this._files, this._sectionOfPath,
-      this._writableFiles);
+  FavoritesService._(
+      this._fileForSection,
+      this._files,
+      this._sectionOfPath,
+      this._writableFiles,
+      this._encodePath,
+      this._dirtyFiles,
+      this._originals);
 
   /// Loads every mapped section file (missing files yield empty sets) plus
   /// [extraFiles] — additional read-only sources such as a legacy
@@ -68,38 +75,67 @@ class FavoritesService {
   /// controller's root-relative section lookup); new entries land in
   /// `fileForSection[section]`, falling back to
   /// `fileForSection[kMiscFavoritesSection]`.
+  ///
+  /// [decodePath] turns a stored line into the absolute effective path used
+  /// in memory; [encodePath] turns it back into the stored representation.
   factory FavoritesService.load({
     required Map<String, String> fileForSection,
     List<String> extraFiles = const [],
     required String Function(String path) sectionOfPath,
+    String Function(String storedPath)? decodePath,
+    String Function(String absolutePath)? encodePath,
   }) {
+    final decode = decodePath ?? (line) => p.normalize(line);
+    final encode = encodePath ?? (path) => path;
     final writableFiles = fileForSection.values.toSet();
+    final dirtyFiles = <String>{};
+    final originals = <String, Map<String, String>>{};
     final files = <String, List<String>>{};
     for (final path in [...fileForSection.values, ...extraFiles]) {
       if (files.containsKey(path)) continue;
       final list = <String>[];
+      final fileOriginals = <String, String>{};
       final file = File(path);
       if (file.existsSync()) {
-        for (final line in file.readAsLinesSync()) {
-          final trimmed = line.trim();
-          if (trimmed.isEmpty) continue;
-          list.add(p.normalize(trimmed));
+        final raw = file.readAsStringSync();
+        final hasBom = raw.startsWith('\uFEFF');
+        final hasCrlf = raw.contains('\r');
+        var dirty = hasBom || hasCrlf;
+        for (final line in raw.split(RegExp(r'\r\n|\r|\n'))) {
+          final original = line.replaceFirst('\uFEFF', '').trim();
+          if (original.isEmpty) continue;
+          final decoded = decode(original);
+          if (decoded.trim().isEmpty) continue;
+          list.add(decoded);
+          fileOriginals[decoded.toLowerCase()] = original;
+          final encoded = encode(decoded);
+          if (!_isAbsoluteEncoded(encoded) && encoded != original) {
+            dirty = true;
+          }
         }
+        if (dirty && writableFiles.contains(path)) dirtyFiles.add(path);
       }
       list.sort(_byLower);
       files[path] = list;
+      originals[path] = fileOriginals;
     }
     return FavoritesService._(
         Map<String, String>.unmodifiable(fileForSection),
         files,
         sectionOfPath,
-        writableFiles);
+        writableFiles,
+        encode,
+        dirtyFiles,
+        originals);
   }
 
   final Map<String, String> _fileForSection;
   final Map<String, List<String>> _files;
   final String Function(String path) _sectionOfPath;
   final Set<String> _writableFiles;
+  final String Function(String absolutePath) _encodePath;
+  final Set<String> _dirtyFiles;
+  final Map<String, Map<String, String>> _originals;
   List<String>? _union;
 
   /// Error of the last save round (`null` when every write succeeded or no
@@ -129,6 +165,12 @@ class FavoritesService {
           targetList.add(path);
           targetList.sort(_byLower);
         }
+        final original = _originals[source]?[path.toLowerCase()];
+        if (original != null) {
+          _originals.putIfAbsent(target, () => {})[path.toLowerCase()] =
+              original;
+          _originals[source]?.remove(path.toLowerCase());
+        }
         touched.add(target);
         moved++;
       }
@@ -139,9 +181,11 @@ class FavoritesService {
         touched.add(source);
       }
     }
+    touched.addAll(_dirtyFiles);
     if (touched.isNotEmpty) {
       _union = null;
-      _save(touched);
+      _save(touched, backup: true);
+      _dirtyFiles.clear();
     }
     return moved;
   }
@@ -174,6 +218,9 @@ class FavoritesService {
       a.toLowerCase().compareTo(b.toLowerCase());
 
   static bool _eq(String a, String b) => a.toLowerCase() == b.toLowerCase();
+
+  static bool _isAbsoluteEncoded(String value) =>
+      value.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value);
 
   /// True when [path] is a favorite (any file, case-insensitive, R26 key).
   bool contains(String path) {
@@ -216,21 +263,38 @@ class FavoritesService {
     return added;
   }
 
+  String _encodedFor(String file, String key) {
+    final encoded = _encodePath(key);
+    if (!_isAbsoluteEncoded(encoded)) return encoded;
+    return _originals[file]?[key.toLowerCase()] ?? encoded;
+  }
+
   /// Best-effort persist of [filesToWrite] (R25: failure must not crash the
   /// UI); [lastSaveError] holds the first error or `null` on success.
-  void _save(Set<String> filesToWrite) {
+  void _save(Set<String> filesToWrite, {bool backup = false}) {
     String? error;
     for (final path in filesToWrite) {
       try {
+        if (backup && File(path).existsSync()) _backup(path);
         final list = _files[path] ?? const <String>[];
+        final encoded = [
+          for (final key in list) _encodedFor(path, key),
+        ]..sort(_byLower);
         File(path)
           ..parent.createSync(recursive: true)
           ..writeAsStringSync(
-              '${list.join('\n')}${list.isEmpty ? '' : '\n'}');
+              '${encoded.join('\n')}${encoded.isEmpty ? '' : '\n'}',
+              flush: true);
       } catch (e) {
         error ??= '$e';
       }
     }
     lastSaveError = error;
+  }
+
+  void _backup(String path) {
+    final stamp =
+        DateTime.now().toUtc().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
+    File(path).copySync('$path.bak-$stamp');
   }
 }

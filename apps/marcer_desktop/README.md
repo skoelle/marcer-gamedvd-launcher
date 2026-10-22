@@ -253,17 +253,20 @@ virtual `Favorites` folder per section that has favorites
 launched like cracked games. Launching a favorited card plays the starred ZIP
 when exactly one variant is favorited.
 
-Storage (one absolute path per line, same format as the console launcher):
+Storage (one root-relative POSIX path per line, same portable format as the
+console launcher):
 
 - with a patch layer: `<Patch>/<section tree>/favorites.txt` per section
   (e.g. `Patch/Title Sorted/Cracked Games - Title Sorted/favorites.txt`) —
-  the same files the console launcher shares; paths outside any section tree
-  go to `<Patch>/favorites.txt`.
+  the console launcher uses the same relative format in
+  `<Patch>/favorites.txt`; paths outside any section tree go to
+  `<Patch>/favorites.txt`.
 - without a patch layer: `favorites-<section>.txt` next to the executable
   (misc paths → `favorites.txt`).
-- a legacy single `favorites.txt` (`PatchDirectory` → application directory
-  → CWD) is still read; entries of the other OS (e.g. Windows `Y:\…`
-  lines in a shared file) are preserved on save but not shown.
+- legacy absolute paths (Windows `Y:\…`, Linux `/mnt/…`) are read and
+  rewritten relative on startup. The first migration creates a timestamped
+  `.bak-*` backup of every rewritten file; unresolvable foreign lines are
+  preserved verbatim but not shown.
 
 ## Keyboard & mouse
 

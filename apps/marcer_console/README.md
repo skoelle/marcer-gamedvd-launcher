@@ -12,7 +12,7 @@ Built for the [Marcer GameDVD](https://www.facebook.com/groups/360493904888475/)
 
 - **Overlay/Patch Mode:** Recursively merges a main game directory with an optional patch directory. If a file or folder exists in both, the patch version takes precedence.
 - **Layer Labels:** Each entry shows its source — `[BOTH]`, `[ROOT]`, or `[PTCH]` — with a matching color scheme.
-- **Favorites:** Press `*` on any ZIP to bookmark it. Bookmarked games appear in a virtual `Favorites` folder at the top of the root listing.
+- **Favorites:** Press `*` on any ZIP to bookmark it. Bookmarked games appear in a virtual `Favorites` folder at the top of the root listing. Favorites are stored as portable root-relative paths (`favorites.txt`); legacy absolute Windows/Linux paths are migrated automatically with a timestamped backup.
 - **Robust Navigation:** Cursor position is remembered per directory. Scrolling and page jumps adapt dynamically to any console height.
 - **Minimal Redraw:** Only changed lines are redrawn — no flicker, no `Console.Clear`, smooth even in huge directory trees.
 

@@ -144,7 +144,7 @@ namespace MarcerGameDvdConsole
         {
             favPath = Path.Combine(AppContext.BaseDirectory, FavoritesService.DefaultFileName);
         }
-        var favoritesService = new FavoritesService(favPath);
+        var favoritesService = new FavoritesService(favPath, cfg.RootDirectory, cfg.PatchDirectory);
         try { favoritesService.Load(); } catch { /* ignore load errors */ }
 
         var errorService = new UIErrorService();

@@ -10,6 +10,7 @@ import 'package:flutter/painting.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
+import 'favorites_paths.dart';
 import 'favorites_service.dart';
 import 'ftp_downloader.dart';
 import 'hatari_launcher.dart';
@@ -146,6 +147,11 @@ class CatalogController extends ChangeNotifier {
       final patch = config.patchDirectory;
       final appDir = File(Platform.resolvedExecutable).parent.path;
       final cwd = Directory.current.path;
+      final favoritesCodec = FavoritesPathCodec(
+        rootDirectory: config.rootDirectory,
+        patchDirectory: patch,
+        sectionTrees: sectionTrees,
+      );
       favorites = FavoritesService.load(
         fileForSection: {
           for (final section in kSections)
@@ -166,6 +172,8 @@ class CatalogController extends ChangeNotifier {
           p.join(cwd, kFavoritesFileName),
         ],
         sectionOfPath: _sectionOfFavoritePath,
+        decodePath: favoritesCodec.decode,
+        encodePath: favoritesCodec.encode,
       );
       favorites!.migrateMisplacedFavorites((path) {
         final section = _sectionOfFavoritePath(path);

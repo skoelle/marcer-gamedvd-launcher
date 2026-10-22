@@ -141,6 +141,20 @@ void main() {
         contains(rootZip(relA)));
   });
 
+  test('migrates legacy Windows favorites to relative paths', () async {
+    final sectionFile = File('${tmp.path}/patch/$crackedTree/favorites.txt');
+    sectionFile.parent.createSync(recursive: true);
+    sectionFile.writeAsStringSync(
+        'Y:\\Downloads\\MarcersGameDVD\\Title Sorted\\Cracked Games - '
+        'Title Sorted\\A\\Alpha\\a.zip\n');
+
+    await c.init();
+
+    expect(sectionFile.readAsStringSync(), '$relA\n');
+    expect(c.favorites!.contains(rootZip(relA)), isTrue);
+    expect(c.favorites!.pathsForSection('cracked'), contains(rootZip(relA)));
+  });
+
   test('★ lists the active section and ignores status/facets', () async {
     await c.init();
     c.toggleFavoriteSelected(); // cracked card → cracked section file

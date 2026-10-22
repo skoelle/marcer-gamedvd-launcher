@@ -482,9 +482,15 @@ error `ZIP file not found: <path>` is shown, then the view is redrawn.
 
 - File name: `favorites.txt`.
 - Location: inside `PatchDirectory` if configured, otherwise the application directory.
-- Encoding: UTF-8, **one absolute path per line**, sorted case-insensitively.
+- Encoding: UTF-8, **one path per line**, sorted case-insensitively.
+- New entries are stored **relative to `RootDirectory`** with `/` separators, so the
+  file stays portable across Windows, Linux and macOS. Relative paths are resolved
+  against `PatchDirectory` first, then `RootDirectory`.
+- Legacy absolute paths are accepted and rewritten relative on the next save;
+  unresolvable foreign paths are preserved but never rendered.
 - Loaded once at startup. Missing file ⇒ empty set. Unparseable lines are skipped.
-- Persisted **immediately on every toggle**.
+- Persisted **immediately on every toggle**. Format migrations create a timestamped
+  `.bak-*` backup before rewriting.
 
 ### 11.2 Toggle semantics
 
@@ -499,8 +505,9 @@ error `ZIP file not found: <path>` is shown, then the view is redrawn.
   as the **first** entry.
 - Name: `Favorites` (fixed).
 - `Activate` on it opens a flat list of the favorited ZIPs, each shown with its
-  file name, ordered case-insensitively by stored full path.
-- Selecting an entry there launches the stored absolute path.
+  file name, ordered case-insensitively by effective path.
+- Selecting an entry there launches the resolved effective path (patch copy when
+  present, otherwise root).
 - Leaving it (`Parent`) returns to root.
 - **R26** — Favorite state is keyed by the ZIP's **effective path** (patch path when
   the entry exists in the patch layer, else root path).

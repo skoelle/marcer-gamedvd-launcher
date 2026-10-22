@@ -168,16 +168,15 @@ Save, the manual screenshot curation described below.
   its ZIPs is starred, and launching it plays that starred ZIP when exactly
   one variant is favorited; pd/utils cards resolve their folder ZIPs on
   demand, so they can be starred and launched like cracked games. Persisted
-  per section tree as `favorites.txt` (one absolute path per line —
-  `Patch/<section tree>/favorites.txt`, the same format and location the
-  console launcher uses, so both apps share their favorites; without a
+  per section tree as `favorites.txt` with **root-relative POSIX paths** (one
+  path per line — `Patch/<section tree>/favorites.txt`; the console launcher
+  uses the same portable format in `Patch/favorites.txt`; without a
   `PatchDirectory` each section gets `favorites-<section>.txt` next to the
-  executable). A legacy single `favorites.txt` (`PatchDirectory` →
-  application directory → CWD) is still read; on startup, entries that
-  clearly belong to a section tree are moved into that section's file, while
-  paths outside every tree — including entries from another OS (e.g. Windows
-  `Y:\…` lines in a shared file) — stay in place and are preserved on save
-  but not shown.
+  executable). Paths outside every section tree go to the misc file.
+  Legacy absolute paths (including Windows
+  `Y:\…` and Linux `/mnt/…` lines) are read and migrated on startup;
+  unresolvable foreign lines are preserved but not shown. The first migration
+  creates a timestamped `.bak-*` copy of each rewritten file.
 - **Manual screenshot curation** — `M` in the lightbox swaps the currently
   viewed candidate with the variant's main image (fixed file names, only the
   PNG contents trade places); the grid card, detail view, filmstrip and

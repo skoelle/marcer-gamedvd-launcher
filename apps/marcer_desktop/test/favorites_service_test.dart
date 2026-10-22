@@ -4,6 +4,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:marcer_desktop/favorites_paths.dart';
 import 'package:marcer_desktop/favorites_service.dart';
 import 'package:path/path.dart' as p;
 
@@ -15,7 +16,11 @@ void main() {
 
   /// Loads a service with a `cracked` + `pd` section map (no `utils` entry —
   /// exercises the misc fallback) and classifies paths by their folder name.
-  FavoritesService loadService({List<String> extraFiles = const []}) =>
+  FavoritesService loadService({
+    List<String> extraFiles = const [],
+    String Function(String storedPath)? decodePath,
+    String Function(String absolutePath)? encodePath,
+  }) =>
       FavoritesService.load(
         fileForSection: {
           'cracked': crackedFile,
@@ -23,6 +28,8 @@ void main() {
           kMiscFavoritesSection: miscFile,
         },
         extraFiles: extraFiles,
+        decodePath: decodePath,
+        encodePath: encodePath,
         sectionOfPath: (path) {
           if (path.contains('Cracked')) return 'cracked';
           if (path.contains('PD')) return 'pd';
@@ -110,6 +117,55 @@ void main() {
         f.migrateMisplacedFavorites(
             (path) => path.contains('Cracked') ? 'cracked' : null),
         0);
+  });
+
+  test('codec rewrites legacy absolute lines to relative paths', () {
+    final root = p.join(tmp.path, 'root');
+    final legacyRel = 'Cracked Games - Title Sorted/A/Alpha/alpha.zip';
+    final legacyAbs = p.join(root, legacyRel);
+    File(legacyAbs).parent.createSync(recursive: true);
+    File(legacyAbs).createSync();
+    write(
+        crackedFile,
+        '\uFEFF'
+        r'Y:\Downloads\MarcersGameDVD\Cracked Games - Title Sorted\A\Alpha\alpha.zip'
+        '\r\n');
+    final codec = FavoritesPathCodec(
+      rootDirectory: root,
+      patchDirectory: p.join(tmp.path, 'patch'),
+      sectionTrees: const {'cracked': 'Cracked Games - Title Sorted'},
+    );
+    final f = loadService(
+      decodePath: codec.decode,
+      encodePath: codec.encode,
+    );
+    expect(f.paths, contains(legacyAbs));
+    expect(
+        f.migrateMisplacedFavorites(
+            (path) => path.contains('Cracked') ? 'cracked' : null),
+        0);
+    expect(File(crackedFile).readAsStringSync(), '$legacyRel\n');
+    expect(
+        Directory(tmp.path)
+            .listSync(recursive: true)
+            .where((e) => p.basename(e.path).contains('.bak-')),
+        isNotEmpty);
+  });
+
+  test('codec keeps unmapped foreign lines verbatim on save', () {
+    const foreign = r'Y:\Other\missing.zip';
+    write(miscFile, '$foreign\n');
+    final codec = FavoritesPathCodec(
+      rootDirectory: p.join(tmp.path, 'root'),
+      patchDirectory: p.join(tmp.path, 'patch'),
+      sectionTrees: const {'cracked': 'Cracked Games - Title Sorted'},
+    );
+    final f = loadService(
+      decodePath: codec.decode,
+      encodePath: codec.encode,
+    );
+    f.toggle('/games/Cracked Games - Title Sorted/A/Alpha/alpha.zip');
+    expect(File(miscFile).readAsStringSync(), '$foreign\n');
   });
 
   test('migration does not rewrite extra files', () {
