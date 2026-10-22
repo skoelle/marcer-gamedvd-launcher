@@ -152,7 +152,7 @@ and **TOS ROM** rows (download/install on demand, see below).
 | `Ftp.RemoteBase` | no | remote prefix of the game folders (default `/GameDVD/`; empty ⇒ FTP login root) |
 | `Ftp.AssetsRemote` | no | remote dir of the catalog asset archives, `screenshots-*.zip` / `gameinfo-*.zip` (default `/Uploads/MarcerGameDVDLauncher-assets/`) |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
-| `DefaultStatus` | no | initial status preset for the cracked section (default `with_screenshot`; pd/utils default `any`) |
+| `DefaultStatus` | no | initial status preset for **all** sections (default `with_screenshot`) |
 | `Window.width/height` | no | initial/restore window size (default 1280×800) |
 | `Window.maximized` | no | start maximized (default `true`; `false` ⇒ `width`×`height`, centered) |
 
@@ -292,8 +292,8 @@ The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
   folders).
 - All other status values use the aggregated card status
   (`done → desktop → no usable shots → interrupted → pending → skipped`).
-- The default is `with screenshot` for cracked and `any` for pd/utils/magazine
-  (their metadata-only / filename-only cards have no screenshot yet).
+- The default is `with screenshot` for **all** sections; change `DefaultStatus` in
+  `desktop.config.json` to use another preset on startup and after section switches.
 
 The status bar reports every status as **games (ZIPs)** (see below), so the
 games number always equals the result count of the matching dropdown

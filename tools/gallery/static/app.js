@@ -63,11 +63,8 @@ let searchTimer = null;
 let showCands = true;       // from meta.show_candidates (config)
 let defaultStatus = "with_screenshot";  // from meta.default_status (config)
 
-// Per-section default status: cracked defaults to the configured preset
-// (usually `with_screenshot`), pd/utils to `any` so metadata-only cards stay
-// visible (desktop-app parity, per-section indices).
-const sectionDefaultStatus = (section) =>
-  section === "cracked" ? defaultStatus : "any";
+// Every section starts with the configured preset (usually `with_screenshot`).
+const sectionDefaultStatus = () => defaultStatus;
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s)
@@ -98,7 +95,7 @@ function writeURL(push) {
     if (v != null && v !== "" && v !== dflt) u.set(k, v);
   };
   keep("section", state.section, "cracked");
-  keep("status", state.status, sectionDefaultStatus(state.section));
+  keep("status", state.status, sectionDefaultStatus());
   keep("q", state.q, "");
   keep("letter", state.letter, "any");
   for (const k of ["publisher", "crew", "cracker", "language", "year",
@@ -998,7 +995,7 @@ function wireEvents() {
   });
   const clearAll = () => {
     Object.assign(state, {
-      status: sectionDefaultStatus(state.section), q: "", letter: "any",
+      status: sectionDefaultStatus(), q: "", letter: "any",
       publisher: "any", crew: "any", cracker: "any", language: "any",
       year: "any", raw: "any", pasti: "any", boxscan: "any", tos: "any",
       sort: "name", order: "asc", offset: 0,
@@ -1024,7 +1021,7 @@ function wireEvents() {
     state.section = b.dataset.section;
     state.offset = 0;
     // reset incompatible filters; status falls back to the section default
-    state.status = sectionDefaultStatus(state.section);
+    state.status = sectionDefaultStatus();
     for (const k of ["raw", "pasti", "boxscan", "tos", "crew", "cracker"])
       state[k] = "any";
     if (state.sort === "cracker" && !["cracked", "utils"].includes(state.section)) {
@@ -1081,7 +1078,7 @@ async function boot() {
   }
   if (meta.show_candidates != null) showCands = !!meta.show_candidates;
   if (meta.default_status) defaultStatus = meta.default_status;
-  if (!urlStatus) state.status = sectionDefaultStatus(state.section);
+  if (!urlStatus) state.status = sectionDefaultStatus();
   // show the section tabs when a non-default section has any card (index-
   // or gameinfo-derived), even without gameinfo; hide empty tabs individually
   const secMeta = (meta && meta.sections) || {};

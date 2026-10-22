@@ -704,7 +704,7 @@ class DataStore:
         return m
 
 
-def _matches(card, params, section):
+def _matches(card, params, section, default_status="with_screenshot"):
     crew = (params.get("crew", "any") or "any")
     crew_active = (crew != "any" and "crew" in kind_filters(section))
     cracker = (params.get("cracker", "any") or "any")
@@ -713,9 +713,8 @@ def _matches(card, params, section):
     focus_active = crew_active or cracker_active
     st = params.get("status")
     if st is None:
-        # cracked defaults to screenshots only; pd/utils show everything
-        # (metadata-only cards) — per-section default (desktop parity)
-        st = "with_screenshot" if section == "cracked" else "any"
+        # all sections use the configured default preset (desktop parity)
+        st = default_status
     st = st or "any"
     if st == "with_screenshot":
         # crew/cracker focus always shows the focused variant, even empty
@@ -927,8 +926,9 @@ class GalleryHandler(BaseHTTPRequestHandler):
             entry_order = params.get("order", "asc") or "asc"
             if entry_order not in ("asc", "desc"):
                 entry_order = "asc"
+            default_status = self.cfg.get("default_status", "with_screenshot")
             filtered = [c for c in store.cards[section]
-                        if _matches(c, params, section)]
+                        if _matches(c, params, section, default_status)]
             _sort_cards(filtered, entry_sort, entry_order)
             position = next(
                 (i for i, c in enumerate(filtered) if c is card), None)
@@ -954,8 +954,9 @@ class GalleryHandler(BaseHTTPRequestHandler):
         if order not in ("asc", "desc"):
             order = "asc"
 
+        default_status = self.cfg.get("default_status", "with_screenshot")
         matched = [c for c in store.cards[section]
-                   if _matches(c, params, section)]
+                   if _matches(c, params, section, default_status)]
         _sort_cards(matched, sort, order)
         page = matched[offset:offset + limit]
 

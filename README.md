@@ -136,8 +136,8 @@ Save, the manual screenshot curation described below.
   the running app version (right-aligned).
 - **Status filter** — `with screenshot` / `any` / `done` / `desktop` /
   `desktop text` / `desktop black` / `pending` / … , available in **all
-  four sections** (cracked, pd, utils, magazine; pd/utils/magazine default
-  to `any`).
+  four sections** (cracked, pd, utils, magazine; all default to the configured
+  `DefaultStatus`, normally `with_screenshot`).
   `pending` matches a game when **at least one** of its ZIPs is pending —
   the same rule the gallery applies (a game can appear in `pending` and
   `done` at once); every other status value uses the card aggregation

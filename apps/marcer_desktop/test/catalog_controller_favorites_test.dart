@@ -163,6 +163,7 @@ void main() {
         contains('Alpha/a.zip'));
 
     c.setSection('pd');
+    c.setStatus('any'); // this fixture has metadata-only pd cards
     expect(c.catalogCards, hasLength(1));
     c.toggleFavoriteSelected(); // pd card → pd section file
     expect(File('${tmp.path}/patch/$pdTree/favorites.txt').readAsStringSync(),
@@ -198,6 +199,7 @@ void main() {
     await c.init();
     c.toggleFavoriteSelected(); // cracked
     c.setSection('pd');
+    c.setStatus('any'); // this fixture has metadata-only pd cards
     c.toggleFavoriteSelected(); // pd
 
     c.toggleView(); // folder browser
@@ -252,6 +254,7 @@ void main() {
       () async {
     await c.init();
     c.setSection('pd');
+    c.setStatus('any'); // this fixture has metadata-only pd cards
     final card = c.catalogCards.first;
     expect(card.variants, isEmpty,
         reason: 'the universe itself never scans the filesystem');

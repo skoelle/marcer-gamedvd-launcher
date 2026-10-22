@@ -292,7 +292,7 @@ class CatalogController extends ChangeNotifier {
     if (filter.section == value) return;
     filter.section = value;
     // Gallery section switch: reset incompatible filters.
-    filter.status = _defaultStatusFor(value);
+    filter.status = config.defaultStatus;
     filter.raw = 'any';
     filter.pasti = 'any';
     filter.boxscan = 'any';
@@ -307,13 +307,6 @@ class CatalogController extends ChangeNotifier {
     }
     _filtersChanged();
   }
-
-  /// Per-section default status: cracked uses the configured
-  /// `default_status`; pd/utils default to `any` so metadata-only cards
-  /// (no screenshot/status) stay visible — their status dropdown is
-  /// available, but the default must not hide the union of metadata cards.
-  String _defaultStatusFor(String section) =>
-      section == 'cracked' ? config.defaultStatus : 'any';
 
   void setStatus(String value) {
     filter.status = value;
@@ -397,9 +390,8 @@ class CatalogController extends ChangeNotifier {
   /// Gallery `clear`: keep the section, reset everything else.
   void resetFilters() {
     filter.reset();
-    // `filter.reset` restores the factory status (cracked default); keep the
-    // per-section default (pd/utils = any) so metadata cards stay visible.
-    filter.status = _defaultStatusFor(filter.section);
+    // Keep the configured status preset for every section.
+    filter.status = config.defaultStatus;
     favoritesOnly = false;
     _catalogDirty = true;
     selectedIndex = 0;

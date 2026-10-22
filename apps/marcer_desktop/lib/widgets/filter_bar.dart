@@ -275,8 +275,8 @@ class _FilterBarState extends State<FilterBar> {
                     ),
                   ),
                   // Status filter is available for every section now that
-                  // pd/utils carry index-derived statuses (default `any`
-                  // there, `default_status` for cracked).
+                  // pd/utils carry index-derived statuses; all sections start
+                  // with the configured `DefaultStatus`.
                   _SelectMenu(
                     value: f.status,
                     items: ['with_screenshot', 'any', ...kStatusFilterKeys],

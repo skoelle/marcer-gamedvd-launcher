@@ -417,8 +417,7 @@ error body `{ "error": "<message>" }`.
 - `show_candidates` / `default_status` mirror the effective config
   (section 9): the frontend disables the card candidate strip when
   `show_candidates` is false and uses `default_status` as the initial
-  status preset for the cracked section (pd/utils default to `any`; URL
-  parameters always win).
+  status preset for every section (URL parameters always win).
 
 ### 5.3 `/api/entries`
 
@@ -427,7 +426,7 @@ Query parameters (all optional, defaults in parentheses):
 | Parameter | Values | Applies to |
 |---|---|---|
 | `section` | `cracked` (default) \| `pd` \| `utils` \| `magazine` | view selection |
-| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default `with_screenshot` for `cracked`, `any` for `pd`/`utils`/`magazine`) |
+| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default from `default_status`, normally `with_screenshot`) |
 | `q` | free text | all |
 | `letter` | `0-9` … `Z` (or facet value) \| `any` (default) | all (magazine: magazine name) |
 | `publisher`, `crew`, `cracker`, `language`, `year` | facet value \| `any` (default) | cracked (+pd/utils where the field exists; magazine: `year` only) |
@@ -446,11 +445,10 @@ Semantics:
   folder, all variant titles, ZIP names and relative paths, publisher,
   cracked_by, crew, intro_code, language, special_flag, special_note,
   tos_bad (and pd/utils equivalents). Empty `q` = no text filter.
-- `status=with_screenshot` is the **default** for `cracked` so the grid shows
-  the 4,414 screenshot cards first; `pd`/`utils` default to `any` (their
-  metadata-only cards have no screenshot). `status=any` shows the full
-  archive (including `pending` placeholders) — the statistics bar always
-  shows the active section's counts.
+- `status=with_screenshot` is the **default** for every section (from
+  `default_status`), so the grid shows screenshot cards first. `status=any`
+  shows the full archive (including `pending` placeholders) — the statistics
+  bar always shows the active section's counts.
 - `status=pending` matches a card when **any** of its ZIPs is `pending`
   (not the `display_status` aggregate: a folder with a `done` ZIP plus a
   `pending` ZIP is shown as `done` **and** as `pending`; the aggregated
@@ -767,9 +765,9 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | Tab | Source | Cards | Notes |
 |---|---|---|---|
 | games | join of `index.json` + `games-cracked.json` | grouped, with previews | default view (label `games`, section key `cracked`) |
-| pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
-| utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
-| magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `any`); `letter` = magazine name, `year` from the file name |
+| pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`) |
+| utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`) |
+| magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `with_screenshot`); `letter` = magazine name, `year` from the file name |
 
 - Letter navigation, search, sorting, the status filter and the
   publisher/language/year facets work in all sections; the remaining
@@ -780,7 +778,7 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
   `Zero Issue 16`), mirroring `packages/marcer_catalog/lib/src/magazine.dart`.
 - Switching tabs preserves `q`, `sort`, `order`, `letter` where applicable,
   resets incompatible filters and falls the status filter back to the
-  section default (`with_screenshot` for cracked, `any` for pd/utils/magazine).
+  configured `default_status` (normally `with_screenshot`).
 
 ### 6.9 Deep links
 
@@ -820,8 +818,8 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
    identified (`focus_variant === -1`) the card shows a hint plus up to
    four screenshots of the folder's other variants (section 6.3). Clicking
    the card opens the lightbox on that variant.
-4. **Status presets**: `with_screenshot` (default for cracked; `any` for
-   pd/utils), `done`, `desktop`, … as listed in section 5.2; `pending`
+4. **Status presets**: `with_screenshot` (default for every section), `done`,
+   `desktop`, … as listed in section 5.2; `pending`
    matches a card when **any** of its ZIPs is pending (section 5.3). The
    statistics bar always shows the active section's numbers.
 5. **Sorting**: `name` (default, case-insensitive), `year` (numeric, `unknown`
@@ -912,9 +910,8 @@ capped at 200.
 - `show_candidates`: enables/disables the candidate thumb strip on grid
   cards (delivered to the frontend via `/api/meta`). The lightbox strips
   are unaffected.
-- `default_status`: initial status preset of the **cracked** status filter
-  (delivered via `/api/meta`; pd/utils default to `any`; a `status` URL
-  parameter always wins).
+- `default_status`: initial status preset of **every** section
+  (delivered via `/api/meta`; a `status` URL parameter always wins).
 - Data paths are **never** configured here — `local/paths.env` only
   (same rule as the sibling tools).
 
@@ -957,7 +954,7 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     `done <games> (<zips> zips)` segments match the dropdown counts.
     The **pd/utils** views show index-backed cards with previews unioned
     with gameinfo-only metadata cards, their statistics bar uses the
-    per-section counts, and their status filter defaults to `any`.
+    per-section counts, and their status filter defaults to the configured `default_status` (normally `with_screenshot`).
 14. **Lightbox order/groups**: filmstrip lists screenshot variants first
     and `↑`/`↓` follows that order; the variant counter shows the
     filmstrip position; a crew/cracker link in Game info and a

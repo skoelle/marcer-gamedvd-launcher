@@ -143,7 +143,7 @@ void main() {
     expect(c.statusLine, contains('3 with screenshot'));
   });
 
-  test('pd/utils sections use their own index and a per-section default',
+  test('pd/utils sections use their own index and the configured default',
       () async {
     // pd index with one done PacMan ZIP (gameinfo already has one pd game).
     const pdTree = 'Title Sorted/PD Games - Title Sorted';
@@ -168,8 +168,7 @@ void main() {
     await c.init();
 
     c.setSection('pd');
-    // pd/utils default to `any` so metadata-only cards stay visible.
-    expect(c.filter.status, 'any');
+    expect(c.filter.status, 'with_screenshot');
     expect(c.countText, '1 result');
     // Header + status segments come from the pd index, not the cracked one.
     expect(c.statusLine, contains('1 folders'));
@@ -185,5 +184,23 @@ void main() {
     expect(c.countText, '0 results');
     c.setStatus('done');
     expect(c.countText, '1 result');
+  });
+
+  test('configured DefaultStatus applies to every section', () async {
+    final custom = CatalogController(DesktopConfig(
+      rootDirectory: '${tmp.path}/root',
+      patchDirectory: '${tmp.path}/patch',
+      screenshotDirectory: '${tmp.path}/out',
+      gameinfoDirectory: '${tmp.path}/data',
+      defaultStatus: 'done',
+    ));
+    await custom.init();
+    expect(custom.filter.status, 'done');
+    custom.setSection('pd');
+    expect(custom.filter.status, 'done');
+    custom.setSection('magazine');
+    expect(custom.filter.status, 'done');
+    custom.resetFilters();
+    expect(custom.filter.status, 'done');
   });
 }
