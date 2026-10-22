@@ -89,6 +89,45 @@ void main() {
     expect(f.fileForSection('cracked'), crackedFile);
   });
 
+  test('migration moves section entries out of the misc file', () {
+    write(
+        miscFile,
+        '/games/Cracked Games - Title Sorted/A/Alpha/alpha.zip\n'
+        '/other/Legacy.zip\n');
+    final f = loadService();
+    expect(
+        f.migrateMisplacedFavorites((path) {
+          if (path.contains('Cracked')) return 'cracked';
+          if (path.contains('PD')) return 'pd';
+          return null;
+        }),
+        1);
+    expect(File(crackedFile).readAsStringSync(), contains('alpha.zip'));
+    expect(File(miscFile).readAsStringSync(), contains('Legacy.zip'));
+    expect(File(miscFile).readAsStringSync(), isNot(contains('alpha.zip')));
+    expect(f.pathsForSection('cracked'), contains(endsWith('alpha.zip')));
+    expect(
+        f.migrateMisplacedFavorites(
+            (path) => path.contains('Cracked') ? 'cracked' : null),
+        0);
+  });
+
+  test('migration does not rewrite extra files', () {
+    final legacy = p.join(tmp.path, 'app', 'favorites.txt');
+    write(
+        legacy,
+        '/games/Cracked Games - Title Sorted/A/Alpha/alpha.zip\n');
+    final f = loadService(extraFiles: [legacy]);
+    expect(
+        f.migrateMisplacedFavorites(
+            (path) => path.contains('Cracked') ? 'cracked' : null),
+        0);
+    expect(
+        File(legacy).readAsStringSync(),
+        '/games/Cracked Games - Title Sorted/A/Alpha/alpha.zip\n');
+    expect(File(crackedFile).existsSync(), isFalse);
+  });
+
   test('section without a mapped file falls back to the misc file', () {
     final f = loadService();
     expect(f.toggle('/games/Util Games - Title Sorted/U/Utils/utils.zip'), isTrue);

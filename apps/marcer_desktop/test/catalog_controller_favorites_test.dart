@@ -127,6 +127,20 @@ void main() {
     expect(c.sectionOf(entries.single), 'Cracked');
   });
 
+  test('init migrates legacy misc favorites into the section file', () async {
+    final misc = File('${tmp.path}/patch/favorites.txt')
+      ..writeAsStringSync('${rootZip(relA)}\n/other/Legacy.zip\n');
+
+    await c.init();
+
+    final sectionFile = File('${tmp.path}/patch/$crackedTree/favorites.txt');
+    expect(sectionFile.readAsStringSync(), contains('Alpha/a.zip'));
+    expect(misc.readAsStringSync(), isNot(contains('Alpha/a.zip')));
+    expect(misc.readAsStringSync(), contains('Legacy.zip'));
+    expect(c.favorites!.pathsForSection('cracked'),
+        contains(rootZip(relA)));
+  });
+
   test('★ lists the active section and ignores status/facets', () async {
     await c.init();
     c.toggleFavoriteSelected(); // cracked card → cracked section file

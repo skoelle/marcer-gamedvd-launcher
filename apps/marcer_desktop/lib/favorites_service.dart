@@ -57,7 +57,8 @@ String resolveFavoritesPath({
 /// preserved verbatim. Save failures never crash (R25): the in-memory set
 /// stays updated, only the disk write is lost ([lastSaveError]).
 class FavoritesService {
-  FavoritesService._(this._fileForSection, this._files, this._sectionOfPath);
+  FavoritesService._(this._fileForSection, this._files, this._sectionOfPath,
+      this._writableFiles);
 
   /// Loads every mapped section file (missing files yield empty sets) plus
   /// [extraFiles] — additional read-only sources such as a legacy
@@ -72,6 +73,7 @@ class FavoritesService {
     List<String> extraFiles = const [],
     required String Function(String path) sectionOfPath,
   }) {
+    final writableFiles = fileForSection.values.toSet();
     final files = <String, List<String>>{};
     for (final path in [...fileForSection.values, ...extraFiles]) {
       if (files.containsKey(path)) continue;
@@ -88,12 +90,16 @@ class FavoritesService {
       files[path] = list;
     }
     return FavoritesService._(
-        Map<String, String>.unmodifiable(fileForSection), files, sectionOfPath);
+        Map<String, String>.unmodifiable(fileForSection),
+        files,
+        sectionOfPath,
+        writableFiles);
   }
 
   final Map<String, String> _fileForSection;
   final Map<String, List<String>> _files;
   final String Function(String path) _sectionOfPath;
+  final Set<String> _writableFiles;
   List<String>? _union;
 
   /// Error of the last save round (`null` when every write succeeded or no
@@ -103,6 +109,42 @@ class FavoritesService {
   /// File that stores favorites of [section] (`'cracked'`/`'pd'`/`'utils'`),
   /// the misc file for [kMiscFavoritesSection]; null when unmapped.
   String? fileForSection(String section) => _fileForSection[section];
+
+  int migrateMisplacedFavorites(String? Function(String path) sectionOf) {
+    final touched = <String>{};
+    var moved = 0;
+    for (final source in _writableFiles.toList()) {
+      final list = _files[source];
+      if (list == null) continue;
+      final keep = <String>[];
+      for (final path in list) {
+        final section = sectionOf(path);
+        final target = section == null ? null : _fileForSection[section];
+        if (target == null || target == source) {
+          keep.add(path);
+          continue;
+        }
+        final targetList = _files.putIfAbsent(target, () => <String>[]);
+        if (!targetList.any((entry) => _eq(entry, path))) {
+          targetList.add(path);
+          targetList.sort(_byLower);
+        }
+        touched.add(target);
+        moved++;
+      }
+      if (keep.length != list.length) {
+        list
+          ..clear()
+          ..addAll(keep);
+        touched.add(source);
+      }
+    }
+    if (touched.isNotEmpty) {
+      _union = null;
+      _save(touched);
+    }
+    return moved;
+  }
 
   /// Every file path in use (mapped section files + extras actually loaded).
   Iterable<String> get files => _files.keys;

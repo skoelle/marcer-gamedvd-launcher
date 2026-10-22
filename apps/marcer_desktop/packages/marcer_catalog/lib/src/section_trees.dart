@@ -76,13 +76,16 @@ Map<String, String> discoverSectionTrees(OverlayBrowser browser) {
   return out;
 }
 
+String normalizeRelSeparators(String rel) => rel.replaceAll('\\', '/');
+
 /// Section key (`cracked`/`pd`/`utils`) of a root-relative path, or `null`
 /// when the path is outside every section tree.
 String? sectionOfRel(Map<String, String> trees, String rel) {
-  if (rel.isEmpty) return null;
+  final relPath = normalizeRelSeparators(rel);
+  if (relPath.isEmpty) return null;
   for (final entry in trees.entries) {
     final tree = entry.value;
-    if (rel == tree || rel.startsWith('$tree/')) return entry.key;
+    if (relPath == tree || relPath.startsWith('$tree/')) return entry.key;
   }
   return null;
 }

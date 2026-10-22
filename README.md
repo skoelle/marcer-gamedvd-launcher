@@ -169,9 +169,11 @@ Save, the manual screenshot curation described below.
   console launcher uses, so both apps share their favorites; without a
   `PatchDirectory` each section gets `favorites-<section>.txt` next to the
   executable). A legacy single `favorites.txt` (`PatchDirectory` →
-  application directory → CWD) is still read, and entries that belong to
-  another OS (e.g. Windows `Y:\…` lines in a shared file) are preserved on
-  save but not shown.
+  application directory → CWD) is still read; on startup, entries that
+  clearly belong to a section tree are moved into that section's file, while
+  paths outside every tree — including entries from another OS (e.g. Windows
+  `Y:\…` lines in a shared file) — stay in place and are preserved on save
+  but not shown.
 - **Manual screenshot curation** — `M` in the lightbox swaps the currently
   viewed candidate with the variant's main image (fixed file names, only the
   PNG contents trade places); the grid card, detail view, filmstrip and

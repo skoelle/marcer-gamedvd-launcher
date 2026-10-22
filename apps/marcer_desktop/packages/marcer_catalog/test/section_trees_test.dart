@@ -112,6 +112,19 @@ void main() {
           sectionOfRel(trees, 'Title Sorted/Cracked Games - Title SortedXX/a.zip'),
           isNull);
     });
+
+    test('classifies Windows-separated relative paths', () {
+      expect(
+          sectionOfRel(
+              trees,
+              r'Title Sorted\Cracked Games - Title Sorted\A\Alpha\a.zip'),
+          'cracked');
+      expect(
+          sectionOfRel(
+              trees, r'Title Sorted\PD Games - Title Sorted\P\PacMan\p.zip'),
+          'pd');
+      expect(sectionOfRel(trees, r'Title Sorted\Other\a.zip'), isNull);
+    });
   });
 
   group('GameCard.kind', () {

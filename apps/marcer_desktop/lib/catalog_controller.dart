@@ -167,6 +167,10 @@ class CatalogController extends ChangeNotifier {
         ],
         sectionOfPath: _sectionOfFavoritePath,
       );
+      favorites!.migrateMisplacedFavorites((path) {
+        final section = _sectionOfFavoritePath(path);
+        return section == kMiscFavoritesSection ? null : section;
+      });
 
       ready = true;
       progress = '';
@@ -493,7 +497,7 @@ class CatalogController extends ChangeNotifier {
     for (final root in roots) {
       final normRoot = p.normalize(root);
       if (p.isWithin(normRoot, absPath) || p.equals(normRoot, absPath)) {
-        return p.relative(absPath, from: normRoot);
+        return normalizeRelSeparators(p.relative(absPath, from: normRoot));
       }
     }
     return null;
@@ -897,7 +901,9 @@ class CatalogController extends ChangeNotifier {
     if (tree != null && card.letter.isNotEmpty && card.folder.isNotEmpty) {
       return '$tree/${card.letter}/${card.folder}';
     }
-    if (card.variants.isNotEmpty) return p.dirname(card.variants.first.rel);
+    if (card.variants.isNotEmpty) {
+      return normalizeRelSeparators(p.dirname(card.variants.first.rel));
+    }
     return null;
   }
 
@@ -1518,7 +1524,8 @@ class CatalogController extends ChangeNotifier {
     return false;
   }
 
-  String _favoriteDirKey(String dir) => p.normalize(dir).toLowerCase();
+  String _favoriteDirKey(String dir) =>
+      normalizeRelSeparators(dir).toLowerCase();
 
   Set<String>? _favoriteFolderRelsCache;
 
@@ -1531,9 +1538,9 @@ class CatalogController extends ChangeNotifier {
     for (final path in favorites?.paths ?? const <String>[]) {
       final rel = _relFromAbsolute(path);
       if (rel == null) continue;
-      final dir = p.dirname(rel);
+      final dir = p.posix.dirname(rel);
       if (dir.isEmpty || dir == '.') continue;
-      out.add(p.normalize(dir).toLowerCase());
+      out.add(_favoriteDirKey(dir));
     }
     return _favoriteFolderRelsCache = out;
   }
