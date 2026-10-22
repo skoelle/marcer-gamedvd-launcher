@@ -18,6 +18,7 @@ const LETTERS = ["0-9", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
 const SORT_KEYS = ["name", "year", "publisher", "cracker", "crew"];
 const SECTION_INDEX_NAMES = {
   cracked: "index.json", pd: "index-pd.json", utils: "index-utils.json",
+  magazine: "index-magazine.json",
 };
 
 const SECTION_CONTROLS = {
@@ -26,6 +27,7 @@ const SECTION_CONTROLS = {
   pd: ["status", "publisher", "language", "year"],
   utils: ["status", "publisher", "crew", "cracker", "language", "year",
           "raw", "tos"],
+  magazine: ["status", "year"],
 };
 const FACET_LABELS = {
   status: "Status", publisher: "Publisher", crew: "Crew",
@@ -85,7 +87,9 @@ function readURL() {
   }
   if (u.has("offset")) state.offset = Math.max(0, parseInt(u.get("offset"), 10) || 0);
   if (u.has("entry")) state.entry = u.get("entry");
-  if (!["cracked", "pd", "utils"].includes(state.section)) state.section = "cracked";
+  if (!Object.prototype.hasOwnProperty.call(SECTION_INDEX_NAMES, state.section)) {
+    state.section = "cracked";
+  }
 }
 
 function writeURL(push) {
@@ -244,7 +248,10 @@ function renderStats(extra) {
     parts.push(`<span class="st">info <b>${meta.coverage.matched_folders}</b> folders</span>`);
   }
   const noInfo = sec.no_info || 0;
-  if (noInfo) parts.push(`<span class="st">${noInfo} without info</span>`);
+  // magazine cards are filename-only by design — never report missing gameinfo
+  if (noInfo && section !== "magazine") {
+    parts.push(`<span class="st">${noInfo} without info</span>`);
+  }
   if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
   parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
   $("stats").innerHTML = parts.join("");
@@ -1020,7 +1027,9 @@ function wireEvents() {
     state.status = sectionDefaultStatus(state.section);
     for (const k of ["raw", "pasti", "boxscan", "tos", "crew", "cracker"])
       state[k] = "any";
-    if (state.sort === "cracker" && state.section === "pd") state.sort = "name";
+    if (state.sort === "cracker" && !["cracked", "utils"].includes(state.section)) {
+      state.sort = "name";
+    }
     syncControls();
     loadEntries();
   });
@@ -1073,12 +1082,16 @@ async function boot() {
   if (meta.show_candidates != null) showCands = !!meta.show_candidates;
   if (meta.default_status) defaultStatus = meta.default_status;
   if (!urlStatus) state.status = sectionDefaultStatus(state.section);
-  // show the section tabs when pd/utils have any card (index- or
-  // gameinfo-derived), even without gameinfo
-  $("tabs").hidden = !(meta.sections &&
-    ((meta.sections.pd && (meta.sections.pd.games || meta.sections.pd.cards)) ||
-     (meta.sections.utils &&
-      (meta.sections.utils.games || meta.sections.utils.cards))));
+  // show the section tabs when a non-default section has any card (index-
+  // or gameinfo-derived), even without gameinfo; hide empty tabs individually
+  const secMeta = (meta && meta.sections) || {};
+  const secHasData = (s) => !!(secMeta[s] && (secMeta[s].games || secMeta[s].cards));
+  $("tabs").hidden = !(secHasData("pd") || secHasData("utils") ||
+    secHasData("magazine"));
+  for (const b of $("tabs").querySelectorAll("button")) {
+    const s = b.dataset.section;
+    b.hidden = s !== "cracked" && !secHasData(s);
+  }
   syncControls();
   renderStats();
   renderFooter();

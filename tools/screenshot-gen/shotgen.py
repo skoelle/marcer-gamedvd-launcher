@@ -71,6 +71,14 @@ DEFAULT_CONFIG = {
                 "Title Sorted/PD Games - Title Sorted",
             ],
         },
+        "magazine": {
+            "trees": [
+                "Bonus/Magazine Cover Disks",
+            ],
+            "exclude_dirs": [
+                "dupes",
+            ],
+        },
     },
     # Directory names ending with this suffix (case-insensitive, matched
     # against the entry's game folder, e.g. "Abalone - Mono") are booted
@@ -214,6 +222,7 @@ def resolve_scopes(cfg: dict) -> tuple:
         if isinstance(spec, dict):
             trees = [str(t) for t in (spec.get("trees") or [])]
             index = spec.get("index")
+            exclude = [str(d) for d in (spec.get("exclude_dirs") or [])]
         else:
             sys.exit(f"error: scopes.{name} must be an object with a "
                      f"trees list")
@@ -221,7 +230,8 @@ def resolve_scopes(cfg: dict) -> tuple:
             sys.exit(f"error: scope {name!r} has no trees")
         if not index:
             index = "index.json" if name == default else f"index-{name}.json"
-        scopes[name] = {"name": name, "trees": trees, "index": index}
+        scopes[name] = {"name": name, "trees": trees, "index": index,
+                        "exclude_dirs": exclude}
     if default not in scopes:
         sys.exit(f"error: scope_default {default!r} is not defined in "
                  f"scopes ({', '.join(sorted(scopes))})")
@@ -453,8 +463,17 @@ def _norm_dir(name: str) -> str:
     return re.sub(r"[\s_-]", "", name.lower())
 
 
-def _excluded_dirs(cfg: dict) -> set:
-    return {_norm_dir(n) for n in (cfg.get("exclude_dirs") or [])}
+def _excluded_dirs(cfg: dict, scope: dict = None) -> set:
+    """Normalized directory names never entered by the scan.
+
+    The global ``exclude_dirs`` list is always applied; a scope may add
+    its own via the ``exclude_dirs`` key (e.g. the magazine scope skips
+    the ``Dupes`` sub-folders).
+    """
+    names = list(cfg.get("exclude_dirs") or [])
+    if scope:
+        names += list(scope.get("exclude_dirs") or [])
+    return {_norm_dir(n) for n in names}
 
 
 def scan_tree(layer_base: Path, scope: str, disk_re, exclude=None) -> dict:
@@ -508,7 +527,7 @@ def build_index(cfg: dict, P: dict, full: bool, scope: dict) -> dict:
     removed (rescoping/exclusions).
     """
     disk_re = re.compile(cfg["disk_skip_regex"])
-    exclude = _excluded_dirs(cfg)
+    exclude = _excluded_dirs(cfg, scope)
     root, patch = Path(P["root"]), Path(P["patch"]) if P["patch"] else None
     out = Path(P["out"])
     idx = load_index(out, scope["index"])

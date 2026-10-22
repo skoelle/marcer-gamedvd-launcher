@@ -359,4 +359,43 @@ void main() {
       expect(reloaded.hatariConfigFile, '');
     });
   });
+
+  group('magazineGroup (filename-derived cards)', () {
+    test('ST Action issue numbers group disks and copies', () {
+      expect(magazineGroup('ST Action - 2 missings', 'ST Action 41 - Disk 22 - maddo'),
+          isA<MagazineGroup>()
+              .having((g) => g.folder, 'folder', '41')
+              .having((g) => g.display, 'display', 'ST Action 41')
+              .having((g) => g.year, 'year', ''));
+    });
+
+    test('Start Micro parses issue and date', () {
+      final g = magazineGroup(
+          'Start Micro', 'start micro 19 (1994-07)(j.d. press)(fr)');
+      expect(g.folder, '19');
+      expect(g.display, 'Start Micro 19');
+      expect(g.year, '1994');
+    });
+
+    test('ST Computer parses YYYY_MM and strips copy suffix', () {
+      final g = magazineGroup('ST Computer', '1995_02 (2)');
+      expect(g.folder, '1995_02');
+      expect(g.display, 'ST Computer 1995-02');
+      expect(g.year, '1995');
+    });
+
+    test('The One / Zero use the issue number', () {
+      expect(magazineGroup('Zero - Complete', 'Zero Issue 01 - Nov 89 - Recoil').display,
+          'Zero Issue 01');
+      expect(magazineGroup('The One - 4 missings', 'The One ST Games Issue 32 - Disk 2').folder,
+          '32');
+    });
+
+    test('unknown names fall back to the file stem', () {
+      final g = magazineGroup('Start Micro', 'startmhs1');
+      expect(g.folder, 'startmhs1');
+      expect(g.display, 'startmhs1');
+      expect(g.year, '');
+    });
+  });
 }

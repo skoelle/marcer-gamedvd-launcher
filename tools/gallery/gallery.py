@@ -54,6 +54,7 @@ SECTION_INDEX_NAMES = {
     "cracked": "index.json",
     "pd": "index-pd.json",
     "utils": "index-utils.json",
+    "magazine": "index-magazine.json",
 }
 
 
@@ -135,25 +136,91 @@ def _info_search_text(info):
     return " ".join(parts).lower()
 
 
+# --- magazine cover disks (filename-derived cards) -----------------------
+#
+# The magazine scope (`Bonus/Magazine Cover Disks`) has no metadata at all;
+# every bit of information lives in the file name. One card = one magazine
+# issue: multiple disks and ` (2)` copies become variants. The parser is
+# mirrored in `packages/marcer_catalog/lib/src/magazine.dart`.
+
+_MAGAZINE_SUFFIXES = (" - 2 missings", " - 4 missings", " - Complete")
+
+
+def _magazine_name(letter):
+    """Clean magazine folder name (`ST Action - 2 missings` -> `ST Action`)."""
+    name = letter
+    for suffix in _MAGAZINE_SUFFIXES:
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+    return name
+
+
+def _magazine_key(letter, stem):
+    """Return ``(folder_key, display_name, year)`` for one magazine ZIP.
+
+    The stem is the file name without `.zip`; a trailing ` (2)`/` (3)`
+    duplicate marker is ignored so copies group with the original issue.
+    """
+    mag = _magazine_name(letter)
+    s = re.sub(r"\s*\(\d+\)\s*$", "", stem)
+    ym = re.search(r"\b(19|20)\d{2}\b", s)
+    year = ym.group(0) if ym else ""
+    if mag == "ST Action":
+        m = re.match(r"st action\s+(\d+)", s, re.I)
+        if m:
+            return m.group(1), f"ST Action {m.group(1)}", ""
+    elif mag == "Start Micro":
+        m = re.match(r"start\s*micro\s*(\d+)", s, re.I)
+        if m:
+            date = re.search(r"\((\d{4})-(\d{2})\)", s)
+            return (m.group(1), f"Start Micro {m.group(1)}",
+                    date.group(1) if date else "")
+    elif mag == "ST Computer":
+        m = re.match(r"(\d{4})[_-](\d{2}(?:-\d{2})?|s\d|p\d)", s, re.I)
+        if m:
+            label = f"{m.group(1)}-{m.group(2).upper()}"
+            return m.group(0).lower(), f"ST Computer {label}", m.group(1)
+    elif mag in ("The One", "Zero"):
+        m = re.search(r"issue\s*(\d+)", s, re.I)
+        if m:
+            return m.group(1), f"{mag} Issue {m.group(1)}", year
+    return s.lower(), s, year
+
+
+def _group_key(rel, kind):
+    """Return ``(letter, folder, display_name, year)`` for one index entry."""
+    parts = rel.split("/")
+    letter = parts[2] if len(parts) > 2 else ""
+    if kind == "magazine":
+        stem = (Path(parts[3]).stem if len(parts) > 3
+                else Path(parts[-1]).stem)
+        folder, display, year = _magazine_key(letter, stem)
+        return letter, folder, display, year
+    folder = parts[3] if len(parts) > 3 else Path(parts[-1]).stem
+    return letter, folder, folder, ""
+
+
 def _build_indexed_cards(entries, games, kind, union_gameinfo):
     """Group index entries by (letter, folder) into cards joined with gameinfo.
 
     With ``union_gameinfo`` (pd/utils) gameinfo-only folders without an index
     entry are appended as metadata-only cards (placeholder, no screenshots);
     cracked stays index-only (desktop-app parity, per-section indices).
+    Magazine cards are grouped per issue with a filename-derived name/year.
     """
     info_by_key = {(g.get("letter", ""), g.get("folder", "")): g
                    for g in games}
     groups = {}
     for rel, e in entries.items():
-        parts = rel.split("/")
-        letter = parts[2] if len(parts) > 2 else ""
-        folder = parts[3] if len(parts) > 3 else Path(parts[-1]).stem
-        groups.setdefault((letter, folder), []).append((rel, e))
+        letter, folder, display, year = _group_key(rel, kind)
+        group = groups.setdefault(
+            (letter, folder), {"items": [], "display": display, "year": year})
+        group["items"].append((rel, e))
 
     cards = []
     seen = set()
-    for (letter, folder), items in groups.items():
+    for (letter, folder), group in groups.items():
+        items = group["items"]
         items.sort(key=lambda t: t[0])
         variants = []
         scounts = {}
@@ -202,19 +269,24 @@ def _build_indexed_cards(entries, games, kind, union_gameinfo):
         info = info_by_key.get((letter, folder))
         card = {
             "id": f"{letter}/{folder}",
-            "name": folder,
+            "name": group["display"] or folder,
             "letter": letter,
             "folder": folder,
             "display_status": display_status,
             "screenshots": preview is not None,
             "status_counts": scounts,
             "layer": layer,
-            "year": "",
+            "year": group["year"],
             "preview": preview,
             "variants": variants,
             "info": _variant_info_summary(info),
         }
         _finalize_card(card, kind=kind)
+        if kind == "magazine" and group["year"]:
+            # _finalize_card derives the year from gameinfo only; magazine
+            # years come from the file name.
+            card["year"] = group["year"]
+            card["_year_num"] = int(group["year"])
         cards.append(card)
         seen.add((letter.lower(), folder.lower()))
 
@@ -302,6 +374,8 @@ def _facets(cards, kind):
     for c in cards:
         if c["letter"]:
             letters.add(c["letter"])
+        if c.get("year") and c["year"] != "unknown":
+            years.add(c["year"])
         for v in (c.get("info") or {}).get("variants") or []:
             for bucket, key in ((pubs, "publisher"), (langs, "language")):
                 val = (v.get(key) or "").strip()
@@ -335,6 +409,7 @@ def kind_fields(kind):
         "pd": {"publisher", "language", "release", "tos_bad"},
         "utils": {"publisher", "crew", "cracked_by", "language", "release",
                   "raw_dump", "tos_bad"},
+        "magazine": set(),
     }[kind]
 
 
@@ -346,6 +421,7 @@ def kind_filters(kind):
         "pd": {"publisher", "language", "year", "tos"},
         "utils": {"publisher", "crew", "cracker", "language", "year", "raw",
                   "tos"},
+        "magazine": {"year"},
     }[kind]
 
 
@@ -459,7 +535,7 @@ class DataStore:
         self.lock = threading.Lock()
         self._mtimes = {}
         self.meta = {}
-        self.cards = {"cracked": [], "pd": [], "utils": []}
+        self.cards = {sec: [] for sec in SECTION_INDEX_NAMES}
         self.facets = {}
         self.gameinfo_available = False
         self.kinds_loaded = set()
@@ -552,8 +628,10 @@ class DataStore:
             entries["utils"],
             games["utils"] if "utils" in self.kinds_loaded else [],
             "utils", union_gameinfo=True)
+        self.cards["magazine"] = _build_indexed_cards(
+            entries["magazine"], [], "magazine", union_gameinfo=False)
         self.facets = {kind: _facets(self.cards[kind], kind)
-                       for kind in ("cracked", "pd", "utils")}
+                       for kind in SECTION_INDEX_NAMES}
 
         coverage = {}
         for src in self.manifest.get("sources") or []:
@@ -601,7 +679,7 @@ class DataStore:
                                    for sec in SECTION_INDEX_NAMES},
             "sections": {
                 sec: {
-                    "games": len(games[sec]),
+                    "games": len(games.get(sec, [])),
                     "cards": len(self.cards[sec]),
                     "with_screenshot": sum(
                         1 for c in self.cards[sec] if c["screenshots"]),
@@ -833,7 +911,7 @@ class GalleryHandler(BaseHTTPRequestHandler):
     def _entries(self):
         params = self._params()
         section = params.get("section", "cracked") or "cracked"
-        if section not in ("cracked", "pd", "utils"):
+        if section not in SECTION_INDEX_NAMES:
             return self._error(400, "invalid section")
         store = self.store
 

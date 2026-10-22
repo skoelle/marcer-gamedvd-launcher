@@ -52,8 +52,8 @@ macOS); the Dart package name stays `marcer_desktop`.
 - Flutter SDK (stable) in `~/flutter` (`export PATH="$HOME/flutter/bin:$PATH"`)
 - Linux desktop toolchain: `clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev`
 - Data roots reachable (see `local/paths.env`): game tree, patch tree,
-  screenshot archive (`index.json`, `index-pd.json`, `index-utils.json` +
-  PNGs), gameinfo `Data/` dir.
+  screenshot archive (`index.json`, `index-pd.json`, `index-utils.json`,
+  `index-magazine.json` + PNGs), gameinfo `Data/` dir.
   All optional — missing artifacts degrade to empty states.
 
 ## Commands
@@ -141,7 +141,7 @@ and **TOS ROM** rows (download/install on demand, see below).
 |---|---|---|
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
-| `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
+| `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`/`index-magazine.json`, PNGs) |
 | `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
 | `AtariLegendDirectory` | no | compact AtariLegend cache (`atarilegend.json`); filled by **Download AtariLegend data** (directory created when missing) |
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
@@ -247,7 +247,8 @@ favorite as soon as **any** of its ZIPs is starred; the **★ Favorites**
 filter lists the favorites of the **active section** (facets and status are
 ignored there, the text search stays active). The folder browser shows one
 virtual `Favorites` folder per section that has favorites
-(`Favorites (games)`, `Favorites (pd)`, `Favorites (utils)`). Cards without raw variants
+(`Favorites (games)`, `Favorites (pd)`, `Favorites (utils)`,
+`Favorites (magazine)`). Cards without raw variants
 (pd/utils) resolve their folder ZIPs on demand, so they can be starred and
 launched like cracked games. Launching a favorited card plays the starred ZIP
 when exactly one variant is favorited.
@@ -279,8 +280,8 @@ file manager.
 
 The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
 `desktop text`, `desktop black`, `pending`, `no usable shots`,
-`interrupted`, `skipped (disk 2+)`) is available in **all three sections**
-(cracked, pd, utils):
+`interrupted`, `skipped (disk 2+)`) is available in **all four sections**
+(cracked, pd, utils, magazine):
 
 - `pending` matches a game when **at least one** of its ZIPs is pending
   (the same rule the gallery's status filter applies — the aggregated
@@ -288,8 +289,8 @@ The status dropdown (`with screenshot`, `any`, `done`, `desktop`,
   folders).
 - All other status values use the aggregated card status
   (`done → desktop → no usable shots → interrupted → pending → skipped`).
-- The default is `with screenshot` for cracked and `any` for pd/utils
-  (their metadata-only cards have no screenshot).
+- The default is `with screenshot` for cracked and `any` for pd/utils/magazine
+  (their metadata-only / filename-only cards have no screenshot yet).
 
 The status bar reports every status as **games (ZIPs)** (see below), so the
 games number always equals the result count of the matching dropdown
@@ -308,8 +309,9 @@ the coverage `info N folders` / `N without info`):
 
 - `3287 folders` — games (cards) of the active section; cracked cards are
   built from `index.json`, pd/utils cards are the union of their own
-  index (`index-pd.json` / `index-utils.json`) and gameinfo-only folders;
-  every game folder with at least one ZIP is one card.
+  index (`index-pd.json` / `index-utils.json`) and gameinfo-only folders,
+  and magazine cards come from `index-magazine.json` (one card per issue,
+  filename-derived); every game folder with at least one ZIP is one card.
 - `3211 with screenshot` — games of the section with a preview (prefer
   `done` game shot, else first `done`, else first `desktop`).
 - `done 2635 (8979 zips)` — per status: number of **games** (cards) plus
@@ -323,9 +325,9 @@ the coverage `info N folders` / `N without info`):
   (`N` cracked folders matched by the gameinfo generator, `manifest.json`
   `matched_folders`; cracked only) / cards of the active section whose
   gameinfo join is empty.
-- `index.json: …` (or `index-pd.json` / `index-utils.json` for those
-  sections), `gameinfo: …` — active index mtime and gameinfo generation
-  timestamp.
+- `index.json: …` (or `index-pd.json` / `index-utils.json` /
+  `index-magazine.json` for those sections), `gameinfo: …` — active index
+  mtime and gameinfo generation timestamp.
 
 ## Missing ZIPs
 

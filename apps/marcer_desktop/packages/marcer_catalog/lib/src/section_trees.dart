@@ -10,6 +10,7 @@ String? sectionOfTreeName(String name) {
   if (name.startsWith('Cracked')) return 'cracked';
   if (name.startsWith('PD')) return 'pd';
   if (name.startsWith('Util')) return 'utils';
+  if (name.startsWith('Magazine')) return 'magazine';
   return null;
 }
 
@@ -23,6 +24,7 @@ const Map<String, String> kCanonicalTreeNames = {
   'cracked': 'Cracked Games - Title Sorted',
   'pd': 'PD Games - Title Sorted',
   'utils': 'Utilitys - Title Sorted',
+  'magazine': 'Magazine Cover Disks',
 };
 
 /// Discovers the section tree directories (relative to the overlay root) by

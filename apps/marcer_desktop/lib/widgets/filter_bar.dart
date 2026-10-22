@@ -409,8 +409,11 @@ class _FilterBarState extends State<FilterBar> {
 
   /// Display label for a section tab: the `cracked` section shows as
   /// `games` (the filter value / section key itself stays unchanged).
-  String _sectionLabel(String section) =>
-      section == 'cracked' ? 'games' : section;
+  String _sectionLabel(String section) => switch (section) {
+        'cracked' => 'games',
+        'magazine' => 'magazines',
+        _ => section,
+      };
 
   Widget _tabButton(String label, bool active, VoidCallback onTap) {
     return InkWell(

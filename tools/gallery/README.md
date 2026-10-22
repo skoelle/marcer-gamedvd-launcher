@@ -12,7 +12,8 @@ specification.
 - Python 3 with the repo `.venv` (no extra packages — stdlib only)
 - Environment in `local/paths.env` (git-ignored):
   - `MARCER_OUT_DIR` (required): screenshot output with the section
-    indices (`index.json`, `index-pd.json`, `index-utils.json`) + PNGs
+    indices (`index.json`, `index-pd.json`, `index-utils.json`,
+    `index-magazine.json`) + PNGs
   - `MARCER_DATA_DIR` (optional): `games-*.json` from `tools/gameinfo-gen`
     (adds metadata facets and hover info to the index-backed cards)
 
@@ -34,9 +35,11 @@ results. There is no live refresh/polling in v1.
 
 ## Features & Keyboard
 
-- **Sections**: tabs for games (cracked) / pd / utils (pd/utils appear when
-  their index or gameinfo data exists). Each section joins its own
-  screenshot index with the matching `games-*.json`.
+- **Sections**: tabs for games (cracked) / pd / utils / magazines (a tab
+  appears when its index or gameinfo data exists). Each section joins its
+  own screenshot index with the matching `games-*.json`; the `magazines`
+  section is index-only (`index-magazine.json`, one filename-derived card
+  per issue, no gameinfo).
 - **Filters**: status preset, search, letter nav, publisher/crew/cracker/
   language/year facets, RAW/PASTI/Boxscan/TOS tri-state flags, and one
   combined sort dropdown (`name asc` … `crew desc`). The URL always

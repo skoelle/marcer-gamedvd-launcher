@@ -7,6 +7,7 @@ import 'dart:isolate';
 import 'atarilegend.dart';
 import 'card.dart';
 import 'gameinfo.dart';
+import 'magazine.dart';
 import 'screenshot_index.dart';
 
 /// Facet option lists of one section (gallery `/api/meta` `facets[section]`).
@@ -36,23 +37,28 @@ class CatalogFacets {
 
 /// All catalog cards grouped per section plus their facets — the global
 /// "universe" of the desktop app, derived from the per-section screenshot
-/// indices (`index.json` / `index-pd.json` / `index-utils.json`) + gameinfo
+/// indices (`index.json` / `index-pd.json` / `index-utils.json` /
+/// `index-magazine.json`) + gameinfo
 /// without any filesystem scan (user decision 2026-10-11; per-section
-/// indices + pd/utils union 2026-10-16).
+/// indices + pd/utils union 2026-10-16; magazine section 2026-10-22).
 ///
 /// - `cracked` cards come from its index entries grouped by (letter, folder)
 ///   joined with `games-cracked.json`.
 /// - `pd`/`utils` cards are the union of index groups (with status counts /
 ///   screenshots / variants) and gameinfo-only folders without an index entry
 ///   (metadata-only cards, the pre-index behaviour).
+/// - `magazine` cards come from `index-magazine.json` only, grouped per issue
+///   by a filename parser (`magazine.dart`).
 class CatalogUniverse {
   CatalogUniverse._({
     required this.cracked,
     required this.pd,
     required this.utils,
+    required this.magazine,
     required this.crackedFacets,
     required this.pdFacets,
     required this.utilsFacets,
+    required this.magazineFacets,
     required Map<String, Map<String, int>> statusCountsBySection,
   }) : _countsBySection = statusCountsBySection;
 
@@ -95,19 +101,32 @@ class CatalogUniverse {
       atariLegend: atariLegend,
       onProgress: onProgress,
     );
+    onProgress?.call('Building catalog — magazine…');
+    final magazine = _buildIndexedSection(
+      kind: 'magazine',
+      index: indices.forSection('magazine'),
+      info: info,
+      fullPng: fullPng,
+      unionGameinfo: false,
+      atariLegend: null,
+      onProgress: onProgress,
+    );
 
     onProgress?.call('Building catalog — facets…');
     return CatalogUniverse._(
       cracked: cracked.cards,
       pd: pd.cards,
       utils: utils.cards,
+      magazine: magazine.cards,
       crackedFacets: _facets(cracked.cards, 'cracked'),
       pdFacets: _facets(pd.cards, 'pd'),
       utilsFacets: _facets(utils.cards, 'utils'),
+      magazineFacets: _facets(magazine.cards, 'magazine'),
       statusCountsBySection: {
         'cracked': cracked.statusCounts,
         'pd': pd.statusCounts,
         'utils': utils.statusCounts,
+        'magazine': magazine.statusCounts,
       },
     );
   }
@@ -115,9 +134,11 @@ class CatalogUniverse {
   final List<GameCard> cracked;
   final List<GameCard> pd;
   final List<GameCard> utils;
+  final List<GameCard> magazine;
   final CatalogFacets crackedFacets;
   final CatalogFacets pdFacets;
   final CatalogFacets utilsFacets;
+  final CatalogFacets magazineFacets;
   final Map<String, Map<String, int>> _countsBySection;
 
   /// Aggregated `displayStatus` counts over cracked cards (status bar games
@@ -132,17 +153,19 @@ class CatalogUniverse {
 
   /// Every card of every section (the `★ Favorites` filter lists all
   /// sections at once).
-  List<GameCard> get allCards => [...cracked, ...pd, ...utils];
+  List<GameCard> get allCards => [...cracked, ...pd, ...utils, ...magazine];
 
   List<GameCard> cardsFor(String section) => switch (section) {
         'pd' => pd,
         'utils' => utils,
+        'magazine' => magazine,
         _ => cracked,
       };
 
   CatalogFacets facetsFor(String section) => switch (section) {
         'pd' => pdFacets,
         'utils' => utilsFacets,
+        'magazine' => magazineFacets,
         _ => crackedFacets,
       };
 
@@ -195,15 +218,28 @@ _SectionBuild _buildIndexedSection({
   void Function(String)? onProgress,
 }) {
   final groups = <String, List<(String, ScreenshotEntry)>>{};
-  final groupKeys = <(String, String)>[];
+  final groupKeys = <(String, String, String, String)>[];
   index.entries.forEach((rel, e) {
     final parts = rel.split('/');
     final letter = parts.length > 2 ? parts[2] : '';
-    final folder = parts.length > 3 ? parts[3] : _stem(parts.last);
+    String folder;
+    String display;
+    String year;
+    if (kind == 'magazine') {
+      final stem = _stem(parts.length > 3 ? parts[3] : parts.last);
+      final g = magazineGroup(letter, stem);
+      folder = g.folder;
+      display = g.display;
+      year = g.year;
+    } else {
+      folder = parts.length > 3 ? parts[3] : _stem(parts.last);
+      display = folder;
+      year = '';
+    }
     final key = '${letter.toLowerCase()}|${folder.toLowerCase()}';
     final bucket = groups[key];
     if (bucket == null) {
-      groupKeys.add((letter, folder));
+      groupKeys.add((letter, folder, display, year));
       groups[key] = [(rel, e)];
     } else {
       bucket.add((rel, e));
@@ -218,7 +254,7 @@ _SectionBuild _buildIndexedSection({
     if (onProgress != null && gi % 500 == 0) {
       onProgress('Building catalog — $kind ${gi + 1}/$total…');
     }
-    final (letter, folder) = groupKeys[gi];
+    final (letter, folder, display, year) = groupKeys[gi];
     final items = groups['${letter.toLowerCase()}|${folder.toLowerCase()}']!;
     final game = info.lookupKind(kind, letter, folder);
     final card = buildIndexedCard(
@@ -229,6 +265,8 @@ _SectionBuild _buildIndexedSection({
       game: game,
       fullPng: fullPng,
       atariLegend: atariLegend?.matchFolder(folder),
+      displayName: display,
+      yearOverride: year,
     );
     cards.add(card);
     seen.add('${letter.toLowerCase()}|${folder.toLowerCase()}');
@@ -281,6 +319,7 @@ CatalogFacets _facets(List<GameCard> cards, String kind) {
   final withCracker = kindFields(kind).contains('cracked_by');
   for (final c in cards) {
     if (c.letter.isNotEmpty) letters.add(c.letter);
+    if (c.year.isNotEmpty && c.year != 'unknown') years.add(c.year);
     final al = c.atariLegend;
     if (al != null) {
       if (al.publisher.trim().isNotEmpty) pubs.add(al.publisher.trim());
@@ -325,6 +364,7 @@ CatalogFacets _facets(List<GameCard> cards, String kind) {
 /// Metadata fields per section (gallery `kind_fields`).
 Set<String> kindFields(String kind) => switch (kind) {
       'pd' => {'publisher', 'language', 'release', 'tos_bad'},
+      'magazine' => const {},
       'utils' => {
           'publisher',
           'crew',

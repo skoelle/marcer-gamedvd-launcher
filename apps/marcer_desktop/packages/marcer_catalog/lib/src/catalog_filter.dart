@@ -13,6 +13,7 @@ Set<String> kindFilters(String kind) => switch (kind) {
           'year',
           'tos',
         },
+      'magazine' => {'year'},
       'utils' => {
           'publisher',
           'genre',

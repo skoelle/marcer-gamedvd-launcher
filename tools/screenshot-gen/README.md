@@ -111,10 +111,16 @@ Each scope has its own tree list and its own index file:
 | `cracked` (default) | `Title Sorted/Cracked Games - Title Sorted` | `index.json`   |
 | `utils` (`--scope utils`) | `Title Sorted/Utilitys - Title Sorted` | `index-utils.json` |
 | `pd` (`--scope pd`) | `Title Sorted/PD Games - Title Sorted` | `index-pd.json`   |
+| `magazine` (`--scope magazine`) | `Bonus/Magazine Cover Disks` | `index-magazine.json` |
+
+The `magazine` scope additionally sets `"exclude_dirs": ["dupes"]` so the
+per-magazine `Dupes/` sub-folders (alternate dumps) never reach the index;
+the scope-specific list is merged with the global `exclude_dirs`.
 
 The default scope always maps to `index.json` — that is the file the
 gallery and the desktop app read (the cracked view); other scope index
-files are invisible to them. Every other scope uses
+files were invisible to them until the `magazine` section was added
+(`index-magazine.json`, now read by both UIs). Every other scope uses
 `index-<name>.json`, overridable per scope with an explicit `"index"`
 key. One scope never reads or writes another scope's index, so a utils
 run cannot corrupt or bloat the curated cracked state (and each
@@ -507,6 +513,8 @@ images: `Boxscan`/`Box Scan` (box scans), `Manual` (manuals) and `Kryoflux`
 `exclude_dirs` (default `kryoflux`, `boxscan`, `manual`) and are never
 entered during the index scan, so nothing inside them is indexed. Matching
 is case-insensitive and ignores spaces/underscores/dashes, at any depth.
+A scope may add its own list via `scopes.<name>.exclude_dirs` (merged with
+the global list) — the `magazine` scope uses this for `dupes`.
 
 After changing `exclude_dirs`, run `index` to rebuild the index (removed
 entries are dropped automatically) and then `prune` to delete their
@@ -565,7 +573,9 @@ Scope configuration:
   "scopes": {
     "cracked": { "trees": ["Title Sorted/Cracked Games - Title Sorted"] },
     "utils":   { "trees": ["Title Sorted/Utilitys - Title Sorted"] },
-    "pd":      { "trees": ["Title Sorted/PD Games - Title Sorted"] }
+    "pd":      { "trees": ["Title Sorted/PD Games - Title Sorted"] },
+    "magazine": { "trees": ["Bonus/Magazine Cover Disks"],
+                  "exclude_dirs": ["dupes"] }
   },
   "mono_dir_suffix": "Mono",
   "screen_format_monitor": {

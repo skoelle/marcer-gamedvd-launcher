@@ -11,15 +11,16 @@ const Map<String, String> kSectionIndexNames = {
   'cracked': 'index.json',
   'pd': 'index-pd.json',
   'utils': 'index-utils.json',
+  'magazine': 'index-magazine.json',
 };
 
 /// Section keys in UI order (gallery tabs), matching [kSectionIndexNames].
-const List<String> kSections = ['cracked', 'pd', 'utils'];
+const List<String> kSections = ['cracked', 'pd', 'utils', 'magazine'];
 
 /// Screenshot index lookup (`SPEC-screenshot-generator.md`, `index.json`).
 ///
 /// One instance represents **one** index file of one section. The
-/// [ScreenshotIndices] aggregate holds the three section indices and provides
+/// [ScreenshotIndices] aggregate holds the per-section indices and provides
 /// rel-path lookups across all of them.
 ///
 /// Key gotcha (PLAN.md §2): on disk `preview` and `candidates` are *basenames*;
@@ -110,11 +111,12 @@ class ScreenshotIndex {
   }
 }
 
-/// The three per-section screenshot indices of one output directory
-/// (`index.json`, `index-pd.json`, `index-utils.json`). Missing files degrade
+/// The per-section screenshot indices of one output directory
+/// (`index.json`, `index-pd.json`, `index-utils.json`, `index-magazine.json`).
+/// Missing files degrade
 /// to empty indices (warning collected in [warnings]), so an older output
-/// directory without the pd/utils indices still works (gameinfo-only pd/utils
-/// cards, no status counts there).
+/// directory without the pd/utils/magazine indices still works (gameinfo-only
+/// pd/utils cards, no status counts there).
 class ScreenshotIndices {
   ScreenshotIndices._(this._bySection, this.warnings);
 

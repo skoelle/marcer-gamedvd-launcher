@@ -321,8 +321,9 @@ String _minLower(Iterable<String> values) {
 
 /// Builds a card from grouped index entries of one section (gallery
 /// `_build_cracked_cards` + `_finalize_card`). [kind] is the section
-/// (`cracked`/`pd`/`utils`); the aggregation / preview rules are identical
-/// for every section.
+/// (`cracked`/`pd`/`utils`/`magazine`); the aggregation / preview rules are
+/// identical for every section. [displayName] overrides the card title
+/// (magazine issues) and [yearOverride] a filename-derived year.
 GameCard buildIndexedCard({
   required String kind,
   required String letter,
@@ -331,6 +332,8 @@ GameCard buildIndexedCard({
   required GameInfo? game,
   required String? Function(String rel, String? baseName) fullPng,
   AtariLegendGame? atariLegend,
+  String? displayName,
+  String? yearOverride,
 }) {
   items.sort((a, b) => a.$1.compareTo(b.$1));
   final variants = <CardVariant>[];
@@ -380,7 +383,7 @@ GameCard buildIndexedCard({
   final info = game == null ? null : InfoSummary.fromGame(game);
   return _finalizeCard(
     id: '$letter/$folder',
-    name: folder,
+    name: displayName ?? folder,
     letter: letter,
     folder: folder,
     displayStatus: displayStatus,
@@ -392,6 +395,7 @@ GameCard buildIndexedCard({
     info: info,
     kind: kind,
     atariLegend: atariLegend,
+    yearOverride: yearOverride,
   );
 }
 
@@ -458,6 +462,7 @@ GameCard _finalizeCard({
   required InfoSummary? info,
   required String kind,
   AtariLegendGame? atariLegend,
+  String? yearOverride,
 }) {
   final years = <int>[];
   final pubs = <String>[], crews = <String>[], crackers = <String>[],
@@ -488,7 +493,10 @@ GameCard _finalizeCard({
       if (tos.trim().isNotEmpty) tosNotes.add(true);
     }
   }
-  final yearNum = years.isEmpty ? 0 : years.reduce((a, b) => a < b ? a : b);
+  var yearNum = years.isEmpty ? 0 : years.reduce((a, b) => a < b ? a : b);
+  if (yearOverride != null && yearOverride.isNotEmpty) {
+    yearNum = int.tryParse(yearOverride) ?? yearNum;
+  }
 
   // Merge the AtariLegend publisher into the gameinfo publishers (the
   // publisher filter/dropdown then matches either source). Keep the gameinfo

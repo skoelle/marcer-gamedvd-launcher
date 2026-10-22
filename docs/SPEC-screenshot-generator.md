@@ -255,11 +255,12 @@ The tool processes **one scope per invocation**. A scope is a named group of
 relative tree paths plus its own index file (section 4.2). Configuration:
 
 - `scope_default`: the scope used when no `--scope` flag is given.
-- `scopes`: a map of scope name → tree list. The default scope's index file
-  is always `index.json`; every other scope uses `index-<name>.json`, unless
-  the scope spec sets an explicit `index` key. A config without any `scopes`
-  entry falls back to the legacy `scope_trees` list (one implicit `cracked`
-  scope writing `index.json`).
+- `scopes`: a map of scope name → tree list (plus an optional
+  `exclude_dirs` list merged with the global one). The default scope's index
+  file is always `index.json`; every other scope uses `index-<name>.json`,
+  unless the scope spec sets an explicit `index` key. A config without any
+  `scopes` entry falls back to the legacy `scope_trees` list (one implicit
+  `cracked` scope writing `index.json`).
 
 Defined scopes:
 
@@ -269,6 +270,11 @@ Defined scopes:
   `Title Sorted/Utilitys - Title Sorted` (merged with its patch counterpart).
 - `pd` (opt-in via `--scope pd`):
   `Title Sorted/PD Games - Title Sorted` (merged with its patch counterpart).
+- `magazine` (opt-in via `--scope magazine`):
+  `Bonus/Magazine Cover Disks`, index `index-magazine.json`, scope-local
+  `exclude_dirs: ["dupes"]` so the per-magazine `Dupes/` dump folders are
+  skipped (section 4.4.1). Verified 2026-10-22: 229 indexed ZIPs, 1
+  `skipped_disk_n`.
 
 Every subcommand (`index`, `run`, `detect`, `reclassify`,
 `cleanup-drive-led`, `cleanup-duplicates`, `promote-app-screens`, `prune`)
@@ -283,7 +289,7 @@ verified 2026-10-16: 12,429 indexed ZIPs, pilot run of 50 entries with
 
 Explicitly out of scope for now (no scope defined):
 
-- `Bonus`, `Tools`, `Falcon 030`
+- `Bonus` (except the `magazine` scope), `Tools`, `Falcon 030`
 - All `Crew Sorted` trees
 - Everything else
 
@@ -292,13 +298,36 @@ are excluded too (config `exclude_dirs`, section 11.2): `Boxscan`/`Box Scan`
 (box scans), `Manual` (manuals/PDFs) and `Kryoflux` (flux dumps, usually
 under `RAW`). The scanner never enters them, so their ZIPs never reach the
 index. Matching is case-insensitive, ignores spaces/underscores/dashes, and
-applies at any depth. After changing the list, run `index` (dropped entries
+applies at any depth. A scope may extend the list via its own
+`exclude_dirs` key (merged with the global one; used by `magazine` for
+`dupes`). After changing the list, run `index` (dropped entries
 are removed automatically) and `prune` (section 5) to clean leftovers.
 
 Scope is defined in the tool config (section 11.2), so extending later is a
 config change, not a code change. Note for UI consumers: the gallery and
-desktop app read `index.json` only (the cracked view); other scope index
-files are invisible to them until a future join step.
+desktop app read `index.json` (cracked), `index-pd.json`, `index-utils.json`
+and `index-magazine.json` (section 4.4.1); any further scope index file is
+invisible to them until a future join step.
+
+#### 4.4.1 Magazine cover disks (`magazine` scope)
+
+`Bonus/Magazine Cover Disks` holds five magazine collections (ST Action,
+ST Computer, Start Micro, The One, Zero) with no metadata at all — all
+information lives in the file name. The `magazine` scope indexes them into
+`index-magazine.json` (229 ZIPs, verified 2026-10-22). The per-magazine
+`Dupes/` sub-folders are skipped via the scope-local `exclude_dirs:
+["dupes"]`; the ZIPs directly in the magazine folder (including ` (2)`/`(3)`
+copies) are indexed normally. No gameinfo or `screen_format` rules apply
+(the monitor defaults to color).
+
+The UIs group the index entries into **one card per magazine issue** using a
+filename parser (`packages/marcer_catalog/lib/src/magazine.dart`,
+`tools/gallery/gallery.py` `_magazine_key`): multiple disks and ` (2)`
+copies become variants of the same issue, the card title is derived from the
+file name (`ST Action 41`, `ST Computer 1995-02`, `Zero Issue 16`), and a
+four-digit year is extracted where present. The magazine folder name is used
+as the card's letter facet (magazine filter). This yields 209 cards
+(47 ST Action, 84 ST Computer, 33 Start Micro, 22 The One, 23 Zero).
 
 ### 4.5 Multi-disk sets (user decision)
 
@@ -1381,8 +1410,9 @@ MARCER_DISPLAY=...
 ### 11.2 Tool config file
 
 `tools/screenshot-gen/config.example.json` (committed, contains no paths):
-`scope_default` + `scopes` (per scope: tree list and optional index file
-name; the default scope maps to `index.json`, every other scope to
+`scope_default` + `scopes` (per scope: tree list, optional index file name
+and optional scope-local `exclude_dirs` merged with the global list; the
+default scope maps to `index.json`, every other scope to
 `index-<name>.json`, section 4.4; legacy `scope_trees` is still accepted
 when no `scopes` entry exists), `mono_dir_suffix` (folder suffix that
 triggers `--mono --tos-res high`, section 4.6), `screen_format_monitor`

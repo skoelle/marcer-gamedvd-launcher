@@ -34,6 +34,7 @@ void main() {
       expect(sectionOfTreeName('Cracked Games - Title Sorted'), 'cracked');
       expect(sectionOfTreeName('PD Games - Title Sorted'), 'pd');
       expect(sectionOfTreeName('Utilitys - Title Sorted'), 'utils');
+      expect(sectionOfTreeName('Magazine Cover Disks'), 'magazine');
       expect(sectionOfTreeName('Title Sorted'), isNull);
       expect(sectionOfTreeName('Bonus'), isNull);
     });
@@ -90,6 +91,15 @@ void main() {
       final browser = OverlayBrowser(rootDir: only);
       expect(discoverSectionTrees(browser),
           {'cracked': 'Bonus/Cracked Demos'});
+    });
+
+    test('discovers the magazine cover disks tree under Bonus', () {
+      final mag = '${tmp.path}/mag';
+      Directory('$mag/Bonus/Magazine Cover Disks/Zero - Complete')
+          .createSync(recursive: true);
+      final browser = OverlayBrowser(rootDir: mag);
+      expect(discoverSectionTrees(browser),
+          {'magazine': 'Bonus/Magazine Cover Disks'});
     });
   });
 

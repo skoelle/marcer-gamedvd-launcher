@@ -55,6 +55,7 @@ void main() {
       String pdGames = '[]',
       Map<String, String> pdEntries = const {},
       Map<String, String> utilsEntries = const {},
+      Map<String, String> magazineEntries = const {},
       AtariLegendIndex? atariLegend}) {
     File('$screenshotDir/index.json').writeAsStringSync(jsonEncode({
       'version': 1,
@@ -72,6 +73,12 @@ void main() {
       'version': 1,
       'entries': {
         for (final e in utilsEntries.entries) e.key: jsonDecode(e.value),
+      },
+    }));
+    File('$screenshotDir/index-magazine.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {
+        for (final e in magazineEntries.entries) e.key: jsonDecode(e.value),
       },
     }));
     File('$gameinfoDir/games-cracked.json').writeAsStringSync(
@@ -880,6 +887,60 @@ void main() {
       final card = u.cracked.first;
       expect(matchesCard(card, CatalogFilter()..cracker = 'Crackerman'), isTrue);
       expect(matchesCard(card, CatalogFilter()..cracker = 'Nobody'), isFalse);
+    });
+  });
+
+  group('CatalogUniverse.build (magazine cards)', () {
+    const magA = 'Bonus/Magazine Cover Disks/Zero - Complete/'
+        'Zero Issue 01 - Nov 89 - Recoil.zip';
+    const magA2 = 'Bonus/Magazine Cover Disks/Zero - Complete/'
+        'Zero Issue 01 - Nov 89 - Recoil (2).zip';
+    const magB = 'Bonus/Magazine Cover Disks/ST Computer/1995_02.zip';
+    const magC = 'Bonus/Magazine Cover Disks/ST Computer/1995_02 (2).zip';
+
+    test('groups issue variants, derives display name and year', () {
+      final u = buildUniverse({}, magazineEntries: {
+        magA: entryJson(magA, 'done', 'PATCH', preview: 'a.png'),
+        magA2: entryJson(magA2, 'pending', 'PATCH'),
+        magB: entryJson(magB, 'done', 'PATCH', preview: 'b.png'),
+        magC: entryJson(magC, 'done', 'PATCH', preview: 'c.png'),
+      });
+      expect(u.magazine.length, 2);
+      final zero = u.magazine.firstWhere((c) => c.letter == 'Zero - Complete');
+      expect(zero.name, 'Zero Issue 01');
+      expect(zero.folder, '01');
+      expect(zero.variants.length, 2);
+      expect(zero.displayStatus, 'done');
+      final st = u.magazine.firstWhere((c) => c.letter == 'ST Computer');
+      expect(st.name, 'ST Computer 1995-02');
+      expect(st.year, '1995');
+      expect(st.yearNum, 1995);
+      expect(st.variants.length, 2);
+    });
+
+    test('letter facet lists magazines, year facet comes from file names', () {
+      final u = buildUniverse({}, magazineEntries: {
+        magA: entryJson(magA, 'done', 'PATCH', preview: 'a.png'),
+        magB: entryJson(magB, 'done', 'PATCH', preview: 'b.png'),
+      });
+      expect(u.magazineFacets.letters,
+          ['ST Computer', 'Zero - Complete']);
+      expect(u.magazineFacets.years, ['1995']);
+      expect(u.magazineFacets.publishers, isEmpty);
+    });
+
+    test('cardsFor/facetsFor resolve the magazine section', () {
+      final u = buildUniverse({}, magazineEntries: {
+        magA: entryJson(magA, 'done', 'PATCH', preview: 'a.png'),
+      });
+      expect(u.cardsFor('magazine'), u.magazine);
+      expect(u.facetsFor('magazine'), u.magazineFacets);
+      expect(u.allCards, contains(u.magazine.first));
+    });
+
+    test('kind filters: year only, no cracker/crew', () {
+      expect(kindFilters('magazine'), {'year'});
+      expect(kindFields('magazine'), isEmpty);
     });
   });
 }

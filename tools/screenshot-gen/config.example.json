@@ -15,6 +15,14 @@
       "trees": [
         "Title Sorted/PD Games - Title Sorted"
       ]
+    },
+    "magazine": {
+      "trees": [
+        "Bonus/Magazine Cover Disks"
+      ],
+      "exclude_dirs": [
+        "dupes"
+      ]
     }
   },
   "mono_dir_suffix": "Mono",

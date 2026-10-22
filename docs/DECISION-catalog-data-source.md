@@ -39,6 +39,8 @@ indices plus gameinfo — without any filesystem scan.**
   joined with `games-cracked.json` (index-only).
 - `pd`/`utils` cards are the **union** of their index groups and gameinfo-only
   folders (metadata-only cards, no screenshots).
+- `magazine` cards come from `index-magazine.json` only (index-only, no
+  gameinfo): one card per magazine issue, grouped by a filename parser.
 - No source tree is walked while building the universe.
 
 References: `CatalogUniverse.build` / `CatalogBundle.loadSync`

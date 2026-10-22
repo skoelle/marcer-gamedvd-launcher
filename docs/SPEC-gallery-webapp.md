@@ -39,8 +39,9 @@ Everything else is *(untested)* and must be confirmed during implementation.
    ZIPs.
 4. Offer full keyboard control of the grid and the lightbox, plus deep links
    (`?entry=…`) that open a specific entry directly.
-5. Cover all three metadata catalogs: cracked games (with screenshots), PD
-   games and utilities (metadata-only, without screenshots).
+5. Cover all metadata catalogs: cracked games (with screenshots), PD
+   games and utilities (metadata-only, without screenshots) plus the
+   filename-only magazine cover disks section.
 6. Be fast with the full catalog (tens of thousands of entries) and run
    locally from the repository tooling (`.venv`, `run.sh`, `local/paths.env`).
 
@@ -93,16 +94,17 @@ Rules:
 - Variable values never appear in committed files, logs or documentation
   (same rule as SPEC-screenshot-generator.md section 11).
 
-### 2.2 Screenshot indices (`<OUT>/index.json`, `index-pd.json`, `index-utils.json`)
+### 2.2 Screenshot indices (`<OUT>/index.json`, `index-pd.json`, `index-utils.json`, `index-magazine.json`)
 
-*(verified, measured 2026-10-11; per-section split 2026-10-16)*
+*(verified, measured 2026-10-11; per-section split 2026-10-16; magazine 2026-10-22)*
 
-- Three files with identical structure, one per section:
+- Four files with identical structure, one per section:
   `index.json` (cracked, back-compat name), `index-pd.json` (PD games),
-  `index-utils.json` (utilities). Missing cracked `index.json` refuses
-  startup (section 2.1); missing pd/utils indices yield empty sections
-  (their cards then come from gameinfo only). Per-section mtimes are
-  reported in `/api/meta` (section 5.2).
+  `index-utils.json` (utilities) and `index-magazine.json` (magazine cover
+  disks, index-only without gameinfo). Missing cracked `index.json` refuses
+  startup (section 2.1); missing pd/utils/magazine indices yield empty
+  sections (pd/utils cards then come from gameinfo only). Per-section mtimes
+  are reported in `/api/meta` (section 5.2).
 - Cracked `index.json`: size ≈ 12 MB, parsed in ≈ 0.16 s *(verified)*.
 - Structure `{ "version": …, "entries": { "<rel zip path>": {…} } }`;
   22,938 entries *(verified)*.
@@ -343,23 +345,27 @@ error body `{ "error": "<message>" }`.
   "index": {
     "cracked": { "entries": 22938, "mtime": 1780000000 },
     "pd":      { "entries": 2846,  "mtime": 1780000000 },
-    "utils":   { "entries": 7689,  "mtime": 1780000000 }
+    "utils":   { "entries": 7689,  "mtime": 1780000000 },
+    "magazine":{ "entries": 229,   "mtime": 1780000000 }
   },
   "status_counts": {
     "cracked": { "done": 1467, "desktop": 2947, "pending": 14827, "...": 0 },
     "pd":      { "...": 0 },
-    "utils":   { "...": 0 }
+    "utils":   { "...": 0 },
+    "magazine":{ "pending": 228, "skipped_disk_n": 1 }
   },
   "game_status_counts": {
     "cracked": { "done": 881, "desktop": 400, "pending": 1500, "...": 0 },
     "pd":      { "...": 0 },
-    "utils":   { "...": 0 }
+    "utils":   { "...": 0 },
+    "magazine":{ "pending": 209 }
   },
   "status_labels": { "done": "done (game)", "with_screenshot": "with screenshot", "...": "..." },
   "sections": {
     "cracked": { "games": 3108, "cards": 3108, "with_screenshot": 881, "no_info": 615 },
     "pd":      { "games": 1901, "cards": 1901, "with_screenshot": 0,   "no_info": 0 },
-    "utils":   { "games": 3546, "cards": 3546, "with_screenshot": 0,   "no_info": 0 }
+    "utils":   { "games": 3546, "cards": 3546, "with_screenshot": 0,   "no_info": 0 },
+    "magazine":{ "games": 0,    "cards": 209,  "with_screenshot": 0,   "no_info": 209 }
   },
   "coverage": { "matched_folders": 3108, "unmatched_folders": 181 },
   "facets": {
@@ -373,7 +379,9 @@ error body `{ "error": "<message>" }`.
     },
     "pd":   { "publishers": ["..."], "letters": ["..."] },
     "utils":{ "publishers": ["..."], "crews": ["..."],
-              "crackers": ["..."], "letters": ["..."] }
+              "crackers": ["..."], "letters": ["..."] },
+    "magazine": { "years": ["1994", "..."],
+                  "letters": ["ST Action", "ST Computer", "..."] }
   },
   "show_candidates": true,
   "default_status": "with_screenshot",
@@ -383,9 +391,10 @@ error body `{ "error": "<message>" }`.
 ```
 
 - `index`, `status_counts`, `game_status_counts` and `sections` are **per
-  section** maps keyed by `cracked`/`pd`/`utils`; the statistics bar and
-  footer read the entry for the active section (`desktop-app parity`, where
-  the status bar is section-aware).
+  section** maps keyed by `cracked`/`pd`/`utils`/`magazine`; the statistics
+  bar and footer read the entry for the active section (`desktop-app parity`,
+  where the status bar is section-aware). `magazine` has no gameinfo, so its
+  `games` count is `0` and `no_info` equals its card count.
 - `facets` are computed once at startup from the metadata files and are
   **per section** (`facets[section]`, section 6.8) — the frontend reads
   `facets[state.section]`. Absent values (e.g. `crews`/`crackers` for `pd`)
@@ -417,11 +426,11 @@ Query parameters (all optional, defaults in parentheses):
 
 | Parameter | Values | Applies to |
 |---|---|---|
-| `section` | `cracked` (default) \| `pd` \| `utils` | view selection |
-| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default `with_screenshot` for `cracked`, `any` for `pd`/`utils`) |
+| `section` | `cracked` (default) \| `pd` \| `utils` \| `magazine` | view selection |
+| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `no_usable_shots` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default `with_screenshot` for `cracked`, `any` for `pd`/`utils`/`magazine`) |
 | `q` | free text | all |
-| `letter` | `0-9` … `Z` (or facet value) \| `any` (default) | all |
-| `publisher`, `crew`, `cracker`, `language`, `year` | facet value \| `any` (default) | cracked (+pd/utils where the field exists) |
+| `letter` | `0-9` … `Z` (or facet value) \| `any` (default) | all (magazine: magazine name) |
+| `publisher`, `crew`, `cracker`, `language`, `year` | facet value \| `any` (default) | cracked (+pd/utils where the field exists; magazine: `year` only) |
 | `raw`, `pasti`, `boxscan` | `any` (default) \| `yes` \| `no` | cracked |
 | `tos` | `any` (default) \| `has` (only entries with a `tos_bad` note) | cracked |
 | `sort` | `name` (default) \| `year` \| `publisher` \| `cracker` \| `crew` | all |
@@ -583,8 +592,8 @@ lightbox, whose side panel carries the same metadata.
 ### 6.2 Page structure (top to bottom)
 
 1. **Header**: title + statistics bar (section 6.7).
-2. **Section tabs**: `games` (cracked) | `pd` | `utils`
-   (PD/Utils hidden in screenshots-only mode; labels match the desktop
+2. **Section tabs**: `games` (cracked) | `pd` | `utils` | `magazines`
+   (a tab is hidden when its section has no cards; labels match the desktop
    app's section tabs).
 3. **Control bar**: search input, status select, facet filters
    (publisher/crew/cracker/language/year/flags/tos), one **combined
@@ -760,13 +769,18 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | games | join of `index.json` + `games-cracked.json` | grouped, with previews | default view (label `games`, section key `cracked`) |
 | pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
 | utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `any`) |
+| magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `any`); `letter` = magazine name, `year` from the file name |
 
 - Letter navigation, search, sorting, the status filter and the
-  publisher/language/year facets work in all three sections; the remaining
+  publisher/language/year facets work in all sections; the remaining
   flag/tos/crew/cracker filters only where `SECTION_CONTROLS` lists them.
+- The `magazines` section (section key `magazine`, `Bonus/Magazine Cover
+  Disks`) has no metadata: its cards come from `index-magazine.json` grouped
+  per issue by a filename parser (`ST Action 41`, `ST Computer 1995-02`,
+  `Zero Issue 16`), mirroring `packages/marcer_catalog/lib/src/magazine.dart`.
 - Switching tabs preserves `q`, `sort`, `order`, `letter` where applicable,
   resets incompatible filters and falls the status filter back to the
-  section default (`with_screenshot` for cracked, `any` for pd/utils).
+  section default (`with_screenshot` for cracked, `any` for pd/utils/magazine).
 
 ### 6.9 Deep links
 

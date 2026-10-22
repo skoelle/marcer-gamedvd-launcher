@@ -293,8 +293,10 @@ class CatalogController extends ChangeNotifier {
     filter.developer = 'any';
     filter.crew = 'any';
     filter.cracker = 'any';
-    // `cracker` sort is not meaningful for pd — fall back to name.
-    if (value == 'pd' && filter.sort == 'cracker') filter.sort = 'name';
+    // `cracker` sort is not meaningful for pd/magazine — fall back to name.
+    if (filter.sort == 'cracker' && value != 'cracked' && value != 'utils') {
+      filter.sort = 'name';
+    }
     _filtersChanged();
   }
 
@@ -536,14 +538,20 @@ class CatalogController extends ChangeNotifier {
   GameInfo? infoFor(Entry e) => gameinfo.lookupByRel(relOf(e));
 
   /// AtariLegend match for a catalog card (matched by folder name, like the
-  /// `tools/atarilegend-gen` matcher). `null` when no data/matche.
-  AtariLegendGame? atariLegendForCard(GameCard card) =>
-      atariLegend.matchFolder(card.folder);
+  /// `tools/atarilegend-gen` matcher). `null` when no data/matche — and
+  /// always `null` for magazine cards (their folder key is an issue number,
+  /// not a game folder).
+  AtariLegendGame? atariLegendForCard(GameCard card) {
+    if (card.kind == 'magazine') return null;
+    return atariLegend.matchFolder(card.folder);
+  }
 
   /// AtariLegend match for a folder-browser entry: the folder is
   /// `<letter>/<folder>` of its rel path (same join as the screenshot index).
   AtariLegendGame? atariLegendForEntry(Entry e) {
-    final parts = relOf(e).split('/');
+    final rel = relOf(e);
+    if (sectionOfRel(sectionTrees, rel) == 'magazine') return null;
+    final parts = rel.split('/');
     if (parts.length >= 4) return atariLegend.matchFolder(parts[3]);
     return atariLegend.matchFolder(e.name);
   }
@@ -582,6 +590,7 @@ class CatalogController extends ChangeNotifier {
       return switch (section) {
         'cracked' => 'Cracked',
         'pd' => 'PD',
+        'magazine' => 'Magazine',
         _ => 'Utils',
       };
     }
@@ -897,6 +906,12 @@ class CatalogController extends ChangeNotifier {
   /// tree, falling back to the parent of its first ZIP; null when neither is
   /// known (no tree discovered and no variants).
   String? cardFolderRel(GameCard card) {
+    // Magazine cards group several ZIPs of one magazine folder; the card's
+    // `<letter>/<folder>` is not a real directory path, so use the ZIP's
+    // parent directory instead.
+    if (card.kind == 'magazine' && card.variants.isNotEmpty) {
+      return normalizeRelSeparators(p.dirname(card.variants.first.rel));
+    }
     final tree = sectionTrees[card.kind];
     if (tree != null && card.letter.isNotEmpty && card.folder.isNotEmpty) {
       return '$tree/${card.letter}/${card.folder}';
@@ -1300,7 +1315,9 @@ class CatalogController extends ChangeNotifier {
         final matched = gameinfo.matchedFolders;
         if (matched != null) parts.add('gameinfo $matched folders');
       }
-      final noInfo = universe.noInfoFor(section);
+      // Magazine cards are filename-only by design — never report them as
+      // missing gameinfo.
+      final noInfo = section == 'magazine' ? 0 : universe.noInfoFor(section);
       if (noInfo > 0) {
         parts.add('$noInfo without gameinfo');
       }
