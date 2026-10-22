@@ -254,14 +254,14 @@ class _CenterGridState extends State<CenterGrid> {
   void _openLightboxForSelection({int image = 0}) {
     final c = widget.controller;
     final card = c.selectedCard;
-    widget.onOpenLightbox(card == null ? 0 : _bestVariant(card), image);
+    widget.onOpenLightbox(card == null ? 0 : _bestVariant(c, card), image);
   }
 
-  int _bestVariant(GameCard card) {
+  int _bestVariant(CatalogController c, GameCard card) {
     if ((card.focusVariant ?? -1) >= 0) return card.focusVariant!;
-    if (card.previewPath != null) {
-      final idx =
-          card.variants.indexWhere((v) => v.previewPath == card.previewPath);
+    final display = c.displayVariantForCard(card);
+    if (display != null) {
+      final idx = card.variants.indexOf(display);
       if (idx >= 0) return idx;
     }
     return 0;
@@ -274,23 +274,27 @@ class _CenterGridState extends State<CenterGrid> {
 
   /// Number of shown variant thumbs that are real game screenshots
   /// (status `done` / "done (game)"); the rest are e.g. `desktop` shots.
-  int _doneThumbCount(GameCard card) =>
-      _variantThumbs(card).where((t) => card.variants[t.index].status == 'done').length;
+  int _doneThumbCount(CatalogController c, GameCard card) =>
+      _variantThumbs(c, card)
+          .where((t) => card.variants[t.index].status == 'done')
+          .length;
 
-  /// True when the no-focus 2×2 variant grid applies (≥2 previews, but not
-  /// the single-game-shot exception: exactly one `done` thumb → the large
-  /// game preview instead of the grid).
-  bool _multiThumbBody(GameCard card) =>
-      !card.focusActive &&
-      _countPreviews(card) >= 2 &&
-      _doneThumbCount(card) != 1;
+  /// True when the no-focus 2×2 variant grid applies. With a concrete status
+  /// filter, ≥2 previews are enough (the selected status is ordered first).
+  /// Otherwise the single-game-shot exception still shows one done image.
+  bool _multiThumbBody(CatalogController c, GameCard card) {
+    if (card.focusActive || _countPreviews(card) < 2) return false;
+    if (c.statusPreviewActive) return true;
+    return _doneThumbCount(c, card) != 1;
+  }
 
   /// Up to 4 clickable variant screenshots, best first
-  /// ([GameCard.thumbIndices]: status tier, then `kind: game` before other
-  /// kinds — app-only, the gallery only ranks by status — then variant
-  /// index).
-  List<({int index, String path})> _variantThumbs(GameCard card) => [
-        for (final i in card.thumbIndices())
+  /// ([GameCard.thumbIndices] with the active status filter prioritized,
+  /// then status tier and `kind: game` before other kinds).
+  List<({int index, String path})> _variantThumbs(
+          CatalogController c, GameCard card) =>
+      [
+        for (final i in c.displayThumbIndices(card))
           (index: i, path: card.variants[i].previewPath!),
       ];
 
@@ -343,12 +347,13 @@ class _CenterGridState extends State<CenterGrid> {
   }
 
   /// Grid card body (gallery `renderGrid` branch order):
-  /// focus miss → hint + 4 other shots; no focus + ≥2 previews (unless only
-  /// one of them is a `done` game shot) → 2×2; preview → single image
-  /// (+ candidate strip); else placeholder.
+  /// focus miss → hint + 4 other shots; no focus + ≥2 previews → 2×2
+  /// (the single `done`-thumb exception only applies without a concrete
+  /// status filter); preview → single selected-status image (+ candidate
+  /// strip); else placeholder.
   Widget _cardBody(CatalogController c, GameCard card, int index) {
     if (card.focusVariant == -1) {
-      final thumbs = _variantThumbs(card);
+      final thumbs = _variantThumbs(c, card);
       if (thumbs.isEmpty) return _placeholder();
       final label = c.crackerFocusActive
           ? 'no cracker ZIP — other variants'
@@ -365,15 +370,16 @@ class _CenterGridState extends State<CenterGrid> {
         ],
       );
     }
-    if (_multiThumbBody(card)) {
-      return _thumbGrid(c, card, index, _variantThumbs(card));
+    if (_multiThumbBody(c, card)) {
+      return _thumbGrid(c, card, index, _variantThumbs(c, card));
     }
-    if (card.previewPath != null) {
+    final preview = c.displayPreviewPathForCard(card);
+    if (preview != null) {
       return Stack(
         fit: StackFit.expand,
         children: [
-          _previewImage(card.previewPath),
-          ?_candidatesOverlay(card, index),
+          _previewImage(preview),
+          ?_candidatesOverlay(c, card, index),
         ],
       );
     }
@@ -402,9 +408,10 @@ class _CenterGridState extends State<CenterGrid> {
       if (card.displayStatus.isNotEmpty) card.displayStatus,
       if (card.year != 'unknown') card.year,
     ];
+    final preview = c.displayPreviewPathForCard(card);
     final thumbsBody = card.focusVariant == -1
-        ? _variantThumbs(card).isNotEmpty
-        : _multiThumbBody(card);
+        ? _variantThumbs(c, card).isNotEmpty
+        : _multiThumbBody(c, card);
     return _tileFrame(
       selected: selected,
       index: index,
@@ -416,7 +423,7 @@ class _CenterGridState extends State<CenterGrid> {
       image: _cardBody(c, card, index),
       badges: chips,
       title: card.name,
-      dim: card.previewPath == null && !thumbsBody,
+      dim: preview == null && !thumbsBody,
     );
   }
 
@@ -424,10 +431,10 @@ class _CenterGridState extends State<CenterGrid> {
   /// top of the preview (hidden when a focus filter is active). The preview
   /// variant is used even when multiple ZIPs apply, so a done/game preview
   /// keeps its candidate shots.
-  Widget? _candidatesOverlay(GameCard card, int index) {
-    if (!widget.controller.config.showCandidates) return null;
+  Widget? _candidatesOverlay(CatalogController c, GameCard card, int index) {
+    if (!c.config.showCandidates) return null;
     if (card.focusActive) return null;
-    final variant = card.previewVariant;
+    final variant = c.displayVariantForCard(card);
     if (variant == null) return null;
     final cands = variant.candidatePaths;
     if (cands.isEmpty) return null;

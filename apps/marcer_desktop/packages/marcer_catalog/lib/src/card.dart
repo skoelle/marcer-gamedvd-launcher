@@ -239,6 +239,29 @@ class GameCard {
     return variants.isEmpty ? null : variants.first;
   }
 
+  /// Variant whose preview should be used for the active status filter.
+  /// [status] is the filter status (`desktop`, `no_usable_shots`, …); [kind]
+  /// narrows `desktop text`/`desktop black`. Falls back to [previewVariant]
+  /// when no matching preview exists.
+  CardVariant? previewVariantFor({String? status, String? kind}) {
+    if (status == null) return previewVariant;
+    if (kind != null) {
+      for (final variant in variants) {
+        if (variant.status == status &&
+            variant.kind == kind &&
+            variant.previewPath != null) {
+          return variant;
+        }
+      }
+    }
+    for (final variant in variants) {
+      if (variant.status == status && variant.previewPath != null) {
+        return variant;
+      }
+    }
+    return previewVariant;
+  }
+
   /// AtariLegend match for this card's folder (`null` without data/match);
   /// supplies the genre/developer filters and the AtariLegend button.
   final AtariLegendGame? atariLegend;
@@ -297,15 +320,27 @@ class GameCard {
 
   /// Variant indices shown as clickable thumbs in the no-focus 2×2 grid
   /// and the focus-miss hint strip (gallery `variantThumbs`), best first:
-  /// status tier, then **`kind: game` before other kinds** (app-only
-  /// divergence: e.g. `done game` before `done textscreen`; the gallery
-  /// only ranks by status), then variant index. At most [limit] entries.
-  List<int> thumbIndices({int limit = 4}) {
+  /// [preferredStatus] (and [preferredKind] when given), then status tier,
+  /// then **`kind: game` before other kinds** (app-only divergence: e.g.
+  /// `done game` before `done textscreen`; the gallery only ranks by status),
+  /// then variant index. At most [limit] entries.
+  List<int> thumbIndices(
+      {int limit = 4, String? preferredStatus, String? preferredKind}) {
+    int preferredRank(int i) {
+      if (preferredStatus == null) return 0;
+      final variant = variants[i];
+      if (variant.status != preferredStatus) return 2;
+      return preferredKind == null || variant.kind == preferredKind ? 0 : 1;
+    }
+
     final items = [
       for (var i = 0; i < variants.length; i++)
         if (variants[i].previewPath != null) i,
     ];
     items.sort((a, b) {
+      final pa = preferredRank(a);
+      final pb = preferredRank(b);
+      if (pa != pb) return pa.compareTo(pb);
       final ra = _thumbStatusRank[variants[a].status] ?? 2;
       final rb = _thumbStatusRank[variants[b].status] ?? 2;
       if (ra != rb) return ra.compareTo(rb);

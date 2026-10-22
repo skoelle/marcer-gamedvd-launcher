@@ -279,6 +279,9 @@ For every `index.json` entry with `rel` split into path parts:
 
 A game folder aggregates the statuses of its ZIPs:
 
+- The card preview/2×2 ordering follows the active status filter: done-first
+  for `with screenshot`/`any`/`done`, selected status first for concrete
+  filters (`desktop`, `no usable shots`, `pending`, …).
 - `display_status` (drives the badge and the `only` status filters), first
   match wins: `done` → `desktop` → `no_usable_shots` → `interrupted` →
   `pending` → `skipped_disk_n`. The `desktop_any`/`no_usable_shots_any`
@@ -288,12 +291,14 @@ A game folder aggregates the statuses of its ZIPs:
   `SPEC-screenshot-generator.md`).
 - `count_done`, `count_pending` etc. are included in the card payload for
   the lightbox and statistics.
-- The card's primary preview = the first (by sorted `rel`) variant preview
-  with `status` `done` **and `kind` `game`**, else the first with
-  `status` `done`, else the first with `status` `desktop`, else the first
-  variant with any preview (desktop-app parity: a real game shot wins over
-  e.g. a `textscreen`; a `no_usable_shots` preview is shown when it is the
-  only image; within a tier the sorted-`rel` order decides).
+- The default primary preview (no concrete status filter) = the first (by
+  sorted `rel`) variant preview with `status` `done` **and `kind` `game`**,
+  else the first with `status` `done`, else the first with `status`
+  `desktop`, else the first variant with any preview (desktop-app parity: a
+  real game shot wins over e.g. a `textscreen`; a `no_usable_shots` preview
+  is shown when it is the only image; within a tier the sorted-`rel` order
+  decides). Under a concrete status filter the selected status preview is
+  used first.
 - `layer` for a grouped card: the single layer value if all its ZIPs share
   one (`ROOT` or `PATCH`), otherwise `BOTH` (overlay semantics of
   SPEC.md section 7 — one logical game, present in one or both layers).
@@ -630,14 +635,18 @@ Filter/search/sort state is reflected in the URL query string
 - Preview image, or placeholder block when `screenshots` is false.
 - **Multi-variant grid** (no focus): when no crew/cracker filter is active
   and the folder has **≥ 2 variants with a screenshot**, the card shows up
-  to **four** variant screenshots in a 2×2 grid (best first: status tier
-  `done`, then `desktop`, then the rest; **within a tier `kind` `game`
-  before other kinds**, then variant order — desktop `thumbIndices`).
-  Exception: when exactly **one** shown thumb is a `done` game shot, the
-  card shows that game screenshot large instead of the 2×2 grid (the
-  desktop app's single game-shot card). Clicking a thumb opens the
-  lightbox on that ZIP. Folders with a single screenshot keep the large
-  single preview (+ candidate strip).
+  to **four** variant screenshots in a 2×2 grid. The active status filter
+  orders the selected status first (`desktop`, `no usable shots`, `pending`,
+  …); otherwise the default order is status tier `done`, then `desktop`,
+  then the rest, with `kind` `game` before other kinds and variant order
+  (desktop `thumbIndices`). For `with screenshot`/`any`/`done`, exactly one
+  shown `done` game shot still shows the large game preview instead of the
+  2×2 grid (the single game-shot exception). Under a concrete status filter
+  the exception is disabled, so the 2×2 grid is shown even with exactly one
+  `done` thumb. Clicking a thumb opens the lightbox on that ZIP. Folders
+  with a single screenshot keep the large selected-status preview (+
+  candidate strip), falling back to the done/desktop preview when that
+  status has no image.
 - **Crew/cracker focus fallback** (`focus_variant === -1`): when a
   crew/cracker filter matched the card via gameinfo but no ZIP in the
   folder could be identified, the card is not blank. Instead it shows a
@@ -967,9 +976,11 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     new/updated card visible (section 8.4 reload path).
 12. **Performance**: `/api/entries` timings on the full dataset with the
     default filter and with `status=any` (budget table, section 8.5).
-13. **Desktop-parity display rules**: a folder with a `done` `textscreen`
-    plus a later `done` `game` ZIP previews the **game** shot; a 2×2 thumb
-    grid never shows exactly one `done` thumb (that card shows the game
+13. **Desktop-parity display rules**: without a concrete status filter, a
+    folder with a `done` `textscreen` plus a later `done` `game` ZIP previews
+    the **game** shot; under a concrete status filter the selected status is
+    first and the 2×2 grid is used. Without a concrete status filter, a 2×2
+    thumb grid never shows exactly one `done` thumb (that card shows the game
     shot large); `status=pending` lists a `done`+`pending` folder;
     `done <games> (<zips> zips)` segments match the dropdown counts.
     The **pd/utils** views show index-backed cards with previews unioned
@@ -1033,7 +1044,8 @@ A conforming implementation satisfies all of the following.
 - [x] D2 Without `MARCER_DATA_DIR` the app runs in screenshots-only mode
       (section 4.6).
 - [x] D3 Status aggregation and primary preview follow section 4.4
-      (preview prefers `done` + `kind: game`).
+      (default preview prefers `done` + `kind: game`; concrete status filters
+      use the selected status first).
 - [x] D4 Year extraction follows section 4.5 (`unknown` handling).
 - [x] D5 Variant payloads carry `kind`; `game_status_counts` follows the
       any-variant `pending`/`desktop_any`/`no_usable_shots_any` rules

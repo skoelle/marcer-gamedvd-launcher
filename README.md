@@ -92,14 +92,16 @@ Save, the manual screenshot curation described below.
 - **Optional folder browser** (`T`) — the overlay tree (main + patch layer)
   with layer labels and the virtual `Favorites` folder.
 - **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
-  several ZIPs; if exactly one of them is a game screenshot (`done`), the
-  large game preview is shown instead. The card's main preview prefers a
-  `done` variant of kind `game` over e.g. `textscreen`, then other `done`
-  and `desktop` variants, then any preview (so a `no_usable_shots` entry
-  that kept its last capture still shows it), and the four tiles are ordered
-  the same way (`done game` → other `done` → `desktop`), so a late-sorting
-  game shot is never pushed out by textscreens (same rules as the gallery
-  webapp).
+  several ZIPs. For `with screenshot` / `any` / `done`, the default order is
+  `done game` → other `done` → `desktop`; if exactly one shown thumb is a
+  `done` game shot, the large game preview is shown instead. For every
+  concrete status filter (`desktop`, `no usable shots`, `pending`, …), the
+  selected status is ordered first and the 2×2 grid is shown even when there
+  is exactly one `done` thumb; the large single-image fallback shows the
+  selected status preview when no 2×2 grid applies. The default preview
+  prefers a `done` variant of kind `game` over e.g. `textscreen`, then other
+  `done`/`desktop` variants, then any preview (a `no_usable_shots` entry that
+  kept its last capture still shows it). Same rules as the gallery webapp.
 - **Local layer & missing ZIPs** — the card/variant layer badge
   (`ROOT`/`PATCH`/`BOTH`) and the "This ZIP" **Layer** row are resolved from
   the actual filesystem, not the published index: a ZIP moved from the patch

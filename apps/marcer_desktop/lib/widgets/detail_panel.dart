@@ -274,14 +274,20 @@ class DetailPanel extends StatelessWidget {
   }
 
   /// The ZIP shown in the "This ZIP" table: the crew/cracker-focused variant
-  /// when a focus filter is active, else the variant that produced the card's
-  /// primary preview, else the first (cache-only, so selecting a card never
-  /// blocks on the filesystem; a background scan fills the data in).
+  /// when a focus filter is active, else the active status filter's preview
+  /// variant, else the card's canonical preview, else the first (cache-only,
+  /// so selecting a card never blocks on the filesystem; a background scan
+  /// fills the data in).
   ZipVariantView? _primaryVariant(GameCard card) {
     final variants =
         controller.cachedVariantsOfCard(card) ?? const <CardVariant>[];
     if (variants.isEmpty) return null;
     var idx = (card.focusVariant ?? -1) >= 0 ? card.focusVariant! : -1;
+    final display = controller.displayVariantForCard(card);
+    if (display != null) {
+      final match = variants.indexWhere((v) => v.rel == display.rel);
+      if (match >= 0) idx = match;
+    }
     if (idx < 0 && card.previewPath != null) {
       final match =
           variants.indexWhere((v) => v.previewPath == card.previewPath);

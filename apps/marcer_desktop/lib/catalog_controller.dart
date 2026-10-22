@@ -235,6 +235,45 @@ class CatalogController extends ChangeNotifier {
   /// `focusActive`); drives the grid miss/2×2 bodies and lightbox labels.
   bool get focusActive => crackerFocusActive || crewFocusActive;
 
+  String? get _preferredPreviewStatus {
+    if (favoritesOnly || focusActive) return null;
+    return switch (filter.status) {
+      'desktop' || 'desktop_any' => 'desktop',
+      'desktop_text' || 'desktop_black' => 'desktop',
+      'no_usable_shots' || 'no_usable_shots_any' => 'no_usable_shots',
+      'pending' || 'interrupted' || 'skipped_disk_n' => filter.status,
+      _ => null,
+    };
+  }
+
+  String? get _preferredPreviewKind => switch (filter.status) {
+        'desktop_text' => 'textscreen',
+        'desktop_black' => 'darkscreen',
+        _ => null,
+      };
+
+  /// True when a concrete status filter should drive the card preview (and
+  /// the 2×2 thumb order) instead of the done-first default.
+  bool get statusPreviewActive =>
+      !favoritesOnly && !focusActive && _preferredPreviewStatus != null;
+
+  /// Variant whose preview should be shown on [card] for the active status
+  /// filter. The card's canonical done/desktop preview is the fallback.
+  CardVariant? displayVariantForCard(GameCard card) => card.previewVariantFor(
+        status: statusPreviewActive ? _preferredPreviewStatus : null,
+        kind: statusPreviewActive ? _preferredPreviewKind : null,
+      );
+
+  String? displayPreviewPathForCard(GameCard card) =>
+      displayVariantForCard(card)?.previewPath;
+
+  List<int> displayThumbIndices(GameCard card, {int limit = 4}) =>
+      card.thumbIndices(
+        limit: limit,
+        preferredStatus: statusPreviewActive ? _preferredPreviewStatus : null,
+        preferredKind: statusPreviewActive ? _preferredPreviewKind : null,
+      );
+
   /// Filtered + sorted cards of the active section (memoized until the next
   /// filter change); the ★ [favoritesOnly] filter lists favorites of the
   /// **active section** — status/facets/flags are ignored then, the text

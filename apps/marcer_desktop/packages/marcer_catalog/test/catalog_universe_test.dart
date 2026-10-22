@@ -461,7 +461,8 @@ void main() {
         relA: entryJson(relA, 'done', 'ROOT', preview: 'a.png'),
         relA2: entryJson(relA2, 'desktop', 'ROOT', preview: 'a2.png'),
         relB: entryJson(relB, 'done', 'ROOT', preview: 'beta.png'),
-        relB2: entryJson(relB2, 'no_usable_shots', 'ROOT'),
+        relB2: entryJson(relB2, 'no_usable_shots', 'ROOT',
+            preview: 'beta2.png'),
       });
       final mixedDesktop = u.cracked.firstWhere((c) => c.folder == 'Alpha');
       final mixedNoUsable = u.cracked.firstWhere((c) => c.folder == 'Beta');
@@ -489,6 +490,18 @@ void main() {
       expect(u.anyVariantCountFor('cracked', 'no_usable_shots'), 1);
       expect(u.anyVariantZipCountFor('cracked', 'no_usable_shots'), 1);
       expect(u.onlyVariantZipCountFor('cracked', 'no_usable_shots'), 0);
+      expect(mixedDesktop.previewVariantFor(status: 'desktop')?.status,
+          'desktop');
+      expect(
+          mixedDesktop.thumbIndices(preferredStatus: 'desktop').first,
+          mixedDesktop.variants
+              .indexWhere((v) => v.status == 'desktop'));
+      expect(mixedNoUsable.previewVariantFor(status: 'no_usable_shots')?.status,
+          'no_usable_shots');
+      expect(
+          mixedNoUsable.thumbIndices(preferredStatus: 'no_usable_shots').first,
+          mixedNoUsable.variants
+              .indexWhere((v) => v.status == 'no_usable_shots'));
     });
 
     test('desktop umbrella keeps all kinds; text/black are strict', () {

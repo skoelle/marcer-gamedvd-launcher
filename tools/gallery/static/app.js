@@ -315,10 +315,9 @@ function renderGrid(cards) {
     const chip = nzip > 1 ? `<span class="chip">×${nzip}</span>` : "";
     const layer = c.layer ? `<span class="layer">${esc(c.layer)}</span>` : "";
     const tos = cardTos(c) ? `<span class="chip chip-tos">TOS ${esc(cardTos(c))}</span>` : "";
-    const previewVariantIndex = Math.max(
-      0, c.variants.findIndex((vv) => vv.preview === c.preview));
+    const preferred = preferredPreview(c);
     const fv = (c.focus_variant != null && c.focus_variant >= 0)
-      ? c.focus_variant : previewVariantIndex;
+      ? c.focus_variant : preferred.idx;
     const focusActive = c.focus_variant != null;
     let body;
     if (c.focus_variant === -1) {
@@ -330,12 +329,15 @@ function renderGrid(cards) {
         ? `<div class="var-miss">${missLabel}</div>` +
           `<div class="var-thumbs">${thumbs}</div>`
         : `<div class="ph"></div>`;
-    } else if (!focusActive && countPreviews(c) >= 2 && doneThumbCount(c) !== 1) {
-      // no focus: show up to 4 variant screenshots (best first); exactly
-      // one game shot → the large preview instead (desktop `_multiThumbBody`)
+    } else if (!focusActive && countPreviews(c) >= 2 &&
+        (statusPreviewActive() || doneThumbCount(c) !== 1)) {
+      // no focus: show up to 4 variant screenshots (best first). With a
+      // concrete status filter the selected status is first and the
+      // single-done exception does not apply; otherwise exactly one game
+      // shot shows the large preview instead (desktop `_multiThumbBody`).
       body = `<div class="var-thumbs">${variantThumbs(c)}</div>`;
-    } else if (c.preview) {
-      body = `<img loading="lazy" src="${imgSrc(c.preview)}" alt="">`;
+    } else if (preferred.preview) {
+      body = `<img loading="lazy" src="${imgSrc(preferred.preview)}" alt="">`;
       if (showCands) {
         // Candidates of the variant whose preview is shown (not just the
         // first ZIP) so multi-variant cards keep the done/game subimages.
@@ -377,12 +379,68 @@ function cardTos(card) {
 // kinds, then variant index — desktop `GameCard.thumbIndices` (the plain
 // gallery only ranked by status). At most `limit` entries.
 const STATUS_RANK = { done: 0, desktop: 1 };
+
+// Concrete status filters show the selected ZIP status first. `null` keeps
+// the done-first default used by with screenshot / any / done.
+function preferredStatusInfo() {
+  if (state.crew !== "any" || state.cracker !== "any") return null;
+  switch (state.status) {
+    case "desktop":
+    case "desktop_any":
+      return { status: "desktop" };
+    case "desktop_text":
+      return { status: "desktop", kind: "textscreen" };
+    case "desktop_black":
+      return { status: "desktop", kind: "darkscreen" };
+    case "no_usable_shots":
+    case "no_usable_shots_any":
+      return { status: "no_usable_shots" };
+    case "pending":
+    case "interrupted":
+    case "skipped_disk_n":
+      return { status: state.status };
+    default:
+      return null;
+  }
+}
+
+function statusPreviewActive() {
+  return preferredStatusInfo() !== null;
+}
+
+function preferredPreview(card) {
+  const pref = preferredStatusInfo();
+  const fallback = Math.max(
+    0, card.variants.findIndex((vv) => vv.preview === card.preview));
+  if (!pref) {
+    return { idx: fallback, preview: card.preview };
+  }
+  let idx = card.variants.findIndex((vv) =>
+    vv.status === pref.status &&
+    (!pref.kind || vv.kind === pref.kind) && vv.preview);
+  if (idx < 0 && pref.kind) {
+    idx = card.variants.findIndex((vv) =>
+      vv.status === pref.status && vv.preview);
+  }
+  if (idx < 0) idx = fallback;
+  return {
+    idx,
+    preview: idx >= 0 ? (card.variants[idx].preview || card.preview) : card.preview,
+  };
+}
+
 function thumbVariantIndices(card, limit = 4) {
+  const pref = preferredStatusInfo();
+  const preferredRank = (vv) => {
+    if (!pref) return 0;
+    if (vv.status !== pref.status) return 2;
+    return !pref.kind || vv.kind === pref.kind ? 0 : 1;
+  };
   return card.variants
     .map((vv, vi) => ({ vv, vi }))
     .filter((x) => x.vv.preview)
-    .sort((a, b) => (STATUS_RANK[a.vv.status] ?? 2)
-      - (STATUS_RANK[b.vv.status] ?? 2)
+    .sort((a, b) => preferredRank(a.vv) - preferredRank(b.vv)
+      || (STATUS_RANK[a.vv.status] ?? 2) - (STATUS_RANK[b.vv.status] ?? 2)
       || (a.vv.kind === "game" ? 0 : 1) - (b.vv.kind === "game" ? 0 : 1)
       || a.vi - b.vi)
     .slice(0, limit)

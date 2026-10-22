@@ -329,6 +329,13 @@ utils, magazine, falcon):
 - The default is `with screenshot` for **all** sections; change `DefaultStatus` in
   `desktop.config.json` to use another preset on startup and after section switches.
 
+Card previews follow the active status filter: `with screenshot`, `any` and
+`done` keep the done-first preview; `desktop`/`no usable shots` and the other
+concrete statuses show that status first. With ≥2 previews the 2×2 variant
+grid is used (no single-done exception under a concrete status filter), with
+the selected status as the first tile; a single-preview card shows the
+selected status image (falling back to the done/desktop preview).
+
 The status bar reports every status as **games (ZIPs)** (see below), so the
 games number always equals the result count of the matching dropdown
 selection.
