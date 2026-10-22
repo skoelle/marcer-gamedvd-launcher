@@ -147,8 +147,9 @@ Save, the manual screenshot curation described below.
   bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking. The **PLAY** button
   is a split button: the main part launches the default variant, the arrow opens
   a variant menu — **Standard** (ST, TOS 1.04), **Mono** (`--monitor mono`),
-  **STE** (`--machine ste`, TOS 1.62 → `TOS162.IMG`) and **Low Res TOS
-  1.02** (`TOS102.IMG`); a missing variant TOS is downloaded on demand.
+  **STE** (`--machine ste`, TOS 1.62 → `TOS162.IMG`), **Low Res TOS
+  1.02** (`TOS102.IMG`) and **Low Res TOS 1.00** (`TOS100.IMG`); a missing
+  variant TOS is downloaded on demand.
 - **Download & install Hatari** — when no emulator is configured, the app offers
   to download prebuilt Hatari **2.6.1** (Windows x64 / macOS universal from
   [hatari-emu.org](https://www.hatari-emu.org/)) before launch or from the
@@ -274,8 +275,9 @@ The release ZIPs ship `desktop.config.example.json` **and** the bundled
 launching, point `Hatari.Executable` at your Hatari binary (or use the in-app
 **Install Hatari…** to download prebuilt Hatari 2.6.1 on Windows/macOS). If
 `TOS.IMG` is missing, the app offers to download it (TOS 1.04, English (UK) or
-German) from atariworld.org and install it next to the app (the STE / Low Res
-TOS 1.02 Play variants download TOS 1.62 / 1.02 on demand).
+German) from atariworld.org and install it next to the app (the STE, Low Res
+TOS 1.02 and Low Res TOS 1.00 Play variants download TOS 1.62 / 1.02 / 1.00 on
+demand).
 
 > **macOS:** the build is ad-hoc signed and not notarized, so macOS quarantines
 > the download. Open it once via **right-click → Open**, or run
@@ -390,8 +392,8 @@ status/kind, `Esc` closes.
 > (`TOS.IMG`) next to the app — same convention as the console launcher; the
 > bundled `MarcerGameDvd-Hatari.cfg` looks for it in the working directory. If
 > `TOS.IMG` is missing, the app offers to download and install it (TOS 1.04,
-> English (UK) or German) from atariworld.org; the STE / Low Res TOS 1.02 Play
-> variants download TOS 1.62 / 1.02 on demand.
+> English (UK) or German) from atariworld.org; the STE, Low Res TOS 1.02 and
+> Low Res TOS 1.00 Play variants download TOS 1.62 / 1.02 / 1.00 on demand.
 
 ### 🛠️ Build & Run (developers)
 

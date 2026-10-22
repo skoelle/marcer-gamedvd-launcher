@@ -76,6 +76,22 @@ void main() {
     expect(r.command!.arguments[i + 1], '${tmp.path}/TOS102.IMG');
   });
 
+  test('Low Res TOS 1.00 variant adds --tos TOS100.IMG', () {
+    File('${tmp.path}/TOS100.IMG').createSync();
+    final r = buildHatariCommand(
+        config(), zip, variant: variant('Low Res TOS 1.00'));
+    final i = r.command!.arguments.indexOf('--tos');
+    expect(i, greaterThanOrEqualTo(0));
+    expect(r.command!.arguments[i + 1], '${tmp.path}/TOS100.IMG');
+  });
+
+  test('Low Res TOS 1.00 variant without the ROM reports an error', () {
+    final r = buildHatariCommand(
+        config(), zip, variant: variant('Low Res TOS 1.00'));
+    expect(r.command, isNull);
+    expect(r.error, contains('TOS100.IMG'));
+  });
+
   test('hatariWorkingDirectory overrides working dir and --tos base', () {
     final work = Directory.systemTemp.createTempSync('hatari_work');
     addTearDown(() {
@@ -96,12 +112,13 @@ void main() {
     expect(r.command!.arguments[i + 1], '${work.path}/TOS162.IMG');
   });
 
-  test('built-in variants are Standard, Mono, STE, Low Res TOS 1.02', () {
+  test('built-in variants include both low-res TOS variants', () {
     expect(kHatariVariants.map((v) => v.name).toList(), [
       'Standard',
       'Mono',
       'STE',
       'Low Res TOS 1.02',
+      'Low Res TOS 1.00',
     ]);
   });
 }

@@ -20,6 +20,7 @@ void main() {
 
   const tree = 'Title Sorted/Cracked Games - Title Sorted';
   const relOld = '$tree/B/Bellum/bellum.zip';
+  const relOld100 = '$tree/O/Old/old.zip';
   const relNew = '$tree/S/Star/star.zip';
 
   Map<String, dynamic> entry(String rel, {String? tos}) => {
@@ -41,6 +42,7 @@ void main() {
       'version': 1,
       'entries': {
         relOld: entry(relOld, tos: '1.02'),
+        relOld100: entry(relOld100, tos: '1.00'),
         relNew: entry(relNew),
       },
     }));
@@ -63,6 +65,12 @@ void main() {
     final variant = c.defaultVariantForCard(bellum);
     expect(variant, isNotNull);
     expect(variant!.tosVersions, contains('1.02'));
+
+    final old = c.universe.cracked.firstWhere((x) => x.folder == 'Old');
+    expect(old.tosVersion, '1.00');
+    final variant100 = c.defaultVariantForCard(old);
+    expect(variant100, isNotNull);
+    expect(variant100!.tosVersions, contains('1.00'));
 
     final star = c.universe.cracked.firstWhere((x) => x.folder == 'Star');
     expect(star.tosVersion, isNull);

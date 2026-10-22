@@ -14,7 +14,7 @@ import 'app_paths.dart';
 class TosRomOption {
   const TosRomOption(this.version, this.language, this.url);
 
-  /// TOS version (`1.02`, `1.04`).
+  /// TOS version (`1.00`, `1.02`, `1.04`, `1.62`).
   final String version;
 
   /// Language label (`English (UK)`, `Deutsch`).
@@ -31,17 +31,21 @@ class TosRomOption {
 }
 
 /// The offered TOS options (user decision 2026-10-17): language first, English
-/// (UK) before Deutsch, newer version first. Only TOS 1.02 and 1.04, only the
-/// English (UK) and German variants.
+/// (UK) before Deutsch, newer version first. Only TOS 1.00, 1.02, 1.04 and
+/// 1.62, only the English (UK) and German variants.
 const List<TosRomOption> kTosRomOptions = [
   TosRomOption('1.04', 'English (UK)',
       'https://www.atariworld.org/files/images/tos104uk.zip'),
   TosRomOption('1.02', 'English (UK)',
       'https://www.atariworld.org/files/images/tos102uk.zip'),
+  TosRomOption('1.00', 'English (UK)',
+      'https://www.atariworld.org/files/images/tos100uk.zip'),
   TosRomOption('1.04', 'Deutsch',
       'https://www.atariworld.org/files/images/tos104de.zip'),
   TosRomOption('1.02', 'Deutsch',
       'https://www.atariworld.org/files/images/tos102de.zip'),
+  TosRomOption('1.00', 'Deutsch',
+      'https://www.atariworld.org/files/images/tos100de.zip'),
   // TOS 1.62 (STE) — used by the STE Play variant.
   TosRomOption('1.62', 'English (UK)',
       'https://www.atariworld.org/files/images/tos162uk.zip'),
@@ -50,8 +54,8 @@ const List<TosRomOption> kTosRomOptions = [
 ];
 
 /// The TOS versions the default (`TOS.IMG`) download dialog offers: only
-/// TOS 1.04 (ST). TOS 1.02/1.62 are offered by the matching Play variants
-/// (`TOS102.IMG` / `TOS162.IMG`) instead.
+/// TOS 1.04 (ST). TOS 1.00/1.02/1.62 are offered by the matching Play variants
+/// (`TOS100.IMG` / `TOS102.IMG` / `TOS162.IMG`) instead.
 const List<String> kDefaultTosVersions = ['1.04'];
 
 /// Default selection of the TOS dropdown.

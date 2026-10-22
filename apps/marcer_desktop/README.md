@@ -165,6 +165,7 @@ variant, the arrow opens a menu of variants (detail sidebar and lightbox; `P` /
 | Mono | `--monitor mono` | `TOS.IMG` (1.04) |
 | STE | `--machine ste` | `TOS162.IMG` (1.62) |
 | Low Res TOS 1.02 | – | `TOS102.IMG` (1.02) |
+| Low Res TOS 1.00 | – | `TOS100.IMG` (1.00) |
 
 The extra args are appended after `Hatari.ArgsTemplate` (Hatari CLI overrides
 the config file). Variants with a TOS file download it on demand (see below).
@@ -217,12 +218,13 @@ non-commercial use), the ROM is extracted and written as `TOS.IMG` into the
 data directory — `<appDir>` on Windows/Linux,
 `~/Library/Application Support/MarcerGameDVDLauncher` on macOS — which is
 Hatari's working directory (the bundled config looks for `TOS.IMG` there). The
-**STE** Play variant needs **TOS 1.62** (`TOS162.IMG`) and
-the **Low Res TOS 1.02** variant **TOS 1.02** (`TOS102.IMG`) — each offered
-filtered to that version when the file is missing. The ⚙ settings editor's
-**TOS ROM** row reflects only `TOS.IMG`; the variant TOS files
-(`TOS162.IMG`/`TOS102.IMG`) are managed by the Play variants (a missing one is
-offered when that variant is launched).
+**STE** Play variant needs **TOS 1.62** (`TOS162.IMG`), the **Low Res TOS
+1.02** variant **TOS 1.02** (`TOS102.IMG`) and the **Low Res TOS 1.00**
+variant **TOS 1.00** (`TOS100.IMG`) — each offered filtered to that version
+when the file is missing. The ⚙ settings editor's **TOS ROM** row reflects
+only `TOS.IMG`; the variant TOS files
+(`TOS162.IMG`/`TOS102.IMG`/`TOS100.IMG`) are managed by the Play variants (a
+missing one is offered when that variant is launched).
 
 ## Favorites
 

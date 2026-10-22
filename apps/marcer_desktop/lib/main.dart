@@ -641,9 +641,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// Pre-launch guard: when the TOS ROM the run needs (variant-specific, e.g.
-  /// `TOS162.IMG` for STE / `TOS102.IMG` for Low Res) is missing next to the
-  /// app, offer the matching TOS ROM download dialog. Returns `true` when the
-  /// image is present (or was just installed), `false` to abort the launch.
+  /// `TOS162.IMG` for STE, `TOS102.IMG`/`TOS100.IMG` for Low Res) is missing
+  /// next to the app, offer the matching TOS ROM download dialog. Returns
+  /// `true` when the image is present (or was just installed), `false` to
+  /// abort the launch.
   Future<bool> _ensureTos(HatariVariant? variant) async {
     final cfg = _config;
     final fileName = variant?.tosFileName ?? kTosImageFileName;

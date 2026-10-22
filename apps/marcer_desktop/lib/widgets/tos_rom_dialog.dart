@@ -27,9 +27,9 @@ Future<bool> showTosRomDialog(
   return result ?? false;
 }
 
-/// Dialog offering the TOS 1.02/1.04 (and, when filtered, 1.62) English (UK)
-/// and German ROM images for download. Pops `true` after the ROM was written as
-/// [fileName] into the app directory.
+/// Dialog offering the TOS 1.00/1.02/1.04 (and, when filtered, 1.62) English
+/// (UK) and German ROM images for download. Pops `true` after the ROM was
+/// written as [fileName] into the app directory.
 class TosRomDialog extends StatefulWidget {
   const TosRomDialog({
     super.key,

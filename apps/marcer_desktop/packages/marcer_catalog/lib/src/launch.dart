@@ -31,7 +31,8 @@ class HatariVariant {
 }
 
 /// The built-in Play variants (fixed in code, user decision 2026-10-17):
-/// Standard (ST, TOS 1.04), Mono, STE (TOS 1.62) and Low Res TOS 1.02.
+/// Standard (ST, TOS 1.04), Mono, STE (TOS 1.62), Low Res TOS 1.02 and
+/// Low Res TOS 1.00.
 const List<HatariVariant> kHatariVariants = [
   HatariVariant(name: 'Standard', description: 'ST, TOS 1.04, color'),
   HatariVariant(
@@ -55,6 +56,12 @@ const List<HatariVariant> kHatariVariants = [
     description: 'ST, TOS 1.02, low-res',
     tosFileName: 'TOS102.IMG',
     tosVersions: ['1.02'],
+  ),
+  HatariVariant(
+    name: 'Low Res TOS 1.00',
+    description: 'ST, TOS 1.00, low-res',
+    tosFileName: 'TOS100.IMG',
+    tosVersions: ['1.00'],
   ),
 ];
 

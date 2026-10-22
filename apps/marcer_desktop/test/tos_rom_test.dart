@@ -19,20 +19,24 @@ List<int> _zipWith(Map<String, List<int>> entries) {
 
 void main() {
   test('offers the TOS options in the agreed order', () {
-    expect(kTosRomOptions, hasLength(6));
+    expect(kTosRomOptions, hasLength(8));
     expect(kTosRomOptions.map((o) => o.label).toList(), [
       'English (UK) — TOS 1.04',
       'English (UK) — TOS 1.02',
+      'English (UK) — TOS 1.00',
       'Deutsch — TOS 1.04',
       'Deutsch — TOS 1.02',
+      'Deutsch — TOS 1.00',
       'English (UK) — TOS 1.62',
       'Deutsch — TOS 1.62',
     ]);
     expect(kTosRomOptions.map((o) => o.url).toList(), [
       'https://www.atariworld.org/files/images/tos104uk.zip',
       'https://www.atariworld.org/files/images/tos102uk.zip',
+      'https://www.atariworld.org/files/images/tos100uk.zip',
       'https://www.atariworld.org/files/images/tos104de.zip',
       'https://www.atariworld.org/files/images/tos102de.zip',
+      'https://www.atariworld.org/files/images/tos100de.zip',
       'https://www.atariworld.org/files/images/tos162uk.zip',
       'https://www.atariworld.org/files/images/tos162de.zip',
     ]);
