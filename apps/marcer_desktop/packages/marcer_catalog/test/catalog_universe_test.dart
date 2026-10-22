@@ -975,6 +975,34 @@ void main() {
       expect(bm.layer, 'PATCH');
     });
 
+    test('previewVariant follows the displayed done/game preview', () {
+      const original =
+          'Falcon 030/Title Sorted/0-9/4WD Road Riot/Original/road_riot.zip';
+      const elite =
+          'Falcon 030/Title Sorted/0-9/4WD Road Riot/Road Riot 4WD - Elite.zip';
+      final u = buildUniverse({}, falconEntries: {
+        original: entryJson(original, 'desktop', 'ROOT',
+            preview: 'original.png',
+            candidates: const ['original_c01.png'],
+            kindOverride: 'darkscreen'),
+        elite: entryJson(elite, 'done', 'ROOT',
+            preview: 'elite.png',
+            candidates: const [
+              'elite_c01.png',
+              'elite_c02.png',
+              'elite_c03.png',
+            ]),
+      });
+      final card = u.falcon.single;
+      expect(card.variants.first.name, 'road_riot.zip');
+      expect(card.previewVariant?.name, 'Road Riot 4WD - Elite.zip');
+      expect(card.previewVariant?.candidatePaths, [
+        '$screenshotDir/Falcon 030/Title Sorted/0-9/4WD Road Riot/elite_c01.png',
+        '$screenshotDir/Falcon 030/Title Sorted/0-9/4WD Road Riot/elite_c02.png',
+        '$screenshotDir/Falcon 030/Title Sorted/0-9/4WD Road Riot/elite_c03.png',
+      ]);
+    });
+
     test('index-only: no gameinfo join, no AtariLegend', () {
       final u = buildUniverse({}, falconEntries: {
         falconA: entryJson(falconA, 'done', 'ROOT', preview: 'a.png'),

@@ -308,8 +308,10 @@ function renderGrid(cards) {
     const chip = nzip > 1 ? `<span class="chip">×${nzip}</span>` : "";
     const layer = c.layer ? `<span class="layer">${esc(c.layer)}</span>` : "";
     const tos = cardTos(c) ? `<span class="chip chip-tos">TOS ${esc(cardTos(c))}</span>` : "";
+    const previewVariantIndex = Math.max(
+      0, c.variants.findIndex((vv) => vv.preview === c.preview));
     const fv = (c.focus_variant != null && c.focus_variant >= 0)
-      ? c.focus_variant : 0;
+      ? c.focus_variant : previewVariantIndex;
     const focusActive = c.focus_variant != null;
     let body;
     if (c.focus_variant === -1) {
@@ -328,9 +330,11 @@ function renderGrid(cards) {
     } else if (c.preview) {
       body = `<img loading="lazy" src="${imgSrc(c.preview)}" alt="">`;
       if (showCands) {
+        // Candidates of the variant whose preview is shown (not just the
+        // first ZIP) so multi-variant cards keep the done/game subimages.
         const src = c.variants[fv] || c.variants[0] || {};
         const cands = src.candidates || [];
-        if (cands.length && !focusActive && c.variants.length === 1) {
+        if (cands.length && !focusActive) {
           body += `<div class="cands">` +
             cands.map((p) => `<img loading="lazy" src="${imgSrc(p)}" alt="" data-cand="${i}">`).join("") +
             `</div>`;

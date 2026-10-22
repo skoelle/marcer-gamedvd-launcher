@@ -420,20 +420,23 @@ class _CenterGridState extends State<CenterGrid> {
     );
   }
 
-  /// Gallery grid `.cands`: thumbnails of the sole variant's candidates on
-  /// top of the preview (hidden when a focus filter is active or multiple
-  /// ZIPs apply). Click opens the lightbox on that candidate image.
+  /// Gallery grid `.cands`: thumbnails of the preview variant's candidates on
+  /// top of the preview (hidden when a focus filter is active). The preview
+  /// variant is used even when multiple ZIPs apply, so a done/game preview
+  /// keeps its candidate shots.
   Widget? _candidatesOverlay(GameCard card, int index) {
     if (!widget.controller.config.showCandidates) return null;
-    if (card.focusActive || card.variants.length != 1) return null;
-    if (card.previewPath == null) return null;
-    final cands = card.variants.first.candidatePaths;
+    if (card.focusActive) return null;
+    final variant = card.previewVariant;
+    if (variant == null) return null;
+    final cands = variant.candidatePaths;
     if (cands.isEmpty) return null;
+    final variantIndex = card.variants.indexOf(variant);
     return _candidateThumbs(
       cands,
       onPick: (i) {
         widget.controller.moveSelectionTo(index);
-        widget.onOpenLightbox(0, i + 1);
+        widget.onOpenLightbox(variantIndex, i + 1);
       },
     );
   }

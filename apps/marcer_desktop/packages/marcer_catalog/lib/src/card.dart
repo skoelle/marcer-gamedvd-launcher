@@ -223,6 +223,18 @@ class GameCard {
   final List<CardVariant> variants;
   final InfoSummary? info;
 
+  /// Variant whose preview is shown on the card (first matching preview path,
+  /// falling back to the first variant). Used for the candidate strip so it
+  /// follows the actually displayed variant even on multi-ZIP cards.
+  CardVariant? get previewVariant {
+    final path = previewPath;
+    if (path == null) return null;
+    for (final variant in variants) {
+      if (variant.previewPath == path) return variant;
+    }
+    return variants.isEmpty ? null : variants.first;
+  }
+
   /// AtariLegend match for this card's folder (`null` without data/match);
   /// supplies the genre/developer filters and the AtariLegend button.
   final AtariLegendGame? atariLegend;

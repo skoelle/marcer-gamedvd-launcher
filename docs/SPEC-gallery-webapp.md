@@ -637,10 +637,11 @@ Filter/search/sort state is reflected in the URL query string
   on that ZIP. When no variant has any screenshot, the plain placeholder
   is shown.
 - Candidate strip (48 px thumbs, as today) when `show_candidates` is
-  enabled and candidates exist — clicking a candidate opens the lightbox on
-  that image. The strip is only shown on **single-variant** cards and is
-  suppressed while a crew/cracker filter focuses the card (multi-variant
-  cards carry the `×N` chip and use the lightbox filmstrip instead).
+  enabled and the **preview variant** has candidates — clicking a candidate
+  opens the lightbox on that variant/image. The strip follows the actually
+  displayed preview even on multi-variant cards (e.g. a `done/game` preview
+  next to a `desktop` ZIP), and is suppressed while a crew/cracker filter
+  focuses the card.
 - `layer` label per card when available (`ROOT`/`PATCH`/`BOTH`, same
   semantics as SPEC.md section 7).
 
