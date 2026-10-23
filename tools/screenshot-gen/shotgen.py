@@ -654,9 +654,11 @@ def prepare_boot(stage: Path, staged_zip: Path, stem: str):
 # floppy image scan for --retry-desktop-auto
 # --------------------------------------------------------------------------
 
-# Floppy images whose FAT12 directory can be read (`.stx`/`.ipf` are
-# copy-protected and have no plain filesystem).
-FAT_FLOPPY_EXTS = {".msa", ".st"}
+# Floppy images whose FAT12 directory can be read. `.ipf` has no plain
+# logical sectors; `.stx` (Pasti) usually does, and its sector payloads are
+# reconstructed by `_stx_to_raw` (copy-protected images without a usable
+# boot sector simply yield no program).
+FAT_FLOPPY_EXTS = {".msa", ".st", ".stx"}
 
 
 def _msa_to_raw(msa: bytes) -> bytes:
@@ -692,6 +694,94 @@ def _msa_to_raw(msa: bytes) -> bytes:
                     i += 1
             raw += out
     return bytes(raw)
+
+
+def _stx_to_raw(stx: bytes) -> bytes:
+    """Reconstruct a raw ST sector dump from a Pasti (`.stx`) image.
+
+    Pasti stores per-track sector headers plus optional fuzzy masks and a
+    track image. The FAT12 filesystem behind ``--retry-desktop-auto`` only
+    needs the sector payloads: the boot sector supplies the geometry
+    (sectors/track, sides), tracks are placed by their track-header number
+    (bit 7 = side B) and sectors by their address-block number. Returns an
+    empty byte string when the container is invalid or has no usable boot
+    sector (e.g. a copy-protected disk with no plain FAT).
+    """
+    if len(stx) < 16 or stx[:4] != b"RSY\x00":
+        return b""
+    if struct.unpack_from("<H", stx, 4)[0] != 3:
+        return b""
+    track_count = stx[0x0A]
+    pos = 16
+    sectors = []  # (track_header_number, sector_number, size, payload)
+    for _ in range(track_count):
+        if pos + 16 > len(stx):
+            break
+        track_start = pos
+        block_len, fuzzy_len, nsect, flags, _img_len, trknum, _res = \
+            struct.unpack_from("<LLHHHBB", stx, pos)
+        if block_len < 16 or pos + block_len > len(stx):
+            break
+        pos += 16
+        shdrs = []
+        if flags & 0x01:
+            for _s in range(nsect):
+                if pos + 16 > len(stx):
+                    return b""
+                (off, _timing, _rtime, _rtrack, _side, sec, ssize,
+                 _crc1, _crc2, _status, _sflags) = \
+                    struct.unpack_from("<LHHBBBBBBBB", stx, pos)
+                pos += 16
+                size = {2: 512, 3: 1024}.get(ssize, 0)
+                if size:
+                    shdrs.append((off, sec, size))
+        else:
+            # unprotected track without sector headers: plain 512-byte
+            # sectors follow the track header in logical order
+            shdrs = [(s * 512, s + 1, 512) for s in range(nsect)]
+        tdata = pos + fuzzy_len
+        for off, sec, size in shdrs:
+            start = tdata + off
+            if start + size > len(stx):
+                continue
+            sectors.append((trknum, sec, size, stx[start:start + size]))
+        pos = track_start + block_len
+
+    boot = next((payload for trknum, sec, size, payload in sectors
+                 if (trknum & 0x7F) == 0 and not (trknum & 0x80)
+                 and sec == 1 and size == 512), None)
+    if boot is None:
+        return b""
+    bps = struct.unpack_from("<H", boot, 11)[0]
+    spt = struct.unpack_from("<H", boot, 24)[0]
+    sides = struct.unpack_from("<H", boot, 26)[0]
+    total = struct.unpack_from("<H", boot, 19)[0]
+    if bps != 512 or spt == 0 or sides not in (1, 2):
+        return b""
+    if total == 0:
+        max_track = max((trknum & 0x7F) for trknum, _s, _z, _p in sectors)
+        total = (max_track + 1) * sides * spt
+    if total * bps > 16 * 1024 * 1024:
+        return b""
+    raw = bytearray(total * bps)
+    for trknum, sec, size, payload in sectors:
+        if size != bps or sec < 1:
+            continue
+        side = 1 if trknum & 0x80 else 0
+        track = trknum & 0x7F
+        if side >= sides:
+            continue
+        off = ((track * sides + side) * spt + (sec - 1)) * bps
+        if off + size <= len(raw):
+            raw[off:off + size] = payload
+    return bytes(raw)
+
+
+def _image_to_raw(name: str, data: bytes) -> bytes:
+    """Decode a supported floppy container to a raw ST sector dump."""
+    if Path(name).suffix.lower() == ".stx":
+        return _stx_to_raw(data)
+    return _msa_to_raw(data)
 
 
 def _fat12_files(raw: bytes):
@@ -800,9 +890,10 @@ def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str):
 
     GEMDOS archives reuse the normal extract + ``-d``/``--auto`` path.
     Floppy ZIPs are scanned through their FAT12 directory: the disk's
-    ``AUTO/`` program wins, else the largest launchable program. Images
-    without a readable FAT (`.stx`/`.ipf`, non-DOS disks) yield no candidate
-    (the click retry remains for those).
+    ``AUTO/`` program wins, else the largest launchable program. `.stx`
+    images are reconstructed to a raw sector dump first (`_stx_to_raw`);
+    images without a readable FAT (`.ipf`, non-DOS/copy-protected disks)
+    yield no candidate (the click retry remains for those).
     """
     names, _sizes = _zip_entries(staged_zip)
     boots = [n for n in names if Path(n).suffix.lower() in BOOT_EXTS]
@@ -821,7 +912,7 @@ def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str):
     ordered = sorted(images, key=lambda n: (_disk_index(n), n.lower()))
     b_name = next((n for n in ordered if n != a_name), None)
     with zipfile.ZipFile(staged_zip) as zf:
-        raw = _msa_to_raw(zf.read(a_name))
+        raw = _image_to_raw(a_name, zf.read(a_name))
         program = _floppy_program(raw)
         if not program:
             return None, None, None

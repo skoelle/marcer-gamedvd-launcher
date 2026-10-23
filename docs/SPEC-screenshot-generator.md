@@ -632,16 +632,18 @@ the image/archive is scanned before boot:
 
 - GEMDOS archives (Falcon, magazine ST-Computer) are extracted and the
   largest program autostarted with `-d` + `--auto C:\…`.
-- Floppy `.msa`/`.st` images are decoded (MSA track lengths + RLE) and their
-  FAT12 directory read. A disk's own `AUTO/` program wins, else the largest
-  launchable `.PRG`/`.TOS`/`.TTP`/`.APP`; Hatari gets
+- Floppy `.msa`/`.st` images are decoded (MSA track lengths + RLE), `.stx`
+  (Pasti) images are reconstructed from their per-track sector payloads
+  (`RSY\0`, track/sector headers, fuzzy masks), and the FAT12 directory is
+  read. A disk's own `AUTO/` program wins, else the largest launchable
+  `.PRG`/`.TOS`/`.TTP`/`.APP`; Hatari gets
   `--disk-a <image> --auto "A:\<path>"` (drive B included for a second
   image). Self-extracting archives (LZH/STZip SFX, which only unpack onto the
   write-protected disk) are skipped.
-- `.stx`/`.ipf`/non-DOS/empty images and SFX-only disks yield no candidate:
-  the entry is marked `auto_retried` / `auto_result: no_program` and stays
-  `desktop` (the click retry below remains for those). No `xdotool`/`detect`
-  run is required.
+- `.ipf`/non-DOS/empty images, copy-protected `.stx` without a usable boot
+  sector/FAT and SFX-only disks yield no candidate: the entry is marked
+  `auto_retried` / `auto_result: no_program` and stays `desktop` (the click
+  retry below remains for those). No `xdotool`/`detect` run is required.
 
 **Icon click retry (`detect` + `run --retry-desktop`).**
 

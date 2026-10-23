@@ -190,16 +190,18 @@ A click-free alternative to the GEM desktop click chain. It selects the
 
 - **GEMDOS archives** (Falcon, magazine ST-Computer): extract and autostart
   the largest program with `-d` + `--auto C:\…`.
-- **Floppy images** (`.msa`/`.st`): the FAT12 directory is scanned in memory
-  (MSA header + track RLE, standard BPB/FAT). A disk's own `AUTO/` program
-  wins, else the largest launchable `.PRG`/`.TOS`/`.TTP`/`.APP`. Hatari is
-  started with `--disk-a <image> --auto "A:\<path>"` (plus drive B for a
-  second image). Self-extracting archives (LZH/STZip "SFX", which only unpack
-  onto the write-protected floppy) are skipped.
-- **Unreadable images** (`.stx`/`.ipf`, non-DOS disks, empty images) and
-  SFX-only disks have no detectable program: the entry is marked
-  `auto_retried` / `auto_result: no_program` and stays `desktop` (the
-  `--retry-desktop` click path remains for those).
+- **Floppy images** (`.msa`/`.st`/`.stx`): the FAT12 directory is scanned in
+  memory (MSA header + track RLE; STX/Pasti track and sector payloads;
+  standard BPB/FAT). A disk's own `AUTO/` program wins, else the largest
+  launchable `.PRG`/`.TOS`/`.TTP`/`.APP`. Hatari is started with
+  `--disk-a <image> --auto "A:\<path>"` (plus drive B for a second image).
+  Self-extracting archives (LZH/STZip "SFX", which only unpack onto the
+  write-protected floppy) are skipped.
+- **Unreadable images** (`.ipf`, non-DOS disks, copy-protected `.stx` without
+  a usable boot sector/FAT, empty images) and SFX-only disks have no
+  detectable program: the entry is marked `auto_retried` /
+  `auto_result: no_program` and stays `desktop` (the `--retry-desktop` click
+  path remains for those).
 
 Completed attempts store `auto_retried`, `auto_result` and `auto_program`;
 `--force` re-runs them. No `xdotool`/`detect` run is required.
