@@ -139,6 +139,13 @@ jobs:
             echo "## Initial release" > release-notes.md
           fi
 
+          # Always link the release setup guide. The tag-specific URL points at
+          # the documentation version that belongs to this release.
+          echo "" >> release-notes.md
+          echo "---" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "**Release setup guide:** https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/docs/GETTING-STARTED.md" >> release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:

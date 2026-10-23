@@ -275,6 +275,10 @@ Alternatively, copy the shipped `desktop.config.example.json` next to the
 executable (or the `.app`), rename it to `desktop.config.json`, and edit it by
 hand before the first start.
 
+For the complete release walkthrough — including macOS Gatekeeper/translocation
+notes, `ftp-sync` game/patch directories, FTP settings and the catalog-data
+downloads — see [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md).
+
 ### 📥 Download
 
 Download the ZIP for your platform from the [Releases](https://github.com/skoelle/marcer-gamedvd-launcher/releases) page:
@@ -520,6 +524,7 @@ The design and specification documents live in [`docs/`](docs/README.md):
 
 | Document | Contents |
 |---|---|
+| [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Release setup guide for users: first start, macOS notes, game/patch directories (`ftp-sync`), FTP settings, catalog-data downloads and troubleshooting. |
 | [`docs/SPEC.md`](docs/SPEC.md) | Technology-neutral behavioral specification of the launcher (overlay rules, navigation, rendering, launch) — the basis for reimplementing it in any language. |
 | [`docs/ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) | Analysis of the external game metadata sources (XLS workbooks, data model, matching, roadmap). |
 | [`docs/ANALYSIS-boxscan-manual-structure.md`](docs/ANALYSIS-boxscan-manual-structure.md) | Analysis of the `Boxscan/` and `Manual/` companion folders (location, naming, ZIP/loose-file structure, edge cases, consumer requirements). |

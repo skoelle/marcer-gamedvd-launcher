@@ -165,6 +165,10 @@ Colors are fully configurable via the `Colors` section of `launcher.config.json`
 
 The community uses [ftp-sync](https://github.com/slippyex/ftp-sync) to keep the patch directory in sync with Marcer's FTP server. This downloads only changed or new files — fast and bandwidth-friendly.
 
+> Using the desktop app? The release setup guide
+> [`docs/GETTING-STARTED.md`](../../docs/GETTING-STARTED.md) covers the same
+> `ftp-sync` mapping plus the app's FTP and catalog-data downloads.
+
 **Setup:**
 
 1. Clone and install ftp-sync:

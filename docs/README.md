@@ -4,6 +4,12 @@ Design and specification documents for the Marcer GameDVD project. These are the
 technology-neutral contracts and records that the apps and tools implement; the
 per-app/per-tool READMEs stay next to their code.
 
+## Guides
+
+| File | What it covers |
+|---|---|
+| [`GETTING-STARTED.md`](GETTING-STARTED.md) | Release setup guide for users: first start, macOS (Gatekeeper/translocation/TCC), game and patch directories, `ftp-sync`, FTP settings, catalog-data downloads and troubleshooting. |
+
 ## Specs
 
 | File | What it describes |
