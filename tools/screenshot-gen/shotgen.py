@@ -796,6 +796,13 @@ def _fat12_files(raw: bytes):
     spf = struct.unpack_from("<H", raw, 22)[0]
     if bps != 512 or spc == 0 or spf == 0 or root_entries == 0:
         return []
+    if reserved == 0:
+        # Many MSA images produced by old formatters/crack tools store 0
+        # here even though the FAT still starts after the boot sector
+        # (TOS/GEMDOS reads them normally). Treating 0 as the usual one
+        # reserved sector keeps FAT/root lookup aligned instead of one
+        # sector early, which otherwise hides every directory entry.
+        reserved = 1
     root_secs = (root_entries * 32 + bps - 1) // bps
     fat_start = reserved * bps
     root_start = (reserved + nfats * spf) * bps

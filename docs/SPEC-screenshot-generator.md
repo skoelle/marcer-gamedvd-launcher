@@ -635,7 +635,11 @@ the image/archive is scanned before boot:
 - Floppy `.msa`/`.st` images are decoded (MSA track lengths + RLE), `.stx`
   (Pasti) images are reconstructed from their per-track sector payloads
   (`RSY\0`, track/sector headers, fuzzy masks), and the FAT12 directory is
-  read. A disk's own `AUTO/` program wins, else the largest launchable
+  read. A BPB `reserved sectors` value of 0 (common in old MSA formatter/
+  crack output) is normalized to the usual 1, because TOS/GEMDOS still
+  places the FAT after the boot sector; without this the FAT/root lookup is
+  one sector early and every directory entry is missed. A disk's own
+  `AUTO/` program wins, else the largest launchable
   `.PRG`/`.TOS`/`.TTP`/`.APP`; Hatari gets
   `--disk-a <image> --auto "A:\<path>"` (drive B included for a second
   image). Self-extracting archives (LZH/STZip SFX, which only unpack onto the

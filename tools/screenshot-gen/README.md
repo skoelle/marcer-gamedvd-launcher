@@ -192,7 +192,10 @@ A click-free alternative to the GEM desktop click chain. It selects the
   the largest program with `-d` + `--auto C:\…`.
 - **Floppy images** (`.msa`/`.st`/`.stx`): the FAT12 directory is scanned in
   memory (MSA header + track RLE; STX/Pasti track and sector payloads;
-  standard BPB/FAT). A disk's own `AUTO/` program wins, else the largest
+  standard BPB/FAT). A BPB `reserved sectors` value of 0 — common in old
+  MSA formatter/crack output — is treated as 1, matching TOS/GEMDOS, so
+  the FAT/root lookup is not one sector early. A disk's own `AUTO/` program
+  wins, else the largest
   launchable `.PRG`/`.TOS`/`.TTP`/`.APP`. Hatari is started with
   `--disk-a <image> --auto "A:\<path>"` (plus drive B for a second image).
   Self-extracting archives (LZH/STZip "SFX", which only unpack onto the
