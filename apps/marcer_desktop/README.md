@@ -208,6 +208,8 @@ The Play dropdown offers Falcon variants: **RGB** (default), **VGA**
 (`--monitor vga`), **4 MB** (`--memsize 4`), **DSP off** (`--dsp none`) and
 **FPU** (`--fpu 68882`). Optional `Falcon` config block in `desktop.config.json`:
 `TosFile`, `Memsize`, `Monitor`, `Dsp`, `CpuClock`, `Fpu`, `ExtraArgs`.
+`ExtraArgs` defaults to **`--vdi off`**, so extended VDI stays disabled; set it
+to an empty string to restore Hatari's default.
 
 ### Magazine GEMDOS cover disks
 
@@ -548,7 +550,8 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   (kept for the session).
 - at startup the cache is read and each catalog card's **folder name** is
   matched against the AtariLegend titles (aliases included; exact → prefix →
-  fuzzy). When matched, the detail sidebar and the lightbox show a teal
+  fuzzy; **Falcon cards are included**, magazine cover-disk cards are not).
+  When matched, the detail sidebar and the lightbox show a teal
   **AtariLegend** button at the top-right of the *Game info* heading (also on
   *No game info*). It opens an in-app dialog with the cached metadata
   (year, publisher, genres, conversion/original system, developers and authors

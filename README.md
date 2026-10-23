@@ -71,7 +71,7 @@ Save, the manual screenshot curation described below.
   comments and the community score. The screenshots/boxscans inside that
   dialog are AtariLegend's own curated images, separate from the generated ZIP
   boot previews (see *Screenshots: actual ZIP boot state*).
-  Matched cards get an **AtariLegend** button
+  Matched cards (including Falcon titles) get an **AtariLegend** button
   in the detail sidebar and the lightbox, plus additional **Genre** and
   **Developers** filter dropdowns; the Publisher filter then also matches
   AtariLegend publishers. Nothing is bundled — the data is downloaded at

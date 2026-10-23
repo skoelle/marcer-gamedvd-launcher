@@ -27,6 +27,9 @@ if [ -f "$REPO_ROOT/local/paths.env" ]; then
     "ConfigFile": "",
     "ArgsTemplate": "-c \"{cfg}\" --disk-a \"{zip}\""
   },
+  "Falcon": {
+    "ExtraArgs": "--vdi off"
+  },
   "Ftp": {
     "Host": "${MARCER_FTP_HOST:-}",
     "User": "${MARCER_FTP_USER:-}",

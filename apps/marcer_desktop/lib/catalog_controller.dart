@@ -579,11 +579,11 @@ class CatalogController extends ChangeNotifier {
   GameInfo? infoFor(Entry e) => gameinfo.lookupByRel(relOf(e));
 
   /// AtariLegend match for a catalog card (matched by folder name, like the
-  /// `tools/atarilegend-gen` matcher). `null` when no data/matche — and
-  /// always `null` for magazine/falcon cards (their folders are not gameinfo
-  /// folders).
+  /// `tools/atarilegend-gen` matcher). `null` when there is no data/match —
+  /// and always `null` for magazine cards (their synthetic folders are not
+  /// game titles).
   AtariLegendGame? atariLegendForCard(GameCard card) {
-    if (card.kind == 'magazine' || card.kind == 'falcon') return null;
+    if (card.kind == 'magazine') return null;
     return atariLegend.matchFolder(card.folder);
   }
 
@@ -592,7 +592,7 @@ class CatalogController extends ChangeNotifier {
   AtariLegendGame? atariLegendForEntry(Entry e) {
     final rel = relOf(e);
     final section = sectionOfRel(sectionTrees, rel);
-    if (section == 'magazine' || section == 'falcon') return null;
+    if (section == 'magazine') return null;
     final parts = rel.split('/');
     if (parts.length >= 4) return atariLegend.matchFolder(parts[3]);
     return atariLegend.matchFolder(e.name);

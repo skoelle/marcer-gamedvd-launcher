@@ -1087,14 +1087,26 @@ void main() {
       ]);
     });
 
-    test('index-only: no gameinfo join, no AtariLegend', () {
+    test('index-only: no gameinfo join, AtariLegend matches by folder', () {
+      final al = AtariLegendIndex.fromGames([
+        const AtariLegendGame(
+          id: 7,
+          name: 'Another World',
+          slug: 'another-world',
+          publisher: 'Delphine',
+          genres: ['Adventure'],
+          developers: ['Eric Chahi'],
+        ),
+      ]);
       final u = buildUniverse({}, falconEntries: {
         falconA: entryJson(falconA, 'done', 'ROOT', preview: 'a.png'),
-      });
+      }, atariLegend: al);
       final card = u.falcon.single;
       expect(card.info, isNull);
-      expect(card.atariLegend, isNull);
+      expect(card.atariLegend?.id, 7);
       expect(u.falconFacets.letters, ['A']);
+      expect(u.falconFacets.genres, ['Adventure']);
+      expect(u.falconFacets.developers, ['Eric Chahi']);
       expect(kindFilters('falcon'), isEmpty);
       expect(kindFields('falcon'), isEmpty);
     });

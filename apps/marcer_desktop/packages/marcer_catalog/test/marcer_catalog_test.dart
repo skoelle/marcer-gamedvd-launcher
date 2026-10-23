@@ -267,6 +267,19 @@ void main() {
       expect(c.windowMaximized, isTrue, reason: 'start maximized by default');
       expect(c.windowWidth, 1280);
       expect(c.windowHeight, 800);
+      expect(c.falconExtraArgs, '--vdi off',
+          reason: 'Falcon starts without extended VDI by default');
+    });
+
+    test('Falcon.ExtraArgs overrides the default (empty disables it)', () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync(
+            '{"RootDirectory": "/r", "Falcon": {"ExtraArgs": "--monitor vga"}}');
+      expect(DesktopConfig.load(f.path).falconExtraArgs, '--monitor vga');
+
+      f.writeAsStringSync(
+          '{"RootDirectory": "/r", "Falcon": {"ExtraArgs": ""}}');
+      expect(DesktopConfig.load(f.path).falconExtraArgs, '');
     });
 
     test('copyWith replaces only the given path fields', () {

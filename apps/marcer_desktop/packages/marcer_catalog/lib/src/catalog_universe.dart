@@ -120,7 +120,7 @@ class CatalogUniverse {
       info: info,
       fullPng: fullPng,
       unionGameinfo: false,
-      atariLegend: null,
+      atariLegend: atariLegend,
       onProgress: onProgress,
     );
 

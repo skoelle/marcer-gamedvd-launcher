@@ -16,7 +16,7 @@
     "Dsp": "emu",
     "CpuClock": "16",
     "Fpu": "none",
-    "ExtraArgs": ""
+    "ExtraArgs": "--vdi off"
   },
   "Ftp": {
     "Host": "ftp.example.com",

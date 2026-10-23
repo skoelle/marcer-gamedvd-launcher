@@ -30,7 +30,7 @@ class DesktopConfig {
     this.falconDsp = 'emu',
     this.falconCpuClock = '16',
     this.falconFpu = 'none',
-    this.falconExtraArgs = '',
+    this.falconExtraArgs = '--vdi off',
     this.ftpHost = '',
     this.ftpUser = '',
     this.ftpPassword = '',
@@ -73,7 +73,8 @@ class DesktopConfig {
   final String falconFpu;
 
   /// Extra raw command-line arguments appended to every Falcon launch
-  /// (split like [hatariArgsTemplate]); empty by default.
+  /// (split like [hatariArgsTemplate]); defaults to `--vdi off` so the
+  /// emulator does not start in extended VDI mode (override or set empty).
   final String falconExtraArgs;
 
   /// FTP download of missing game folders (DetailPanel "Download missing").
@@ -161,7 +162,7 @@ class DesktopConfig {
       falconDsp: (falcon['Dsp'] ?? 'emu') as String,
       falconCpuClock: (falcon['CpuClock'] ?? '16') as String,
       falconFpu: (falcon['Fpu'] ?? 'none') as String,
-      falconExtraArgs: (falcon['ExtraArgs'] ?? '') as String,
+      falconExtraArgs: (falcon['ExtraArgs'] ?? '--vdi off') as String,
       ftpHost: (ftp['Host'] ?? '') as String,
       ftpUser: (ftp['User'] ?? '') as String,
       ftpPassword: (ftp['Password'] ?? '') as String,

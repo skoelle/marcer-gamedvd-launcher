@@ -58,6 +58,41 @@ void main() {
     expect(c.hasAtariLegend, isTrue);
   });
 
+  test('falcon cards resolve their AtariLegend match too', () async {
+    File('$alDir/atarilegend.json').writeAsStringSync(jsonEncode({
+      'schema_version': kAtariLegendSchemaVersion,
+      'generated_at': 'now',
+      'games': [
+        {'id': 7, 'name': 'Another World', 'slug': 'another-world'},
+      ],
+    }));
+    const rel = 'Falcon 030/Title Sorted/A/Another World/Another World.zip';
+    Directory('${tmp.path}/root/Falcon 030/Title Sorted/A/Another World')
+        .createSync(recursive: true);
+    File('${tmp.path}/out/index-falcon.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {
+        rel: {
+          'rel': rel,
+          'name': 'Another World.zip',
+          'status': 'done',
+          'kind': 'game',
+          'layer': 'ROOT',
+          'preview': null,
+          'candidates': <String>[],
+        },
+      },
+    }));
+
+    final c = controller();
+    await c.init();
+    final card = c.universe.falcon.single;
+    expect(card.folder, 'Another World');
+    expect(card.atariLegend?.id, 7);
+    expect(c.atariLegendForCard(card)?.id, 7);
+    c.dispose();
+  });
+
   test('curation keeps the AtariLegend match on the rebuilt cards', () async {
     File('$alDir/atarilegend.json').writeAsStringSync(jsonEncode({
       'schema_version': kAtariLegendSchemaVersion,

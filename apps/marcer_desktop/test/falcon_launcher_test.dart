@@ -55,6 +55,8 @@ void main() {
     expect(args, contains('emu'));
     expect(args, contains('--monitor'));
     expect(args, contains('rgb'));
+    // extended VDI stays off (Falcon.ExtraArgs default)
+    expect(args[args.indexOf('--vdi') + 1], 'off');
     // never the ST config
     expect(args, isNot(contains('-c')));
     expect(args, isNot(contains('--disk-a')));
