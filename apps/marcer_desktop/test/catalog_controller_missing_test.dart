@@ -178,9 +178,14 @@ void main() {
     await c.init();
     final alpha = crackedCard('A', 'Alpha');
     const folder = '$crackedTree/A/Alpha';
-    expect(c.cardFolderPath(alpha), p.join(tmp.path, 'root', folder));
-    expect(c.cardFolderPath(alpha, patch: true),
-        p.join(tmp.path, 'patch', folder));
+    final rootPath = c.cardFolderPath(alpha)!;
+    final patchPath = c.cardFolderPath(alpha, patch: true)!;
+    expect(rootPath, p.normalize(p.join(tmp.path, 'root', folder)));
+    expect(patchPath, p.normalize(p.join(tmp.path, 'patch', folder)));
+    if (Platform.isWindows) {
+      expect(rootPath, isNot(contains('/')));
+      expect(patchPath, isNot(contains('/')));
+    }
     c.config = c.config.copyWith(patchDirectory: '');
     expect(c.cardFolderPath(alpha, patch: true), isNull);
   });

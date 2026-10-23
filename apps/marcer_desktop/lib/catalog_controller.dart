@@ -972,7 +972,7 @@ class CatalogController extends ChangeNotifier {
     if (rel == null || rel.isEmpty) return null;
     final base = patch ? config.patchDirectory : config.rootDirectory;
     if (base.trim().isEmpty) return null;
-    return p.join(base, rel);
+    return p.normalize(p.join(base, normalizeRelSeparators(rel)));
   }
 
   static final Future<Set<String>> _emptyFolderLayers =

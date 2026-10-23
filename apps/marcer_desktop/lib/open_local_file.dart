@@ -3,6 +3,8 @@
 
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 /// Opens [path] with the operating system's default application (PDF viewer,
 /// text editor, word processor, …). Returns `false` when the launcher could
 /// not be started or reported a failure.
@@ -15,27 +17,28 @@ Future<bool> openLocalDirectory(String path) =>
     _openLocalPath(path, directory: true);
 
 Future<bool> _openLocalPath(String path, {bool directory = false}) async {
+  final normalized = p.normalize(path);
   try {
     if (Platform.isMacOS) {
-      final r = await Process.run('open', [path]);
+      final r = await Process.run('open', [normalized]);
       return r.exitCode == 0;
     }
     if (Platform.isWindows) {
       if (directory) {
         await Process.start(
           'explorer',
-          [path],
+          [normalized],
           mode: ProcessStartMode.detached,
         );
         return true;
       }
       // `start` is a cmd built-in; the empty title argument is required so a
       // quoted path with spaces is not mistaken for the window title.
-      final r =
-          await Process.run('cmd', ['/c', 'start', '', path], runInShell: true);
+      final r = await Process.run('cmd', ['/c', 'start', '', normalized],
+          runInShell: true);
       return r.exitCode == 0;
     }
-    final r = await Process.run('xdg-open', [path]);
+    final r = await Process.run('xdg-open', [normalized]);
     return r.exitCode == 0;
   } catch (_) {
     return false;
