@@ -8,7 +8,7 @@ per-app/per-tool READMEs stay next to their code.
 
 | File | What it covers |
 |---|---|
-| [`GETTING-STARTED.md`](GETTING-STARTED.md) | Release setup guide for users: first start, macOS (Gatekeeper/translocation/TCC), game and patch directories, `ftp-sync`, FTP settings, catalog-data downloads and troubleshooting. |
+| [`GETTING-STARTED.md`](GETTING-STARTED.md) | Quick start plus detailed release setup guide for users: first start, macOS (Gatekeeper/translocation/TCC), game and patch directories, `ftp-sync`, FTP settings, catalog-data downloads and troubleshooting. |
 
 ## Specs
 

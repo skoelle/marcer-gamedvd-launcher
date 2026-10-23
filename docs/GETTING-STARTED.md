@@ -6,6 +6,31 @@ covers the first start, the macOS specifics, the game/patch directories
 catalog-data downloads. It does **not** describe how to build the app from
 source.
 
+## Quick start (TL;DR)
+
+1. Download the release ZIP for your platform, extract it and start the app
+   ([Download and start](#1-download-and-start)).
+2. **macOS only:** right-click the app → **Open** (or run
+   `xattr -dr com.apple.quarantine …`) and move the `.app` individually in
+   Finder to a normal folder such as `~/Applications` ([macOS](#7-macos)).
+3. In the setup page, set **RootDirectory** to your local game archive. If you
+   use `ftp-sync`, also set **PatchDirectory** to its `patchDir`; otherwise
+   leave it empty ([ftp-sync](#3-syncing-the-game-archive-with-ftp-sync)).
+4. Enter the FTP **host** (use `host:2121` for the community server), **user**
+   and **password**.
+5. Set **ScreenshotDirectory** and **GameinfoDirectory**, then click
+   **Download from FTP** next to each. Optional: set
+   **AtariLegendDirectory** and click **Download AtariLegend data**
+   ([FTP and catalog data](#4-ftp-connection-and-catalog-data)).
+6. Press **Save**. Install Hatari and download the TOS ROM when prompted
+   ([Hatari and TOS ROM](#5-hatari-and-tos-rom)).
+7. Press `?` in the app for all keyboard shortcuts. The detailed sections
+   below cover every option.
+
+**ftp-sync in 3 steps:** `localDir` → **RootDirectory**, `patchDir` →
+**PatchDirectory**, then enter the FTP data and download the catalog data in
+the app.
+
 For the full feature list and keyboard shortcuts see
 [`apps/marcer_desktop/README.md`](../apps/marcer_desktop/README.md). The legacy
 console launcher has its own documentation:

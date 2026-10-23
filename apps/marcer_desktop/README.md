@@ -47,8 +47,9 @@ The executable / app bundle is named **`MarcerGameDVDLauncher`**
 (`MarcerGameDVDLauncher.exe` on Windows, `MarcerGameDVDLauncher.app` on
 macOS); the Dart package name stays `marcer_desktop`.
 
-For the release setup (first start, macOS notes, `ftp-sync`, FTP/catalog-data
-downloads) see [`docs/GETTING-STARTED.md`](../../docs/GETTING-STARTED.md).
+For the quick start and release setup (first start, macOS notes, `ftp-sync`,
+FTP/catalog-data downloads) see
+[`docs/GETTING-STARTED.md`](../../docs/GETTING-STARTED.md).
 
 ## Prerequisites
 

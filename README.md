@@ -275,9 +275,10 @@ Alternatively, copy the shipped `desktop.config.example.json` next to the
 executable (or the `.app`), rename it to `desktop.config.json`, and edit it by
 hand before the first start.
 
-For the complete release walkthrough — including macOS Gatekeeper/translocation
-notes, `ftp-sync` game/patch directories, FTP settings and the catalog-data
-downloads — see [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md).
+For the quick start and the complete release walkthrough — including macOS
+Gatekeeper/translocation notes, `ftp-sync` game/patch directories, FTP settings
+and the catalog-data downloads — see
+[`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md).
 
 ### 📥 Download
 
