@@ -301,14 +301,17 @@ TOS 1.02 and Low Res TOS 1.00 Play variants download TOS 1.62 / 1.02 / 1.00 on
 demand).
 
 > **macOS:** the build is ad-hoc signed and not notarized, so macOS quarantines
-> the download. Open it once via **right-click → Open**, or run
-> `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`. Also
-> **drag the `.app` individually in Finder** out of the unzipped folder into a
-> normal folder (e.g. `~/Applications`; not Downloads/Documents) — otherwise
-> macOS runs it from a temporary read-only copy (App Translocation) and
-> self-update/favorites cannot be saved. The app is not sandboxed (it reads game
-> folders you configure and launches Hatari); protected folders like
-> `~/Downloads` still trigger a one-time macOS permission prompt. See
+> the download. Extract the **whole ZIP** into a normal folder under your home
+> directory (e.g. `~/MarcerGameDVDLauncher/`) and keep the `.app`,
+> `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` together; start
+> the app from there. Open it once via **right-click → Open**, or run
+> `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`. Do not
+> run it from Downloads/Documents/Desktop or directly from the ZIP. If macOS
+> still runs a translocated read-only copy (app hint or self-update failure),
+> clear the quarantine or re-extract/move the app to a different normal folder.
+> The app is not sandboxed (it reads game folders you configure and launches
+> Hatari); protected folders like `~/Downloads` still trigger a one-time macOS
+> permission prompt. See
 > [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md#macos).
 
 ### ⚙️ Configuration (`desktop.config.json`)

@@ -103,13 +103,18 @@ user-selected entitlement. See
 - **Gatekeeper:** the release build is ad-hoc signed and **not notarized**, so a
   downloaded ZIP is quarantined. Open it once via **right-click → Open**, or run
   `xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`.
-- **App Translocation:** if you run the app straight from the unzipped folder
-  while it is still quarantined, macOS runs it from a randomized read-only copy.
-  Quit it, then **drag the `.app` individually in Finder** out of the unzipped
-  folder into a normal folder (e.g. `~/Applications` or your home folder — not
-  Downloads/Documents/Desktop) and reopen it. Only a Finder move (not `mv`, not
-  moving the whole folder) ends translocation. The app shows a hint when it
-  detects this.
+- **App Translocation:** extract the **whole ZIP** into a normal folder under
+  your home directory (e.g. `~/MarcerGameDVDLauncher/`) and keep the `.app`,
+  `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` together; start
+  the app from there. This is the portable layout: the config/cfg are next to
+  the app and self-update can replace the bundle in the writable folder. Do not
+  run it from Downloads/Documents/Desktop or directly from the ZIP. If macOS
+  still runs a translocated read-only copy (the app shows a hint), quit it and
+  clear the quarantine or re-extract/move the app to a different normal folder.
+  A Finder move to a different folder (or removing the quarantine) ends
+  translocation; `mv` in Terminal does not. Moving only the `.app` requires
+  copying `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` next to
+  it.
 - **Downloaded artifacts and the config live outside the bundle:** Hatari, the
   TOS ROM **and** a fallback `desktop.config.json` are written into
   `~/Library/Application Support/MarcerGameDVDLauncher/` (not inside the `.app`),

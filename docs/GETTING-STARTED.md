@@ -10,9 +10,13 @@ source.
 
 1. Download the release ZIP for your platform, extract it and start the app
    ([Download and start](#1-download-and-start)).
-2. **macOS only:** right-click the app → **Open** (or run
-   `xattr -dr com.apple.quarantine …`) and move the `.app` individually in
-   Finder to a normal folder such as `~/Applications` ([macOS](#7-macos)).
+2. **macOS only:** extract the **whole ZIP** into a normal folder under your
+   home directory, e.g. `~/MarcerGameDVDLauncher/`, so the `.app`,
+   `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` stay together.
+   Right-click the app → **Open** (or run
+   `xattr -dr com.apple.quarantine …`) and start it from that folder. Do not
+   run it from Downloads/Documents/Desktop or directly from the ZIP
+   ([macOS](#7-macos)).
 3. In the setup page, set **RootDirectory** to your local game archive. If you
    use `ftp-sync`, also set **PatchDirectory** to its `patchDir`; otherwise
    leave it empty ([ftp-sync](#3-syncing-the-game-archive-with-ftp-sync)).
@@ -53,7 +57,8 @@ Extract the ZIP to a normal folder, for example:
 
 - Windows: `C:\Games\MarcerGameDVDLauncher\`
 - Linux: `~/Games/MarcerGameDVDLauncher/`
-- macOS: `~/Applications/MarcerGameDVDLauncher.app` (see [macOS](#7-macos))
+- macOS: `~/MarcerGameDVDLauncher/` (the folder containing the `.app` and the
+  two companion files; see [macOS](#7-macos))
 
 The release ZIP contains the application, `desktop.config.example.json` and the
 bundled Hatari configuration `MarcerGameDvd-Hatari.cfg`.
@@ -68,8 +73,10 @@ chmod +x MarcerGameDVDLauncher
 ./MarcerGameDVDLauncher
 ```
 
-On macOS do **not** run the app directly from the unzipped folder or from
-Downloads/Documents/Desktop. Read [macOS](#7-macos) first.
+On macOS extract the **whole ZIP** into a normal folder under your home
+directory (e.g. `~/MarcerGameDVDLauncher/`) and start the `.app` there; do not
+run it from Downloads/Documents/Desktop or directly from the ZIP. Read
+[macOS](#7-macos) first.
 
 ---
 
@@ -294,15 +301,25 @@ xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app
 
 ### 7.2 App Translocation
 
-If you run the app straight from the unzipped folder while it is still
-quarantined, macOS may run it from a randomized, read-only copy
-(**App Translocation**). Self-update and favorites cannot be written there.
+**Recommended:** extract the **whole ZIP** into a normal folder under your home
+directory, e.g. `~/MarcerGameDVDLauncher/`, and start the `.app` from there.
+Keep the `.app`, `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg`
+together — this is the portable layout, so the config/cfg are next to the app
+and self-update can replace the bundle in the writable folder.
 
-Quit the app, then **drag the `.app` individually in Finder** into a normal
-folder such as `~/Applications` or your home folder. Do **not** use
-Downloads/Documents/Desktop for the app itself, and do not move the whole
-unzipped folder or use `mv` in Terminal — only a Finder move of the `.app`
-ends translocation. The app shows a hint when it detects this state.
+Do not run the app from Downloads/Documents/Desktop or directly from the ZIP or
+a mounted archive. If macOS still runs it from a randomized, read-only copy
+(**App Translocation**, the app shows a hint), quit it and:
+
+- clear the quarantine (`xattr -dr com.apple.quarantine /path/to/…app`), or
+- re-extract the whole ZIP into a **different** normal folder, or
+- move the `.app` individually in Finder to a normal folder and copy
+  `desktop.config.example.json` + `MarcerGameDvd-Hatari.cfg` next to it.
+
+A Finder move to a different folder (or removing the quarantine) ends
+translocation; `mv` in Terminal does not. The per-user data directory
+(`~/Library/Application Support/…`) remains the fallback for the config and
+downloaded Hatari/TOS files.
 
 ### 7.3 Protected folders (TCC)
 
@@ -333,7 +350,7 @@ in a writable folder.
 | Problem | What to do |
 |---|---|
 | macOS: “app is damaged” / “unidentified developer” | Right-click → Open, or run `xattr -dr com.apple.quarantine …` (section 7.1). |
-| macOS: settings/favorites/self-update do not stick | Move the `.app` individually in Finder out of the unzipped/Downloads folder (section 7.2). |
+| macOS: settings/favorites/self-update do not stick | Quit, clear the quarantine and/or re-extract the whole ZIP into a different normal folder (section 7.2). |
 | `Operation not permitted` on a configured path | Grant the macOS permission prompt, or use a folder outside Downloads/Documents/Desktop (section 7.3). |
 | Catalog is empty | Set `ScreenshotDirectory`/`GameinfoDirectory` and use **Download from FTP**; then select status **any**. |
 | FTP download fails | Check host/port (community port **2121**), user/password and `Ftp.RemoteBase` / `Ftp.AssetsRemote`. |

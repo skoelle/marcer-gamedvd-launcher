@@ -87,8 +87,14 @@ Both work: the native picker returns a path, and a hand-typed path in the config
 is reachable as long as TCC allows the location.
 
 ### 3.3 App Translocation
-A quarantined, not-notarized app launched straight from its unzipped folder is
-run by macOS from a randomized, read-only **App Translocation** path
+**Recommended portable layout:** extract the whole release ZIP into a normal
+folder under the user's home directory (e.g. `~/MarcerGameDVDLauncher/`) and
+keep the `.app`, `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg`
+together. This is the tested distribution layout: the config/cfg stay next to
+the app and self-update can replace the bundle in the writable folder.
+
+A quarantined, not-notarized app launched straight from its unzipped/download
+location is run by macOS from a randomized, read-only **App Translocation** path
 (`/private/var/folders/…/AppTranslocation/…`). Writing inside the `.app` bundle
 there is blocked or lands in a location that disappears, and the bundle path
 changes on every launch. Because of that the app keeps downloaded artifacts **and
@@ -101,8 +107,11 @@ downloads work even while translocated. Two things still need a real move:
 
 Ending translocation requires moving the `.app` **individually in Finder** to a
 different folder (`mv` in Terminal or moving the whole folder does **not**
-count); removing `com.apple.quarantine` also works. The app shows a non-blocking
-hint when it detects translocation.
+count), re-extracting the whole ZIP into a different normal folder, or removing
+`com.apple.quarantine`. When moving only the `.app`, copy
+`desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` next to it to keep
+the portable layout. The app shows a non-blocking hint when it detects
+translocation.
 
 ### 3.4 Gatekeeper / notarization (open)
 The release build is **ad-hoc signed and not notarized** (`CODE_SIGN_IDENTITY =
