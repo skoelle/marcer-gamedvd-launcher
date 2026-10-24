@@ -59,6 +59,11 @@ class CrewDetailPanel extends StatelessWidget {
                 'Click a release to open it in the existing lightbox.',
                 style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
               ),
+              const SizedBox(height: 2),
+              const Text(
+                'Double-click the crew card for the screenshot browser.',
+                style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+              ),
             ],
           ),
         ),

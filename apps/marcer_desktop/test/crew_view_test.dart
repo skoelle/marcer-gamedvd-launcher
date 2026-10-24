@@ -5,10 +5,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_controller.dart';
 import 'package:marcer_desktop/widgets/crew_detail_panel.dart';
+import 'package:marcer_desktop/widgets/crew_lightbox.dart';
 
 /// Crews tab: `crews.json` loading, top-N cards, search and the release ->
 /// cracked-card lookup used to open the existing game lightbox.
@@ -280,6 +282,43 @@ void main() {
     expect(c2.catalogCards.first.crew?.name, 'Crew 01');
     expect(c2.crews.groups.any((g) => g.name == 'Crew 10'), isFalse);
     expect(c2.statusLine, contains('top 128 of 129'));
+  });
+
+  testWidgets('crew lightbox lists releases and navigates with arrows', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await c.init();
+    });
+    final crew = c.crews.groups.firstWhere(
+      (group) => group.name == 'Alpha Crew',
+    );
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CrewLightbox(controller: c, crew: crew),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Alpha Crew'), findsWidgets);
+    expect(find.text('Alpha v2'), findsOneWidget);
+    expect(find.text('a_v2.zip'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(find.text('a_v2.zip'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'v2');
+    await tester.pump();
+    expect(find.text('Alpha v2'), findsOneWidget);
+    expect(find.text('a_v2.zip'), findsOneWidget);
   });
 
   testWidgets('crew detail lists releases and opens one on tap', (

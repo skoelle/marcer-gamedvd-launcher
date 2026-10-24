@@ -106,7 +106,12 @@ The desktop app loads it as part of the catalog bundle:
   publisher, cracker/crew, language, disks, RAW/PASTI/Boxscan, TOS/Bad and the
   ZIP name;
 - clicking a release opens the **existing game lightbox** pinned to that
-  cracked-game card/ZIP, without leaving the Crews tab.
+  cracked-game card/ZIP, without leaving the Crews tab;
+- **double-clicking a crew card** opens the **crew release browser**: all
+  releases as a responsive screenshot grid (up to 4 columns) on the left, the
+  normal lightbox `GameInfoPanel` sidebar for the selected ZIP on the right.
+  Arrow keys/`PgUp`/`PgDn` move through the releases, `Enter`/double-click on a
+  release opens the normal game lightbox, `P`/`Space` launches, `Esc` closes.
 
 The full data for all 888 groups is already in `crews.json`; the tab selection
 is controlled by `tools/crew-analysis/crew-tab.json` (`include_until`, `keep`,

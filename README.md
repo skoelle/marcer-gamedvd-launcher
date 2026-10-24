@@ -47,7 +47,11 @@ Save, the manual screenshot curation described below.
   by `tools/crew-analysis`); it prefers a curated cracktro image from
   `crew-images.json`, then the best release screenshot, then a group icon. Its
   detail panel lists all releases of the selected crew and a release click
-  opens the existing lightbox pinned to that ZIP.
+  opens the existing lightbox pinned to that ZIP. Double-clicking a crew card
+  opens a release browser: all releases as a responsive screenshot grid
+  (up to 4 columns) on the left, the normal lightbox sidebar for the selected
+  ZIP on the right; arrow keys navigate, Enter opens the normal lightbox and
+  P/Play launches.
 - **Type-to-filter dropdowns** — every filter dropdown (publisher, crew,
   cracker, language, year, genre/developers, status, sort, raw/pasti/boxscan,
   TOS/Bad) opens a searchable, virtualized menu (only the visible rows are

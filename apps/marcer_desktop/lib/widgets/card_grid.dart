@@ -20,6 +20,7 @@ class CenterGrid extends StatefulWidget {
     required this.onToggleHelp,
     required this.onOpenLightbox,
     required this.onFocusSearch,
+    this.onOpenCrewLightbox,
     this.focusNode,
   });
 
@@ -30,6 +31,9 @@ class CenterGrid extends StatefulWidget {
   /// image index (0 = preview, gallery `openLightbox` semantics).
   final void Function(int variant, int image) onOpenLightbox;
   final VoidCallback onFocusSearch;
+
+  /// Opens the crew release browser for a synthetic crew card.
+  final void Function(GameCard card)? onOpenCrewLightbox;
 
   /// Optional externally-owned focus node (the home page can hand focus
   /// back here after leaving the search field); otherwise one is created
@@ -158,7 +162,12 @@ class _CenterGridState extends State<CenterGrid> {
     }
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
-      if (c.activate()) _openLightboxForSelection();
+      final card = c.selectedCard;
+      if (card?.crew != null) {
+        widget.onOpenCrewLightbox?.call(card!);
+      } else if (c.activate()) {
+        _openLightboxForSelection();
+      }
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.backspace) {
@@ -254,7 +263,10 @@ class _CenterGridState extends State<CenterGrid> {
   void _openLightboxForSelection({int image = 0}) {
     final c = widget.controller;
     final card = c.selectedCard;
-    if (card?.crew != null) return;
+    if (card?.crew != null) {
+      widget.onOpenCrewLightbox?.call(card!);
+      return;
+    }
     widget.onOpenLightbox(card == null ? 0 : _bestVariant(c, card), image);
   }
 
@@ -430,7 +442,11 @@ class _CenterGridState extends State<CenterGrid> {
       onTap: () => c.moveSelectionTo(index),
       onDoubleTap: () {
         c.moveSelectionTo(index);
-        if (card.crew == null && c.activate()) _openLightboxForSelection();
+        if (card.crew != null) {
+          widget.onOpenCrewLightbox?.call(card);
+        } else if (c.activate()) {
+          _openLightboxForSelection();
+        }
       },
       image: _cardBody(c, card, index),
       badges: chips,

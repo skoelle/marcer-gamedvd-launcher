@@ -21,6 +21,7 @@ import 'theme.dart';
 import 'tos_rom.dart';
 import 'window_layout.dart';
 import 'widgets/card_grid.dart';
+import 'widgets/crew_lightbox.dart';
 import 'widgets/detail_panel.dart';
 import 'widgets/entry_list.dart';
 import 'widgets/filter_bar.dart';
@@ -719,6 +720,14 @@ class _HomePageState extends State<HomePage> {
         variant: variant, image: image, onToggleHelp: _toggleHelpAsync);
   }
 
+  /// Opens the crew release browser (all releases with screenshots + normal
+  /// lightbox sidebar).
+  void _openCrewLightbox(GameCard card) {
+    final crew = card.crew;
+    if (crew == null) return;
+    CrewLightbox.show(context, _controller, crew);
+  }
+
   /// Opens a crew release in the existing game lightbox without leaving the
   /// Crews tab (the lightbox is pinned to the cracked card of that ZIP).
   void _openCrewRelease(String rel) {
@@ -850,6 +859,7 @@ class _HomePageState extends State<HomePage> {
                           controller: c,
                           onToggleHelp: _toggleHelp,
                           onOpenLightbox: _openLightbox,
+                          onOpenCrewLightbox: _openCrewLightbox,
                           onFocusSearch: () => _searchFocus.requestFocus(),
                           focusNode: _centerFocus,
                         )
