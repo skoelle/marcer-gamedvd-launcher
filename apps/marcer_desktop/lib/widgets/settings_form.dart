@@ -42,7 +42,6 @@ enum _Field {
   gameinfo,
   hatariExec,
   hatariCfg,
-  atariLegend,
 }
 
 class _PathField {
@@ -51,9 +50,7 @@ class _PathField {
       this.optionalHint,
       this.obscure = false,
       this.sectionHeader,
-      this.download,
-      this.atariLegendDownload = false,
-      this.allowCreate = false});
+      this.download});
 
   final _Field field;
   final String label;
@@ -69,14 +66,6 @@ class _PathField {
   /// When set, the field gets a "Download from FTP" button that fetches the
   /// newest archive of this asset into the field's directory.
   final CatalogAsset? download;
-
-  /// When true, the field gets a "Download AtariLegend data" button that
-  /// fetches the newest dump and writes the compact cache next to it.
-  final bool atariLegendDownload;
-
-  /// When true, a filled but not-yet-existing directory is not an error (the
-  /// download creates it). Empty still means "not configured".
-  final bool allowCreate;
 
   final TextEditingController controller = TextEditingController();
 }
@@ -196,20 +185,15 @@ class _SettingsFormState extends State<SettingsForm> {
           optionalHint: kDefaultFtpAssetsRemote)
         ..controller.text = c.ftpAssetsRemote,
       _PathField(_Field.screenshot, 'ScreenshotDirectory', _PickerKind.directory,
-          sectionHeader: 'Catalog data (download missing from FTP)',
+          sectionHeader: 'Catalog data',
           optionalHint: 'screenshots + index.json',
           download: CatalogAsset.screenshots)
         ..controller.text = c.screenshotDirectory,
-      _PathField(_Field.gameinfo, 'GameinfoDirectory', _PickerKind.directory,
-          optionalHint: 'game metadata JSON',
+      _PathField(_Field.gameinfo, 'Data directory (GameinfoDirectory)',
+          _PickerKind.directory,
+          optionalHint: 'gameinfo/, atarilegend/, piratefinder/',
           download: CatalogAsset.gameinfo)
         ..controller.text = c.gameinfoDirectory,
-      _PathField(_Field.atariLegend, 'AtariLegendDirectory',
-          _PickerKind.directory,
-          optionalHint: 'compact metadata cache (atarilegend.json)',
-          atariLegendDownload: true,
-          allowCreate: true)
-        ..controller.text = c.atariLegendDirectory,
       _PathField(_Field.hatariExec, 'Hatari executable', _PickerKind.executable,
           sectionHeader: 'Hatari')
         ..controller.text = c.hatariExecutable,
@@ -241,6 +225,8 @@ class _SettingsFormState extends State<SettingsForm> {
   }
 
   void _revalidate() {
+    _pirateFinder.config = currentConfig;
+    _pirateFinder.refreshLocal();
     setState(() {});
     _emit();
   }
@@ -264,7 +250,6 @@ class _SettingsFormState extends State<SettingsForm> {
         patchDirectory: _textOf(_Field.patch),
         screenshotDirectory: _textOf(_Field.screenshot),
         gameinfoDirectory: _textOf(_Field.gameinfo),
-        atariLegendDirectory: _textOf(_Field.atariLegend),
         hatariExecutable: _textOf(_Field.hatariExec),
         hatariConfigFile: _textOf(_Field.hatariCfg),
         ftpHost: _textOf(_Field.ftpHost),
@@ -288,15 +273,13 @@ class _SettingsFormState extends State<SettingsForm> {
         ? Directory(v).existsSync()
         : File(v).existsSync();
     if (ok) return FieldStatus.valid;
-    // Auto-created on download: a not-yet-existing directory is not an error.
-    if (f.allowCreate) return FieldStatus.none;
     return FieldStatus.invalid;
   }
 
   /// Target directory of the downloadable [asset] field.
   String _targetFor(CatalogAsset asset) => asset == CatalogAsset.screenshots
       ? _textOf(_Field.screenshot)
-      : _textOf(_Field.gameinfo);
+      : currentConfig.resolveGameinfoDirectory();
 
   Future<void> _downloadAsset(CatalogAsset asset, {bool force = false}) async {
     if (_downloading != null ||
@@ -372,9 +355,9 @@ class _SettingsFormState extends State<SettingsForm> {
         _pirateFinder.busy) {
       return;
     }
-    final target = _textOf(_Field.atariLegend);
+    final target = currentConfig.resolveAtariLegendDirectory();
     if (target.isEmpty) {
-      _snack('Choose an AtariLegend directory first.');
+      _snack('Set a data directory first.');
       return;
     }
 
@@ -520,9 +503,10 @@ class _SettingsFormState extends State<SettingsForm> {
         for (final field in _fields) ...[
           if (field.sectionHeader != null) _sectionHeader(field.sectionHeader!),
           _fieldRow(field),
-          if (field.field == _Field.atariLegend &&
-              widget.pirateFinderData != null)
-            _pirateFinderRow(),
+          if (field.field == _Field.gameinfo) ...[
+            _atariLegendRow(),
+            if (widget.pirateFinderData != null) _pirateFinderRow(),
+          ],
           const SizedBox(height: 8),
         ],
         _hatariRow(),
@@ -531,17 +515,99 @@ class _SettingsFormState extends State<SettingsForm> {
     );
   }
 
-  /// Optional PF catalogue data row (app-managed, downloaded from GitHub).
+  /// AtariLegend cache row (no path field; target is `<DataDir>/atarilegend`).
+  Widget _atariLegendRow() {
+    final target = currentConfig.resolveAtariLegendDirectory();
+    final installed = target.isNotEmpty &&
+        File('$target/$kAtariLegendFileName').existsSync();
+    final busy =
+        _downloading != null || _fetchingAtariLegend || _pirateFinder.busy;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: _labelWidth,
+          child: const Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: Text(
+              'AtariLegend data',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            installed ? 'installed' : 'not installed',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          Text(
+                            target.isEmpty
+                                ? 'set a data directory first'
+                                : target,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 40,
+                    child: FilledButton.tonal(
+                      onPressed: busy || target.isEmpty
+                          ? null
+                          : _downloadAtariLegend,
+                      child: const Text('Download AtariLegend data'),
+                    ),
+                  ),
+                ],
+              ),
+              if (_fetchingAtariLegend) ...[
+                const SizedBox(height: 6),
+                _atariLegendStatus(),
+              ],
+              const SizedBox(height: 4),
+              const Text(
+                'CC BY-NC-SA 4.0 · not part of the Marcer catalog',
+                style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Optional PF catalogue data row (`<DataDir>/piratefinder`).
   Widget _pirateFinderRow() {
     final pf = _pirateFinder;
     final remote = pf.remote;
     final local = pf.local;
     final pending = pf.hasPending;
     final busy = pf.busy || _downloading != null || _fetchingAtariLegend;
+    final hasDataDir = pf.dataDir.isNotEmpty;
     final localLabel = local == null
         ? 'not installed'
         : 'catalogue ${local.sourceTag} · ${local.generatedAt}';
-    final remoteLabel = remote == null
+    final remoteLabel = !hasDataDir
+        ? 'set a data directory first'
+        : remote == null
         ? (pf.checking ? 'checking…' : 'not available')
         : 'catalogue ${pf.latest?.sourceTag ?? '?'} · '
             '${pf.latest?.generatedAt ?? '?'}';
@@ -594,12 +660,16 @@ class _SettingsFormState extends State<SettingsForm> {
                       height: 40,
                       child: remote == null
                           ? TextButton(
-                              onPressed: busy ? null : _checkPirateFinder,
+                              onPressed: busy || !hasDataDir
+                                  ? null
+                                  : _checkPirateFinder,
                               child: const Text('Check'),
                             )
                           : pending
                               ? FilledButton.tonal(
-                                  onPressed: busy ? null : _downloadPirateFinder,
+                                  onPressed: busy || !hasDataDir
+                                      ? null
+                                      : _downloadPirateFinder,
                                   child:
                                       Text(local == null ? 'Install' : 'Update'),
                                 )
@@ -720,26 +790,10 @@ class _SettingsFormState extends State<SettingsForm> {
                       ),
                     ),
                   ],
-                  if (field.atariLegendDownload) ...[
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      height: 40,
-                      child: FilledButton.tonal(
-                        onPressed: _downloading == null &&
-                                !_fetchingAtariLegend &&
-                                !_pirateFinder.busy
-                            ? _downloadAtariLegend
-                            : null,
-                        child: const Text('Download AtariLegend data'),
-                      ),
-                    ),
-                  ],
                 ],
               ),
               if (field.download != null && _downloading == field.download)
                 _downloadStatus(),
-              if (field.atariLegendDownload && _fetchingAtariLegend)
-                _atariLegendStatus(),
             ],
           ),
         ),

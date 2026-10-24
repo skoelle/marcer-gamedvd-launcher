@@ -131,7 +131,7 @@ class AssetUpdateController extends ChangeNotifier {
   String _targetDirFor(CatalogAsset asset) =>
       asset == CatalogAsset.screenshots
           ? config.screenshotDirectory
-          : config.gameinfoDirectory;
+          : config.resolveGameinfoDirectory();
 
   RemoteAsset? remoteFor(CatalogAsset asset) => latest?.assets[asset];
 

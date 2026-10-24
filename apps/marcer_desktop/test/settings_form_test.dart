@@ -27,8 +27,7 @@ class _HangingDownloader implements CatalogAssetDownloader {
     String? expectedSha256,
     AssetProgress? onProgress,
     bool Function()? isCancelled,
-  }) =>
-      completer.future;
+  }) => completer.future;
 }
 
 /// Fake Hatari downloader that writes a stand-in executable into the install
@@ -52,31 +51,40 @@ class _FakeHatariDownloader implements HatariDownloader {
 class _HangingAtariLegendFetcher implements AtariLegendFetcher {
   final Completer<AtariLegendFetchResult> completer =
       Completer<AtariLegendFetchResult>();
+  String? lastTargetDir;
 
   @override
   Future<AtariLegendFetchResult> fetch({
     required String targetDir,
     AtariLegendProgress? onProgress,
     bool Function()? isCancelled,
-  }) =>
-      completer.future;
+  }) {
+    lastTargetDir = targetDir;
+    return completer.future;
+  }
 }
 
-Future<void> _pumpForm(WidgetTester tester, DesktopConfig initial,
-    void Function(DesktopConfig config, bool valid) onChanged) async {
-  await tester.pumpWidget(MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: SettingsForm(initial: initial, onChanged: onChanged),
+Future<void> _pumpForm(
+  WidgetTester tester,
+  DesktopConfig initial,
+  void Function(DesktopConfig config, bool valid) onChanged,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: SettingsForm(initial: initial, onChanged: onChanged),
+        ),
       ),
     ),
-  ));
+  );
   await tester.pumpAndSettle();
 }
 
 void main() {
-  testWidgets('required root: empty blocks, valid directory enables',
-      (tester) async {
+  testWidgets('required root: empty blocks, valid directory enables', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -88,8 +96,7 @@ void main() {
 
     DesktopConfig? latest;
     bool? valid;
-    await _pumpForm(tester, DesktopConfig(rootDirectory: ''),
-        (c, v) {
+    await _pumpForm(tester, DesktopConfig(rootDirectory: ''), (c, v) {
       latest = c;
       valid = v;
     });
@@ -108,8 +115,9 @@ void main() {
     expect(find.byIcon(Icons.cancel), findsNothing);
   });
 
-  testWidgets('optional field: empty is fine, invalid value blocks saving',
-      (tester) async {
+  testWidgets('optional field: empty is fine, invalid value blocks saving', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -142,8 +150,9 @@ void main() {
     expect(find.byIcon(Icons.cancel), findsNothing);
   });
 
-  testWidgets('FTP fields are free text, never block and round-trip',
-      (tester) async {
+  testWidgets('FTP fields are free text, never block and round-trip', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -188,22 +197,24 @@ void main() {
 
     final downloader = _HangingDownloader();
     bool? busy;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: SettingsForm(
-            initial: DesktopConfig(
-              rootDirectory: dir.path,
-              ftpHost: 'ftp.example.com',
-              screenshotDirectory: dir.path,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SettingsForm(
+              initial: DesktopConfig(
+                rootDirectory: dir.path,
+                ftpHost: 'ftp.example.com',
+                screenshotDirectory: dir.path,
+              ),
+              onChanged: (_, _) {},
+              onBusyChanged: (b) => busy = b,
+              assetDownloader: downloader,
             ),
-            onChanged: (_, _) {},
-            onBusyChanged: (b) => busy = b,
-            assetDownloader: downloader,
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(busy, isNot(true));
 
@@ -211,8 +222,12 @@ void main() {
     await tester.pump();
     expect(busy, isTrue);
 
-    downloader.completer.complete(const AssetDownloadResult(
-        archive: 'screenshots-20261017-080230.zip', upToDate: false));
+    downloader.completer.complete(
+      const AssetDownloadResult(
+        archive: 'screenshots-20261017-080230.zip',
+        upToDate: false,
+      ),
+    );
     await tester.pumpAndSettle();
     expect(busy, isFalse);
   });
@@ -228,20 +243,25 @@ void main() {
     });
 
     DesktopConfig? latest;
-    const build =
-        HatariBuild(os: 'test', label: 'Test', url: 'https://x/y.zip');
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: SettingsForm(
-            initial: DesktopConfig(rootDirectory: dir.path, appDir: dir.path),
-            onChanged: (c, _) => latest = c,
-            hatariDownloader: _FakeHatariDownloader(),
-            hatariBuild: build,
+    const build = HatariBuild(
+      os: 'test',
+      label: 'Test',
+      url: 'https://x/y.zip',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SettingsForm(
+              initial: DesktopConfig(rootDirectory: dir.path, appDir: dir.path),
+              onChanged: (c, _) => latest = c,
+              hatariDownloader: _FakeHatariDownloader(),
+              hatariBuild: build,
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Install Hatari…'));
@@ -253,8 +273,9 @@ void main() {
     expect(find.text('Hatari is installed'), findsOneWidget);
   });
 
-  testWidgets('AtariLegend directory is saved and download reports busy',
-      (tester) async {
+  testWidgets('AtariLegend download targets DataDir/atarilegend', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1400, 2800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -268,67 +289,45 @@ void main() {
     DesktopConfig? latest;
     bool? valid;
     bool? busy;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: SettingsForm(
-            initial: DesktopConfig(
-              rootDirectory: dir.path,
-              atariLegendDirectory: dir.path,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SettingsForm(
+              initial: DesktopConfig(
+                rootDirectory: dir.path,
+                gameinfoDirectory: dir.path,
+              ),
+              onChanged: (c, v) {
+                latest = c;
+                valid = v;
+              },
+              onBusyChanged: (b) => busy = b,
+              atariLegendFetcher: fetcher,
             ),
-            onChanged: (c, v) {
-              latest = c;
-              valid = v;
-            },
-            onBusyChanged: (b) => busy = b,
-            atariLegendFetcher: fetcher,
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(valid, isTrue);
-    expect(latest!.atariLegendDirectory, dir.path);
+    expect(latest!.gameinfoDirectory, dir.path);
 
     final button = find.text('Download AtariLegend data');
     await tester.ensureVisible(button);
     await tester.tap(button);
     await tester.pump();
     expect(busy, isTrue);
+    expect(fetcher.lastTargetDir, p.join(dir.path, 'atarilegend'));
 
-    fetcher.completer.complete(AtariLegendFetchResult(
-      games: 42,
-      dumpFile: '2026-10-11.sql.gz',
-      cachePath: p.join(dir.path, 'atarilegend.json'),
-    ));
+    fetcher.completer.complete(
+      AtariLegendFetchResult(
+        games: 42,
+        dumpFile: '2026-10-11.sql.gz',
+        cachePath: p.join(dir.path, 'atarilegend', 'atarilegend.json'),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(busy, isFalse);
-  });
-
-  testWidgets('AtariLegend path may not exist yet (auto-create on download)',
-      (tester) async {
-    tester.view.physicalSize = const Size(1400, 2800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-
-    final dir = Directory.systemTemp.createTempSync('settings_form_al_create');
-    addTearDown(() {
-      if (dir.existsSync()) dir.deleteSync(recursive: true);
-    });
-
-    DesktopConfig? latest;
-    bool? valid;
-    await _pumpForm(tester, DesktopConfig(rootDirectory: dir.path), (c, v) {
-      latest = c;
-      valid = v;
-    });
-
-    // Field order: root, patch, 5 FTP, screenshot, gameinfo, atariLegend.
-    await tester.enterText(
-        find.byType(TextField).at(9), '/definitely/missing/atarilegend');
-    await tester.pumpAndSettle();
-
-    expect(valid, isTrue, reason: 'the download creates the directory');
-    expect(latest!.atariLegendDirectory, '/definitely/missing/atarilegend');
   });
 }

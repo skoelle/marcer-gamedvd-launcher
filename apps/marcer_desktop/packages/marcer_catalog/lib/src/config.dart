@@ -330,14 +330,57 @@ class DesktopConfig {
   String get downloadTargetDirectory =>
       patchDirectory.trim().isNotEmpty ? patchDirectory : rootDirectory;
 
-  /// The configured gameinfo directory (or empty when not set). There is no
-  /// implicit fallback: gameinfo data must be fetched explicitly (user
-  /// decision 2026-10-17, see "Download from FTP" in the setup/settings form).
-  String resolveGameinfoDirectory() => gameinfoDirectory;
+  /// The data directory root (`GameinfoDirectory` in the config). It holds
+  /// the `gameinfo/`, `atarilegend/` and `piratefinder/` caches; screenshots
+  /// stay in their own [screenshotDirectory].
+  String resolveDataDirectory() => gameinfoDirectory.trim();
 
-  /// The configured AtariLegend directory (or empty when not set). No implicit
-  /// fallback: the cache is built explicitly via the settings download button.
-  String resolveAtariLegendDirectory() => atariLegendDirectory;
+  /// The gameinfo cache directory: `<DataDir>/gameinfo`. Existing layouts
+  /// whose gameinfo files still sit directly in the data root keep working
+  /// until the one-time startup migration moves them.
+  String resolveGameinfoDirectory() {
+    final root = gameinfoDirectory.trim();
+    if (root.isEmpty) return '';
+    final sub = '$root/gameinfo';
+    if (Directory(sub).existsSync()) return sub;
+    if (_hasGameinfoFiles(root)) return root;
+    return sub;
+  }
+
+  /// The AtariLegend cache directory: `<DataDir>/atarilegend`. Before the
+  /// layout migration the cache may still live in the legacy configured
+  /// directory, so that is used as a read fallback.
+  String resolveAtariLegendDirectory() {
+    final root = gameinfoDirectory.trim();
+    final legacy = atariLegendDirectory.trim();
+    if (root.isNotEmpty) {
+      final sub = '$root/atarilegend';
+      if (Directory(sub).existsSync()) return sub;
+      if (legacy.isNotEmpty && Directory(legacy).existsSync()) return legacy;
+      return sub;
+    }
+    return legacy;
+  }
+
+  /// The optional PirateFinder cache directory: `<DataDir>/piratefinder`.
+  String resolvePirateFinderDirectory() {
+    final root = gameinfoDirectory.trim();
+    return root.isEmpty ? '' : '$root/piratefinder';
+  }
+
+  bool _hasGameinfoFiles(String dir) {
+    for (final name in const [
+      'games-cracked.json',
+      'games-pd.json',
+      'games-utils.json',
+      'manifest.json',
+      'crews.json',
+      'crew-images.json',
+    ]) {
+      if (File('$dir/$name').existsSync()) return true;
+    }
+    return false;
+  }
 
   /// Absolute Hatari executable (`Hatari.Executable`), resolved against
   /// [appDir] when relative (SPEC.md R10); empty when not configured.

@@ -38,8 +38,11 @@ void main() {
     if (tmp.existsSync()) tmp.deleteSync(recursive: true);
   });
 
-  DesktopConfig config() =>
-      DesktopConfig(rootDirectory: '${tmp.path}/root', appDir: tmp.path);
+  DesktopConfig config() => DesktopConfig(
+    rootDirectory: '${tmp.path}/root',
+    gameinfoDirectory: '${tmp.path}/data',
+    appDir: tmp.path,
+  );
 
   String latestBody({
     String generatedAt = '2026-10-24T12:34:16Z',
@@ -163,5 +166,37 @@ void main() {
     expect(c.latest, isNull);
     expect(c.hasPending, isFalse);
     expect(c.error, contains('Could not check'));
+  });
+  test('ensureIndex parses the downloaded gzip in an isolate', () async {
+    final c = PirateFinderDataController(fetcher: (_) async => latestBody());
+    c.config = config();
+    final dir = pirateFinderDataDir(c.config);
+    Directory(dir).createSync(recursive: true);
+    const local = PirateFinderLocalVersion(
+      sourceTag: 'catalogue-2026-10-19',
+      generatedAt: '2026-10-24T12:34:16Z',
+      asset: 'piratefinder-catalog-atari-st.json.gz',
+      sha256: 'abc',
+      appliedAt: '2026-10-24T12:40:00Z',
+    );
+    writePirateFinderLocal(dir, local);
+    File(p.join(dir, local.asset)).writeAsBytesSync(
+      gzip.encode(
+        utf8.encode(
+          jsonEncode({
+            'generated_at': '2026-10-24T12:34:16Z',
+            'source': {'tag': 'catalogue-2026-10-19'},
+            'disks': [
+              {'id': 1, 'kind': 'single', 'title': 'Alpha', 'label': 'Alpha'},
+            ],
+          }),
+        ),
+      ),
+    );
+    c.refreshLocal();
+    final index = await c.ensureIndex();
+    expect(index, isNotNull);
+    expect(index!.length, 1);
+    expect(c.hasIndex, isTrue);
   });
 }

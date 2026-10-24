@@ -144,10 +144,13 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
     final local = pf.local;
     final pending = pf.hasPending;
     final busy = pf.busy || widget.controller.busy;
+    final hasDataDir = pf.dataDir.isNotEmpty;
     final localLabel = local == null
         ? 'not installed'
         : 'catalogue ${local.sourceTag} · ${local.generatedAt}';
-    final remoteLabel = remote == null
+    final remoteLabel = !hasDataDir
+        ? 'set a data directory first'
+        : remote == null
         ? (pf.checking ? 'checking…' : 'not available')
         : 'catalogue ${pf.latest?.sourceTag ?? '?'} · '
             '${pf.latest?.generatedAt ?? '?'}';
@@ -221,7 +224,9 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 OutlinedButton(
-                  onPressed: busy ? null : () => pf.check(force: true),
+                  onPressed: busy || !hasDataDir
+                      ? null
+                      : () => pf.check(force: true),
                   child: const Text('Check'),
                 ),
               ],
@@ -231,7 +236,9 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 FilledButton(
-                  onPressed: busy ? null : _updatePirateFinder,
+                  onPressed: busy || !hasDataDir
+                      ? null
+                      : _updatePirateFinder,
                   child: Text(local == null ? 'Install' : 'Update'),
                 ),
               ],

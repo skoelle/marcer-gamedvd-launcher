@@ -155,4 +155,23 @@ void _atariLegendTests() {
     await tester.pumpAndSettle();
     expect(find.text('AtariLegend'), findsNothing);
   });
+  testWidgets('PF detail button stays hidden for this release', (tester) async {
+    var tapped = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 420,
+          child: GameInfoPanel(
+            info: null,
+            onPirateFinder: () => tapped++,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PF'), findsNothing);
+    expect(tapped, 0);
+  });
+
 }

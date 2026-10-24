@@ -75,7 +75,7 @@ Save, the manual screenshot curation described below.
   an icon.
 - **Optional AtariLegend metadata** — fetch the weekly
   [AtariLegend](https://www.atarilegend.com/) database on demand from the
-  settings (**AtariLegendDirectory** → **Download AtariLegend data**): genre,
+  settings (**AtariLegend data** → **Download AtariLegend data**): genre,
   developer, original credits/roles, boxscans/screenshots, reviews, magazines,
   comments and the community score. The screenshots/boxscans inside that
   dialog are AtariLegend's own curated images, separate from the generated ZIP
@@ -90,11 +90,11 @@ Save, the manual screenshot curation described below.
   [PirateFinder catalogue JSON](https://github.com/skoelle/piratefinder-catalog-json)
   from the settings **PirateFinder data** row (Install/Update): catalogue facts,
   crew histories, menu-disk appearances, trivia and media references. The data
-  is app-managed under `downloadedDataDir/piratefinder/`, checked at startup
-  (release builds) and listed in the same **Catalog data** dialog as gameinfo
-  and screenshots. It is **CC BY-NC-SA 4.0**, not part of the Marcer catalog,
-  never bundled and never uploaded. This phase downloads/updates the data; the
-  PF detail button follows in a later phase.
+  lives under `<GameinfoDirectory>/piratefinder/`, checked at startup (release
+  builds) and listed in the same **Catalog data** dialog as gameinfo and
+  screenshots. It is **CC BY-NC-SA 4.0**, not part of the Marcer catalog, never
+  bundled and never uploaded. The PF detail button is hidden for this release;
+  the download/update row stays available.
 - **Crew / cracker focus** — pick a crew or cracker and each card jumps to
   *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
   matching tolerates `&`/`and` and small typos).
@@ -254,7 +254,7 @@ capture the actual state of each ZIP/floppy image as it boots:
   of in-game graphics. This is intentional.
 
 For curated in-game screenshots, connect the optional AtariLegend data
-locally (**Settings → AtariLegendDirectory → Download AtariLegend data**).
+locally (**Settings → AtariLegend data → Download AtariLegend data**).
 The AtariLegend dialog then shows AtariLegend's own hotlinked screenshots and
 boxscans, separate from the boot-state previews in the catalog grid and
 lightbox. AtariLegend data is downloaded at runtime, never bundled, and is
@@ -354,29 +354,25 @@ When no config is found the app opens the **first-run setup page** (it lists
 the searched locations and the candidate save locations). A config that exists
 but cannot be read shows an error page with a **Setup…** button. Template: [`apps/marcer_desktop/desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json).
 
-> **Upgrading:** the config keys were renamed (`OutDirectory` →
-> `ScreenshotDirectory`, `DataDirectory` → `GameinfoDirectory`); the old names
-> are no longer read. Rename them in an existing `desktop.config.json` (or fix
-> them via the ⚙ settings editor), otherwise the screenshot/gameinfo paths stay
-> empty.
+> **Upgrading:** `GameinfoDirectory` is now the **data directory**. On first
+> start the app moves root-level gameinfo files into `gameinfo/` and a legacy
+> `AtariLegendDirectory` into `atarilegend/`. Screenshots stay in
+> `ScreenshotDirectory`. The old config key `DataDirectory` is still not read.
 
 The ⚙ gear button in the top bar opens an in-app **settings editor** for all
 path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
-`GameinfoDirectory`, `AtariLegendDirectory`, `Hatari.Executable`,
-`Hatari.ConfigFile`) with native directory/file pickers, plus the **FTP**
+`GameinfoDirectory`, `Hatari.Executable`, `Hatari.ConfigFile`) with native
+directory/file pickers, plus the **FTP**
 fields for the downloads
 (`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase`,
 `Ftp.AssetsRemote` — free text, never block saving). The form is ordered
 **RootDirectory → PatchDirectory → FTP → ScreenshotDirectory /
-GameinfoDirectory → AtariLegendDirectory → Hatari** (with the **Hatari
-installation** and **TOS ROM** rows); the two catalog-data fields each carry a
+GameinfoDirectory (data directory) → PirateFinder data → Hatari** (with the
+**Hatari installation** and **TOS ROM** rows); the two catalog-data fields each carry a
 **Download from FTP** button next to *Browse…* that pulls the newest
 `screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
 into the target directory (the gameinfo directory has **no** implicit
-fallback), and **AtariLegendDirectory** has a **Download AtariLegend data**
-button, and the app-managed **PirateFinder data** row offers **Install/Update**
-for the optional PF catalogue JSON (GitHub, CC BY-NC-SA 4.0, see
-[License](#license)). **Save** writes them back to the
+fallback), the **AtariLegend data** row downloads into `<GameinfoDirectory>/atarilegend`, and the **PirateFinder data** row offers **Install/Update** for the optional PF catalogue JSON in `<GameinfoDirectory>/piratefinder` (GitHub, CC BY-NC-SA 4.0, see [License](#license)). **Save** writes them back to the
 same `desktop.config.json` and reloads the catalog in place, so new paths apply
 without restarting the app; window settings and the remaining fields stay
 untouched.
@@ -393,9 +389,9 @@ optional (needed to launch, not to browse).
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
-| `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
-| `AtariLegendDirectory` | no | optional AtariLegend metadata cache (`atarilegend.json` + `atarilegend-texts.json`); filled by **Download AtariLegend data** |
-| `PirateFinder data` (app-managed) | no | optional PF-only catalogue JSON; **Install/Update** downloads it from GitHub into `downloadedDataDir/piratefinder/`. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog |
+| `GameinfoDirectory` | no | **data directory**: `gameinfo/`, `atarilegend/`, `piratefinder/`; screenshots stay separate. No implicit fallback |
+| `AtariLegendDirectory` (legacy) | no | old separate AtariLegend path; migrated at startup into `<GameinfoDirectory>/atarilegend` and no longer shown in the settings form |
+| `PirateFinder data` | no | optional PF-only catalogue JSON; **Install/Update** downloads it from GitHub into `<GameinfoDirectory>/piratefinder/`. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog |
 | `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
 | `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |

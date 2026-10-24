@@ -3,7 +3,6 @@
   "PatchDirectory": "/absolute/path/to/MarcersGamesDVD-Update/Patch",
   "ScreenshotDirectory": "/absolute/path/to/MarcersGamesDVD-Update/Screenshots",
   "GameinfoDirectory": "/absolute/path/to/MarcersGamesDVD-Update/Data",
-  "AtariLegendDirectory": "/absolute/path/to/MarcersGamesDVD-Update/AtariLegend",
   "Hatari": {
     "Executable": "/absolute/path/to/hatari",
     "ConfigFile": "",

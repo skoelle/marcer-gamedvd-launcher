@@ -143,26 +143,36 @@ images carry **no** `virus`, `virus_damage` or `antivirus` flags. A virus
 warning for the ST cracked section therefore cannot be sourced from this
 catalogue.
 
-## 4a. Implemented in the desktop app (Phase A)
+## 4a. Implemented in the desktop app (Phase A/B1)
 
-The desktop app now has an optional, app-managed **PirateFinder data** row in
-the shared settings form (below `AtariLegendDirectory`; no config path) and a
-third **PirateFinder** row in the existing top-bar **Catalog data** dialog:
+The desktop app now has an optional **PirateFinder data** row in the shared
+settings form (below the data-directory field; no config path) and a third
+**PirateFinder** row in the existing top-bar **Catalog data** dialog:
 
 - `lib/piratefinder_data.dart` fetches the small `latest.json` pointer from the
   generic `skoelle/piratefinder-catalog-json` GitHub release
   (`catalog-latest`) and downloads
   `piratefinder-catalog-atari-st.json.gz` on request (no auto-download).
 - The asset is verified against its SHA-256 and stored under
-  `downloadedDataDir/piratefinder/` with a `.piratefinder-catalog.json` marker
+  `<GameinfoDirectory>/piratefinder/` with a `.piratefinder-catalog.json` marker
   (`source_tag`, `generated_at`, `asset`, `sha256`, `applied_at`).
 - Release builds check silently at startup; the dataset badge counts a pending
   PF update. The settings row and dialog show the local/remote catalogue tag and
   generation date; a not-installed row shows the **Install** hint right away.
-- The data is CC BY-NC-SA 4.0, is never written into `GameinfoDirectory` or any
-  Marcer artifact, and is never bundled/uploaded.
-- Phase A only downloads/updates the data. The PF detail button, runtime
-  matching and the tabbed detail dialog are a later phase.
+- The data is CC BY-NC-SA 4.0, lives inside the data directory
+  (`GameinfoDirectory/piratefinder`) and is never written into the game trees
+  or published artifacts.
+- A compact **PF** button next to AtariLegend is implemented but **hidden for
+  this release**; it opens the tabbed dialog (Release/Crew/Menus/Trivia/
+  Sources). The selected ZIP is matched by decoded `.msa`/`.st`/`.stx` hashes;
+  title + gameinfo crew/cracker/year is the fallback. B1 is metadata-only;
+  media and card-preview fallbacks are later phases.
+- The data layout moved into `GameinfoDirectory` subfolders (`gameinfo/`,
+  `atarilegend/`, `piratefinder/`); a startup migration moves legacy root-level
+  gameinfo files and a configured `AtariLegendDirectory` into them.
+- Hash matching was validated in Dart against the real data: in a 120-ZIP
+  SHA-1 sample all 120 matched, and all 31 SHA-512 (Atari Legend `.msa`) samples
+  matched.
 
 ## 4. What this enables (next phases)
 

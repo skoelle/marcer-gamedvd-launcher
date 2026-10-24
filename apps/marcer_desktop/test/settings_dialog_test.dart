@@ -8,22 +8,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/widgets/settings_dialog.dart';
 
-Future<void> _openDialog(WidgetTester tester, DesktopConfig config,
-    void Function(DesktopConfig?) onResult) async {
-  await tester.pumpWidget(MaterialApp(
-    home: Builder(
-      builder: (context) => Scaffold(
-        body: Center(
-          child: ElevatedButton(
-            onPressed: () async {
-              onResult(await showSettingsDialog(context, config: config));
-            },
-            child: const Text('open'),
+Future<void> _openDialog(
+  WidgetTester tester,
+  DesktopConfig config,
+  void Function(DesktopConfig?) onResult,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () async {
+                onResult(await showSettingsDialog(context, config: config));
+              },
+              child: const Text('open'),
+            ),
           ),
         ),
       ),
     ),
-  ));
+  );
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
 }
@@ -32,8 +37,9 @@ FilledButton _saveButton(WidgetTester tester) =>
     tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'));
 
 void main() {
-  testWidgets('settings dialog saves edits once the paths are valid',
-      (tester) async {
+  testWidgets('settings dialog saves edits once the paths are valid', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -44,15 +50,18 @@ void main() {
     });
 
     final exe = File('${dir.path}/hatari')..createSync();
-    final original = DesktopConfig(rootDirectory: '/old', hatariExecutable: exe.path);
+    final original = DesktopConfig(
+      rootDirectory: '/old',
+      hatariExecutable: exe.path,
+    );
     DesktopConfig? result;
 
     await _openDialog(tester, original, (r) => result = r);
 
     expect(find.text('Settings'), findsOneWidget);
-    // root+patch, 5 FTP fields, screenshot+gameinfo+atariLegend, hatari
-    // exec+cfg → 12 text fields.
-    expect(find.byType(TextField), findsNWidgets(12));
+    // root+patch, 5 FTP fields, screenshot+gameinfo, hatari exec+cfg
+    // → 11 text fields.
+    expect(find.byType(TextField), findsNWidgets(11));
     // Invalid mandatory root + optional fields empty: Save is disabled.
     expect(_saveButton(tester).onPressed, isNull);
 
@@ -69,8 +78,9 @@ void main() {
     expect(result!.hatariExecutable, exe.path);
   });
 
-  testWidgets('settings dialog keeps Save disabled on an invalid root',
-      (tester) async {
+  testWidgets('settings dialog keeps Save disabled on an invalid root', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);

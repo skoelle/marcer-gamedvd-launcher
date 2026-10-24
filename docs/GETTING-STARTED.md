@@ -22,10 +22,9 @@ source.
    leave it empty ([ftp-sync](#3-syncing-the-game-archive-with-ftp-sync)).
 4. Enter the FTP **host** (use `host:2121` for the community server), **user**
    and **password**.
-5. Set **ScreenshotDirectory** and **GameinfoDirectory**, then click
-   **Download from FTP** next to each. Optional: set
-   **AtariLegendDirectory** and click **Download AtariLegend data**
-   ([FTP and catalog data](#4-ftp-connection-and-catalog-data)).
+5. Set **ScreenshotDirectory** and **GameinfoDirectory** (the data
+   directory), then click **Download from FTP** next to each. Optional: click
+   **Download AtariLegend data** ([FTP and catalog data](#4-ftp-connection-and-catalog-data)).
 6. Press **Save**. Install Hatari and download the TOS ROM when prompted
    ([Hatari and TOS ROM](#5-hatari-and-tos-rom)). Optional later: open
    **Settings** and click **Install** on the **PirateFinder data** row
@@ -122,9 +121,11 @@ Create the folders before filling in the form (empty folders are fine):
 GameDVD/                       <- RootDirectory (the game archive)
 GameDVD-Patch/                 <- PatchDirectory (optional)
 MarcersGameDVD-Data/
-  Screenshots/                 <- ScreenshotDirectory
-  Gameinfo/                    <- GameinfoDirectory
-  AtariLegend/                 <- AtariLegendDirectory (optional)
+  Screenshots/                 <- ScreenshotDirectory (separate)
+  Data/                        <- GameinfoDirectory (the data directory)
+    gameinfo/                  <- games-*.json, crews.json, …
+    atarilegend/               <- atarilegend.json, atarilegend-texts.json
+    piratefinder/              <- PF catalogue JSON
 ```
 
 | Field | Required | Meaning |
@@ -132,9 +133,13 @@ MarcersGameDVD-Data/
 | `RootDirectory` | yes | The local Marcer GameDVD game tree. Navigation never leaves it. |
 | `PatchDirectory` | no | Optional overlay/patch tree. Files there take precedence over the root. Leave empty for no patch layer. |
 | `ScreenshotDirectory` | no | Target for the screenshot index (`index.json`, `index-pd.json`, `index-utils.json`, `index-magazine.json`, `index-falcon.json`) and the PNG previews. |
-| `GameinfoDirectory` | no | Target for the game metadata (`games-*.json`) and the optional crew data (`crews.json`, `crew-images.json`). There is no implicit fallback. |
-| `AtariLegendDirectory` | no | Optional AtariLegend metadata cache (`atarilegend.json`, `atarilegend-texts.json`). |
-| `PirateFinder data` (app-managed) | no | Optional PF catalogue JSON, downloaded from GitHub into `downloadedDataDir/piratefinder/`. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog. |
+| `GameinfoDirectory` | no | **Data directory**: `gameinfo/` (games JSON, `crews.json`, `crew-images.json`), `atarilegend/`, `piratefinder/`. There is no implicit fallback. |
+| `AtariLegendDirectory` (legacy) | no | Old separate AtariLegend path; moved into `<GameinfoDirectory>/atarilegend/` at startup and no longer shown in the form. |
+| `PirateFinder data` | no | Optional PF catalogue JSON, downloaded from GitHub into `<GameinfoDirectory>/piratefinder/`. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog. |
+
+On first start the app migrates an old layout automatically: root-level gameinfo
+files move into `gameinfo/`, a configured `AtariLegendDirectory` moves into
+`atarilegend/`, and `piratefinder/` is created. Screenshots are not touched.
 
 Without screenshots/gameinfo the catalog is empty or incomplete; the app then
 shows a notice that points to the download buttons and to the status filter
@@ -232,19 +237,20 @@ download buttons. The same connection is used for:
 2. Set **`ScreenshotDirectory`** and click **Download from FTP** next to it.
    The newest `screenshots-*.zip` is downloaded and extracted into that folder
    (the folder is created when missing).
-3. Set **`GameinfoDirectory`** and click **Download from FTP** next to it. The
-   newest `gameinfo-*.zip` is extracted there. It normally contains the game
-   metadata; newer archives may also contain `crews.json`/`crew-images.json`
-   for the Crews tab.
-4. Optional: set **`AtariLegendDirectory`** and click **Download AtariLegend
-   data**. This downloads the weekly AtariLegend dump, builds the compact cache
-   and can be repeated later. AtariLegend data is CC BY-NC-SA 4.0 and is not
-   bundled.
+3. Set **`GameinfoDirectory`** (the data directory) and click **Download from
+   FTP** next to it. The newest `gameinfo-*.zip` is extracted into
+   `GameinfoDirectory/gameinfo/`. It normally contains the game metadata; newer
+   archives may also contain `crews.json`/`crew-images.json` for the Crews tab.
+4. Optional: click **Download AtariLegend data** (no path field). This
+   downloads the weekly AtariLegend dump into
+   `<GameinfoDirectory>/atarilegend/`, builds the compact cache and can be
+   repeated later. AtariLegend data is CC BY-NC-SA 4.0 and is not bundled.
 5. Optional: click **Install** on the **PirateFinder data** row. This downloads
    the generic PF catalogue JSON from the GitHub `piratefinder-catalog-json`
-   release and stores it under the app data directory. It is offered again in
-   the top-bar **Catalog data** dialog (third row) when newer data exists. It is
-   CC BY-NC-SA 4.0, not part of the Marcer catalog, and never bundled.
+   release into `<GameinfoDirectory>/piratefinder/`. It is offered again in the
+   top-bar **Catalog data** dialog (third row) when newer data exists. The PF
+   detail button is hidden for this release. It is CC BY-NC-SA 4.0, not part of
+   the Marcer catalog, and never bundled.
 6. Press **Save**. The catalog reloads with the new data.
 
 Downloads show progress and can be cancelled. The newest archive is chosen by

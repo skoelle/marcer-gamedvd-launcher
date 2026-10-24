@@ -14,6 +14,7 @@ import 'package:window_manager/window_manager.dart';
 import 'catalog_controller.dart';
 import 'app_paths.dart';
 import 'config_locator.dart';
+import 'data_layout_migration.dart';
 import 'hatari_installer.dart';
 import 'self_updater.dart';
 import 'asset_updater.dart';
@@ -70,16 +71,26 @@ Future<void> main() async {
   );
   DesktopConfig? config;
   String? configError;
+  String? startupNotice;
   if (configPath != null) {
     try {
       // Hatari paths + the bundled config resolve against the executable dir;
       // the bundled config is searched in CWD → exe dir → (macOS) .app parent.
-      config = DesktopConfig.load(configPath,
-          appDir: exeDir, searchDirs: searchDirs);
+      config = DesktopConfig.load(
+        configPath,
+        appDir: exeDir,
+        searchDirs: searchDirs,
+      );
       // Downloaded artifacts (Hatari, TOS) live outside the bundle on macOS;
       // Hatari runs with that directory as its working dir.
       config = config.copyWith(
-          hatariWorkingDirectory: downloadedDataDir(config));
+        hatariWorkingDirectory: downloadedDataDir(config),
+      );
+      final migration = migrateDataLayout(config);
+      if (migration.errors.isNotEmpty) {
+        startupNotice = 'Data directory migration: '
+            '${migration.errors.join('; ')}';
+      }
     } catch (e) {
       configError = '$configPath: $e';
     }
@@ -88,10 +99,14 @@ Future<void> main() async {
   // opens the first-run setup page instead of an error hint.
   // Remove *.old leftovers from the previous self-update (best effort;
   // runs in every build so a dev build can also clean a release install).
-  unawaited(cleanupOldFiles(installTargetDir(
-    resolvedExecutable: Platform.resolvedExecutable,
-    isMacOS: Platform.isMacOS,
-  )));
+  unawaited(
+    cleanupOldFiles(
+      installTargetDir(
+        resolvedExecutable: Platform.resolvedExecutable,
+        isMacOS: Platform.isMacOS,
+      ),
+    ),
+  );
   // Drop a one-shot update task left behind by an aborted update.
   cleanupUpdateTask();
   // Window: start maximized (`Window.maximized`, default true — user
@@ -128,8 +143,8 @@ Future<void> main() async {
   final startSize = winArea != null
       ? winArea.size
       : workArea != null
-          ? clampWindowSize(requestedSize, workArea.size)
-          : requestedSize;
+      ? clampWindowSize(requestedSize, workArea.size)
+      : requestedSize;
   await windowManager.waitUntilReadyToShow(
     WindowOptions(
       size: startSize,
@@ -138,8 +153,14 @@ Future<void> main() async {
     ),
     () async {
       if (winArea != null) {
-        await windowManager.setBounds(Rect.fromLTWH(winArea.position.dx,
-            winArea.position.dy, winArea.size.width, winArea.size.height));
+        await windowManager.setBounds(
+          Rect.fromLTWH(
+            winArea.position.dx,
+            winArea.position.dy,
+            winArea.size.width,
+            winArea.size.height,
+          ),
+        );
       } else if (maximized) {
         await windowManager.maximize();
       }
@@ -151,13 +172,16 @@ Future<void> main() async {
       if (winArea != null) await windowManager.maximize();
     },
   );
-  runApp(MarcerDesktopApp(
-    config: config,
-    configError: configError,
-    configPath: configPath,
-    saveDirs: saveDirs,
-    searchDirs: searchDirs,
-  ));
+  runApp(
+    MarcerDesktopApp(
+      config: config,
+      configError: configError,
+      configPath: configPath,
+      saveDirs: saveDirs,
+      searchDirs: searchDirs,
+      startupNotice: startupNotice,
+    ),
+  );
   if (maximized) {
     // Windows safeguard: the runner reveals the window on the first frame
     // (win32_window.cpp Show() uses SW_SHOW since the SW_SHOWNORMAL fix) —
@@ -185,10 +209,14 @@ class MarcerDesktopApp extends StatelessWidget {
     this.configPath,
     this.saveDirs = const [],
     this.searchDirs = const [],
+    this.startupNotice,
   });
 
   final DesktopConfig? config;
   final String? configError;
+
+  /// One-shot startup notice (e.g. a failed data-directory migration).
+  final String? startupNotice;
 
   /// Resolved `desktop.config.json` path, used by the settings editor to
   /// save edits back to the same file.
@@ -213,6 +241,7 @@ class MarcerDesktopApp extends StatelessWidget {
         configPath: configPath,
         saveDirs: saveDirs,
         searchDirs: searchDirs,
+        startupNotice: startupNotice,
       ),
     );
   }
@@ -229,10 +258,13 @@ class _AppRoot extends StatefulWidget {
     required this.configPath,
     required this.saveDirs,
     this.searchDirs = const [],
+    this.startupNotice,
   });
 
   final DesktopConfig? config;
   final String? configError;
+
+  final String? startupNotice;
   final String? configPath;
   final List<String> saveDirs;
   final List<String> searchDirs;
@@ -255,7 +287,8 @@ class _AppRootState extends State<_AppRoot> {
   void _onConfigured(DesktopConfig config, String path) {
     setState(() {
       _config = config.copyWith(
-          hatariWorkingDirectory: downloadedDataDir(config));
+        hatariWorkingDirectory: downloadedDataDir(config),
+      );
       _configPath = path;
     });
   }
@@ -266,30 +299,34 @@ class _AppRootState extends State<_AppRoot> {
       context,
       config: DesktopConfig(rootDirectory: ''),
       title: 'Setup',
-      subtitle:
-          '${_configPath ?? kConfigFileName} — edit and save to fix it',
+      subtitle: '${_configPath ?? kConfigFileName} — edit and save to fix it',
     );
     if (edited == null || !mounted) return;
 
     final known = _configPath;
-    final path = known ??
+    final path =
+        known ??
         writeFirstWritable(
           widget.saveDirs,
           fileName: kConfigFileName,
           write: edited.save,
         );
     if (path == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Could not write desktop.config.json')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not write desktop.config.json')),
+      );
       return;
     }
     try {
       if (known != null) edited.save(known);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
           content: Text('Could not write $known: $e'),
-          duration: const Duration(seconds: 5)));
+          duration: const Duration(seconds: 5),
+        ),
+      );
       return;
     }
     _onConfigured(edited, path);
@@ -299,7 +336,11 @@ class _AppRootState extends State<_AppRoot> {
   Widget build(BuildContext context) {
     final config = _config;
     if (config != null) {
-      return HomePage(config: config, configPath: _configPath ?? '');
+      return HomePage(
+        config: config,
+        configPath: _configPath ?? '',
+        startupNotice: widget.startupNotice ?? '',
+      );
     }
     if (widget.configError != null) {
       return _ConfigErrorPage(
@@ -352,9 +393,17 @@ class _ConfigErrorPage extends StatelessWidget {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.config, this.configPath = ''});
+  const HomePage({
+    super.key,
+    required this.config,
+    this.configPath = '',
+    this.startupNotice = '',
+  });
 
   final DesktopConfig config;
+
+  /// One-shot notice shown after the first frame (e.g. a failed migration).
+  final String startupNotice;
 
   /// Resolved config file path the settings editor writes to.
   final String configPath;
@@ -379,6 +428,7 @@ class _HomePageState extends State<HomePage> {
   bool _showingLaunchError = false;
   bool _showingDownloadError = false;
   bool _showingUpdateError = false;
+  String? _lastPirateFinderVersion;
 
   /// Running app version (release builds: stamped from the git tag via
   /// `--build-name`; dev builds: the pubspec version). Shown right-aligned
@@ -399,7 +449,8 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _config = widget.config;
-    _controller = CatalogController(_config);
+    _controller = CatalogController(_config)
+      ..pirateFinderData = _pirateFinderData;
     // A controller starts uninitialized: do not touch lazy fields such as
     // `universe` (used by `catalogDataNotice`) before `init()` has completed.
     _lastReady = false;
@@ -416,9 +467,22 @@ class _HomePageState extends State<HomePage> {
     _assetUpdater.config = _config;
     _pirateFinderData.config = _config;
     _pirateFinderData.refreshLocal();
+    _lastPirateFinderVersion = _pirateFinderData.local?.sha256;
+    _pirateFinderData.addListener(_onPirateFinderChanged);
     _loadAppVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initSelfUpdate());
     WidgetsBinding.instance.addPostFrameCallback((_) => _warnIfTranslocated());
+    if (widget.startupNotice.trim().isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.startupNotice),
+            duration: const Duration(seconds: 8),
+          ),
+        );
+      });
+    }
   }
 
   /// macOS runs a quarantined, unsigned app from a randomized read-only
@@ -426,15 +490,18 @@ class _HomePageState extends State<HomePage> {
   /// live outside the bundle. Tell the user once how to fix it.
   void _warnIfTranslocated() {
     if (!mounted || !isAppTranslocated()) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text(
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
           'macOS runs this app from a temporary read-only copy. Quit it, then '
           'drag the .app individually in Finder out of the unzipped folder into '
           'a normal folder (e.g. ~/Applications) and reopen it — not '
           'Downloads/Documents. Otherwise updates and favorites cannot be '
-          'saved.'),
-      duration: Duration(seconds: 20),
-    ));
+          'saved.',
+        ),
+        duration: Duration(seconds: 20),
+      ),
+    );
   }
 
   /// Reads the version for the status bar (always — unlike the self-update
@@ -456,6 +523,7 @@ class _HomePageState extends State<HomePage> {
     _centerFocus.dispose();
     _updater.dispose();
     _assetUpdater.dispose();
+    _pirateFinderData.removeListener(_onPirateFinderChanged);
     _pirateFinderData.dispose();
     _controller.dispose();
     super.dispose();
@@ -476,6 +544,16 @@ class _HomePageState extends State<HomePage> {
     await _updater.check();
     await _assetUpdater.check();
     await _pirateFinderData.check();
+  }
+
+  /// Rebuilds the page when PF data is installed/updated so the PF button
+  /// appears (or disappears) without a catalog reload. Progress notifications
+  /// are ignored; only the applied version changes.
+  void _onPirateFinderChanged() {
+    final version = _pirateFinderData.local?.sha256;
+    if (version == _lastPirateFinderVersion) return;
+    _lastPirateFinderVersion = version;
+    if (mounted) setState(() {});
   }
 
   /// Surfaces failed update installs as a modal, once per error.
@@ -501,8 +579,10 @@ class _HomePageState extends State<HomePage> {
             children: [
               SelectableText(err),
               const SizedBox(height: 12),
-              SelectableText('Log: $logPath',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              SelectableText(
+                'Log: $logPath',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
             ],
           ),
           actions: [
@@ -576,7 +656,8 @@ class _HomePageState extends State<HomePage> {
       if (mounted) setState(() {});
       return;
     }
-    final structural = !_lastReady ||
+    final structural =
+        !_lastReady ||
         _lastCatalogMode != _controller.catalogMode ||
         _lastGridMode != _controller.gridMode ||
         _lastCatalogNotice != _controller.catalogDataNotice;
@@ -604,8 +685,9 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('Could not save desktop.config.json: $e'),
-            duration: const Duration(seconds: 5)),
+          content: Text('Could not save desktop.config.json: $e'),
+          duration: const Duration(seconds: 5),
+        ),
       );
       return;
     }
@@ -620,7 +702,8 @@ class _HomePageState extends State<HomePage> {
     _controller.dispose();
     setState(() {
       _config = config;
-      _controller = CatalogController(config);
+      _controller = CatalogController(config)
+        ..pirateFinderData = _pirateFinderData;
     });
     _lastReady = false;
     _lastCatalogMode = true;
@@ -633,6 +716,7 @@ class _HomePageState extends State<HomePage> {
     _assetUpdater.check();
     _pirateFinderData.config = config;
     _pirateFinderData.refreshLocal();
+    _pirateFinderData.invalidateIndex();
     _pirateFinderData.check();
   }
 
@@ -666,17 +750,19 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return false;
     final exe = await showHatariInstallDialog(context, config: _config);
     if (exe == null) return false;
-    final value =
-        hatariConfigExecutable(appDir: _config.appDir, exePath: exe);
+    final value = hatariConfigExecutable(appDir: _config.appDir, exePath: exe);
     final edited = _config.copyWith(hatariExecutable: value);
     if (widget.configPath.isNotEmpty) {
       try {
         edited.save(widget.configPath);
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
               content: Text('Could not save desktop.config.json: $e'),
-              duration: const Duration(seconds: 5)));
+              duration: const Duration(seconds: 5),
+            ),
+          );
         }
       }
     }
@@ -700,13 +786,20 @@ class _HomePageState extends State<HomePage> {
 
   /// Ensures a specific TOS image ([fileName]) exists, offering the download
   /// dialog with [versions] when it is missing.
-  Future<bool> _ensureTosFor(String version, String fileName,
-      {List<String>? versions}) async {
+  Future<bool> _ensureTosFor(
+    String version,
+    String fileName, {
+    List<String>? versions,
+  }) async {
     final cfg = _config;
     if (File(tosImagePath(cfg, fileName: fileName)).existsSync()) return true;
     if (!mounted) return false;
-    return showTosRomDialog(context,
-        config: cfg, versions: versions ?? [version], fileName: fileName);
+    return showTosRomDialog(
+      context,
+      config: cfg,
+      versions: versions ?? [version],
+      fileName: fileName,
+    );
   }
 
   Future<void> _toggleHelpAsync() async {
@@ -731,8 +824,13 @@ class _HomePageState extends State<HomePage> {
       final card = c.selectedCard;
       if (card == null || card.crew != null) return;
     }
-    GameLightbox.show(context, c,
-        variant: variant, image: image, onToggleHelp: _toggleHelpAsync);
+    GameLightbox.show(
+      context,
+      c,
+      variant: variant,
+      image: image,
+      onToggleHelp: _toggleHelpAsync,
+    );
   }
 
   /// Opens the crew release browser (all releases with screenshots + normal
@@ -748,11 +846,14 @@ class _HomePageState extends State<HomePage> {
   void _openCrewRelease(String rel) {
     final hit = _controller.releaseCardFor(rel);
     if (hit == null) return;
-    GameLightbox.showCard(context, _controller,
-        card: hit.card,
-        variant: hit.index,
-        image: 0,
-        onToggleHelp: _toggleHelpAsync);
+    GameLightbox.showCard(
+      context,
+      _controller,
+      card: hit.card,
+      variant: hit.index,
+      image: 0,
+      onToggleHelp: _toggleHelpAsync,
+    );
   }
 
   @override
@@ -785,16 +886,22 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.error_outline,
-                      color: Colors.orangeAccent, size: 36),
+                  const Icon(
+                    Icons.error_outline,
+                    color: Colors.orangeAccent,
+                    size: 36,
+                  ),
                   const SizedBox(height: 12),
-                  const Text('Could not load the catalog',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Could not load the catalog',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
-                  SelectableText(err,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  SelectableText(
+                    err,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -842,13 +949,20 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline,
-                      size: 16, color: Colors.orangeAccent),
+                  const Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Colors.orangeAccent,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(notice,
-                        style: const TextStyle(
-                            fontSize: 12, color: Colors.orangeAccent)),
+                    child: Text(
+                      notice,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.orangeAccent,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -946,8 +1060,10 @@ class _StatusBar extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 1.5),
             ),
             const SizedBox(width: 6),
-            const Text('Hatari is running…',
-                style: TextStyle(fontSize: 11, color: Colors.lightGreen)),
+            const Text(
+              'Hatari is running…',
+              style: TextStyle(fontSize: 11, color: Colors.lightGreen),
+            ),
             const SizedBox(width: 16),
           ],
           if (c.downloading) ...[
@@ -957,13 +1073,16 @@ class _StatusBar extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 1.5),
             ),
             const SizedBox(width: 6),
-            Text('Downloading… ${c.downloadProgress}',
-                style: const TextStyle(
-                    fontSize: 11, color: Colors.orangeAccent)),
+            Text(
+              'Downloading… ${c.downloadProgress}',
+              style: const TextStyle(fontSize: 11, color: Colors.orangeAccent),
+            ),
             const SizedBox(width: 16),
           ],
-          Text(messages.join('  ·  '),
-              style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          Text(
+            messages.join('  ·  '),
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
           if (notices.isNotEmpty) ...[
             const SizedBox(width: 16),
             Expanded(
@@ -980,7 +1099,9 @@ class _StatusBar extends StatelessWidget {
             Text(
               'v$version',
               style: TextStyle(
-                  fontSize: 11, color: Colors.grey.withValues(alpha: 0.7)),
+                fontSize: 11,
+                color: Colors.grey.withValues(alpha: 0.7),
+              ),
             ),
           ],
         ],

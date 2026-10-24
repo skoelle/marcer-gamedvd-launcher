@@ -12,6 +12,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
+import 'piratefinder_dialog.dart';
 import 'game_info_panel.dart';
 import 'local_assets_chips.dart';
 import 'open_folder_button.dart';
@@ -116,8 +117,7 @@ class _GameLightboxState extends State<GameLightbox> {
   void initState() {
     super.initState();
     _rebuildItems();
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _focus.requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
 
   @override
@@ -136,9 +136,7 @@ class _GameLightboxState extends State<GameLightbox> {
       _items = List<Object>.of(c.catalogCards);
       _itemIdx = c.selectedIndex.clamp(0, math.max(0, _items.length - 1));
     } else {
-      _items = c.visibleEntries
-          .where((e) => e.kind == EntryKind.zip)
-          .toList();
+      _items = c.visibleEntries.where((e) => e.kind == EntryKind.zip).toList();
       final sel = c.selectedEntry;
       final idx = sel == null ? -1 : _items.indexOf(sel);
       _itemIdx = idx >= 0 ? idx : 0;
@@ -268,10 +266,7 @@ class _GameLightboxState extends State<GameLightbox> {
   /// (gallery `lightboxImages`).
   List<String> _imagesOf(_Variant? v) {
     if (v == null) return const [];
-    return [
-      if (v.preview != null) v.preview!,
-      ...v.candidates,
-    ];
+    return [if (v.preview != null) v.preview!, ...v.candidates];
   }
 
   void _goItem(int delta) {
@@ -297,7 +292,8 @@ class _GameLightboxState extends State<GameLightbox> {
 
   void _goImage(int delta) {
     final images = _imagesOf(
-        _variantIdx < _variants.length ? _variants[_variantIdx] : null);
+      _variantIdx < _variants.length ? _variants[_variantIdx] : null,
+    );
     if (images.isEmpty) return;
     setState(() {
       // wraps like the gallery PageUp/PageDown handler
@@ -317,9 +313,9 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 
   void _setVariant(int idx) => setState(() {
-        _variantIdx = idx;
-        _imageIdx = 0;
-      });
+    _variantIdx = idx;
+    _imageIdx = 0;
+  });
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -352,13 +348,11 @@ class _GameLightboxState extends State<GameLightbox> {
       _goImage(-1);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.space ||
-        key == LogicalKeyboardKey.keyP) {
+    if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.keyP) {
       _launchCurrent();
       return KeyEventResult.handled;
     }
-    if (event.character == '*' ||
-        key == LogicalKeyboardKey.asterisk) {
+    if (event.character == '*' || key == LogicalKeyboardKey.asterisk) {
       _toggleFavoriteCurrent();
       return KeyEventResult.handled;
     }
@@ -373,9 +367,11 @@ class _GameLightboxState extends State<GameLightbox> {
     if (event.character == '?') {
       final help = widget.onToggleHelp;
       if (help != null) {
-        unawaited(help().whenComplete(() {
-          if (mounted) _focus.requestFocus();
-        }));
+        unawaited(
+          help().whenComplete(() {
+            if (mounted) _focus.requestFocus();
+          }),
+        );
       }
       return KeyEventResult.handled;
     }
@@ -415,9 +411,14 @@ class _GameLightboxState extends State<GameLightbox> {
     final pos = _filmScroll.position;
     if (target < pos.pixels) {
       _filmScroll.jumpTo(target);
-    } else if (target + _filmWidth + _filmGap > pos.pixels + pos.viewportDimension) {
-      _filmScroll.jumpTo(math.max(
-          0.0, target + _filmWidth + _filmGap - pos.pixels - pos.viewportDimension));
+    } else if (target + _filmWidth + _filmGap >
+        pos.pixels + pos.viewportDimension) {
+      _filmScroll.jumpTo(
+        math.max(
+          0.0,
+          target + _filmWidth + _filmGap - pos.pixels - pos.viewportDimension,
+        ),
+      );
     }
   }
 
@@ -438,7 +439,9 @@ class _GameLightboxState extends State<GameLightbox> {
       return;
     }
     final err = c.swapPreviewImage(
-        previewPath: v.preview!, candidatePath: images[_imageIdx]);
+      previewPath: v.preview!,
+      candidatePath: images[_imageIdx],
+    );
     if (err != null) {
       _showCurationMessage(err);
       return;
@@ -457,8 +460,10 @@ class _GameLightboxState extends State<GameLightbox> {
     if (entry == null) {
       // pd/utils ZIPs (and favorites outside the screenshot archive) are not
       // part of index.json — a change could never be saved.
-      _showCurationMessage('No index.json entry for this ZIP — '
-          'status editing is unavailable.');
+      _showCurationMessage(
+        'No index.json entry for this ZIP — '
+        'status editing is unavailable.',
+      );
       return;
     }
     final choice = await showStatusKindDialog(
@@ -483,10 +488,9 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 
   void _showCurationMessage(String message) {
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-      content: Text(message),
-      duration: const Duration(seconds: 3),
-    ));
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+    );
   }
 
   @override
@@ -518,58 +522,67 @@ class _GameLightboxState extends State<GameLightbox> {
             child: GestureDetector(
               onTap: () => _focus.requestFocus(),
               child: Container(
-              width: 1200,
-              height: height,
-              decoration: BoxDecoration(
-                color: const Color(0xFF0D0D0D),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF2A2A2A)),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: vs.isEmpty && _item == null
-                  ? const Center(
-                      child: Text('No selection',
-                          style: TextStyle(color: Colors.grey)))
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _header(v, vs.length),
-                              Expanded(
-                                child: Container(
-                                  color: Colors.black,
-                                  child: imagePath == null
-                                      ? const Center(
-                                          child: Text('No screenshot',
+                width: 1200,
+                height: height,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D0D0D),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF2A2A2A)),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: vs.isEmpty && _item == null
+                    ? const Center(
+                        child: Text(
+                          'No selection',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _header(v, vs.length),
+                                Expanded(
+                                  child: Container(
+                                    color: Colors.black,
+                                    child: imagePath == null
+                                        ? const Center(
+                                            child: Text(
+                                              'No screenshot',
                                               style: TextStyle(
-                                                  color: Colors.grey)))
-                                      : _IntegerScaledImage(path: imagePath),
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                          )
+                                        : _IntegerScaledImage(path: imagePath),
+                                  ),
                                 ),
-                              ),
-                              if (vs.isNotEmpty) _filmstrip(vs),
-                              Container(
-                                height: 60,
-                                color: const Color(0xFF111111),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 6),
-                                child: v == null
-                                    ? const SizedBox.shrink()
-                                    : _candidateStrip(v),
-                              ),
-                              _hints(),
-                            ],
+                                if (vs.isNotEmpty) _filmstrip(vs),
+                                Container(
+                                  height: 60,
+                                  color: const Color(0xFF111111),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  child: v == null
+                                      ? const SizedBox.shrink()
+                                      : _candidateStrip(v),
+                                ),
+                                _hints(),
+                              ],
+                            ),
                           ),
-                        ),
-                        Container(
-                          width: 330,
-                          color: const Color(0xFF161616),
-                          child: _infoPanel(v),
-                        ),
-                      ],
-                    ),
+                          Container(
+                            width: 330,
+                            color: const Color(0xFF161616),
+                            child: _infoPanel(v),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ),
@@ -579,19 +592,19 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 
   Widget _header(_Variant? v, int totalVariants) {
-    final counts =
-        _statusCounts.entries.map((e) => '${e.value}× ${e.key}').join('  ');
+    final counts = _statusCounts.entries
+        .map((e) => '${e.value}× ${e.key}')
+        .join('  ');
     // gallery `lb-sub` miss prefix: focus filter active but no ZIP matched.
     // pd/utils cards have no raw variants to match against (they resolve
     // lazily), so the prefix is limited to cards where focus could miss.
     final item = _item;
-    final focusMiss = item is GameCard &&
-        item.focusVariant == -1 &&
-        item.variants.isNotEmpty;
+    final focusMiss =
+        item is GameCard && item.focusVariant == -1 && item.variants.isNotEmpty;
     final missPrefix = focusMiss
         ? (widget.controller.filter.cracker != 'any'
-            ? 'cracker ZIP not found — '
-            : 'crew ZIP not found — ')
+              ? 'cracker ZIP not found — '
+              : 'crew ZIP not found — ')
         : '';
     final sub = v == null
         ? 'no ZIP variants'
@@ -620,16 +633,19 @@ class _GameLightboxState extends State<GameLightbox> {
                   _title,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
               if (item is GameCard) ...[
                 CardFolderButtons(
                   layers: widget.controller.cardFolderLayers(item),
-                  pathFor: (layer) => widget.controller
-                      .cardFolderPath(item, patch: layer == 'PATCH'),
+                  pathFor: (layer) => widget.controller.cardFolderPath(
+                    item,
+                    patch: layer == 'PATCH',
+                  ),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -645,8 +661,10 @@ class _GameLightboxState extends State<GameLightbox> {
             ],
           ),
           const SizedBox(height: 2),
-          Text(subText,
-              style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          Text(
+            subText,
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
           const SizedBox(height: 4),
           Wrap(
             spacing: 6,
@@ -670,15 +688,17 @@ class _GameLightboxState extends State<GameLightbox> {
   }
 
   Widget _badge(String text, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.25),
-          border: Border.all(color: color.withValues(alpha: 0.7)),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(text,
-            style: TextStyle(fontSize: 10, color: color.withValues(alpha: 1))),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.25),
+      border: Border.all(color: color.withValues(alpha: 0.7)),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(fontSize: 10, color: color.withValues(alpha: 1)),
+    ),
+  );
 
   /// Short film label (gallery: strip `.zip`, then leading `…- ` prefix).
   static String _shortName(String name) {
@@ -710,160 +730,187 @@ class _GameLightboxState extends State<GameLightbox> {
           itemCount: vs.length,
           padding: const EdgeInsets.only(bottom: 8),
           itemBuilder: (context, i) {
-          final v = vs[i];
-          final active = i == _variantIdx;
-          final fav = favFlags[i];
-          final stColor = v.preview == null
-              ? const Color(0xFF444444)
-              : (v.status == 'done'
-                  ? const Color(0xFF11AA55)
-                  : const Color(0xFFAA8800));
-          final nCand = v.candidates.length;
-          return Tooltip(
-            message: '${v.title} (${v.status})',
-            child: GestureDetector(
-              onTap: () {
-                // Keep keyboard focus on the lightbox so `*` works after
-                // clicking a filmstrip entry.
-                _focus.requestFocus();
-                _setVariant(i);
-              },
-              child: Container(
-                width: _filmWidth,
-                margin: const EdgeInsets.only(right: _filmGap),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0E1216),
-                  border: Border.all(
+            final v = vs[i];
+            final active = i == _variantIdx;
+            final fav = favFlags[i];
+            final stColor = v.preview == null
+                ? const Color(0xFF444444)
+                : (v.status == 'done'
+                      ? const Color(0xFF11AA55)
+                      : const Color(0xFFAA8800));
+            final nCand = v.candidates.length;
+            return Tooltip(
+              message: '${v.title} (${v.status})',
+              child: GestureDetector(
+                onTap: () {
+                  // Keep keyboard focus on the lightbox so `*` works after
+                  // clicking a filmstrip entry.
+                  _focus.requestFocus();
+                  _setVariant(i);
+                },
+                child: Container(
+                  width: _filmWidth,
+                  margin: const EdgeInsets.only(right: _filmGap),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0E1216),
+                    border: Border.all(
                       color: active ? Colors.cyan : const Color(0xFF2A2A2A),
-                      width: 2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          Container(
-                            color: Colors.black,
-                            child: v.preview == null
-                                ? const Center(
-                                    child: Text('–',
+                      width: 2,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            Container(
+                              color: Colors.black,
+                              child: v.preview == null
+                                  ? const Center(
+                                      child: Text(
+                                        '–',
                                         style: TextStyle(
-                                            fontSize: 14,
-                                            color: Color(0xFF556677))))
-                                : Image.file(io.File(v.preview!),
-                                    key: ValueKey(
-                                        '${v.preview}#${widget.controller.imageVersionOf(v.preview!)}'),
-                                    fit: BoxFit.cover,
-                                    filterQuality: FilterQuality.none,
-                                    errorBuilder: (_, _, _) =>
-                                        const SizedBox.shrink()),
-                          ),
-                          if (nCand > 1)
-                            Positioned(
-                              right: 3,
-                              bottom: 3,
-                              child: Container(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 3),
-                                constraints: const BoxConstraints(
-                                    minWidth: 14, minHeight: 14),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2456A0),
-                                  borderRadius: BorderRadius.circular(7),
-                                ),
-                                child: Text('+$nCand',
+                                          fontSize: 14,
+                                          color: Color(0xFF556677),
+                                        ),
+                                      ),
+                                    )
+                                  : Image.file(
+                                      io.File(v.preview!),
+                                      key: ValueKey(
+                                        '${v.preview}#${widget.controller.imageVersionOf(v.preview!)}',
+                                      ),
+                                      fit: BoxFit.cover,
+                                      filterQuality: FilterQuality.none,
+                                      errorBuilder: (_, _, _) =>
+                                          const SizedBox.shrink(),
+                                    ),
+                            ),
+                            if (nCand > 1)
+                              Positioned(
+                                right: 3,
+                                bottom: 3,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 14,
+                                    minHeight: 14,
+                                  ),
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF2456A0),
+                                    borderRadius: BorderRadius.circular(7),
+                                  ),
+                                  child: Text(
+                                    '+$nCand',
                                     style: const TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                        height: 1.2)),
-                              ),
-                            ),
-                          if (v.missing)
-                            Positioned(
-                              right: 3,
-                              top: 3,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 4, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xCCB3261E),
-                                  borderRadius: BorderRadius.circular(7),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      height: 1.2,
+                                    ),
+                                  ),
                                 ),
-                                child: const Text('MISSING',
-                                    style: TextStyle(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                        height: 1.2)),
                               ),
-                            ),
-                          if (fav || active)
-                            Positioned(
-                              left: 3,
-                              top: 3,
-                              child: GestureDetector(
-                                onTap: () {
-                                  // Keep keyboard focus on the lightbox so
-                                  // `*` works after clicking the star.
-                                  _focus.requestFocus();
-                                  _toggleFavoriteVariant(i);
-                                },
-                                child: Tooltip(
-                                  message: fav
-                                      ? 'Favorite — click to remove'
-                                      : 'Click to favorite this ZIP',
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 3, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xCC000000),
-                                      borderRadius: BorderRadius.circular(7),
-                                      border: Border.all(
+                            if (v.missing)
+                              Positioned(
+                                right: 3,
+                                top: 3,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xCCB3261E),
+                                    borderRadius: BorderRadius.circular(7),
+                                  ),
+                                  child: const Text(
+                                    'MISSING',
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (fav || active)
+                              Positioned(
+                                left: 3,
+                                top: 3,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    // Keep keyboard focus on the lightbox so
+                                    // `*` works after clicking the star.
+                                    _focus.requestFocus();
+                                    _toggleFavoriteVariant(i);
+                                  },
+                                  child: Tooltip(
+                                    message: fav
+                                        ? 'Favorite — click to remove'
+                                        : 'Click to favorite this ZIP',
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 3,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xCC000000),
+                                        borderRadius: BorderRadius.circular(7),
+                                        border: Border.all(
                                           color: fav
                                               ? Colors.amber
-                                              : const Color(0xFF3A3A3A)),
-                                    ),
-                                    child: Text(
-                                      fav ? '★' : '☆',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        height: 1.2,
-                                        color: fav
-                                            ? Colors.amber
-                                            : Colors.grey,
+                                              : const Color(0xFF3A3A3A),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        fav ? '★' : '☆',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          height: 1.2,
+                                          color: fav
+                                              ? Colors.amber
+                                              : Colors.grey,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    Container(height: 2, color: stColor),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 3, vertical: 2),
-                      child: Text(
-                        _shortName(v.title),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                      Container(height: 2, color: stColor),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 3,
+                          vertical: 2,
+                        ),
+                        child: Text(
+                          _shortName(v.title),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
                             fontSize: 9,
-                            color: active ? Colors.cyan : const Color(0xFF99AABB)),
+                            color: active
+                                ? Colors.cyan
+                                : const Color(0xFF99AABB),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
         ),
       ),
     );
@@ -882,16 +929,18 @@ class _GameLightboxState extends State<GameLightbox> {
               child: Container(
                 decoration: BoxDecoration(
                   border: Border.all(
-                      color: i + (v.preview != null ? 1 : 0) == _imageIdx
-                          ? Colors.cyan
-                          : const Color(0xFF2A2A2A)),
+                    color: i + (v.preview != null ? 1 : 0) == _imageIdx
+                        ? Colors.cyan
+                        : const Color(0xFF2A2A2A),
+                  ),
                   borderRadius: BorderRadius.circular(3),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Image.file(
                   io.File(v.candidates[i]),
                   key: ValueKey(
-                      '${v.candidates[i]}#${widget.controller.imageVersionOf(v.candidates[i])}'),
+                    '${v.candidates[i]}#${widget.controller.imageVersionOf(v.candidates[i])}',
+                  ),
                   height: 48,
                   fit: BoxFit.contain,
                   filterQuality: FilterQuality.none,
@@ -920,15 +969,28 @@ class _GameLightboxState extends State<GameLightbox> {
   Widget _infoPanel(_Variant? v) {
     final al = _atariLegend;
     final item = _item;
-    final localAssets =
-        item is GameCard ? widget.controller.localAssetsForCard(item) : null;
+    final localAssets = item is GameCard
+        ? widget.controller.localAssetsForCard(item)
+        : null;
     return GameInfoPanel(
       info: _info,
       atariLegend: al,
       onAtariLegend: al == null
           ? null
-          : () => showAtariLegendDialog(context,
-              game: al, textsLoader: widget.controller.atariLegendTexts),
+          : () => showAtariLegendDialog(
+              context,
+              game: al,
+              textsLoader: widget.controller.atariLegendTexts,
+            ),
+      onPirateFinder: !widget.controller.pirateFinderAvailable
+          ? null
+          : () => showPirateFinderDialog(
+              context,
+              controller: widget.controller,
+              card: item is GameCard ? item : null,
+              entry: item is Entry ? item : null,
+              rel: v?.rel,
+            ),
       extras: localAssets == null
           ? null
           : LocalAssetsChips(
@@ -950,8 +1012,9 @@ class _GameLightboxState extends State<GameLightbox> {
       filter: widget.controller.filter,
       onPlay: v == null ? null : _launchCurrent,
       variants: _launchVariants,
-      onPlayVariant:
-          v == null ? null : (variant) => _launchCurrent(variant: variant),
+      onPlayVariant: v == null
+          ? null
+          : (variant) => _launchCurrent(variant: variant),
       // Group click: switch to that crew's/cracker's variant; no matching
       // ZIP ("not found") jumps to variant 0 (the header shows the
       // "… ZIP not found —" prefix when a focus filter missed).
@@ -1054,27 +1117,29 @@ class _IntegerScaledImageState extends State<_IntegerScaledImage> {
         ),
       );
     }
-    return LayoutBuilder(builder: (context, constraints) {
-      final scale = math.max(
-        1,
-        math.min(
-          (constraints.maxWidth / img.width).floor(),
-          (constraints.maxHeight / img.height).floor(),
-        ),
-      );
-      return Center(
-        child: SizedBox(
-          width: img.width * scale.toDouble(),
-          height: img.height * scale.toDouble(),
-          child: Image.file(
-            io.File(widget.path),
-            fit: BoxFit.fill,
-            filterQuality: FilterQuality.none,
-            gaplessPlayback: true,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = math.max(
+          1,
+          math.min(
+            (constraints.maxWidth / img.width).floor(),
+            (constraints.maxHeight / img.height).floor(),
           ),
-        ),
-      );
-    });
+        );
+        return Center(
+          child: SizedBox(
+            width: img.width * scale.toDouble(),
+            height: img.height * scale.toDouble(),
+            child: Image.file(
+              io.File(widget.path),
+              fit: BoxFit.fill,
+              filterQuality: FilterQuality.none,
+              gaplessPlayback: true,
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

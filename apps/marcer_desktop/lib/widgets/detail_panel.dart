@@ -12,6 +12,7 @@ import 'atari_legend_dialog.dart';
 import 'crew_detail_panel.dart';
 import 'game_info_panel.dart';
 import 'local_assets_chips.dart';
+import 'piratefinder_dialog.dart';
 import 'open_folder_button.dart';
 import 'status_kind_dialog.dart';
 
@@ -87,15 +88,23 @@ class DetailPanel extends StatelessWidget {
     // pd/utils ZIPs (and favorites of ZIPs outside the screenshot archive)
     // have no index.json entry — the change could never be saved.
     if (c.screenshots[rel] == null) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-        content: Text('No index.json entry for this ZIP — '
-            'status editing is unavailable.'),
-        duration: const Duration(seconds: 3),
-      ));
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'No index.json entry for this ZIP — '
+            'status editing is unavailable.',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
       return;
     }
-    final choice = await showStatusKindDialog(context,
-        title: title, currentStatus: status, currentKind: kind);
+    final choice = await showStatusKindDialog(
+      context,
+      title: title,
+      currentStatus: status,
+      currentKind: kind,
+    );
     if (choice == null) return;
     c.applyStatusChange(rel, choice.status, choice.kind);
   }
@@ -108,14 +117,17 @@ class DetailPanel extends StatelessWidget {
         color: const Color(0xFF161616),
         child: card == null
             ? const Center(
-                child: Text('No selection',
-                    style: TextStyle(color: Colors.grey, fontSize: 13)))
+                child: Text(
+                  'No selection',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+              )
             : card.crew != null
-                ? CrewDetailPanel(
-                    crew: card.crew!,
-                    onOpenRelease: onOpenCrewRelease,
-                  )
-                : _cardInfo(context, c, card),
+            ? CrewDetailPanel(
+                crew: card.crew!,
+                onOpenRelease: onOpenCrewRelease,
+              )
+            : _cardInfo(context, c, card),
       );
     }
     final entry = c.selectedEntry;
@@ -123,11 +135,14 @@ class DetailPanel extends StatelessWidget {
       color: const Color(0xFF161616),
       child: entry == null
           ? const Center(
-              child: Text('No selection',
-                  style: TextStyle(color: Colors.grey, fontSize: 13)))
+              child: Text(
+                'No selection',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            )
           : entry.kind == EntryKind.directory
-              ? _directoryInfo(c, entry)
-              : _zipInfo(c, entry),
+          ? _directoryInfo(c, entry)
+          : _zipInfo(c, entry),
     );
   }
 
@@ -154,9 +169,13 @@ class DetailPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(card.name,
-                        style: const TextStyle(
-                            fontSize: 17, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      card.name,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                   CardFolderButtons(
                     layers: c.cardFolderLayers(card),
@@ -170,8 +189,7 @@ class DetailPanel extends StatelessWidget {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  if (c.isFavoriteCard(card))
-                    _badge('FAVORITE', Colors.amber),
+                  if (c.isFavoriteCard(card)) _badge('FAVORITE', Colors.amber),
                   if (layer != null && layer.isNotEmpty)
                     _badge(layer, _layerColorName(layer)),
                   if (missing == true) _badge('MISSING', Colors.redAccent),
@@ -201,8 +219,19 @@ class DetailPanel extends StatelessWidget {
             atariLegend: al,
             onAtariLegend: al == null
                 ? null
-                : () => showAtariLegendDialog(context,
-                    game: al, textsLoader: c.atariLegendTexts),
+                : () => showAtariLegendDialog(
+                    context,
+                    game: al,
+                    textsLoader: c.atariLegendTexts,
+                  ),
+            onPirateFinder: !c.pirateFinderAvailable
+                ? null
+                : () => showPirateFinderDialog(
+                    context,
+                    controller: c,
+                    card: card,
+                    rel: _primaryVariant(card)?.rel,
+                  ),
             extras: LocalAssetsChips(
               assets: localAssets,
               service: c.localAssetsService,
@@ -238,8 +267,10 @@ class DetailPanel extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(c.downloadProgress,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            child: Text(
+              c.downloadProgress,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ),
           TextButton(
             onPressed: c.cancelDownload,
@@ -263,7 +294,9 @@ class DetailPanel extends StatelessWidget {
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           label: Text(
-            c.ftpConfigured ? 'Download folder' : 'Download folder (FTP not set)',
+            c.ftpConfigured
+                ? 'Download folder'
+                : 'Download folder (FTP not set)',
             style: const TextStyle(fontSize: 12),
           ),
         ),
@@ -271,13 +304,20 @@ class DetailPanel extends StatelessWidget {
     );
   }
 
-  void _startDownload(BuildContext context, CatalogController c, GameCard card) {
+  void _startDownload(
+    BuildContext context,
+    CatalogController c,
+    GameCard card,
+  ) {
     if (!c.ftpConfigured) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
-        content: Text(
-            'FTP not configured — set Host/User/Password in Settings (gear icon).'),
-        duration: Duration(seconds: 4),
-      ));
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'FTP not configured — set Host/User/Password in Settings (gear icon).',
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
       return;
     }
     c.downloadMissing(card);
@@ -299,8 +339,9 @@ class DetailPanel extends StatelessWidget {
       if (match >= 0) idx = match;
     }
     if (idx < 0 && card.previewPath != null) {
-      final match =
-          variants.indexWhere((v) => v.previewPath == card.previewPath);
+      final match = variants.indexWhere(
+        (v) => v.previewPath == card.previewPath,
+      );
       if (match >= 0) idx = match;
     }
     if (idx < 0 || idx >= variants.length) idx = 0;
@@ -319,23 +360,29 @@ class DetailPanel extends StatelessWidget {
   }
 
   Color _layerColorName(String layer) => switch (layer) {
-        'BOTH' => Colors.green,
-        _ => Colors.lightGreen,
-      };
+    'BOTH' => Colors.green,
+    _ => Colors.lightGreen,
+  };
 
   Widget _directoryInfo(CatalogController c, Entry e) {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        Row(children: [
-          const Icon(Icons.folder, size: 36, color: Colors.amber),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(e.name,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          ),
-        ]),
+        Row(
+          children: [
+            const Icon(Icons.folder, size: 36, color: Colors.amber),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                e.name,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         _badges(c, e),
         const SizedBox(height: 12),
@@ -378,29 +425,34 @@ class DetailPanel extends StatelessWidget {
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: candidates
-                  .map((path) => Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: Image.file(File(path),
-                            key: ValueKey(
-                                '$path#${c.imageVersionOf(path)}'),
-                            height: 56,
-                            errorBuilder: (_, _, _) =>
-                                const SizedBox(width: 56)),
-                      ))
+                  .map(
+                    (path) => Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Image.file(
+                        File(path),
+                        key: ValueKey('$path#${c.imageVersionOf(path)}'),
+                        height: 56,
+                        errorBuilder: (_, _, _) => const SizedBox(width: 56),
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           ),
         ],
         const SizedBox(height: 12),
-        Text(c.titleFor(e),
-            style:
-                const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        Text(
+          c.titleFor(e),
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 6),
         _badges(c, e),
         const SizedBox(height: 12),
         if (info == null)
-          const Text('No metadata for this entry',
-              style: TextStyle(color: Colors.grey, fontSize: 12))
+          const Text(
+            'No metadata for this entry',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          )
         else
           ..._metadataRows(c, info, shots),
         const SizedBox(height: 12),
@@ -409,8 +461,10 @@ class DetailPanel extends StatelessWidget {
         if (e.inPatch && e.inRoot)
           const Padding(
             padding: EdgeInsets.only(top: 4),
-            child: Text('Launching would use the patch copy (SPEC R14)',
-                style: TextStyle(fontSize: 11, color: Colors.grey)),
+            child: Text(
+              'Launching would use the patch copy (SPEC R14)',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
           ),
       ],
     );
@@ -418,8 +472,11 @@ class DetailPanel extends StatelessWidget {
 
   Widget _noPreview(String text) {
     return Center(
-        child: Text(text,
-            style: const TextStyle(color: Colors.grey, fontSize: 13)));
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.grey, fontSize: 13),
+      ),
+    );
   }
 
   Widget _badges(CatalogController c, Entry e) {
@@ -439,24 +496,29 @@ class DetailPanel extends StatelessWidget {
   }
 
   Color _layerColor(Entry e) => switch (e.layerStatus) {
-        LayerStatus.both => Colors.green,
-        LayerStatus.root => Colors.lightGreen,
-        LayerStatus.patch => Colors.pink,
-      };
+    LayerStatus.both => Colors.green,
+    LayerStatus.root => Colors.lightGreen,
+    LayerStatus.patch => Colors.pink,
+  };
 
   Widget _badge(String text, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.25),
-          border: Border.all(color: color.withValues(alpha: 0.7)),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(text,
-            style: TextStyle(fontSize: 10, color: color.withValues(alpha: 1))),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.25),
+      border: Border.all(color: color.withValues(alpha: 0.7)),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(fontSize: 10, color: color.withValues(alpha: 1)),
+    ),
+  );
 
   List<Widget> _metadataRows(
-      CatalogController c, GameInfo info, ScreenshotEntry? shots) {
+    CatalogController c,
+    GameInfo info,
+    ScreenshotEntry? shots,
+  ) {
     final rows = <Widget>[
       _kv('Matched via', info.matchedVia),
       if (info.variants.length > 1) _kv('Variants', '${info.variants.length}'),
@@ -468,8 +530,10 @@ class DetailPanel extends StatelessWidget {
     return rows;
   }
 
-  List<Widget> _metadataRowsFromVariants(List<Map<String, dynamic>> variants,
-      {bool skipVariantsCount = false}) {
+  List<Widget> _metadataRowsFromVariants(
+    List<Map<String, dynamic>> variants, {
+    bool skipVariantsCount = false,
+  }) {
     final v = variants.isEmpty ? const <String, dynamic>{} : variants.first;
     final rows = <Widget>[];
     if (!skipVariantsCount && variants.length > 1) {
@@ -518,8 +582,10 @@ class DetailPanel extends StatelessWidget {
         children: [
           SizedBox(
             width: 110,
-            child: Text(label,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ),
           Expanded(
             child: Text(

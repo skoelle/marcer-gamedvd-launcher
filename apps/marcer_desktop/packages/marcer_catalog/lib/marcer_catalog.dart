@@ -20,5 +20,6 @@ export 'src/gameinfo.dart';
 export 'src/launch.dart';
 export 'src/magazine.dart';
 export 'src/overlay.dart';
+export 'src/piratefinder.dart';
 export 'src/screenshot_index.dart';
 export 'src/section_trees.dart';

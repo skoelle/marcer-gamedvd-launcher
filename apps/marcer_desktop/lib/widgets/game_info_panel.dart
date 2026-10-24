@@ -39,6 +39,10 @@ class ZipVariantView {
   final bool missing;
 }
 
+/// Release switch for the PirateFinder detail button. The data download and
+/// dialog stay available; the button is hidden until the next release.
+const bool kPirateFinderDetailButtonEnabled = false;
+
 /// Gallery-style detail panel (`SPEC-gallery-webapp.md` §6.5 `lb-side`):
 /// **Game info** table, the **This ZIP** table and the **Release variants**
 /// table (matching row highlighted). Shared by the lightbox side panel and
@@ -55,6 +59,7 @@ class GameInfoPanel extends StatelessWidget {
     this.onSelectGroup,
     this.atariLegend,
     this.onAtariLegend,
+    this.onPirateFinder,
     this.extras,
   });
 
@@ -91,6 +96,9 @@ class GameInfoPanel extends StatelessWidget {
   /// Opens the AtariLegend dialog; hidden when null (no match / no data).
   final VoidCallback? onAtariLegend;
 
+  /// Opens the optional PirateFinder dialog; hidden when null (no PF data).
+  final VoidCallback? onPirateFinder;
+
   /// Optional extras row rendered above the info tables (e.g. the local
   /// `Box scans`/`Manuals` chips). Shown only when non-null.
   final Widget? extras;
@@ -106,14 +114,14 @@ class GameInfoPanel extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         if (info == null) ...[
-          _headingRow('No game info', trailing: _atariLegendButtonOrNull()),
+          _headingRow('No game info', trailing: _actionButtonsOrNull()),
           if (variant != null) ...[
             const SizedBox(height: 8),
             _headingRow('This ZIP', trailing: _playButtonOrNull()),
             ..._zipTable(variant!),
           ],
         ] else ...[
-          _headingRow('Game info', trailing: _atariLegendButtonOrNull()),
+          _headingRow('Game info', trailing: _actionButtonsOrNull()),
           ..._infoRows(info, onSelectGroup),
           if (variant != null) ...[
             const SizedBox(height: 8),
@@ -142,8 +150,59 @@ class GameInfoPanel extends StatelessWidget {
 
   Widget? _playButtonOrNull() => onPlay == null ? null : _playButton();
 
-  Widget? _atariLegendButtonOrNull() =>
-      onAtariLegend == null ? null : _atariLegendButton();
+  Widget? _actionButtonsOrNull() {
+    final buttons = <Widget>[
+      if (kPirateFinderDetailButtonEnabled && onPirateFinder != null)
+        _pirateFinderButton(),
+      if (onAtariLegend != null) _atariLegendButton(),
+    ];
+    if (buttons.isEmpty) return null;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < buttons.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          buttons[i],
+        ],
+      ],
+    );
+  }
+
+  /// Compact indigo "PF" button (PirateFinder), next to AtariLegend.
+  Widget _pirateFinderButton() {
+    return Tooltip(
+      message: 'PirateFinder data',
+      child: Material(
+        color: Colors.transparent,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF6C7BFF), Color(0xFF3F51B5)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: InkWell(
+            onTap: onPirateFinder,
+            borderRadius: BorderRadius.circular(4),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Text(
+                'PF',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   /// Teal-gradient "AtariLegend" button (same shape/position as PLAY).
   Widget _atariLegendButton() {

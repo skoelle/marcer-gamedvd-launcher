@@ -17,6 +17,8 @@ import 'ftp_downloader.dart';
 import 'hatari_launcher.dart';
 import 'index_editor.dart';
 import 'local_assets.dart';
+import 'piratefinder_data.dart';
+import 'piratefinder_zip.dart';
 import 'st_gemdos_launcher.dart';
 
 /// Sentinel rel-path prefix for the per-section virtual `Favorites` views.
@@ -59,6 +61,10 @@ class CatalogController extends ChangeNotifier {
   late ScreenshotIndices screenshots;
   late GameInfoIndex gameinfo;
   AtariLegendIndex atariLegend = AtariLegendIndex.empty();
+
+  /// Optional PirateFinder data controller (set by the home page); used by
+  /// the PF detail button and the matching helper.
+  PirateFinderDataController? pirateFinderData;
   late CatalogUniverse universe;
   late CrewIndex crews;
   late CrewImageIndex crewImages;
@@ -169,8 +175,11 @@ class CatalogController extends ChangeNotifier {
             if (patch.isEmpty)
               section: p.join(appDir, favoritesSectionFileName(section))
             else if (sectionTrees[section] != null)
-              section:
-                  p.join(patch, sectionTrees[section]!, kFavoritesFileName),
+              section: p.join(
+                patch,
+                sectionTrees[section]!,
+                kFavoritesFileName,
+              ),
           kMiscFavoritesSection: resolveFavoritesPath(
             patchDir: patch.isEmpty ? null : patch,
             appDir: appDir,
@@ -229,14 +238,15 @@ class CatalogController extends ChangeNotifier {
 
   /// Lazily loads the reviews/comments/magazines cache the first time the
   /// AtariLegend details text tabs are opened (kept for the session).
-  Future<AtariLegendTexts> atariLegendTexts() =>
-      _atariLegendTextsFuture ??= Future(() =>
-          AtariLegendTexts.load(config.resolveAtariLegendDirectory()));
+  Future<AtariLegendTexts> atariLegendTexts() => _atariLegendTextsFuture ??=
+      Future(() => AtariLegendTexts.load(config.resolveAtariLegendDirectory()));
 
-  bool get crewFocusActive => !favoritesOnly &&
+  bool get crewFocusActive =>
+      !favoritesOnly &&
       filter.crew != 'any' &&
       kindFilters(filter.section).contains('crew');
-  bool get crackerFocusActive => !favoritesOnly &&
+  bool get crackerFocusActive =>
+      !favoritesOnly &&
       filter.cracker != 'any' &&
       kindFilters(filter.section).contains('cracker');
 
@@ -256,10 +266,10 @@ class CatalogController extends ChangeNotifier {
   }
 
   String? get _preferredPreviewKind => switch (filter.status) {
-        'desktop_text' => 'textscreen',
-        'desktop_black' => 'darkscreen',
-        _ => null,
-      };
+    'desktop_text' => 'textscreen',
+    'desktop_black' => 'darkscreen',
+    _ => null,
+  };
 
   /// True when a concrete status filter should drive the card preview (and
   /// the 2×2 thumb order) instead of the done-first default.
@@ -269,9 +279,9 @@ class CatalogController extends ChangeNotifier {
   /// Variant whose preview should be shown on [card] for the active status
   /// filter. The card's canonical done/desktop preview is the fallback.
   CardVariant? displayVariantForCard(GameCard card) => card.previewVariantFor(
-        status: statusPreviewActive ? _preferredPreviewStatus : null,
-        kind: statusPreviewActive ? _preferredPreviewKind : null,
-      );
+    status: statusPreviewActive ? _preferredPreviewStatus : null,
+    kind: statusPreviewActive ? _preferredPreviewKind : null,
+  );
 
   String? displayPreviewPathForCard(GameCard card) {
     final variant = displayVariantForCard(card);
@@ -380,40 +390,42 @@ class CatalogController extends ChangeNotifier {
           ..add(release.crackedBy)
           ..add(release.crew);
       }
-      cards.add(GameCard(
-        id: 'crew:${group.id}',
-        name: group.name,
-        kind: 'crew',
-        letter: '',
-        folder: group.id,
-        displayStatus: '',
-        screenshots: preview != null,
-        statusCounts: const {},
-        layer: '',
-        year: 'unknown',
-        previewPath: preview,
-        variants: const [],
-        info: null,
-        yearNum: 0,
-        publishers: const [],
-        crews: const [],
-        crackers: const [],
-        languages: const [],
-        raw: null,
-        pasti: null,
-        boxscan: null,
-        tos: false,
-        publisherSort: '',
-        crewSort: group.name.toLowerCase(),
-        crackerSort: '',
-        languageSort: '',
-        searchText: searchParts
-            .where((part) => part.isNotEmpty)
-            .join(' ')
-            .toLowerCase(),
-        sortName: group.name.toLowerCase(),
-        crew: group,
-      ));
+      cards.add(
+        GameCard(
+          id: 'crew:${group.id}',
+          name: group.name,
+          kind: 'crew',
+          letter: '',
+          folder: group.id,
+          displayStatus: '',
+          screenshots: preview != null,
+          statusCounts: const {},
+          layer: '',
+          year: 'unknown',
+          previewPath: preview,
+          variants: const [],
+          info: null,
+          yearNum: 0,
+          publishers: const [],
+          crews: const [],
+          crackers: const [],
+          languages: const [],
+          raw: null,
+          pasti: null,
+          boxscan: null,
+          tos: false,
+          publisherSort: '',
+          crewSort: group.name.toLowerCase(),
+          crackerSort: '',
+          languageSort: '',
+          searchText: searchParts
+              .where((part) => part.isNotEmpty)
+              .join(' ')
+              .toLowerCase(),
+          sortName: group.name.toLowerCase(),
+          crew: group,
+        ),
+      );
     }
     return cards;
   }
@@ -604,9 +616,8 @@ class CatalogController extends ChangeNotifier {
   bool get inFavoritesView => currentRel.startsWith(kFavoritesRelPrefix);
 
   /// Section of the current virtual Favorites view, or `''`.
-  String get favoritesViewSection => inFavoritesView
-      ? currentRel.substring(kFavoritesRelPrefix.length)
-      : '';
+  String get favoritesViewSection =>
+      inFavoritesView ? currentRel.substring(kFavoritesRelPrefix.length) : '';
 
   /// Display name of the virtual Favorites folder of [section].
   String favoritesFolderLabel(String section) =>
@@ -625,16 +636,16 @@ class CatalogController extends ChangeNotifier {
 
   /// One virtual Favorites folder per section that currently has favorites.
   List<Entry> get virtualFavoritesEntries => [
-        for (final section in kSections)
-          if (favorites?.pathsForSection(section).isNotEmpty ?? false)
-            Entry(
-              name: favoritesFolderLabel(section),
-              kind: EntryKind.directory,
-              inRoot: true,
-              inPatch: false,
-              isVirtual: true,
-            ),
-      ];
+    for (final section in kSections)
+      if (favorites?.pathsForSection(section).isNotEmpty ?? false)
+        Entry(
+          name: favoritesFolderLabel(section),
+          kind: EntryKind.directory,
+          inRoot: true,
+          inPatch: false,
+          isVirtual: true,
+        ),
+  ];
 
   /// Favorites folders visible at root and first (one per section).
   bool get showFavoritesFolder =>
@@ -666,18 +677,20 @@ class CatalogController extends ChangeNotifier {
           : p.join(config.patchDirectory, rel);
       final inRoot = File(rootAbs).existsSync();
       final inPatch = patchAbs != null && File(patchAbs).existsSync();
-      out.add(Entry(
-        name: p.basename(path),
-        kind: EntryKind.zip,
-        inRoot: inRoot,
-        inPatch: inPatch,
-        // Keep the stored path when the file vanished, so the entry stays
-        // selectable and removable (`*`) and launching reports the missing
-        // ZIP instead of doing nothing.
-        rootPath: inRoot ? rootAbs : (inPatch ? null : path),
-        patchPath: inPatch ? patchAbs : null,
-        isVirtual: false,
-      ));
+      out.add(
+        Entry(
+          name: p.basename(path),
+          kind: EntryKind.zip,
+          inRoot: inRoot,
+          inPatch: inPatch,
+          // Keep the stored path when the file vanished, so the entry stays
+          // selectable and removable (`*`) and launching reports the missing
+          // ZIP instead of doing nothing.
+          rootPath: inRoot ? rootAbs : (inPatch ? null : path),
+          patchPath: inPatch ? patchAbs : null,
+          isVirtual: false,
+        ),
+      );
     }
     return out;
   }
@@ -838,14 +851,134 @@ class CatalogController extends ChangeNotifier {
   /// it exists (SPEC.md R14), otherwise the root copy. Driven by the local
   /// filesystem (not the published index layer), so a ZIP moved between
   /// layers is still launched from wherever it actually lives.
-  String zipPathForVariant(CardVariant v) {
-    final rel = v.rel;
+  String zipPathForVariant(CardVariant v) => zipPathForRel(v.rel);
+
+  /// Absolute path of a root-relative ZIP (patch copy wins when it exists).
+  String zipPathForRel(String rel) {
     final patch = config.patchDirectory;
     if (patch.isNotEmpty) {
       final patchPath = p.join(patch, rel);
       if (File(patchPath).existsSync()) return patchPath;
     }
     return p.join(config.rootDirectory, rel);
+  }
+
+  bool get pirateFinderAvailable => pirateFinderData?.local != null;
+
+  /// Matches a card against the downloaded PirateFinder catalogue. The
+  /// selected ZIP is tried by exact disk-image hashes first; title + gameinfo
+  /// crew/cracker/year is the fallback.
+  Future<PirateFinderMatch?> pirateFinderMatchForCard(
+    GameCard card, {
+    String? rel,
+  }) {
+    final labels = <String>{};
+    final years = <int>{};
+    final publishers = <String>{};
+    for (final value in [...card.crews, ...card.crackers]) {
+      final label = PirateFinderIndex.normalizeLabel(value);
+      if (label.isNotEmpty) labels.add(label);
+    }
+    for (final variant in card.info?.variants ?? const []) {
+      for (final field in const ['crew', 'cracked_by']) {
+        final label = PirateFinderIndex.normalizeLabel(
+          (variant[field] ?? '').toString(),
+        );
+        if (label.isNotEmpty && label != 'original') labels.add(label);
+      }
+      final year = int.tryParse(
+        RegExp(r'(19|20)\d{2}')
+                .firstMatch((variant['release'] ?? '').toString())
+                ?.group(0) ??
+            '',
+      );
+      if (year != null) years.add(year);
+      final publisher = PirateFinderIndex.normalizeLabel(
+        (variant['publisher'] ?? '').toString(),
+      );
+      if (publisher.isNotEmpty) publishers.add(publisher);
+    }
+    if (card.yearNum > 0) years.add(card.yearNum);
+    for (final publisher in card.publishers) {
+      final value = PirateFinderIndex.normalizeLabel(publisher);
+      if (value.isNotEmpty) publishers.add(value);
+    }
+    return _pirateFinderMatch(
+      titles: [card.folder, card.name, card.info?.title ?? ''],
+      rel: rel,
+      labels: labels,
+      years: years,
+      publishers: publishers,
+    );
+  }
+
+  /// Same as [pirateFinderMatchForCard] for a browse-mode ZIP entry.
+  Future<PirateFinderMatch?> pirateFinderMatchForEntry(
+    Entry entry, {
+    String? rel,
+  }) {
+    final info = infoFor(entry);
+    final labels = <String>{};
+    final years = <int>{};
+    final publishers = <String>{};
+    for (final variant in info?.variants ?? const []) {
+      for (final field in const ['crew', 'cracked_by']) {
+        final label = PirateFinderIndex.normalizeLabel(
+          (variant[field] ?? '').toString(),
+        );
+        if (label.isNotEmpty && label != 'original') labels.add(label);
+      }
+      final year = int.tryParse(
+        RegExp(r'(19|20)\d{2}')
+                .firstMatch((variant['release'] ?? '').toString())
+                ?.group(0) ??
+            '',
+      );
+      if (year != null) years.add(year);
+      final publisher = PirateFinderIndex.normalizeLabel(
+        (variant['publisher'] ?? '').toString(),
+      );
+      if (publisher.isNotEmpty) publishers.add(publisher);
+    }
+    final name = entry.name;
+    final withoutExtension = name.contains('.')
+        ? name.substring(0, name.lastIndexOf('.'))
+        : name;
+    return _pirateFinderMatch(
+      titles: [withoutExtension, name, info?.matchedTitle ?? ''],
+      rel: rel ?? relOf(entry),
+      labels: labels,
+      years: years,
+      publishers: publishers,
+    );
+  }
+
+  Future<PirateFinderMatch?> _pirateFinderMatch({
+    required List<String> titles,
+    String? rel,
+    Set<String> labels = const {},
+    Set<int> years = const {},
+    Set<String> publishers = const {},
+  }) async {
+    final controller = pirateFinderData;
+    if (controller == null) return null;
+    final index = await controller.ensureIndex();
+    if (index == null) return null;
+    if (rel != null && rel.isNotEmpty) {
+      try {
+        final hashes = await pirateFinderHashesForZip(zipPathForRel(rel));
+        final exact = index.matchByHashes(hashes);
+        if (exact != null) return exact;
+      } catch (_) {
+        // Unreadable/undecodable ZIP: fall through to the title match.
+      }
+    }
+    return index.matchByTitles(
+      titles.where((title) => title.trim().isNotEmpty),
+      labels: labels,
+      years: years,
+      publishers: publishers,
+    );
   }
 
   // ------------------------------------------------- missing / layer (sync)
@@ -894,7 +1027,6 @@ class CatalogController extends ChangeNotifier {
     return _zipLayerCache[key] ?? '';
   }
 
-
   /// Local overlay layer of the ZIP at [rel]: `BOTH` when present in root and
   /// patch, `ROOT`/`PATCH` when present in only one, `''` when absent. Both
   /// layers are checked regardless of the published layer field.
@@ -904,8 +1036,7 @@ class CatalogController extends ChangeNotifier {
     return _zipLayerCache.putIfAbsent(key, () {
       final inRoot = File(p.join(config.rootDirectory, rel)).existsSync();
       final patch = config.patchDirectory;
-      final inPatch =
-          patch.isNotEmpty && File(p.join(patch, rel)).existsSync();
+      final inPatch = patch.isNotEmpty && File(p.join(patch, rel)).existsSync();
       if (inRoot && inPatch) return 'BOTH';
       if (inPatch) return 'PATCH';
       if (inRoot) return 'ROOT';
@@ -1036,8 +1167,7 @@ class CatalogController extends ChangeNotifier {
   }
 
   Future<void> _scanDir(String dir) async {
-    final rootNames =
-        await _listZipNames(p.join(config.rootDirectory, dir));
+    final rootNames = await _listZipNames(p.join(config.rootDirectory, dir));
     final patch = config.patchDirectory;
     final patchNames = patch.isEmpty
         ? const <String>{}
@@ -1047,8 +1177,9 @@ class CatalogController extends ChangeNotifier {
       final rel = dir.isEmpty ? name : '$dir/$name';
       final inRoot = rootNames.contains(name);
       final inPatch = patchNames.contains(name);
-      _zipLayerCache[rel] =
-          (inRoot && inPatch) ? 'BOTH' : (inPatch ? 'PATCH' : 'ROOT');
+      _zipLayerCache[rel] = (inRoot && inPatch)
+          ? 'BOTH'
+          : (inPatch ? 'PATCH' : 'ROOT');
       rels.add(rel);
     }
     rels.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
@@ -1097,8 +1228,9 @@ class CatalogController extends ChangeNotifier {
     if (variants.isEmpty) return null;
     var idx = (card.focusVariant ?? -1) >= 0 ? card.focusVariant! : -1;
     if (idx < 0 && card.previewPath != null) {
-      final match =
-          variants.indexWhere((v) => v.previewPath == card.previewPath);
+      final match = variants.indexWhere(
+        (v) => v.previewPath == card.previewPath,
+      );
       if (match >= 0) idx = match;
     }
     return variants[idx < 0 ? 0 : idx];
@@ -1134,8 +1266,9 @@ class CatalogController extends ChangeNotifier {
     return p.normalize(p.join(base, normalizeRelSeparators(rel)));
   }
 
-  static final Future<Set<String>> _emptyFolderLayers =
-      Future.value(const <String>{});
+  static final Future<Set<String>> _emptyFolderLayers = Future.value(
+    const <String>{},
+  );
 
   final Map<String, Future<Set<String>>> _cardFolderLayersCache = {};
 
@@ -1192,12 +1325,14 @@ class CatalogController extends ChangeNotifier {
     final out = <CardVariant>[];
     for (final e in browser.list(dir)) {
       if (e.kind != EntryKind.zip) continue;
-      out.add(CardVariant(
-        rel: '$dir/${e.name}',
-        name: e.name,
-        status: '',
-        layer: e.layerStatus.name.toUpperCase(),
-      ));
+      out.add(
+        CardVariant(
+          rel: '$dir/${e.name}',
+          name: e.name,
+          status: '',
+          layer: e.layerStatus.name.toUpperCase(),
+        ),
+      );
     }
     _resolvedCardVariants[card] = out;
     return out;
@@ -1254,8 +1389,11 @@ class CatalogController extends ChangeNotifier {
   /// dedicated Falcon launch path (own machine/TOS, GEMDOS autostart). Sets
   /// [launchError] when the configuration or ZIP is invalid; [launching] while
   /// the process runs.
-  Future<void> launchZip(String zipPath,
-      {HatariVariant? variant, bool? falcon}) async {
+  Future<void> launchZip(
+    String zipPath, {
+    HatariVariant? variant,
+    bool? falcon,
+  }) async {
     final useFalcon = falcon ?? isFalconPath(zipPath);
     if (beforeLaunch != null && !await beforeLaunch!(variant, useFalcon)) {
       return;
@@ -1263,8 +1401,8 @@ class CatalogController extends ChangeNotifier {
     final result = useFalcon
         ? await launchFalcon(config, zipPath, variant: variant)
         : isMagazinePath(zipPath)
-            ? await launchStGemdos(config, zipPath, variant: variant)
-            : await launchHatari(config, zipPath, variant: variant);
+        ? await launchStGemdos(config, zipPath, variant: variant)
+        : await launchHatari(config, zipPath, variant: variant);
     if (result.error != null) {
       launchError = result.error;
       notifyListeners();
@@ -1295,12 +1433,17 @@ class CatalogController extends ChangeNotifier {
 
   /// Launches the ZIP of a catalog card's variant [index] — an index into
   /// [variantsOfCard] (lightbox "Play").
-  Future<void> launchCardVariant(GameCard card, int index,
-      {HatariVariant? variant}) async {
+  Future<void> launchCardVariant(
+    GameCard card,
+    int index, {
+    HatariVariant? variant,
+  }) async {
     final variants = variantsOfCard(card);
     if (index < 0 || index >= variants.length) return;
-    await launchZip(zipPathForVariant(variants[index]),
-        variant: variant ?? defaultVariantForCard(card));
+    await launchZip(
+      zipPathForVariant(variants[index]),
+      variant: variant ?? defaultVariantForCard(card),
+    );
   }
 
   /// Launches the current selection: a ZIP in browse mode, the card's ZIP in
@@ -1407,8 +1550,9 @@ class CatalogController extends ChangeNotifier {
         remoteDir: _remoteDirFor(folder),
         localDir: p.join(config.downloadTargetDirectory, folder),
         onProgress: (done, total) {
-          downloadProgress =
-              total <= 0 ? 'Downloading…' : 'Downloading $done/$total files';
+          downloadProgress = total <= 0
+              ? 'Downloading…'
+              : 'Downloading $done/$total files';
           notifyListeners();
         },
         isCancelled: () => cancelled,
@@ -1440,14 +1584,17 @@ class CatalogController extends ChangeNotifier {
   /// re-reads the freshly downloaded files from disk.
   void _refreshAfterDownload(String folder) {
     final key = _relKey(folder);
-    _zipLayerCache
-        .removeWhere((rel, _) => rel == key || rel.startsWith('$key/'));
+    _zipLayerCache.removeWhere(
+      (rel, _) => rel == key || rel.startsWith('$key/'),
+    );
     _scannedFolderZips.removeWhere(
-        (dir, _) => dir == key || dir.startsWith('$key/'));
+      (dir, _) => dir == key || dir.startsWith('$key/'),
+    );
     _scannedDirs.removeWhere((dir) => dir == key || dir.startsWith('$key/'));
     _scanRequested.removeWhere((dir) => dir == key || dir.startsWith('$key/'));
     _cardFolderLayersCache.removeWhere(
-        (dir, _) => dir == key || dir.startsWith('$key/'));
+      (dir, _) => dir == key || dir.startsWith('$key/'),
+    );
     _resolvedCardVariants.clear();
   }
 
@@ -1475,7 +1622,8 @@ class CatalogController extends ChangeNotifier {
   }
 
   /// Number of selectable items in the center view (entries or cards).
-  int get itemCount => catalogMode ? catalogCards.length : visibleEntries.length;
+  int get itemCount =>
+      catalogMode ? catalogCards.length : visibleEntries.length;
 
   /// Count text for the status bar.
   String get countText {
@@ -1516,8 +1664,9 @@ class CatalogController extends ChangeNotifier {
     }
     final cached = _statusLineCache[section];
     if (cached != null) return cached;
-    return _statusLineCache[section] =
-        List<String>.unmodifiable(_computeStatusLine(section));
+    return _statusLineCache[section] = List<String>.unmodifiable(
+      _computeStatusLine(section),
+    );
   }
 
   final Map<String, List<String>> _statusLineCache = {};
@@ -1540,41 +1689,50 @@ class CatalogController extends ChangeNotifier {
       }
 
       addSegment(
-          'done',
-          universe.anyVariantCountFor(section, 'done'),
-          universe.anyVariantZipCountFor(section, 'done'));
+        'done',
+        universe.anyVariantCountFor(section, 'done'),
+        universe.anyVariantZipCountFor(section, 'done'),
+      );
       final desktopOnly = gameCounts['desktop'] ?? 0;
       final desktopZips = universe.onlyVariantZipCountFor(section, 'desktop');
       final desktopAny = universe.anyVariantCountFor(section, 'desktop');
-      final desktopAnyZips =
-          universe.anyVariantZipCountFor(section, 'desktop');
+      final desktopAnyZips = universe.anyVariantZipCountFor(section, 'desktop');
       addSegment('desktop', desktopOnly, desktopZips);
       if (desktopAny != desktopOnly || desktopAnyZips != desktopZips) {
         addSegment('desktop any', desktopAny, desktopAnyZips);
       }
       addSegment(
-          'pending',
-          universe.pendingAnyVariantCountFor(section),
-          zipCounts['pending'] ?? 0);
+        'pending',
+        universe.pendingAnyVariantCountFor(section),
+        zipCounts['pending'] ?? 0,
+      );
       addSegment(
-          'skipped_disk_n',
-          universe.anyVariantCountFor(section, 'skipped_disk_n'),
-          universe.anyVariantZipCountFor(section, 'skipped_disk_n'));
+        'skipped_disk_n',
+        universe.anyVariantCountFor(section, 'skipped_disk_n'),
+        universe.anyVariantZipCountFor(section, 'skipped_disk_n'),
+      );
       final noUsableOnly = gameCounts['no_usable_shots'] ?? 0;
-      final noUsableZips =
-          universe.onlyVariantZipCountFor(section, 'no_usable_shots');
-      final noUsableAny =
-          universe.anyVariantCountFor(section, 'no_usable_shots');
-      final noUsableAnyZips =
-          universe.anyVariantZipCountFor(section, 'no_usable_shots');
+      final noUsableZips = universe.onlyVariantZipCountFor(
+        section,
+        'no_usable_shots',
+      );
+      final noUsableAny = universe.anyVariantCountFor(
+        section,
+        'no_usable_shots',
+      );
+      final noUsableAnyZips = universe.anyVariantZipCountFor(
+        section,
+        'no_usable_shots',
+      );
       addSegment('no usable shots', noUsableOnly, noUsableZips);
       if (noUsableAny != noUsableOnly || noUsableAnyZips != noUsableZips) {
         addSegment('no usable shots any', noUsableAny, noUsableAnyZips);
       }
       addSegment(
-          'interrupted',
-          universe.anyVariantCountFor(section, 'interrupted'),
-          universe.anyVariantZipCountFor(section, 'interrupted'));
+        'interrupted',
+        universe.anyVariantCountFor(section, 'interrupted'),
+        universe.anyVariantZipCountFor(section, 'interrupted'),
+      );
       // Cracked gameinfo coverage from the manifest (matched folders).
       if (section == 'cracked') {
         final matched = gameinfo.matchedFolders;
@@ -1619,7 +1777,8 @@ class CatalogController extends ChangeNotifier {
     final noInfo = gameinfo.length == 0;
     if (!noIndex && !noInfo) return null;
     final missing = <String>[
-      if (noIndex) 'the screenshot index (${screenshots.indexNameFor(section)})',
+      if (noIndex)
+        'the screenshot index (${screenshots.indexNameFor(section)})',
       if (noInfo) 'the game metadata',
     ].join(' and ');
     return 'No catalog data loaded — missing $missing. Open Settings (⚙) and '
@@ -1638,22 +1797,23 @@ class CatalogController extends ChangeNotifier {
     final name = visible.isEmpty
         ? ''
         : visible[selectedIndex.clamp(0, visible.length - 1)].name;
-    _lastSelections[currentRel] =
-        _SelMemory(selectedIndex, name);
+    _lastSelections[currentRel] = _SelMemory(selectedIndex, name);
   }
 
   void _restoreSelection() {
-    final mem =
-        _lastSelections[currentRel];
+    final mem = _lastSelections[currentRel];
     final visible = visibleEntries;
     if (visible.isEmpty) {
       selectedIndex = 0;
       return;
     }
     if (mem != null) {
-      final byName =
-          visible.indexWhere((e) => e.name == mem.name && mem.name.isNotEmpty);
-      selectedIndex = byName >= 0 ? byName : mem.index.clamp(0, visible.length - 1);
+      final byName = visible.indexWhere(
+        (e) => e.name == mem.name && mem.name.isNotEmpty,
+      );
+      selectedIndex = byName >= 0
+          ? byName
+          : mem.index.clamp(0, visible.length - 1);
     } else {
       selectedIndex = 0;
     }
@@ -1752,7 +1912,8 @@ class CatalogController extends ChangeNotifier {
       final patchPath = config.patchDirectory.isEmpty
           ? null
           : p.join(config.patchDirectory, v.rel);
-      final hit = favs.contains(rootPath) ||
+      final hit =
+          favs.contains(rootPath) ||
           (patchPath != null && favs.contains(patchPath));
       if (!hit) continue;
       final effective = zipPathForVariant(v);
@@ -1861,8 +2022,7 @@ class CatalogController extends ChangeNotifier {
   /// (grid badges, ★ filter, virtual Favorites folder).
   void toggleFavoritePath(String path) {
     favorites?.toggle(path);
-    _entryCache.removeWhere(
-        (key, _) => key.startsWith(kFavoritesRelPrefix));
+    _entryCache.removeWhere((key, _) => key.startsWith(kFavoritesRelPrefix));
     _favoriteFolderRelsCache = null;
     _catalogDirty = true;
     notifyListeners();
@@ -1893,7 +2053,9 @@ class CatalogController extends ChangeNotifier {
     final entry = screenshots[rel];
     if (entry == null) return;
     _pendingStatus.putIfAbsent(
-        rel, () => (status: entry.status, kind: entry.kind));
+      rel,
+      () => (status: entry.status, kind: entry.kind),
+    );
     final normKind = (kind == null || kind.isEmpty) ? null : kind;
     entry.applyStatusKind(status, normKind);
     _rebuildUniverse();
@@ -1979,15 +2141,20 @@ class CatalogController extends ChangeNotifier {
   /// refresh all views. Returns null on success or an error message (lock
   /// taken, IO failure); the disk state and the versions stay untouched
   /// then.
-  String? swapPreviewImage(
-      {required String previewPath, required String candidatePath}) {
+  String? swapPreviewImage({
+    required String previewPath,
+    required String candidatePath,
+  }) {
     try {
       if (isShotgenActive(config.screenshotDirectory)) {
         throw ShotgenLockedException(
-            readShotgenLockPid(config.screenshotDirectory));
+          readShotgenLockPid(config.screenshotDirectory),
+        );
       }
       swapPreviewCandidate(
-          previewPath: previewPath, candidatePath: candidatePath);
+        previewPath: previewPath,
+        candidatePath: candidatePath,
+      );
       // Order matters: clear the caches first, bump afterwards, so widgets
       // recreated by the notify re-read from disk instead of stale entries.
       //

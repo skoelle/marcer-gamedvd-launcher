@@ -4,13 +4,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
-import 'app_paths.dart';
 import 'ftp_downloader.dart';
 
 /// Fixed GitHub release/tag publishing the generic PirateFinder catalogue
@@ -143,9 +143,10 @@ class PirateFinderLocalVersion {
   };
 }
 
-/// App-managed data directory for the PF catalogue JSON.
+/// PF catalogue directory under the shared data directory
+/// (`<DataDir>/piratefinder`). Empty when no data directory is configured.
 String pirateFinderDataDir(DesktopConfig config) =>
-    p.join(downloadedDataDir(config), 'piratefinder');
+    config.resolvePirateFinderDirectory();
 
 String pirateFinderMarkerPath(String dataDir) =>
     p.join(dataDir, kPirateFinderMarkerFileName);
@@ -322,6 +323,10 @@ class PirateFinderDataController extends ChangeNotifier {
   String? error;
   bool checking = false;
   bool downloading = false;
+  bool indexLoading = false;
+  String? indexError;
+  PirateFinderIndex? _index;
+  Future<PirateFinderIndex?>? _indexFuture;
   String message = '';
   int done = 0;
   int total = 0;
@@ -340,7 +345,47 @@ class PirateFinderDataController extends ChangeNotifier {
   );
 
   void refreshLocal() {
-    local = readPirateFinderLocal(dataDir);
+    local = dataDir.isEmpty ? null : readPirateFinderLocal(dataDir);
+  }
+
+  /// Drops a parsed index (data update or config change).
+  void invalidateIndex() {
+    _index = null;
+    _indexFuture = null;
+    indexError = null;
+  }
+
+  bool get hasIndex => _index != null;
+
+  /// Parses the downloaded PF JSON on first use, in a background isolate.
+  Future<PirateFinderIndex?> ensureIndex({bool force = false}) {
+    if (_index != null && !force) return Future.value(_index);
+    if (_indexFuture != null) return _indexFuture!;
+    final current = local;
+    if (current == null || downloading) return Future.value(null);
+    final path = p.join(dataDir, p.basename(current.asset));
+    if (!File(path).existsSync()) return Future.value(null);
+    indexLoading = true;
+    indexError = null;
+    _notify();
+    final future = () async {
+      try {
+        final value = await Isolate.run(
+          () => PirateFinderIndex.fromGzipFile(path),
+        );
+        _index = value;
+        return value;
+      } catch (e) {
+        indexError = 'Could not read PirateFinder data: $e';
+        return null;
+      } finally {
+        indexLoading = false;
+        _indexFuture = null;
+        _notify();
+      }
+    }();
+    _indexFuture = future;
+    return future;
   }
 
   void _notify() {
@@ -376,6 +421,11 @@ class PirateFinderDataController extends ChangeNotifier {
   Future<bool> update({bool Function()? isCancelled}) async {
     final asset = remote;
     if (asset == null || downloading || checking) return false;
+    if (dataDir.isEmpty) {
+      error = 'Set a data directory first.';
+      _notify();
+      return false;
+    }
     downloading = true;
     error = null;
     message = 'Starting…';
@@ -403,6 +453,7 @@ class PirateFinderDataController extends ChangeNotifier {
       );
       writePirateFinderLocal(dataDir, applied);
       local = applied;
+      invalidateIndex();
       return true;
     } on DownloadCancelledException {
       error = 'PirateFinder download cancelled.';
