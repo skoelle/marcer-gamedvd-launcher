@@ -251,7 +251,7 @@ For every `index.json` entry with `rel` split into path parts:
   (`games[]` keyed by the same pair).
 - *(verified)* With these rules, 22,323 of 22,938 index entries (97 %)
   resolve to a gameinfo record; 615 entries have no metadata and are shown
-  as cards without info.
+  as cards without gameinfo.
 - Entries whose `rel` has fewer than 5 parts or whose tree is not the
   cracked scope tree are handled defensively: shown, not joined.
 
@@ -285,8 +285,10 @@ A game folder aggregates the statuses of its ZIPs:
 - `display_status` (drives the badge and the `done`/`desktop`/
   `no_usable_shots` only filters), first match wins: `done` → `desktop` →
   `no_usable_shots` → `interrupted` → `pending` → `skipped_disk_n`. The
-  `desktop_any`/`no_usable_shots_any`/`pending`/`interrupted`/
-  `skipped_disk_n` filters inspect the individual ZIP statuses instead.
+  `desktop_any`/`desktop_text`/`desktop_black`/`no_usable_shots_any`/
+  `pending`/`interrupted`/`skipped_disk_n` filters inspect the individual
+  ZIP statuses instead (`desktop_text`/`desktop_black` additionally require
+  the matching `kind`).
 - `screenshots` (bool): at least one variant has any preview (including
   `no_usable_shots`, which keeps its last capture, section 8.5 of
   `SPEC-screenshot-generator.md`).
@@ -371,7 +373,7 @@ error body `{ "error": "<message>" }`.
     "magazine":{ "pending": 209 },
     "falcon":  { "...": 0 }
   },
-  "status_labels": { "done": "done (game)", "with_screenshot": "with screenshot", "...": "..." },
+  "status_labels": { "done": "done (game)", "desktop_text": "desktop text", "desktop_black": "desktop black", "with_screenshot": "with screenshot", "...": "..." },
   "sections": {
     "cracked": { "games": 3108, "cards": 3108, "with_screenshot": 881, "no_info": 615 },
     "pd":      { "games": 1901, "cards": 1901, "with_screenshot": 0,   "no_info": 0 },
@@ -399,7 +401,7 @@ error body `{ "error": "<message>" }`.
   "show_candidates": true,
   "default_status": "with_screenshot",
   "generated_at": "…",
-  "tool_version": "0.1.0"
+  "tool_version": "0.2.0"
 }
 ```
 
@@ -425,9 +427,9 @@ error body `{ "error": "<message>" }`.
   ZIP-level counts only.
 - `sections[section]` additionally carries `cards` and `with_screenshot`
   (cards, index-backed) and `no_info` (cards without gameinfo), which the
-  statistics bar uses for the `M / N with screenshot` and `N without info`
-  segments; the cracked `coverage.matched_folders` figure stays
-  cracked-only.
+  statistics bar uses for the `N folders`, `M with screenshot` and
+  `N without gameinfo` segments; the cracked
+  `coverage.matched_folders` figure stays cracked-only.
 - `coverage` comes from `manifest.json` if available.
 - `show_candidates` / `default_status` mirror the effective config
   (section 9): the frontend disables the card candidate strip when
@@ -441,7 +443,7 @@ Query parameters (all optional, defaults in parentheses):
 | Parameter | Values | Applies to |
 |---|---|---|
 | `section` | `cracked` (default) \| `pd` \| `utils` \| `magazine` \| `falcon` | view selection |
-| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `desktop_any` \| `no_usable_shots` \| `no_usable_shots_any` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default from `default_status`, normally `with_screenshot`) |
+| `status` | `any` \| `with_screenshot` \| `done` \| `desktop` \| `desktop_any` \| `desktop_text` \| `desktop_black` \| `no_usable_shots` \| `no_usable_shots_any` \| `interrupted` \| `pending` \| `skipped_disk_n` | all (default from `default_status`, normally `with_screenshot`) |
 | `q` | free text | all |
 | `letter` | `0-9` … `Z` (or facet value) \| `any` (default) | all (magazine: magazine name; falcon: letter) |
 | `publisher`, `crew`, `cracker`, `language`, `year` | facet value \| `any` (default) | cracked (+pd/utils where the field exists; magazine: `year` only) |
@@ -472,7 +474,10 @@ Semantics:
   `status=desktop` and `status=no_usable_shots` match the aggregated
   `display_status` (only), so they exclude folders with a higher-priority
   status. `done` matches the aggregated `display_status` (desktop-app
-  parity).
+  parity). `status=desktop_text` and `status=desktop_black` are strict
+  ZIP-level presets: a card matches when **any** variant has status
+  `desktop` and kind `textscreen` / `darkscreen` respectively, even when
+  another ZIP of the folder is `done` (desktop-app parity).
 - `entry` returns exactly one card (regardless of filters/pagination) with
   an additional `position` field: the card's index in the filtered list
   under the requested `sort`/`order` (defaults `name`/`asc`), or `null`
@@ -716,8 +721,12 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
   so the layout does not jump when candidates appear/disappear between
   variants.
 - **Metadata table** (right-hand side panel, fixed width ~380 px): all
-  fields of the selected variant's gameinfo entry, plus all XLS variants
-  of the folder in a compact table (title, cracker, crew, year). The
+  fields of the selected variant's gameinfo entry, then the **This ZIP**
+  table (File, Status, **Kind**, TOS, Layer, Size, Path) and finally all
+  XLS variants of the folder in a compact table (title, cracker, crew,
+  year). The `Kind` row shows the variant's preview classification
+  (`game`/`desktop`/`textscreen`/`darkscreen`/…) or `—` when absent
+  (desktop-app parity). The
   **Year column never wraps** (`white-space: nowrap`). The release
   variant that matches the currently selected ZIP (by cracker or crew
   name contained in the ZIP filename) is **highlighted** with a subtle
@@ -769,18 +778,18 @@ parameter):
 Shown in the header, sourced from `/api/meta`; all counts are for the
 **active section** (desktop-app parity — the status bar is section-aware):
 
-- `X / Y with screenshot` where **both counts are games (cards)** (`Y` is
-  the section's card count), then one segment per status formatted as
-  `done <games> (<zips> zips)` — games from `game_status_counts[section]`,
-  ZIPs from `status_counts[section]`; segments with zero games and zero ZIPs
-  are omitted. The `pending`, `interrupted`, `skipped_disk_n`, `desktop any`
-  and `no usable shots any` segments use the any-variant rule; the
-  `desktop any`/`no usable shots any` segments are shown only when they
-  differ from the corresponding `only` counts. In screenshots-only mode (no
-  join) only the raw ZIP counts are
+- `N folders` and `M with screenshot` (both counts are games/cards; `N`
+  is the section's card count, `M` the cards with a preview), then one
+  segment per status formatted as `done <games> (<zips> zips)` — games from
+  `game_status_counts[section]`, ZIPs from `status_counts[section]`;
+  segments with zero games and zero ZIPs are omitted. The `pending`,
+  `interrupted`, `skipped_disk_n`, `desktop any` and `no usable shots any`
+  segments use the any-variant rule; the `desktop any`/`no usable shots any`
+  segments are shown only when they differ from the corresponding `only`
+  counts. In screenshots-only mode (no join) only the raw ZIP counts are
   shown (`done 1467`).
-- Gameinfo coverage is shown as `info <matched> folders` (cracked only)
-  plus `<no_info> without info` (cards without gameinfo, per section).
+- Gameinfo coverage is shown as `gameinfo <matched> folders` (cracked only)
+  plus `<no_info> without gameinfo` (cards without gameinfo, per section).
 - The tool version (`gallery <x.y.z>`) is shown **right-aligned** at the
   end of the statistics bar; the footer line keeps only the data
   freshness (the active section's index mtime, gameinfo `generated_at`).
@@ -792,7 +801,7 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | Tab | Source | Cards | Notes |
 |---|---|---|---|
 | games | join of `index.json` + `games-cracked.json` | grouped, with previews | default view (label `games`, section key `cracked`) |
-| pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`) |
+| pd | `index-pd.json` ∪ `games-pd.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`), TOS/Bad |
 | utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`) |
 | magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `with_screenshot`); `letter` = magazine name, `year` from the file name |
 | falcon | `index-falcon.json` (index-only, no gameinfo) | grouped by `(letter, folder)` like the cracked view | status filter (default `with_screenshot`); Falcon titles launch with the Falcon machine/TOS 4.04 (desktop) |
@@ -800,6 +809,8 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 - Letter navigation, search, sorting, the status filter and the
   publisher/language/year facets work in all sections; the remaining
   flag/tos/crew/cracker filters only where `SECTION_CONTROLS` lists them.
+  In particular, `pd` exposes the `TOS/Bad` (`tos=has`) filter because its
+  gameinfo variants carry `tos_bad` notes.
 - The `magazines` section (section key `magazine`, `Bonus/Magazine Cover
   Disks`) has no metadata: its cards come from `index-magazine.json` grouped
   per issue by a filename parser (`ST Action 41`, `ST Computer 1995-02`,
@@ -852,9 +863,11 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
    four screenshots of the folder's other variants (section 6.3). Clicking
    the card opens the lightbox on that variant.
 4. **Status presets**: `with_screenshot` (default for every section), `done`,
-   `desktop`, … as listed in section 5.2; `pending`
-   matches a card when **any** of its ZIPs is pending (section 5.3). The
-   statistics bar always shows the active section's numbers.
+   `desktop`, `desktop_text`, `desktop_black`, … as listed in section 5.2;
+   `pending` matches a card when **any** of its ZIPs is pending (section
+   5.3); `desktop_text`/`desktop_black` are strict ZIP-level presets
+   (status `desktop` + kind `textscreen`/`darkscreen`). The statistics bar
+   always shows the active section's numbers.
 5. **Sorting**: `name` (default, case-insensitive), `year` (numeric, `unknown`
    last), `publisher`, `cracker` (=`cracked_by`), `crew` (alphabetical,
    empty values last), `order` `asc|desc`; ties broken by name then `rel`
@@ -961,8 +974,9 @@ Manual test pass (required before delivery, per AGENTS.md policy):
 3. **Search**: single word, multi word, case variants, umlauts, term that
    exists only in a ZIP file name, term matching only a publisher, no-hit
    query (empty state).
-4. **Filters/facets**: each status preset; each tri-state flag; combined
-   facets (AND); facet + search; letter `0-9`/`A`; clear-all.
+4. **Filters/facets**: each status preset (including `desktop text` and
+   `desktop black`); each tri-state flag; combined facets (AND); facet +
+   search; `pd` TOS/Bad; letter `0-9`/`A`; clear-all.
 5. **Sort**: every sort key × both orders; verify `unknown` year placement
    and stable order across pages (walk pages 1→2→3, no duplicates).
 6. **Grouping**: a folder with many ZIPs shows one card with `×N`; lightbox
@@ -986,15 +1000,21 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     first and the 2×2 grid is used. Without a concrete status filter, a 2×2
     thumb grid never shows exactly one `done` thumb (that card shows the game
     shot large); `status=pending` lists a `done`+`pending` folder;
-    `done <games> (<zips> zips)` segments match the dropdown counts.
+    `status=desktop_text`/`desktop_black` list cards with at least one
+    matching status+kind ZIP (even when another ZIP is `done`);
+    `done <games> (<zips> zips)` segments match the dropdown counts; the
+    statistics bar shows `N folders`, `M with screenshot`,
+    `gameinfo <matched> folders` and `N without gameinfo`.
     The **pd/utils** views show index-backed cards with previews unioned
     with gameinfo-only metadata cards, their statistics bar uses the
     per-section counts, and their status filter defaults to the configured `default_status` (normally `with_screenshot`).
 14. **Lightbox order/groups**: filmstrip lists screenshot variants first
     and `↑`/`↓` follows that order; the variant counter shows the
-    filmstrip position; a crew/cracker link in Game info and a
-    release-variant row both switch to that group's ZIP (unknown group →
-    variant 0); header shows layer + status histogram + year badges.
+    filmstrip position; the side panel shows **This ZIP** (including the
+    **Kind** row) before the **Release variants** table; a crew/cracker
+    link in Game info and a release-variant row both switch to that
+    group's ZIP (unknown group → variant 0); header shows layer + status
+    histogram + year badges.
 15. **Help**: `?` opens the overlay, the next key closes it, `?` typed
     into the search input stays in the input.
 16. **Touch/no-hover**: with a touch-only pointer (DevTools device
@@ -1054,7 +1074,8 @@ A conforming implementation satisfies all of the following.
 - [x] D5 Variant payloads carry `kind`; `game_status_counts` follows the
       any-variant `pending`/`interrupted`/`skipped_disk_n`/`desktop_any`/
       `no_usable_shots_any` rules (sections 5.2/5.3), and those filters match
-      per ZIP, not via `display_status`.
+      per ZIP, not via `display_status`. `desktop_text`/`desktop_black`
+      match status `desktop` + the corresponding `kind` per ZIP.
 
 **API**
 - [x] A1 All endpoints of section 5 exist with the documented parameters.
@@ -1072,15 +1093,17 @@ A conforming implementation satisfies all of the following.
       without gameinfo).
 - [x] U4 Deep links `?entry=` and list-state params behave per section 6.9
       (combined sort dropdown still writes `sort`+`order`).
-- [x] U5 Statistics bar shows the section 6.7 format (games/ZIPs segments,
-      `… without info`, right-aligned version) plus the current result
+- [x] U5 Statistics bar shows the section 6.7 format (`N folders`,
+      `M with screenshot`, games/ZIPs segments, `gameinfo N folders`,
+      `N without gameinfo`, right-aligned version) plus the current result
       count.
 - [x] U6 PD/Utils sections render metadata cards without previews and are
-      labelled `pd`/`utils`.
+      labelled `pd`/`utils`; `pd` exposes the TOS/Bad filter.
 - [x] U7 Card thumbs follow the section 6.3 ordering, with the single
       game-shot exception.
 - [x] U8 Lightbox filmstrip order (screenshots first), header badges and
-      clickable crew/cracker groups follow section 6.5.
+      clickable crew/cracker groups follow section 6.5. The side panel
+      shows **This ZIP** (with the `Kind` row) before **Release variants**.
 - [ ] U9 No hover info on touch/mobile: panel gated behind
       `(hover: hover) and (pointer: fine)`, sticky `:hover` highlights
       behind `@media (hover: hover)`, panel dismissed on key press/scroll

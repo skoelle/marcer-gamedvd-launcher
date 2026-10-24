@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-TOOL_VERSION = "0.1.0"
+TOOL_VERSION = "0.2.0"
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
@@ -39,6 +39,8 @@ STATUS_LABELS = {
     "done": "done (game)",
     "desktop": "desktop (only)",
     "desktop_any": "desktop (any ZIP)",
+    "desktop_text": "desktop text",
+    "desktop_black": "desktop black",
     "no_usable_shots": "no usable shots (only)",
     "no_usable_shots_any": "no usable shots (any ZIP)",
     "interrupted": "interrupted",
@@ -743,6 +745,14 @@ def _matches(card, params, section, default_status="with_screenshot"):
             return False
     elif st == "desktop_any":
         if not any(v["status"] == "desktop" for v in card["variants"]):
+            return False
+    elif st in ("desktop_text", "desktop_black"):
+        # strict status+kind presets: textscreen / darkscreen desktop shots.
+        # Like the desktop app, these are ZIP-level filters (a card with a
+        # done ZIP still matches when it has a desktop text/black variant).
+        kind = "textscreen" if st == "desktop_text" else "darkscreen"
+        if not any(v["status"] == "desktop" and v.get("kind") == kind
+                   for v in card["variants"]):
             return False
     elif st == "no_usable_shots_any":
         if not any(v["status"] == "no_usable_shots" for v in card["variants"]):

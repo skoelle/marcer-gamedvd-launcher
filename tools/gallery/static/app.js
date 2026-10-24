@@ -9,6 +9,8 @@ const STATUS_OPTIONS = [
   ["done", "done (game)"],
   ["desktop", "desktop (only)"],
   ["desktop_any", "desktop (any ZIP)"],
+  ["desktop_text", "desktop text"],
+  ["desktop_black", "desktop black"],
   ["no_usable_shots", "no usable shots (only)"],
   ["no_usable_shots_any", "no usable shots (any ZIP)"],
   ["interrupted", "interrupted"],
@@ -27,7 +29,7 @@ const SECTION_INDEX_NAMES = {
 const SECTION_CONTROLS = {
   cracked: ["status", "publisher", "crew", "cracker", "language", "year",
             "raw", "pasti", "boxscan", "tos"],
-  pd: ["status", "publisher", "language", "year"],
+  pd: ["status", "publisher", "language", "year", "tos"],
   utils: ["status", "publisher", "crew", "cracker", "language", "year",
           "raw", "tos"],
   magazine: ["status", "year"],
@@ -225,7 +227,8 @@ function renderStats(extra) {
   const parts = [];
   if (meta.gameinfo && sec.cards != null) {
     // both counts are games (cards), like the desktop status bar
-    parts.push(`<span class="st"><b>${sec.with_screenshot}</b> / ${sec.cards} with screenshot</span>`);
+    parts.push(`<span class="st"><b>${sec.cards}</b> folders</span>`);
+    parts.push(`<span class="st"><b>${sec.with_screenshot}</b> with screenshot</span>`);
   } else {
     parts.push(`<span class="st"><b>${idx.entries || 0}</b> index entries</span>`);
   }
@@ -250,12 +253,12 @@ function renderStats(extra) {
   // gameinfo coverage (matched folders) is cracked-only (desktop parity)
   if (section === "cracked" && meta.coverage
       && meta.coverage.matched_folders != null) {
-    parts.push(`<span class="st">info <b>${meta.coverage.matched_folders}</b> folders</span>`);
+    parts.push(`<span class="st">gameinfo <b>${meta.coverage.matched_folders}</b> folders</span>`);
   }
   const noInfo = sec.no_info || 0;
   // magazine/falcon cards are index-only by design — never report missing info
   if (noInfo && section !== "magazine" && section !== "falcon") {
-    parts.push(`<span class="st">${noInfo} without info</span>`);
+    parts.push(`<span class="st">${noInfo} without gameinfo</span>`);
   }
   if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
   parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
@@ -794,6 +797,16 @@ function renderLightbox() {
     if (i.boxscan) flags.push("Boxscan");
     add("Flags", flags.join(", "));
     let html = `<h3>Game info</h3><table>${rows.join("")}</table>`;
+    if (v) {
+      html += `<h3>This ZIP</h3><table>` +
+        `<tr><td>File</td><td>${esc(v.name)}</td></tr>` +
+        `<tr><td>Status</td><td>${esc(v.status)}</td></tr>` +
+        `<tr><td>Kind</td><td>${esc(v.kind || "—")}</td></tr>` +
+        (v.tos ? `<tr><td>TOS</td><td>${esc(v.tos)}</td></tr>` : "") +
+        (v.layer ? `<tr><td>Layer</td><td>${esc(v.layer)}</td></tr>` : "") +
+        (v.size ? `<tr><td>Size</td><td>${(v.size / 1024).toFixed(0)} KB</td></tr>` : "") +
+        `<tr><td>Path</td><td>${esc(v.rel)}</td></tr></table>`;
+    }
     if (i.variants && i.variants.length > 1) {
       // mark the gameinfo variant that matches the currently selected ZIP
       let selIdx = -1;
@@ -831,21 +844,13 @@ function renderLightbox() {
         }).join("") +
         `</table>`;
     }
-    if (v) {
-      html += `<h3>This ZIP</h3><table>` +
-        `<tr><td>File</td><td>${esc(v.name)}</td></tr>` +
-        `<tr><td>Status</td><td>${esc(v.status)}</td></tr>` +
-        (v.tos ? `<tr><td>TOS</td><td>${esc(v.tos)}</td></tr>` : "") +
-        (v.layer ? `<tr><td>Layer</td><td>${esc(v.layer)}</td></tr>` : "") +
-        (v.size ? `<tr><td>Size</td><td>${(v.size / 1024).toFixed(0)} KB</td></tr>` : "") +
-        `<tr><td>Path</td><td>${esc(v.rel)}</td></tr></table>`;
-    }
     side.innerHTML = html;
   } else {
     let html = `<h3>No game info</h3>`;
     if (v) {
       html += `<table><tr><td>File</td><td>${esc(v.name)}</td></tr>` +
         `<tr><td>Status</td><td>${esc(v.status)}</td></tr>` +
+        `<tr><td>Kind</td><td>${esc(v.kind || "—")}</td></tr>` +
         (v.tos ? `<tr><td>TOS</td><td>${esc(v.tos)}</td></tr>` : "") +
         (v.layer ? `<tr><td>Layer</td><td>${esc(v.layer)}</td></tr>` : "") +
         `<tr><td>Path</td><td>${esc(v.rel)}</td></tr></table>`;

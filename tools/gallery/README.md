@@ -33,6 +33,14 @@ The server revalidates the section indices and the metadata files on each
 API request (mtime check), so a page reload shows the latest screenshot-run
 results. There is no live refresh/polling in v1.
 
+## Tests
+
+Backend filter/card helpers use stdlib `unittest` only:
+
+```bash
+.venv/bin/python -m unittest discover -s tools/gallery -p 'test_*.py'
+```
+
 ## Features & Keyboard
 
 - **Sections**: tabs for games (cracked) / pd / utils / magazines / falcon
@@ -40,14 +48,17 @@ results. There is no live refresh/polling in v1.
   its own screenshot index with the matching `games-*.json`; the `magazines`
   and `falcon` sections are index-only (`index-magazine.json`,
   `index-falcon.json`; no gameinfo).
-- **Filters**: status preset, search, letter nav, publisher/crew/cracker/
-  language/year facets, RAW/PASTI/Boxscan/TOS tri-state flags, and one
-  combined sort dropdown (`name asc` … `crew desc`). The URL always
-  reflects the current list state (shareable).
-- **Statistics bar**: section-aware — `X / Y with screenshot` (both games),
-  per-status segments as `done <games> (<zips> zips)` (the `pending`
-  segment and filter count cards whose **any** ZIP is pending), `info N
-  folders` (cracked), `N without info` and the tool version right-aligned.
+- **Filters**: status preset (including the strict `desktop text` /
+  `desktop black` ZIP-level presets), search, letter nav, publisher/crew/
+  cracker/language/year facets, RAW/PASTI/Boxscan tri-state flags, TOS/Bad
+  (also available in `pd`), and one combined sort dropdown
+  (`name asc` … `crew desc`). The URL always reflects the current list
+  state (shareable).
+- **Statistics bar**: section-aware — `N folders`, `M with screenshot`
+  (both games/cards), per-status segments as `done <games> (<zips> zips)`
+  (the `pending` segment and filter count cards whose **any** ZIP is
+  pending), `gameinfo N folders` (cracked), `N without gameinfo` and the
+  tool version right-aligned.
 - **Multi-variant grid**: without an active crew/cracker filter, cards with
   several screenshots show up to four variant thumbnails (best first:
   status tier, then `kind: game`); a card with exactly **one** game shot
@@ -61,10 +72,10 @@ results. There is no live refresh/polling in v1.
   shows a hint plus up to four screenshots of the folder's other variants.
 - **Lightbox**: integer-upscaled screenshot, variant filmstrip (click or
   `↑`/`↓`; variants with a screenshot are listed first), candidate images,
-  header badges (layer, status histogram, year), metadata +
-  release-variant table with the open ZIP highlighted, and **clickable
-  crew/cracker groups** (Game info values and release-variant rows jump to
-  that group's ZIP), deep link `?entry=<rel>`.
+  header badges (layer, status histogram, year), metadata with **This ZIP**
+  (including the `Kind` row) before the release-variant table, the open ZIP
+  highlighted, and **clickable crew/cracker groups** (Game info values and
+  release-variant rows jump to that group's ZIP), deep link `?entry=<rel>`.
 - **Deep links**: `?entry=…` jumps to the card's page and opens it;
   closing the lightbox keeps the list state.
 - **Help**: `?` opens the keyboard overview; any key closes it.
