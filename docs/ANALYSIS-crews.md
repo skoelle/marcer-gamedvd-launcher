@@ -5,8 +5,10 @@ metadata (`games-cracked.json`). The goal is a **crew view** for the cracked
 section: which crews and scene groups have the most release ZIPs, analogous to
 the catalog sections `games`, `pd`, `utils`, `magazines` and `falcon`.
 
-Tool: [`tools/crew-analysis`](../tools/crew-analysis/README.md). The analysis is
-read-only and does not modify the game trees or the catalog artifacts.
+Tool: [`tools/crew-analysis`](../tools/crew-analysis/README.md). It is
+read-only towards the game trees and the normal `games-*.json`; it writes the
+derived `crews.json`/`crew-images.json` into `GameinfoDirectory` and audit files
+into `local/crew-analysis/`.
 
 ## Data sources
 
@@ -21,6 +23,37 @@ read-only and does not modify the game trees or the catalog artifacts.
 cracked Title Sorted tree has 10,722 direct release ZIPs. Only 5,796 direct
 ZIPs match a Crew Sorted ZIP by exact basename. The remaining releases are
 attributed through `games-cracked.json` and alias/fuzzy matching.
+
+## Build the data
+
+The normal game metadata is a prerequisite; this tool does not create it.
+
+```sh
+# 1) normal gameinfo -> games-*.json + manifest + unmatched report
+tools/gameinfo-gen/run.sh extract
+
+# 2) screenshot index + PNGs (or reuse an existing screenshot archive)
+tools/screenshot-gen/run.sh run --scope cracked
+
+# 3) crew data -> <GameinfoDirectory>/crews.json + local/crew-analysis/
+tools/crew-analysis/run.sh
+
+# 4) optional: crew card images -> <GameinfoDirectory>/crew-images.json
+tools/crew-analysis/run.sh images --top 128 --write-images --force
+```
+
+- Step 2 can be skipped for the ranking with `crew-analysis/run.sh --scan`
+  (it reads `Title Sorted` directly); `images` requires the screenshot
+  index/sidecars.
+- `crew-analysis` reads `games-cracked.json`; it never modifies the
+  `games-*.json` files.
+- Generate screenshots and crew data from the same snapshot. `crews.json`
+  stores full ZIP rel paths and `crew-images.json` references PNG
+  basenames/paths from the screenshot archive.
+- `gameinfo-*.zip` packaging can include the normal metadata plus the optional
+  `crews.json`/`crew-images.json` (the app falls back when they are absent).
+  The archive packaging/upload itself is outside `tools/asset-manifest`, which
+  only publishes the `latest.json` pointer.
 
 ## Method
 

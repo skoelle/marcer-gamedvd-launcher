@@ -16,6 +16,33 @@ the current tab selection (currently 60 groups) and the data-quality caveats.
 | `<GameinfoDirectory>/games-cracked.json` | `crew` / `cracked_by` metadata per game folder |
 | `<ScreenshotDirectory>/index.json` | fast merged ZIP list (used by default; `--scan` reads the filesystem instead) |
 
+## Build order / prerequisites
+
+`crew-analysis` reads the normal game metadata; it does not create it. Run the
+pipeline in this order:
+
+```sh
+# 1) normal gameinfo (required input)
+tools/gameinfo-gen/run.sh extract
+
+# 2) screenshot index + PNGs (or reuse an existing archive)
+tools/screenshot-gen/run.sh run --scope cracked
+
+# 3) crew data (writes <GameinfoDirectory>/crews.json)
+tools/crew-analysis/run.sh
+
+# 4) optional: crew card images (writes <GameinfoDirectory>/crew-images.json)
+tools/crew-analysis/run.sh images --top 128 --write-images --force
+```
+
+- Step 2 can be skipped for the ranking by using `--scan` (reads
+  `Title Sorted` directly); `images` needs the screenshot index/sidecars.
+- `crew-analysis` never writes or modifies `games-*.json`. It only adds
+  `crews.json` and `crew-images.json` to `GameinfoDirectory`.
+- Generate screenshots and crew data from the same data snapshot:
+  `crew-images.json` references PNG basenames/paths from the screenshot
+  archive.
+
 ## Usage
 
 ```sh

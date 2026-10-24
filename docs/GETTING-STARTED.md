@@ -130,7 +130,7 @@ MarcersGameDVD-Data/
 | `RootDirectory` | yes | The local Marcer GameDVD game tree. Navigation never leaves it. |
 | `PatchDirectory` | no | Optional overlay/patch tree. Files there take precedence over the root. Leave empty for no patch layer. |
 | `ScreenshotDirectory` | no | Target for the screenshot index (`index.json`, `index-pd.json`, `index-utils.json`, `index-magazine.json`, `index-falcon.json`) and the PNG previews. |
-| `GameinfoDirectory` | no | Target for the game metadata (`games-*.json`). There is no implicit fallback. |
+| `GameinfoDirectory` | no | Target for the game metadata (`games-*.json`) and the optional crew data (`crews.json`, `crew-images.json`). There is no implicit fallback. |
 | `AtariLegendDirectory` | no | Optional AtariLegend metadata cache (`atarilegend.json`, `atarilegend-texts.json`). |
 
 Without screenshots/gameinfo the catalog is empty or incomplete; the app then
@@ -230,7 +230,9 @@ download buttons. The same connection is used for:
    The newest `screenshots-*.zip` is downloaded and extracted into that folder
    (the folder is created when missing).
 3. Set **`GameinfoDirectory`** and click **Download from FTP** next to it. The
-   newest `gameinfo-*.zip` is extracted there.
+   newest `gameinfo-*.zip` is extracted there. It normally contains the game
+   metadata; newer archives may also contain `crews.json`/`crew-images.json`
+   for the Crews tab.
 4. Optional: set **`AtariLegendDirectory`** and click **Download AtariLegend
    data**. This downloads the weekly AtariLegend dump, builds the compact cache
    and can be repeated later. AtariLegend data is CC BY-NC-SA 4.0 and is not
@@ -363,6 +365,7 @@ in a writable folder.
 | macOS: settings/favorites/self-update do not stick | Quit, clear the quarantine and/or re-extract the whole ZIP into a different normal folder (section 7.2). |
 | `Operation not permitted` on a configured path | Grant the macOS permission prompt, or use a folder outside Downloads/Documents/Desktop (section 7.3). |
 | Catalog is empty | Set `ScreenshotDirectory`/`GameinfoDirectory` and use **Download from FTP**; then select status **any**. |
+| Crews tab is empty | The gameinfo archive contains no `crews.json`; use a newer `gameinfo-*.zip` or generate it with `tools/crew-analysis/run.sh` (after `tools/gameinfo-gen/run.sh extract`). |
 | FTP download fails | Check host/port (community port **2121**), user/password and `Ftp.RemoteBase` / `Ftp.AssetsRemote`. |
 | A card shows `MISSING` | Use **Download folder** in the detail sidebar (requires FTP), or sync the archive with `ftp-sync`. |
 | Hatari does not start | Install Hatari via the settings row (Windows/macOS) or set the Linux binary path. |

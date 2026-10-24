@@ -31,9 +31,27 @@ title-sorted trees in ROOT and PATCH, matches folders to XLS titles
 - `manifest.json` (counts, source mtimes, match statistics)
 - `unmatched-report.txt` (folders without data, titles without folder)
 
-The extractor is the only writer of that directory. It never modifies the
-XLS sources or the game trees. Rerun whenever the XLS files change
-(`check` detects staleness).
+`extract` writes only the normal metadata files listed above. It never modifies
+the XLS sources or the game trees. Other tools add derived files to the same
+directory: `tools/crew-analysis` writes `crews.json` and `crew-images.json`.
+Rerun `extract` whenever the XLS files change (`check` detects staleness); rerun
+`tools/crew-analysis` afterwards so the crew data joins the new metadata.
+
+## Build order
+
+This tool is step 1 of the catalog-data pipeline:
+
+```sh
+tools/gameinfo-gen/run.sh extract          # 1) games-*.json
+tools/screenshot-gen/run.sh run --scope cracked  # 2) index.json + PNGs
+tools/crew-analysis/run.sh                 # 3) crews.json
+tools/crew-analysis/run.sh images --top 128 --write-images --force  # 4) optional
+```
+
+`crew-analysis` only reads `games-cracked.json`; it never rewrites the
+`games-*.json` files. See
+[`ANALYSIS-crews.md`](../../docs/ANALYSIS-crews.md) and the
+[crew-analysis README](../crew-analysis/README.md).
 
 ## Config
 

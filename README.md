@@ -485,6 +485,15 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 `no_game_image` (offline `reclassify` pass; offline `cleanup-duplicates` pass removes pixel-exact duplicate candidates, updates index + metadata and prints a 10-second progress line; offline `promote-app-screens` pass scans `desktop` candidates backwards (skipping TTP dialogs, GEM file windows, blank screens and the plain desktop) and promotes the remaining app screen, resetting TTP-only entries to desktop/desktop; drive-LED resets re-captured via
 `run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview; old titles that hang on TOS 1.04 are re-captured via `run --retry-no-usable --tos 1.02` (a success records a sparse `tos: "1.02"` marker shown as a `TOS 1.02` badge in the gallery/desktop app, failed attempts go to `tos_tried`); the root/patch overlay merge is case-insensitive for file **and** folder names, so each directory has exactly one canonical output spelling; processing happens in named **scopes** — one scope per invocation via `--scope`, default `cracked` on `index.json`, the opt-in `utils` scope (`Title Sorted/Utilitys - Title Sorted`) on `index-utils.json`, the opt-in `pd` scope (`Title Sorted/PD Games - Title Sorted`) on `index-pd.json`, the opt-in `magazine` scope (`Bonus/Magazine Cover Disks`, scope-local `exclude_dirs: ["dupes"]`) on `index-magazine.json`, the opt-in `falcon` scope (`Falcon 030/Title Sorted`, own TOS 4.04 + Falcon profile, GEMDOS titles extracted and autostarted with `-d`/`--auto`; the static TOS 4.04 boot screens (Atari logo, plain green Videl stage) are detected/rejected before preview selection and removed from older shots via the offline `cleanup-boot-logo` pass) on `index-falcon.json`; monitor mode comes from the gameinfo `screen_format` rules (`MARCER_DATA_DIR/games-<scope>.json`: utils mono unless `Not Mono`/`Low`/`Mid`, including utils entries without a gameinfo match, pd mono only for all-`High` folders) with the `mono_dir_suffix` folder check as fallback; mono boots Hatari `--mono --tos-res high` (ST high res 640x400), and the rules affect future captures only). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
 
+
+**Catalog-data pipeline:** `tools/gameinfo-gen/run.sh extract` (normal
+`games-*.json`) → `tools/screenshot-gen/run.sh run --scope cracked`
+(`index.json` + PNGs) → `tools/crew-analysis/run.sh` (`crews.json`) →
+`tools/crew-analysis/run.sh images --top 128 --write-images --force`
+(optional `crew-images.json`). `crew-analysis` only reads
+`games-cracked.json`; it never rewrites the normal gameinfo files. Screenshots
+and crew data should come from the same data snapshot.
+
 ---
 
 ## 🚀 Release Process

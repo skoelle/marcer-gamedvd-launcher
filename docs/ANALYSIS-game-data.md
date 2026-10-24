@@ -418,6 +418,12 @@ Non-goals: writing anywhere under `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR`
 (generated output goes exclusively to `MARCER_DATA_DIR`); network access;
 modifying the XLS sources.
 
+`extract` writes only the normal `games-*.json` metadata (+ manifest/report).
+The crew artifacts are derived data: run `tools/crew-analysis/run.sh`
+afterwards to add `crews.json`/`crew-images.json` to the same
+`MARCER_DATA_DIR`. See [`ANALYSIS-crews.md`](ANALYSIS-crews.md) for the build
+order and the optional image step.
+
 ---
 
 ## 7. Roadmap / Next Steps
