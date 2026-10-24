@@ -5,7 +5,7 @@ ZIPs. The result is the "crew view" used when looking at the cracked section the
 same way the catalog exposes `games`, `pd`, `utils`, `magazines` and `falcon`.
 
 See [`ANALYSIS-crews.md`](../../docs/ANALYSIS-crews.md) for the methodology,
-the current top 48 and the data-quality caveats.
+the current tab selection (currently 60 groups) and the data-quality caveats.
 
 ## Data sources
 
@@ -26,8 +26,8 @@ tools/crew-analysis/run.sh --include-subdirs  # include STX/Original/Demo/RAW/..
 tools/crew-analysis/run.sh --out /tmp/crews
 
 # Phase 2: cracktro image suggestions for the top crews
-tools/crew-analysis/run.sh images --top 48 --per-crew 3
-tools/crew-analysis/run.sh images --top 48 --write-images   # starter crew-images.json
+tools/crew-analysis/run.sh images --top 128 --per-crew 3
+tools/crew-analysis/run.sh images --top 128 --write-images   # starter crew-images.json
 # curated overrides in tools/crew-analysis/manual-images.json are merged
 ```
 
@@ -74,7 +74,7 @@ The per-crew release list consumed by the desktop app's **Crews** tab:
 }
 ```
 
-It contains **all** groups (the UI starts with the top 48 cards). The
+It contains **all** groups; the UI shows the curated selection (currently 60, cap 128). The
 `image` field is reserved for the later cracktro/logo curation phase.
 `--crews-out` overrides the path (default `<GameinfoDirectory>/crews.json`).
 
@@ -126,6 +126,12 @@ so re-running the pipeline never silently replaces a curated pick.
 - `aliases.json` — canonical group names and their aliases.
 - `exclude.txt` — labels that are not scene groups (placeholders, region/
   language notes, …).
+- `crew-tab.json` — tab selection: `include_until` (visible through this
+  group), `keep` (visible after the cutoff), `exclude` (always hidden). The
+  group stays in `crews.json` (with `"excluded": true`) and in the ranking
+  audit; the app filters it out, and `images` skips it.
+- `manual-images.json` — curated crew card images, merged by
+  `images --write-images`.
 
 The tool applies the registry plus generic rules (leading `The`, region
 descriptors such as `- USA`, combined-credit normalization, abbreviations and a

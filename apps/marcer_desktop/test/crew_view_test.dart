@@ -248,17 +248,18 @@ void main() {
     expect(c.catalogCards.every((card) => card.crew == null), isTrue);
   });
 
-  test('crews tab shows only the top 48 groups', () async {
+  test('crews tab shows the top 128 groups after exclusions', () async {
     final groups = [
-      for (var i = 1; i <= 50; i++)
+      for (var i = 1; i <= 130; i++)
         {
           'id': 'crew-$i',
           'name': 'Crew ${i.toString().padLeft(2, '0')}',
           'kind': 'crew',
           'rank': i,
-          'zips': 51 - i,
+          'zips': 131 - i,
           'aliases': ['Crew $i'],
           'image': null,
+          'excluded': i == 10,
           'releases': <Map<String, dynamic>>[],
         },
     ];
@@ -274,10 +275,11 @@ void main() {
     addTearDown(c2.dispose);
     await c2.init();
     c2.setSection('crew');
-    expect(c2.crews.length, 50);
-    expect(c2.catalogCards, hasLength(48));
+    expect(c2.crews.length, 129);
+    expect(c2.catalogCards, hasLength(128));
     expect(c2.catalogCards.first.crew?.name, 'Crew 01');
-    expect(c2.statusLine, contains('top 48 of 50'));
+    expect(c2.crews.groups.any((g) => g.name == 'Crew 10'), isFalse);
+    expect(c2.statusLine, contains('top 128 of 129'));
   });
 
   testWidgets('crew detail lists releases and opens one on tap', (

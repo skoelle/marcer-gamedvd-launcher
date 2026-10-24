@@ -142,6 +142,58 @@ def load_exclude(path: Path) -> set[str]:
     return out
 
 
+def load_tab_selection(path: Path) -> dict:
+    if not path.is_file():
+        return {"include_until": "", "keep": set(), "exclude": set()}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        sys.exit(f"error: cannot read crew-tab selection {path}: {exc}")
+    return {
+        "include_until": norm(str(data.get("include_until") or "")),
+        "keep": {norm(str(value)) for value in data.get("keep", []) if str(value).strip()},
+        "exclude": {norm(str(value)) for value in data.get("exclude", []) if str(value).strip()},
+    }
+
+
+def tab_selection_flags(names: list[str], selection: dict) -> dict[str, bool]:
+    """Map normalized group name -> excluded flag for the Crews tab.
+
+    Without `include_until` all groups are visible except explicit excludes.
+    With it, groups up to the cutoff are visible, and only the `keep` groups
+    after the cutoff remain.
+    """
+    include_until = selection["include_until"]
+    keep = selection["keep"]
+    exclude = selection["exclude"]
+    normalized = [norm(name) for name in names]
+    if not include_until:
+        return {name: name in exclude for name in normalized}
+
+    flags: dict[str, bool] = {}
+    reached = False
+    found = False
+    for name in normalized:
+        if name == include_until:
+            found = True
+        if name in exclude:
+            flags[name] = True
+            if name == include_until:
+                reached = True
+            continue
+        if not reached:
+            flags[name] = False
+            if name == include_until:
+                reached = True
+        else:
+            flags[name] = name not in keep
+    if not found:
+        print(f"warning: include_until group not found: {include_until}",
+              file=sys.stderr)
+        return {name: name in exclude for name in normalized}
+    return flags
+
+
 def prefer_group(candidates: set[str], alias_norm: str) -> str:
     if len(candidates) == 1:
         return next(iter(candidates))
@@ -928,7 +980,14 @@ def run_images(args) -> int:
         index_data = json.loads(index_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         sys.exit(f"error: cannot read crew/index data: {exc}")
-    groups = crew_data.get("groups", [])
+    tab_selection = load_tab_selection(Path(args.crew_tab))
+    all_groups = crew_data.get("groups", [])
+    selection_flags = tab_selection_flags(
+        [group.get("name", "") for group in all_groups], tab_selection)
+    groups = [
+        group for group in all_groups
+        if not selection_flags.get(norm(group.get("name", "")), False)
+    ]
     if args.top > 0:
         groups = groups[:args.top]
     entries = index_data.get("entries", index_data)
@@ -1017,6 +1076,8 @@ def main() -> int:
     parser.add_argument("--out", default=str(REPO_ROOT / "local" / "crew-analysis"), help="Output directory")
     parser.add_argument("--aliases", default=str(Path(__file__).with_name("aliases.json")))
     parser.add_argument("--exclude", default=str(Path(__file__).with_name("exclude.txt")))
+    parser.add_argument("--crew-tab", default=str(Path(__file__).with_name("crew-tab.json")),
+                        help="Crews tab selection (include_until/keep/exclude)")
     parser.add_argument("--crews-out", default="", help="crews.json path (default: <GameinfoDirectory>/crews.json)")
     parser.add_argument("--crews", default="", help="crews.json input for `images` (default: <GameinfoDirectory>/crews.json)")
     parser.add_argument("--per-crew", type=int, default=3, help="image suggestions per crew (default: 3)")
@@ -1045,6 +1106,7 @@ def main() -> int:
 
     explicit = load_aliases(Path(args.aliases))
     exclude = load_exclude(Path(args.exclude))
+    tab_selection = load_tab_selection(Path(args.crew_tab))
     raw_crew_canon, alias_to_groups, abbrev_aliases, label_canon = build_registry(
         raw_crew_groups, gameinfo_labels, explicit, exclude
     )
@@ -1229,6 +1291,7 @@ def main() -> int:
             out.append(value)
         return out
 
+    selection_flags = tab_selection_flags([group for group, _ in ordered], tab_selection)
     used_slugs: set[str] = set()
     crew_groups: list[dict] = []
     for rank, (group, count) in enumerate(ordered, 1):
@@ -1255,6 +1318,7 @@ def main() -> int:
             "zips": count,
             "aliases": aliases,
             "image": None,
+            "excluded": selection_flags.get(norm(group), False),
             "releases": releases,
         })
 

@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "include_until": "Fanatics",
+  "keep": [
+    "MUG UK",
+    "TDA",
+    "Delta Force",
+    "LSD",
+    "ST Amigos",
+    "Quartex",
+    "Alpha Flight",
+    "FOFT",
+    "Mad Vision",
+    "Maartau",
+    "MDK",
+    "Overlanders",
+    "Bavarian Cracking Service - BCS",
+    "Hotline and MCA and Nokturnal",
+    "Fallen Angels",
+    "ACF",
+    "Genesis Inc"
+  ],
+  "exclude": [
+    "A-HA",
+    "ICs Workshop",
+    "V8 and Fallen Angels and Highlanders",
+    "007",
+    "Copy Service Stuttgart - CSS",
+    "Serenade",
+    "Master",
+    "Mr Atari"
+  ]
+}

@@ -55,16 +55,18 @@ attributed through `games-cracked.json` and alias/fuzzy matching.
 `tools/crew-analysis` writes **`crews.json`** into the `GameinfoDirectory`
 (path override: `--crews-out`). It contains every canonical group plus its
 per-release list (year, publisher, cracker, crew, disks, flags, TOS notes and
-the ZIP rel path); the `image` field is reserved for the later
-cracktro/logo curation phase. `rel` is the **full index path**
+the ZIP rel path); the optional `excluded` flag hides a group from the Crews
+tab (selection in `tools/crew-analysis/crew-tab.json`), and `image`
+is reserved for the later cracktro/logo curation phase. `rel` is the **full index path**
 (`Title Sorted/Cracked Games - Title Sorted/...`), matching `index.json` and
 `GameCard.variants[].rel`; the app also accepts legacy section-relative paths
 by prefixing the discovered cracked tree.
 
 The desktop app loads it as part of the catalog bundle:
 
-- a new **`crews`** section/tab (last tab) shows the top 48 groups by ZIP count
-  (`kCrewInitialLimit`), searchable by crew name, aliases and release titles;
+- a new **`crews`** section/tab (last tab) shows the curated selection
+  (currently 60 groups; `kCrewInitialLimit` caps it at 128), searchable by
+  crew name, aliases and release titles;
 - a crew card prefers a curated image from `crew-images.json`, then the best
   available release screenshot, then a group icon;
 - the detail panel lists **all releases** without screenshots, with year,
@@ -73,12 +75,13 @@ The desktop app loads it as part of the catalog bundle:
 - clicking a release opens the **existing game lightbox** pinned to that
   cracked-game card/ZIP, without leaving the Crews tab.
 
-The full data for all 888 groups is already in `crews.json`; expanding the tab
-beyond the top 48 is a UI change only.
+The full data for all 888 groups is already in `crews.json`; the tab selection
+is controlled by `tools/crew-analysis/crew-tab.json` (`include_until`, `keep`,
+`exclude`) and can be expanded up to the 128 cap without a data change.
 
 ## Cracktro image suggestions
 
-`tools/crew-analysis/run.sh images --top 48` generates a review set of typical
+`tools/crew-analysis/run.sh images --top 128` generates a review set of typical
 repeated screens per crew. It uses the existing per-ZIP screenshot sidecars
 (`shots[].phash`, quality statistics) and the index preview/candidate mapping;
 no new capture run is needed.
@@ -98,7 +101,9 @@ files. `--write-images` writes a starter
 (`source: "auto"`); entries should be reviewed/replaced manually. Curated
 overrides in `tools/crew-analysis/manual-images.json` (same schema, keyed by
 crew name) are merged over the automatic picks, so a later pipeline run does
-not silently revert them.
+not silently revert them. Groups in
+`tools/crew-analysis/crew-tab.json` are skipped by `images` and hidden by the
+app.
 
 `crew-images.json` schema:
 
@@ -118,6 +123,22 @@ not silently revert them.
 
 The app resolves `rel` + `name` against `ScreenshotDirectory`; if the file is
 missing, the release-screenshot fallback is used.
+
+### Tab selection (`crew-tab.json`)
+
+`tools/crew-analysis/crew-tab.json` controls which groups the Crews tab shows:
+
+```json
+{
+  "include_until": "Fanatics",
+  "keep": ["MUG UK", "TDA", "Delta Force", "LSD", "ST Amigos", "..."],
+  "exclude": ["A-HA", "ICs Workshop", "..." ]
+}
+```
+
+All groups up to `include_until` are visible; after it only the `keep` list is
+visible. `exclude` always wins. The tool writes the result as
+`"excluded": true/false` in `crews.json`; the app only reads that flag.
 
 ## Current result
 
@@ -160,9 +181,9 @@ Generated from the local game tree (2026-10-24):
 | 23 | Superior | 80 |
 | 24 | Revolution | 64 |
 
-The Crews tab now shows the top 48; ranks 25-48 are in
-`local/crew-analysis/crew-ranking.csv` and use the auto image suggestions until
-curated.
+The Crews tab currently shows 60 curated groups; the complete ranking is in
+`local/crew-analysis/crew-ranking.csv`, and groups outside the selection are
+marked `"excluded": true` in `crews.json`.
 
 `Bust`, `Klapauzius` and `Boss` are individual crackers in the gameinfo data;
 they appear because their releases have no separate crew label (the crew view
