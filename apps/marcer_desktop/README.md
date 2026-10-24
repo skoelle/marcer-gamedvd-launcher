@@ -656,8 +656,10 @@ its `Crews` button opens the tabbed dialog
 (`Release (N)`/`Menus (N)`/`Trivia (N)`/`Sources`). The Release tab keeps the
 game publisher at the top and lists every candidate with Release Name, crew +
 release date and crew info inline; Contents are shown per release when they add
-information. There is no Crew tab, dropdown or release selector. The catalogue
-is preloaded at startup; hash matching remains in the data layer but is not used
+information. The Trivia tab lists only real `fact`/`note` entries, collected from
+the matching menu appearances (Wikipedia stubs are excluded) and merged by
+text+url with the source menu shown. There is no Crew tab, dropdown or release
+selector. The catalogue is preloaded at startup; hash matching remains in the data layer but is not used
 for visibility. The dialog is metadata-only (no media tab and no card-preview
 fallback yet).
 

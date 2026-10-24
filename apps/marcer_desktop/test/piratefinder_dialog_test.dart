@@ -82,11 +82,22 @@ PirateFinderIndex _index() => PirateFinderIndex.fromJson({
   'trivia': [
     {
       'id': 900,
-      'disk_id': 1,
+      'disk_id': 2,
+      'content_id': 11,
       'kind': 'fact',
       'text': 'Cleaned and upscaled box art.',
       'source': 'atari-legend',
+      'url': 'https://atarilegend.com/games/x',
       'licence': 'CC BY-NC-SA 4.0',
+    },
+    {
+      'id': 901,
+      'disk_id': 1,
+      'kind': 'wikipedia',
+      'text': 'Arkanoid',
+      'source': 'wikipedia',
+      'url': 'https://en.wikipedia.org/wiki/Arkanoid',
+      'licence': 'CC BY-SA 4.0',
     },
   ],
   'links': [
@@ -182,6 +193,12 @@ void main() {
     await tester.tap(find.widgetWithText(Tab, 'Menus (1)'));
     await tester.pumpAndSettle();
     expect(find.text('Automation 250'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(Tab, 'Trivia (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cleaned and upscaled box art.'), findsOneWidget);
+    expect(find.text('via menu: Automation 250'), findsOneWidget);
+    expect(find.text('Arkanoid'), findsNothing);
 
     await tester.tap(find.widgetWithText(Tab, 'Sources'));
     await tester.pumpAndSettle();

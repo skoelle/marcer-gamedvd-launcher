@@ -365,6 +365,7 @@ class PirateFinderIndex {
     required this.sourceTag,
     required this.sources,
     required Map<int, PirateFinderDisk> disks,
+    required Map<int, PirateFinderContent> contentById,
     required Map<int, PirateFinderCrew> crews,
     required Map<String, PirateFinderSeries> series,
     required Map<int, List<PirateFinderContent>> contents,
@@ -377,19 +378,20 @@ class PirateFinderIndex {
     required Map<String, List<int>> sha512,
     required Map<String, List<int>> crc,
     required Map<int, PirateFinderImage> images,
-  })  : _disks = disks,
-        _crews = crews,
-        _series = series,
-        _contents = contents,
-        _trivia = trivia,
-        _links = links,
-        _singleByTitle = singleByTitle,
-        _menuByTitle = menuByTitle,
-        _sha1 = sha1,
-        _md5 = md5,
-        _sha512 = sha512,
-        _crc = crc,
-        _images = images;
+  }) : _disks = disks,
+       _crews = crews,
+       _series = series,
+       _contents = contents,
+       _contentById = contentById,
+       _trivia = trivia,
+       _links = links,
+       _singleByTitle = singleByTitle,
+       _menuByTitle = menuByTitle,
+       _sha1 = sha1,
+       _md5 = md5,
+       _sha512 = sha512,
+       _crc = crc,
+       _images = images;
 
   final String generatedAt;
   final String sourceTag;
@@ -398,6 +400,7 @@ class PirateFinderIndex {
   final Map<int, PirateFinderCrew> _crews;
   final Map<String, PirateFinderSeries> _series;
   final Map<int, List<PirateFinderContent>> _contents;
+  final Map<int, PirateFinderContent> _contentById;
   final Map<int, List<PirateFinderTrivia>> _trivia;
   final Map<int, List<PirateFinderLink>> _links;
   final Map<String, List<int>> _singleByTitle;
@@ -420,36 +423,50 @@ class PirateFinderIndex {
   static PirateFinderIndex fromJson(Map<String, dynamic> map) {
     final disks = <int, PirateFinderDisk>{};
     for (final raw in (map['disks'] as List<dynamic>?) ?? const []) {
-      final disk = PirateFinderDisk.fromJson(Map<String, dynamic>.from(raw as Map));
+      final disk = PirateFinderDisk.fromJson(
+        Map<String, dynamic>.from(raw as Map),
+      );
       disks[disk.id] = disk;
     }
     final crews = <int, PirateFinderCrew>{};
     for (final raw in (map['crews'] as List<dynamic>?) ?? const []) {
-      final crew = PirateFinderCrew.fromJson(Map<String, dynamic>.from(raw as Map));
+      final crew = PirateFinderCrew.fromJson(
+        Map<String, dynamic>.from(raw as Map),
+      );
       crews[crew.id] = crew;
     }
     final series = <String, PirateFinderSeries>{};
     for (final raw in (map['series'] as List<dynamic>?) ?? const []) {
-      final item = PirateFinderSeries.fromJson(Map<String, dynamic>.from(raw as Map));
+      final item = PirateFinderSeries.fromJson(
+        Map<String, dynamic>.from(raw as Map),
+      );
       if (item.id.isNotEmpty) series[item.id] = item;
     }
     final contents = <int, List<PirateFinderContent>>{};
+    final contentById = <int, PirateFinderContent>{};
     for (final raw in (map['contents'] as List<dynamic>?) ?? const []) {
-      final item = PirateFinderContent.fromJson(Map<String, dynamic>.from(raw as Map));
+      final item = PirateFinderContent.fromJson(
+        Map<String, dynamic>.from(raw as Map),
+      );
       (contents[item.diskId] ??= []).add(item);
+      contentById[item.id] = item;
     }
     for (final list in contents.values) {
       list.sort((a, b) => a.position.compareTo(b.position));
     }
     final trivia = <int, List<PirateFinderTrivia>>{};
     for (final raw in (map['trivia'] as List<dynamic>?) ?? const []) {
-      final item = PirateFinderTrivia.fromJson(Map<String, dynamic>.from(raw as Map));
+      final item = PirateFinderTrivia.fromJson(
+        Map<String, dynamic>.from(raw as Map),
+      );
       final diskId = item.diskId;
       if (diskId != null) (trivia[diskId] ??= []).add(item);
     }
     final links = <int, List<PirateFinderLink>>{};
     for (final raw in (map['links'] as List<dynamic>?) ?? const []) {
-      final item = PirateFinderLink.fromJson(Map<String, dynamic>.from(raw as Map));
+      final item = PirateFinderLink.fromJson(
+        Map<String, dynamic>.from(raw as Map),
+      );
       (links[item.diskId] ??= []).add(item);
     }
     final sources = [
@@ -483,7 +500,9 @@ class PirateFinderIndex {
     final crc = <String, List<int>>{};
     final images = <int, PirateFinderImage>{};
     for (final raw in (map['images'] as List<dynamic>?) ?? const []) {
-      final image = PirateFinderImage.fromJson(Map<String, dynamic>.from(raw as Map));
+      final image = PirateFinderImage.fromJson(
+        Map<String, dynamic>.from(raw as Map),
+      );
       images[image.id] = image;
       if (image.sha1.isNotEmpty) (sha1[image.sha1] ??= []).add(image.id);
       if (image.md5.isNotEmpty) (md5[image.md5] ??= []).add(image.id);
@@ -501,6 +520,7 @@ class PirateFinderIndex {
       crews: crews,
       series: series,
       contents: contents,
+      contentById: contentById,
       trivia: trivia,
       links: links,
       singleByTitle: singleByTitle,
@@ -534,8 +554,7 @@ class PirateFinderIndex {
   List<PirateFinderTrivia> triviaForDisk(int diskId) =>
       _trivia[diskId] ?? const [];
 
-  List<PirateFinderLink> linksForDisk(int diskId) =>
-      _links[diskId] ?? const [];
+  List<PirateFinderLink> linksForDisk(int diskId) => _links[diskId] ?? const [];
 
   /// Other menu/pack/compilation disks that list one of [disk]'s titles.
   List<PirateFinderDisk> appearancesForDisk(PirateFinderDisk disk) {
@@ -549,6 +568,37 @@ class PirateFinderIndex {
       }
     }
     result.sort((a, b) => (a.label).compareTo(b.label));
+    return result;
+  }
+
+  /// Real trivia (`fact`/`note`, no Wikipedia stubs) that belongs to [disk].
+  ///
+  /// Facts only exist on menu/pack disks and are linked to a game via
+  /// `content_id`. This walks the menu appearances of [disk] and keeps only
+  /// the facts whose content is one of [disk]'s own titles. Duplicates
+  /// (same text + url) are merged; [menu] is the appearance the fact came from.
+  List<({PirateFinderTrivia trivia, PirateFinderDisk menu})> factsForDisk(
+    PirateFinderDisk disk,
+  ) {
+    final titles = <String>{
+      for (final content in contentsForDisk(disk.id))
+        if (titleKey(content.title).isNotEmpty) titleKey(content.title),
+      if (titleKey(disk.title).isNotEmpty) titleKey(disk.title),
+    };
+    if (titles.isEmpty) return const [];
+    final result = <({PirateFinderTrivia trivia, PirateFinderDisk menu})>[];
+    final seen = <String>{};
+    for (final menu in appearancesForDisk(disk)) {
+      for (final item in triviaForDisk(menu.id)) {
+        if (item.kind != 'fact' && item.kind != 'note') continue;
+        final content = _contentById[item.contentId];
+        if (content == null) continue;
+        if (!titles.contains(titleKey(content.title))) continue;
+        final key = '${item.text}\u0000${item.url}';
+        if (!seen.add(key)) continue;
+        result.add((trivia: item, menu: menu));
+      }
+    }
     return result;
   }
 
@@ -571,11 +621,9 @@ class PirateFinderIndex {
       }
     }
     if (found.isEmpty) return null;
-    final images = found
-        .map((id) => _images[id])
-        .whereType<PirateFinderImage>()
-        .toList()
-      ..sort(_imageQuality);
+    final images =
+        found.map((id) => _images[id]).whereType<PirateFinderImage>().toList()
+          ..sort(_imageQuality);
     for (final image in images) {
       final disk = _disks[image.diskId];
       if (disk == null) continue;
@@ -602,20 +650,20 @@ class PirateFinderIndex {
       ids.addAll(_singleByTitle[key] ?? const []);
     }
     if (ids.isEmpty) return null;
-    var disks = ids.map((id) => _disks[id]).whereType<PirateFinderDisk>().toList()
-      ..sort((a, b) => a.id.compareTo(b.id));
+    var disks =
+        ids.map((id) => _disks[id]).whereType<PirateFinderDisk>().toList()
+          ..sort((a, b) => a.id.compareTo(b.id));
     if (labels.isNotEmpty) {
       final filtered = disks.where((d) {
-        final values = {
-          normalizeLabel(d.crew),
-          normalizeLabel(d.cracker),
-        };
+        final values = {normalizeLabel(d.crew), normalizeLabel(d.cracker)};
         return values.any(labels.contains);
       }).toList();
       if (filtered.isNotEmpty) disks = filtered;
     }
     if (disks.length > 1 && years.isNotEmpty) {
-      final filtered = disks.where((d) => d.year != null && years.contains(d.year)).toList();
+      final filtered = disks
+          .where((d) => d.year != null && years.contains(d.year))
+          .toList();
       if (filtered.isNotEmpty) disks = filtered;
     }
     if (disks.length > 1 && publishers.isNotEmpty) {
@@ -641,12 +689,19 @@ class PirateFinderIndex {
     return a.id.compareTo(b.id);
   }
 
-  static String _titleKeyOfDisk(PirateFinderDisk disk, List<PirateFinderContent>? contents) {
+  static String _titleKeyOfDisk(
+    PirateFinderDisk disk,
+    List<PirateFinderContent>? contents,
+  ) {
     if (disk.title.isNotEmpty) return titleKey(disk.title);
     for (final item in contents ?? const <PirateFinderContent>[]) {
-      if (item.kind == 'game' && item.title.isNotEmpty) return titleKey(item.title);
+      if (item.kind == 'game' && item.title.isNotEmpty) {
+        return titleKey(item.title);
+      }
     }
-    return contents != null && contents.isNotEmpty ? titleKey(contents.first.title) : '';
+    return contents != null && contents.isNotEmpty
+        ? titleKey(contents.first.title)
+        : '';
   }
 
   /// Normalises a game title for title matching.
@@ -677,7 +732,10 @@ class PirateFinderIndex {
 
   /// Normalises a crew/cracker label for matching.
   static String normalizeLabel(String value) {
-    var text = value.toLowerCase().replaceAll('&', ' and ').replaceAll('+', ' and ');
+    var text = value
+        .toLowerCase()
+        .replaceAll('&', ' and ')
+        .replaceAll('+', ' and ');
     text = text.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
     if (text.startsWith('the ')) text = text.substring(4);
     return text.replaceAll(RegExp(r'\s+'), ' ');

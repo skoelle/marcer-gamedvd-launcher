@@ -171,7 +171,9 @@ settings form (below the data-directory field; no config path) and a third
   **Crews** button. The dialog tabs are `Release (N)`, `Menus (N)`, `Trivia (N)`
   and `Sources`; the Release tab keeps the game publisher at the top and lists
   each candidate with Release Name, crew + release date and crew info inline
-  (no Crew tab, dropdown or release selector). Hash matching remains in the data layer
+  (no Crew tab, dropdown or release selector). Trivia lists only real
+  `fact`/`note` entries gathered from the matching menu appearances (Wikipedia
+  stubs excluded), de-duplicated by text+url and tagged with the source menu. Hash matching remains in the data layer
   but is not used for visibility. B1 is metadata-only; media and card-preview
   fallbacks are later phases.
 - The data layout moved into `GameinfoDirectory` subfolders (`gameinfo/`,

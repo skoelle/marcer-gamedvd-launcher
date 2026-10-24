@@ -90,8 +90,8 @@ Save, the manual screenshot curation described below.
   download the generic
   [PirateFinder catalogue JSON](https://github.com/skoelle/piratefinder-catalog-json)
   from the settings **PirateFinder-Catalog** row:
-  catalogue facts, crew histories, menu-disk appearances, trivia and media
-  references. The data lives under `<GameinfoDirectory>/piratefinder/`, checked
+  catalogue facts, crew histories, menu-disk appearances and real trivia
+  (`fact`/`note` entries from the matching menu releases). The data lives under `<GameinfoDirectory>/piratefinder/`, checked
   at startup (release builds) and listed in the same **Catalog data** dialog as
   gameinfo and screenshots. The row links to the
   [original PirateFinder project](https://github.com/peteclarke-del/PirateFinder).

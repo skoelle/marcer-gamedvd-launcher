@@ -154,13 +154,16 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
     final candidates = match.candidates;
     final first = match.disk;
     final appearances = <int, PirateFinderDisk>{};
-    final trivia = <int, PirateFinderTrivia>{};
+    final trivia = <String, ({PirateFinderTrivia trivia, String menu})>{};
     for (final candidate in candidates) {
       for (final menu in index.appearancesForDisk(candidate)) {
         appearances[menu.id] = menu;
       }
-      for (final item in index.triviaForDisk(candidate.id)) {
-        trivia[item.id] = item;
+      for (final fact in index.factsForDisk(candidate)) {
+        trivia['${fact.trivia.text}\u0000${fact.trivia.url}'] = (
+          trivia: fact.trivia,
+          menu: fact.menu.label,
+        );
       }
     }
     final menus = appearances.values.toList()
@@ -336,11 +339,6 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
           if (crew != null) ...[
             _kv('Members', crew.members),
             _kv('History', crew.notes),
-            if (crew.wikipedia.isNotEmpty)
-              _link(
-                'Wikipedia: ${crew.wikipedia}',
-                'https://en.wikipedia.org/wiki/${Uri.encodeComponent(crew.wikipedia.replaceAll(' ', '_'))}',
-              ),
           ],
           if (showContents) ...[
             _section('Contents (${contents.length})'),
@@ -382,7 +380,7 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
     );
   }
 
-  Widget _triviaTab(List<PirateFinderTrivia> trivia) {
+  Widget _triviaTab(List<({PirateFinderTrivia trivia, String menu})> trivia) {
     if (trivia.isEmpty) {
       return const Text(
         'No trivia in the $kPirateFinderCatalogName.',
@@ -392,24 +390,35 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final item in trivia) ...[
+        for (final entry in trivia) ...[
           Row(
             children: [
-              _badge(item.kind.toUpperCase(), Colors.blueGrey),
+              _badge(entry.trivia.kind.toUpperCase(), Colors.blueGrey),
               const SizedBox(width: 6),
-              if (item.source.isNotEmpty)
+              if (entry.trivia.source.isNotEmpty)
                 Text(
-                  item.source,
+                  entry.trivia.source,
                   style: const TextStyle(fontSize: 10, color: Colors.grey),
                 ),
             ],
           ),
           const SizedBox(height: 3),
-          SelectableText(item.text, style: const TextStyle(fontSize: 12)),
-          if (item.url.isNotEmpty) _link('Source', item.url),
-          if (item.licence.isNotEmpty)
+          SelectableText(
+            entry.trivia.text,
+            style: const TextStyle(fontSize: 12),
+          ),
+          if (entry.menu.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                'via menu: ${entry.menu}',
+                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ),
+          if (entry.trivia.url.isNotEmpty) _link('Source', entry.trivia.url),
+          if (entry.trivia.licence.isNotEmpty)
             Text(
-              item.licence,
+              entry.trivia.licence,
               style: const TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
             ),
           const SizedBox(height: 10),
