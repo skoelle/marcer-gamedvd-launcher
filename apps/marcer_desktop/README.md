@@ -348,6 +348,9 @@ The status dropdown (`with screenshot`, `any`, `done`, `desktop (only)`,
 `no usable shots (only)`, `no usable shots (any ZIP)`, `interrupted`,
 `skipped (disk 2+)`) is available in the **five game sections** (cracked, pd,
 utils, magazine, falcon); the Crews tab has no screenshot-status filter:
+When a crew matches a PirateFinder-Catalog crew (name or alias), its detail
+panel additionally shows the PF crew info (members, history, release count,
+source) above the release list.
 
 - `pending`, `desktop (any ZIP)` and `no usable shots (any ZIP)` match a
   game when **at least one** of its ZIPs has that status.

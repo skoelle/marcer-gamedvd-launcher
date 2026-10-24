@@ -125,6 +125,7 @@ class DetailPanel extends StatelessWidget {
             : card.crew != null
             ? CrewDetailPanel(
                 crew: card.crew!,
+                pirateFinderCrew: c.pirateFinderCrewForGroup(card.crew!),
                 onOpenRelease: onOpenCrewRelease,
               )
             : _cardInfo(context, c, card),

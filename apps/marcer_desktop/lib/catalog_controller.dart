@@ -790,6 +790,18 @@ class CatalogController extends ChangeNotifier {
     return atariLegend.matchFolder(card.folder);
   }
 
+  /// PirateFinder crew info for a Crews-tab group (matched by name/alias);
+  /// `null` when the PF catalogue is not loaded or has no such crew.
+  PirateFinderCrew? pirateFinderCrewForGroup(CrewGroup crew) {
+    final index = _pirateFinderData?.index;
+    if (index == null) return null;
+    for (final name in [crew.name, ...crew.aliases]) {
+      final match = index.crewByName(name);
+      if (match != null) return match;
+    }
+    return null;
+  }
+
   /// AtariLegend match for a folder-browser entry: the folder is
   /// `<letter>/<folder>` of its rel path (same join as the screenshot index).
   AtariLegendGame? atariLegendForEntry(Entry e) {

@@ -399,4 +399,50 @@ void main() {
     await tester.pump();
     expect(opened, relA);
   });
+
+  testWidgets('CrewDetailPanel shows PirateFinder crew info when present', (
+    tester,
+  ) async {
+    final group = CrewGroup(
+      id: 'alpha',
+      name: 'Alpha Crew',
+      kind: 'crew',
+      rank: 1,
+      zips: 2,
+      aliases: const ['Alpha Crew'],
+      releases: const [],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            height: 700,
+            child: CrewDetailPanel(
+              crew: group,
+              pirateFinderCrew: const PirateFinderCrew(
+                id: 613,
+                name: 'Alpha Crew',
+                platform: 'atari-st',
+                notes: 'An Alfa cracking crew from 1988.',
+                members: 'Floyd, Pumpkin',
+                founded: '',
+                source: 'atari-legend, demozoo',
+                url: 'https://demozoo.org/groups/1/',
+                wikipedia: '',
+                diskCount: 40,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('PirateFinder-Catalog'), findsOneWidget);
+    expect(find.textContaining('Floyd, Pumpkin'), findsOneWidget);
+    expect(find.textContaining('An Alfa cracking crew'), findsOneWidget);
+    expect(find.textContaining('40 releases'), findsOneWidget);
+    expect(find.textContaining('atari-legend, demozoo'), findsOneWidget);
+    expect(find.textContaining('Founded'), findsNothing);
+  });
 }

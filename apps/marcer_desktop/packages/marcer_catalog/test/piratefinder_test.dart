@@ -197,6 +197,14 @@ void main() {
     expect(index.factsForDisk(index.disk(3)!), isEmpty);
   });
 
+  test('crewByName matches names case/punct-insensitively', () {
+    final index = _index();
+    expect(index.crewByName('replicants')!.name, 'Replicants');
+    expect(index.crewByName('REPLICANTS')!.id, 1);
+    expect(index.crewByName('nonexistent'), isNull);
+    expect(index.crewByName(''), isNull);
+  });
+
   test('title key and label normalization', () {
     expect(
       PirateFinderIndex.titleKey('The Chaos Engine, The (Europe)'),

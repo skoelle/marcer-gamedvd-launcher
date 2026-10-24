@@ -8,9 +8,18 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 /// list (no screenshots). Clicking a release opens the existing game lightbox
 /// at that ZIP.
 class CrewDetailPanel extends StatelessWidget {
-  const CrewDetailPanel({super.key, required this.crew, this.onOpenRelease});
+  const CrewDetailPanel({
+    super.key,
+    required this.crew,
+    this.pirateFinderCrew,
+    this.onOpenRelease,
+  });
 
   final CrewGroup crew;
+
+  /// Optional PirateFinder crew info of the same group (members, history,
+  /// release count, source); shown above the release list when present.
+  final PirateFinderCrew? pirateFinderCrew;
 
   /// Opens the cracked-game card + variant for a release `rel` path.
   final void Function(String rel)? onOpenRelease;
@@ -53,6 +62,10 @@ class CrewDetailPanel extends StatelessWidget {
                   'Also known as: ${crew.aliases.where((a) => a != crew.name).join(', ')}',
                   style: const TextStyle(fontSize: 10, color: Colors.grey),
                 ),
+              ],
+              if (pirateFinderCrew != null) ...[
+                const SizedBox(height: 8),
+                _pirateFinderInfo(pirateFinderCrew!),
               ],
               const SizedBox(height: 6),
               const Text(
@@ -97,6 +110,63 @@ class CrewDetailPanel extends StatelessWidget {
                 ),
         ),
       ],
+    );
+  }
+
+  /// PirateFinder crew block (members, history, release count, source) shown
+  /// above the release list. No link, no `founded`, no Wikipedia.
+  Widget _pirateFinderInfo(PirateFinderCrew pf) {
+    final meta = <String>[
+      '${pf.diskCount} releases',
+      if (pf.source.isNotEmpty) pf.source,
+    ].join(' · ');
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'PirateFinder-Catalog',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF9E9E9E),
+            ),
+          ),
+          if (pf.members.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Members: ${pf.members}',
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: Colors.white70),
+            ),
+          ],
+          if (pf.notes.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              pf.notes,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+          if (meta.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              meta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

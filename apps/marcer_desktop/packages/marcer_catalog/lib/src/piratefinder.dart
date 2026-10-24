@@ -398,6 +398,7 @@ class PirateFinderIndex {
   final List<PirateFinderSource> sources;
   final Map<int, PirateFinderDisk> _disks;
   final Map<int, PirateFinderCrew> _crews;
+  Map<String, PirateFinderCrew>? _crewByKey;
   final Map<String, PirateFinderSeries> _series;
   final Map<int, List<PirateFinderContent>> _contents;
   final Map<int, PirateFinderContent> _contentById;
@@ -534,6 +535,28 @@ class PirateFinderIndex {
   }
 
   PirateFinderDisk? disk(int id) => _disks[id];
+
+  /// Lookup of a crew by its name (normalized). Crew names are unique per
+  /// platform; the first entry wins. Built lazily.
+  Map<String, PirateFinderCrew> _crewKeyIndex() {
+    final cached = _crewByKey;
+    if (cached != null) return cached;
+    final map = <String, PirateFinderCrew>{};
+    for (final crew in _crews.values) {
+      final key = normalizeLabel(crew.name);
+      if (key.isNotEmpty) map.putIfAbsent(key, () => crew);
+    }
+    return _crewByKey = map;
+  }
+
+  /// Matches a Marcer crew/cracker label (name or alias) against the
+  /// PirateFinder crews. Returns null when nothing matches.
+  PirateFinderCrew? crewByName(String name) {
+    final key = normalizeLabel(name);
+    if (key.isEmpty) return null;
+    return _crewKeyIndex()[key];
+  }
+
   PirateFinderCrew? crewForDisk(PirateFinderDisk disk) {
     final byId = disk.crewId == null ? null : _crews[disk.crewId];
     if (byId != null) return byId;
