@@ -84,7 +84,7 @@ The console launcher is meant for browsing a games directory and can launch ZIP 
 
 ### Launching a Game
 - If Enter is pressed on a ZIP, Hatari is called with the configured executable, config file, and the full path to the ZIP file as arguments.
-- `Hatari.ConfigFile` is optional. When empty, the bundled `MarcerGameDvd-Hatari.cfg` (shipped with the launcher) is used automatically.
+- `Hatari.ConfigFile` is optional. When empty, the bundled `MarcerGameDvd-Hatari.cfg` (shipped with the launcher) is used automatically. The bundled config never starts in fullscreen (`bFullScreen = FALSE`) and uses the SDL renderer with desktop resolution (`bUseSdlRenderer`, `bKeepResolution = TRUE`) so the `F11` fullscreen toggle centers the image and preserves its aspect ratio with black letterbox bars instead of stretching it or drawing it in the top-left corner.
 
 ### Error Handling & Edge Cases
 - Paths with special characters or spaces must work robustly.

@@ -48,7 +48,7 @@ Download the ZIP for your platform from the [Releases](https://github.com/skoell
 ### 💻 System Requirements
 
 - **.NET Runtime 10** or later ([download](https://dotnet.microsoft.com/download/dotnet/10.0))
-- **Hatari Emulator** (Windows native, or Linux/macOS via Wine or native build) — a Hatari configuration file (`MarcerGameDvd-Hatari.cfg`) is bundled with the launcher and used automatically when `Hatari.ConfigFile` is empty.
+- **Hatari Emulator** (Windows native, or Linux/macOS via Wine or native build) — a Hatari configuration file (`MarcerGameDvd-Hatari.cfg`) is bundled with the launcher and used automatically when `Hatari.ConfigFile` is empty. It always starts windowed; `F11` switches to a centered, aspect-preserved fullscreen (black letterbox bars instead of stretching).
 - **TOS 1.04** ROM image (`TOS.IMG`) — required by Hatari to boot the Atari ST system.
 
 ### 🕹️ Setting Up Hatari

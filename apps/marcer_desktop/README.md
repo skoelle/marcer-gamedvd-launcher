@@ -190,6 +190,11 @@ same locations as the config) when `Hatari.ConfigFile` is empty. Launching is
 errors appear as a modal (missing executable, vanished ZIP, …). The bundled
 config expects a TOS ROM (`TOS.IMG`) next to the app (in the executable
 directory, which is Hatari's working directory), matching the console launcher.
+Hatari always starts **windowed** (`bFullScreen = FALSE`); `F11` switches to a
+centered, aspect-preserved fullscreen mode. The bundled config enables the SDL
+renderer and desktop resolution (`bUseSdlRenderer`, `bKeepResolution`) so the
+Atari image is letterboxed with black bars rather than stretched or pinned to
+the top-left corner.
 
 The **PLAY** button is a split button: the main part launches the default
 variant, the arrow opens a menu of variants (detail sidebar and lightbox; `P` /

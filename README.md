@@ -175,7 +175,9 @@ Save, the manual screenshot curation described below.
 - **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
   list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
   detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
-  bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking. The **PLAY** button
+  bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking. Hatari always
+  starts windowed; `F11` switches to a centered, aspect-preserved fullscreen
+  (black letterbox bars instead of stretching). The **PLAY** button
   is a split button: the main part launches the default variant, the arrow opens
   a variant menu — **Standard** (ST, TOS 1.04), **Mono** (`--monitor mono`),
   **STE** (`--machine ste`, TOS 1.62 → `TOS162.IMG`), **Low Res TOS
