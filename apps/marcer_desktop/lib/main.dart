@@ -88,7 +88,8 @@ Future<void> main() async {
       );
       final migration = migrateDataLayout(config);
       if (migration.errors.isNotEmpty) {
-        startupNotice = 'Data directory migration: '
+        startupNotice =
+            'Data directory migration: '
             '${migration.errors.join('; ')}';
       }
     } catch (e) {
@@ -469,6 +470,9 @@ class _HomePageState extends State<HomePage> {
     _pirateFinderData.refreshLocal();
     _lastPirateFinderVersion = _pirateFinderData.local?.sha256;
     _pirateFinderData.addListener(_onPirateFinderChanged);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _preloadPirateFinderIndex(),
+    );
     _loadAppVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initSelfUpdate());
     WidgetsBinding.instance.addPostFrameCallback((_) => _warnIfTranslocated());
@@ -554,6 +558,16 @@ class _HomePageState extends State<HomePage> {
     if (version == _lastPirateFinderVersion) return;
     _lastPirateFinderVersion = version;
     if (mounted) setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _preloadPirateFinderIndex(),
+    );
+  }
+
+  /// Parses the PF catalogue once at startup/update so title matches (and the
+  /// detail button) are available without waiting for the first dialog open.
+  void _preloadPirateFinderIndex() {
+    if (_pirateFinderData.local == null) return;
+    unawaited(_pirateFinderData.ensureIndex());
   }
 
   /// Surfaces failed update installs as a modal, once per error.
@@ -718,6 +732,9 @@ class _HomePageState extends State<HomePage> {
     _pirateFinderData.refreshLocal();
     _pirateFinderData.invalidateIndex();
     _pirateFinderData.check();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _preloadPirateFinderIndex(),
+    );
   }
 
   /// Opens the catalog-data update dialog (green badge); a successful update

@@ -4,7 +4,6 @@
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
-import '../piratefinder_names.dart';
 import '../theme.dart';
 
 /// One ZIP as shown in the gallery-style info panel ("This ZIP" table).
@@ -40,10 +39,6 @@ class ZipVariantView {
   final bool missing;
 }
 
-/// Release switch for the PirateFinder detail button. The data download and
-/// dialog stay available; the button is hidden until the next release.
-const bool kPirateFinderDetailButtonEnabled = false;
-
 /// Gallery-style detail panel (`SPEC-gallery-webapp.md` §6.5 `lb-side`):
 /// **Game info** table, the **This ZIP** table and the **Release variants**
 /// table (matching row highlighted). Shared by the lightbox side panel and
@@ -60,6 +55,7 @@ class GameInfoPanel extends StatelessWidget {
     this.onSelectGroup,
     this.atariLegend,
     this.onAtariLegend,
+    this.pirateFinderMatch,
     this.onPirateFinder,
     this.extras,
   });
@@ -97,7 +93,10 @@ class GameInfoPanel extends StatelessWidget {
   /// Opens the AtariLegend dialog; hidden when null (no match / no data).
   final VoidCallback? onAtariLegend;
 
-  /// Opens the optional PirateFinder dialog; hidden when null (no PF data).
+  /// Title match for this card/entry; drives the release summary section.
+  final PirateFinderMatch? pirateFinderMatch;
+
+  /// Opens the PirateFinder crew/release dialog; hidden when null.
   final VoidCallback? onPirateFinder;
 
   /// Optional extras row rendered above the info tables (e.g. the local
@@ -118,6 +117,7 @@ class GameInfoPanel extends StatelessWidget {
             _headingRow('This ZIP', trailing: _playButtonOrNull()),
             ..._zipTable(variant!),
           ],
+          ..._pirateFinderSection(),
         ] else ...[
           _headingRow('Game info', trailing: _actionButtonsOrNull()),
           ..._infoRows(info, onSelectGroup),
@@ -126,6 +126,7 @@ class GameInfoPanel extends StatelessWidget {
             _headingRow('This ZIP', trailing: _playButtonOrNull()),
             ..._zipTable(variant!),
           ],
+          ..._pirateFinderSection(),
           if (info.variants.length > 1) ...[
             const SizedBox(height: 8),
             _heading('Release variants (${info.variants.length})'),
@@ -134,6 +135,66 @@ class GameInfoPanel extends StatelessWidget {
           ],
         ],
       ],
+    );
+  }
+
+  List<Widget> _pirateFinderSection() {
+    final match = pirateFinderMatch;
+    final onMore = onPirateFinder;
+    if (match == null || onMore == null) return const [];
+    final crews = <String>{};
+    for (final candidate in match.candidates) {
+      final name = candidate.crew.isNotEmpty
+          ? candidate.crew
+          : candidate.cracker;
+      if (name.isNotEmpty) crews.add(name);
+    }
+    return [
+      const SizedBox(height: 8),
+      _headingRow(
+        'PirateFinder Crew Releases (${match.candidates.length})',
+        trailing: _pirateFinderCrewButton(),
+      ),
+      if (crews.isNotEmpty) ...[
+        const SizedBox(height: 3),
+        Text(
+          crews.join(' · '),
+          style: const TextStyle(fontSize: 11, color: Colors.white70),
+        ),
+      ],
+    ];
+  }
+
+  /// Red-gradient "Crews" action in the PirateFinder section heading.
+  Widget _pirateFinderCrewButton() {
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFE53935), Color(0xFF8E0000)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: InkWell(
+          onTap: onPirateFinder,
+          borderRadius: BorderRadius.circular(4),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Text(
+              'Crews',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -149,11 +210,7 @@ class GameInfoPanel extends StatelessWidget {
   Widget? _playButtonOrNull() => onPlay == null ? null : _playButton();
 
   Widget? _actionButtonsOrNull() {
-    final buttons = <Widget>[
-      if (kPirateFinderDetailButtonEnabled && onPirateFinder != null)
-        _pirateFinderButton(),
-      if (onAtariLegend != null) _atariLegendButton(),
-    ];
+    final buttons = <Widget>[if (onAtariLegend != null) _atariLegendButton()];
     if (buttons.isEmpty) return null;
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -163,42 +220,6 @@ class GameInfoPanel extends StatelessWidget {
           buttons[i],
         ],
       ],
-    );
-  }
-
-  /// Compact indigo "PF" button (PirateFinder-Catalog), next to AtariLegend.
-  Widget _pirateFinderButton() {
-    return Tooltip(
-      message: kPirateFinderCatalogShortName,
-      child: Material(
-        color: Colors.transparent,
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF6C7BFF), Color(0xFF3F51B5)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: InkWell(
-            onTap: onPirateFinder,
-            borderRadius: BorderRadius.circular(4),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Text(
-                'PF',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 0.4,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 

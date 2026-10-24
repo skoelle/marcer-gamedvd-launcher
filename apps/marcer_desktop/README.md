@@ -639,20 +639,27 @@ link points to the
   local/remote catalogue tag + generation date and **Install**/**Update** (or
   **up to date**). If the data is not installed yet, the row shows the install
   hint right away. It is always offered, never downloaded automatically.
-- The PirateFinder-Catalog **detail button is hidden for this release**; the data row and dialog
-  code stay in place for the next release.
-- The settings row mirrors the AtariLegend row: local status/path, a single
-  **PirateFinder-Catalog** button (it refreshes `latest.json` and then
-  downloads), and a **PirateFinder-Catalog on GitHub** link; while a download runs,
-  Save/Cancel are blocked and the transfer can be cancelled inline.
+- A `PirateFinder Crew Releases` section appears before `Release variants` in
+  the detail sidebar and lightbox when a title/crew match exists. It lists the
+  matching crews and has a right-aligned red-gradient `Crews` button.
+- The settings row mirrors the AtariLegend row: local status/path, an index
+  status (`loaded`/`loading`/error), a single **PirateFinder-Catalog** button
+  (it refreshes `latest.json` and then downloads), and a
+  **PirateFinder-Catalog on GitHub** link; while a download runs, Save/Cancel
+  are blocked and the transfer can be cancelled inline.
 - Data license: **CC BY-NC-SA 4.0** (non-commercial, attribution, share-alike).
   It is not part of the Marcer catalog and is never bundled or uploaded.
 
 The PirateFinder-Catalog data row downloads into `<GameinfoDirectory>/piratefinder/`. The
-compact **PirateFinder-Catalog detail button is hidden for this release**; the tabbed dialog
-(Release/Crew/Menus/Trivia/Sources), exact hash matching and title fallback stay
-implemented for the next release. The dialog is metadata-only (no media tab and
-no card-preview fallback yet).
+`PirateFinder Crew Releases` section is shown only for a title/crew match and
+its `Crews` button opens the tabbed dialog
+(`Release (N)`/`Menus (N)`/`Trivia (N)`/`Sources`). The Release tab keeps the
+game publisher at the top and lists every candidate with Release Name, crew +
+release date and crew info inline; Contents are shown per release when they add
+information. There is no Crew tab, dropdown or release selector. The catalogue
+is preloaded at startup; hash matching remains in the data layer but is not used
+for visibility. The dialog is metadata-only (no media tab and no card-preview
+fallback yet).
 
 ## Catalog-data update check
 

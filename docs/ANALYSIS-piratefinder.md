@@ -166,11 +166,14 @@ settings form (below the data-directory field; no config path) and a third
 - The data is CC BY-NC-SA 4.0, lives inside the data directory
   (`GameinfoDirectory/piratefinder`) and is never written into the game trees
   or published artifacts.
-- A compact **PirateFinder-Catalog** button next to AtariLegend is implemented but **hidden for
-  this release**; it opens the tabbed dialog (Release/Crew/Menus/Trivia/
-  Sources). The selected ZIP is matched by decoded `.msa`/`.st`/`.stx` hashes;
-  title + gameinfo crew/cracker/year is the fallback. B1 is metadata-only;
-  media and card-preview fallbacks are later phases.
+- A **PirateFinder Crew Releases** section before the release variants is shown
+  only for a title/crew match: distinct crews and a right-aligned red-gradient
+  **Crews** button. The dialog tabs are `Release (N)`, `Menus (N)`, `Trivia (N)`
+  and `Sources`; the Release tab keeps the game publisher at the top and lists
+  each candidate with Release Name, crew + release date and crew info inline
+  (no Crew tab, dropdown or release selector). Hash matching remains in the data layer
+  but is not used for visibility. B1 is metadata-only; media and card-preview
+  fallbacks are later phases.
 - The data layout moved into `GameinfoDirectory` subfolders (`gameinfo/`,
   `atarilegend/`, `piratefinder/`); a startup migration moves legacy root-level
   gameinfo files and a configured `AtariLegendDirectory` into them.

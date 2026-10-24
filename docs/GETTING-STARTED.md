@@ -252,8 +252,10 @@ download buttons. The same connection is used for:
    and links to the
    [original PirateFinder project](https://github.com/peteclarke-del/PirateFinder).
    It is offered again in the top-bar **Catalog data** dialog (third row) when
-   newer data exists. The PirateFinder-Catalog detail button is hidden for this release. It is
-   CC BY-NC-SA 4.0, not part of the Marcer catalog, and never bundled.
+   newer data exists. A title/crew match adds a `PirateFinder Crew Releases`
+   section before the release variants with a red `Crews` button that opens the
+   tabbed catalogue dialog. It is CC BY-NC-SA 4.0, not part of the Marcer
+   catalog, and never bundled.
 6. Press **Save**. The catalog reloads with the new data.
 
 Downloads show progress and can be cancelled. The newest archive is chosen by

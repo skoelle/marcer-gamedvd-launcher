@@ -96,8 +96,12 @@ Save, the manual screenshot curation described below.
   gameinfo and screenshots. The row links to the
   [original PirateFinder project](https://github.com/peteclarke-del/PirateFinder).
   It is **CC BY-NC-SA 4.0**, not part of the Marcer catalog, never bundled and
-  never uploaded. The PirateFinder-Catalog detail button is hidden for this release; the download
-  row stays available.
+  never uploaded. The catalogue is preloaded at startup (the settings row shows its index
+  status). A `PirateFinder Crew Releases` section appears before the release
+  variants only for a title/crew match; it lists the matching crews and has a
+  right-aligned red `Crews` button. The dialog has `Release (N)`, `Menus (N)`,
+  `Trivia (N)` and `Sources` tabs; the Release tab lists each candidate with
+  its crew and release date, and crew/contents details inline.
 - **Crew / cracker focus** — pick a crew or cracker and each card jumps to
   *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
   matching tolerates `&`/`and` and small typos).

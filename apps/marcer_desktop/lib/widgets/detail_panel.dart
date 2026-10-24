@@ -154,6 +154,7 @@ class DetailPanel extends StatelessWidget {
     final layer = c.cachedCardLayer(card);
     final missing = c.cachedCardMissing(card);
     final al = c.atariLegendForCard(card);
+    final pfMatch = c.pirateFinderTitleMatchForCard(card);
     // Lazily discovered local Boxscan/Manual assets (cached per game folder).
     final localAssets = c.localAssetsForCard(card);
     // Gallery-style detail (no large preview — the lightbox shows the image).
@@ -217,6 +218,7 @@ class DetailPanel extends StatelessWidget {
             filter: c.filter,
             variants: card.kind == 'falcon' ? kFalconVariants : kHatariVariants,
             atariLegend: al,
+            pirateFinderMatch: pfMatch,
             onAtariLegend: al == null
                 ? null
                 : () => showAtariLegendDialog(
@@ -224,13 +226,12 @@ class DetailPanel extends StatelessWidget {
                     game: al,
                     textsLoader: c.atariLegendTexts,
                   ),
-            onPirateFinder: !c.pirateFinderAvailable
+            onPirateFinder: pfMatch == null
                 ? null
                 : () => showPirateFinderDialog(
                     context,
                     controller: c,
                     card: card,
-                    rel: _primaryVariant(card)?.rel,
                   ),
             extras: LocalAssetsChips(
               assets: localAssets,

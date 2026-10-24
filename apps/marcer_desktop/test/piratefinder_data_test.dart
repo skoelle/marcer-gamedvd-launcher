@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -206,6 +207,85 @@ void main() {
     expect(c.hasPending, isFalse);
     expect(c.error, contains('Could not check'));
   });
+
+  test('ensureIndex does not notify synchronously', () async {
+    final c = PirateFinderDataController(fetcher: (_) async => latestBody());
+    c.config = config();
+    final dir = pirateFinderDataDir(c.config);
+    Directory(dir).createSync(recursive: true);
+    const local = PirateFinderLocalVersion(
+      sourceTag: 'catalogue-2026-10-19',
+      generatedAt: '2026-10-24T12:34:16Z',
+      asset: 'piratefinder-catalog-atari-st.json.gz',
+      sha256: 'abc',
+      appliedAt: '2026-10-24T12:40:00Z',
+    );
+    writePirateFinderLocal(dir, local);
+    File(p.join(dir, local.asset)).writeAsBytesSync(
+      gzip.encode(
+        utf8.encode(
+          jsonEncode({
+            'generated_at': '2026-10-24T12:34:16Z',
+            'source': {'tag': 'catalogue-2026-10-19'},
+            'disks': [
+              {'id': 1, 'kind': 'single', 'title': 'Alpha', 'label': 'Alpha'},
+            ],
+          }),
+        ),
+      ),
+    );
+    c.refreshLocal();
+
+    var notifications = 0;
+    c.addListener(() => notifications++);
+    final future = c.ensureIndex();
+
+    expect(notifications, 0);
+    expect(await future, isNotNull);
+    expect(notifications, greaterThan(0));
+    expect(c.index, isNotNull);
+  });
+
+  test('ensureIndex does not capture the controller in the isolate', () async {
+    final c = PirateFinderDataController(fetcher: (_) async => latestBody());
+    c.config = config();
+    final dir = pirateFinderDataDir(c.config);
+    Directory(dir).createSync(recursive: true);
+    const local = PirateFinderLocalVersion(
+      sourceTag: 'catalogue-2026-10-19',
+      generatedAt: '2026-10-24T12:34:16Z',
+      asset: 'piratefinder-catalog-atari-st.json.gz',
+      sha256: 'abc',
+      appliedAt: '2026-10-24T12:40:00Z',
+    );
+    writePirateFinderLocal(dir, local);
+    File(p.join(dir, local.asset)).writeAsBytesSync(
+      gzip.encode(
+        utf8.encode(
+          jsonEncode({
+            'generated_at': '2026-10-24T12:34:16Z',
+            'source': {'tag': 'catalogue-2026-10-19'},
+            'disks': [
+              {'id': 1, 'kind': 'single', 'title': 'Alpha', 'label': 'Alpha'},
+            ],
+          }),
+        ),
+      ),
+    );
+    c.refreshLocal();
+
+    // A listener holding a Future makes the controller graph unsendable.
+    // The isolate closure must not capture `this`.
+    final blocker = Completer<void>();
+    final pending = blocker.future;
+    c.addListener(() => pending.ignore());
+
+    final index = await c.ensureIndex();
+    expect(index, isNotNull);
+    expect(c.index, isNotNull);
+    expect(c.indexError, isNull);
+  });
+
   test('ensureIndex parses the downloaded gzip in an isolate', () async {
     final c = PirateFinderDataController(fetcher: (_) async => latestBody());
     c.config = config();

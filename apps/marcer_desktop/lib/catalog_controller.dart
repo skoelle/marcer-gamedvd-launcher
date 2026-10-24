@@ -62,9 +62,39 @@ class CatalogController extends ChangeNotifier {
   late GameInfoIndex gameinfo;
   AtariLegendIndex atariLegend = AtariLegendIndex.empty();
 
-  /// Optional PirateFinder-Catalog data controller (set by the home page); used by
-  /// the PF detail button and the matching helper.
-  PirateFinderDataController? pirateFinderData;
+  /// Optional PirateFinder-Catalog data controller (set by the home page);
+  /// drives the title-only detail-button match below.
+  PirateFinderDataController? _pirateFinderData;
+
+  PirateFinderDataController? get pirateFinderData => _pirateFinderData;
+
+  set pirateFinderData(PirateFinderDataController? value) {
+    if (identical(_pirateFinderData, value)) return;
+    _pirateFinderData?.removeListener(_onPirateFinderDataChanged);
+    _pirateFinderData = value;
+    _pirateFinderTitleMatches.clear();
+    _lastPirateFinderVersion = value?.local?.sha256;
+    _lastPirateFinderIndexReady = value?.hasIndex ?? false;
+    value?.addListener(_onPirateFinderDataChanged);
+  }
+
+  final Map<String, PirateFinderMatch?> _pirateFinderTitleMatches = {};
+  String? _lastPirateFinderVersion;
+  bool _lastPirateFinderIndexReady = false;
+
+  void _onPirateFinderDataChanged() {
+    final version = _pirateFinderData?.local?.sha256;
+    final indexReady = _pirateFinderData?.hasIndex ?? false;
+    if (version == _lastPirateFinderVersion &&
+        indexReady == _lastPirateFinderIndexReady) {
+      return;
+    }
+    _lastPirateFinderVersion = version;
+    _lastPirateFinderIndexReady = indexReady;
+    _pirateFinderTitleMatches.clear();
+    if (!_disposed) notifyListeners();
+  }
+
   late CatalogUniverse universe;
   late CrewIndex crews;
   late CrewImageIndex crewImages;
@@ -116,6 +146,7 @@ class CatalogController extends ChangeNotifier {
     progress = 'Loading catalog…';
     _localAssetsCache.clear();
     _cardFolderLayersCache.clear();
+    _pirateFinderTitleMatches.clear();
     _releaseLookupCache = null;
     _crewCardsBase = null;
     notifyListeners();
@@ -863,15 +894,97 @@ class CatalogController extends ChangeNotifier {
     return p.join(config.rootDirectory, rel);
   }
 
-  bool get pirateFinderAvailable => pirateFinderData?.local != null;
+  /// Title-only match for a card (no ZIP I/O). Cached until the PF data or
+  /// catalog universe changes. Returns null while the index is still loading.
+  PirateFinderMatch? pirateFinderTitleMatchForCard(GameCard card) {
+    final index = _pirateFinderData?.index;
+    if (index == null) {
+      _requestPirateFinderIndex();
+      return null;
+    }
+    final key = 'card:${card.kind}:${card.folder}:${card.name}';
+    if (_pirateFinderTitleMatches.containsKey(key)) {
+      return _pirateFinderTitleMatches[key];
+    }
+    final inputs = _pirateFinderCardInputs(card);
+    final match = index.matchByTitles(
+      inputs.titles,
+      labels: inputs.labels,
+      years: inputs.years,
+      publishers: inputs.publishers,
+    );
+    _pirateFinderTitleMatches[key] = match;
+    return match;
+  }
+
+  /// Title-only match for a browse-mode ZIP entry.
+  PirateFinderMatch? pirateFinderTitleMatchForEntry(Entry entry) {
+    final index = _pirateFinderData?.index;
+    if (index == null) {
+      _requestPirateFinderIndex();
+      return null;
+    }
+    final key = 'entry:${relOf(entry)}';
+    if (_pirateFinderTitleMatches.containsKey(key)) {
+      return _pirateFinderTitleMatches[key];
+    }
+    final inputs = _pirateFinderEntryInputs(entry);
+    final match = index.matchByTitles(
+      inputs.titles,
+      labels: inputs.labels,
+      years: inputs.years,
+      publishers: inputs.publishers,
+    );
+    _pirateFinderTitleMatches[key] = match;
+    return match;
+  }
+
+  void _requestPirateFinderIndex() {
+    final data = _pirateFinderData;
+    if (data == null || data.hasIndex || data.local == null) return;
+    unawaited(data.ensureIndex());
+  }
 
   /// Matches a card against the downloaded PirateFinder catalogue. The
   /// selected ZIP is tried by exact disk-image hashes first; title + gameinfo
-  /// crew/cracker/year is the fallback.
+  /// crew/cracker/year is the fallback. The UI uses the title-only methods
+  /// above, so the detail button only appears for a confirmed title match.
   Future<PirateFinderMatch?> pirateFinderMatchForCard(
     GameCard card, {
     String? rel,
   }) {
+    final inputs = _pirateFinderCardInputs(card);
+    return _pirateFinderMatch(
+      titles: inputs.titles,
+      rel: rel,
+      labels: inputs.labels,
+      years: inputs.years,
+      publishers: inputs.publishers,
+    );
+  }
+
+  /// Same as [pirateFinderMatchForCard] for a browse-mode ZIP entry.
+  Future<PirateFinderMatch?> pirateFinderMatchForEntry(
+    Entry entry, {
+    String? rel,
+  }) {
+    final inputs = _pirateFinderEntryInputs(entry);
+    return _pirateFinderMatch(
+      titles: inputs.titles,
+      rel: rel ?? relOf(entry),
+      labels: inputs.labels,
+      years: inputs.years,
+      publishers: inputs.publishers,
+    );
+  }
+
+  ({
+    List<String> titles,
+    Set<String> labels,
+    Set<int> years,
+    Set<String> publishers,
+  })
+  _pirateFinderCardInputs(GameCard card) {
     final labels = <String>{};
     final years = <int>{};
     final publishers = <String>{};
@@ -903,20 +1016,21 @@ class CatalogController extends ChangeNotifier {
       final value = PirateFinderIndex.normalizeLabel(publisher);
       if (value.isNotEmpty) publishers.add(value);
     }
-    return _pirateFinderMatch(
+    return (
       titles: [card.folder, card.name, card.info?.title ?? ''],
-      rel: rel,
       labels: labels,
       years: years,
       publishers: publishers,
     );
   }
 
-  /// Same as [pirateFinderMatchForCard] for a browse-mode ZIP entry.
-  Future<PirateFinderMatch?> pirateFinderMatchForEntry(
-    Entry entry, {
-    String? rel,
-  }) {
+  ({
+    List<String> titles,
+    Set<String> labels,
+    Set<int> years,
+    Set<String> publishers,
+  })
+  _pirateFinderEntryInputs(Entry entry) {
     final info = infoFor(entry);
     final labels = <String>{};
     final years = <int>{};
@@ -944,9 +1058,8 @@ class CatalogController extends ChangeNotifier {
     final withoutExtension = name.contains('.')
         ? name.substring(0, name.lastIndexOf('.'))
         : name;
-    return _pirateFinderMatch(
+    return (
       titles: [withoutExtension, name, info?.matchedTitle ?? ''],
-      rel: rel ?? relOf(entry),
       labels: labels,
       years: years,
       publishers: publishers,
@@ -960,7 +1073,7 @@ class CatalogController extends ChangeNotifier {
     Set<int> years = const {},
     Set<String> publishers = const {},
   }) async {
-    final controller = pirateFinderData;
+    final controller = _pirateFinderData;
     if (controller == null) return null;
     final index = await controller.ensureIndex();
     if (index == null) return null;
@@ -1216,6 +1329,7 @@ class CatalogController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _pirateFinderData?.removeListener(_onPirateFinderDataChanged);
     _scanQueue.clear();
     super.dispose();
   }
@@ -2090,6 +2204,7 @@ class CatalogController extends ChangeNotifier {
     // New card objects — drop the lazy pd/utils variant cache (identity-keyed).
     _resolvedCardVariants.clear();
     _statusLineCache.clear();
+    _pirateFinderTitleMatches.clear();
   }
 
   /// Persists the pending changes (shotgen lock, atomic `index.json` +

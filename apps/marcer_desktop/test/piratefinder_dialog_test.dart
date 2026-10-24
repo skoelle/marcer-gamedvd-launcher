@@ -99,12 +99,12 @@ PirateFinderIndex _index() => PirateFinderIndex.fromJson({
 });
 
 class _FakeData extends PirateFinderDataController {
-  _FakeData(this.index);
+  _FakeData(this.catalog);
 
-  final PirateFinderIndex index;
+  final PirateFinderIndex catalog;
 
   @override
-  Future<PirateFinderIndex?> ensureIndex({bool force = false}) async => index;
+  Future<PirateFinderIndex?> ensureIndex({bool force = false}) async => catalog;
 }
 
 class _FakeController extends CatalogController {
@@ -115,15 +115,13 @@ class _FakeController extends CatalogController {
   final PirateFinderIndex index;
 
   @override
-  Future<PirateFinderMatch?> pirateFinderMatchForEntry(
-    Entry entry, {
-    String? rel,
-  }) async => PirateFinderMatch(
-    disk: index.disk(1)!,
-    candidates: [index.disk(1)!, index.disk(2)!],
-    method: 'hash',
-    confidence: 'exact',
-  );
+  PirateFinderMatch? pirateFinderTitleMatchForEntry(Entry entry) =>
+      PirateFinderMatch(
+        disk: index.disk(1)!,
+        candidates: [index.disk(1)!, index.disk(2)!],
+        method: 'title',
+        confidence: 'likely',
+      );
 }
 
 void main() {
@@ -152,7 +150,6 @@ void main() {
                   context,
                   controller: controller,
                   entry: entry,
-                  rel: 'arkanoid.zip',
                 ),
                 child: const Text('open'),
               ),
@@ -169,15 +166,20 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('PirateFinder-Catalog on GitHub'), findsOneWidget);
-    expect(find.text('EXACT'), findsOneWidget);
-    for (final tab in ['Release', 'Crew', 'Menus', 'Trivia', 'Sources']) {
+    expect(find.text('LIKELY'), findsOneWidget);
+    expect(find.text('Release Name'), findsNWidgets(2));
+    expect(find.text('Publisher'), findsOneWidget);
+    expect(find.text('Year'), findsNothing);
+    expect(find.text('Date'), findsNothing);
+    expect(find.text('Open crew page'), findsNothing);
+    expect(find.text('Founded'), findsNothing);
+    for (final tab in ['Release (2)', 'Menus (1)', 'Trivia (1)', 'Sources']) {
       expect(find.widgetWithText(Tab, tab), findsOneWidget);
     }
-    await tester.tap(find.widgetWithText(Tab, 'Crew'));
-    await tester.pumpAndSettle();
+    expect(find.widgetWithText(Tab, 'Crew'), findsNothing);
     expect(find.textContaining('A crew founded in 1988.'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(Tab, 'Menus'));
+    await tester.tap(find.widgetWithText(Tab, 'Menus (1)'));
     await tester.pumpAndSettle();
     expect(find.text('Automation 250'), findsOneWidget);
 

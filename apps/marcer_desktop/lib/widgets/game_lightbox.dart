@@ -972,60 +972,70 @@ class _GameLightboxState extends State<GameLightbox> {
     final localAssets = item is GameCard
         ? widget.controller.localAssetsForCard(item)
         : null;
-    return GameInfoPanel(
-      info: _info,
-      atariLegend: al,
-      onAtariLegend: al == null
-          ? null
-          : () => showAtariLegendDialog(
-              context,
-              game: al,
-              textsLoader: widget.controller.atariLegendTexts,
-            ),
-      onPirateFinder: !widget.controller.pirateFinderAvailable
-          ? null
-          : () => showPirateFinderDialog(
-              context,
-              controller: widget.controller,
-              card: item is GameCard ? item : null,
-              entry: item is Entry ? item : null,
-              rel: v?.rel,
-            ),
-      extras: localAssets == null
-          ? null
-          : LocalAssetsChips(
-              assets: localAssets,
-              service: widget.controller.localAssetsService,
-            ),
-      variant: v == null
-          ? null
-          : ZipVariantView(
-              name: v.title,
-              status: v.status,
-              kind: v.kind,
-              layer: v.layer,
-              rel: v.rel,
-              size: v.size,
-              missing: v.missing,
-              tos: v.tos,
-            ),
-      filter: widget.controller.filter,
-      onPlay: v == null ? null : _launchCurrent,
-      variants: _launchVariants,
-      onPlayVariant: v == null
-          ? null
-          : (variant) => _launchCurrent(variant: variant),
-      // Group click: switch to that crew's/cracker's variant; no matching
-      // ZIP ("not found") jumps to variant 0 (the header shows the
-      // "… ZIP not found —" prefix when a focus filter missed).
-      onSelectGroup: (value, kind) {
-        final item = _item;
-        if (item is! GameCard) return;
-        final orig = focusVariant(item, value, kind);
-        final target = orig >= 0 ? orig : 0;
-        final vs = _variants;
-        final pos = vs.indexWhere((x) => x.origIndex == target);
-        _setVariant(pos >= 0 ? pos : 0);
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) {
+        final pfMatch = item is GameCard
+            ? widget.controller.pirateFinderTitleMatchForCard(item)
+            : item is Entry
+            ? widget.controller.pirateFinderTitleMatchForEntry(item)
+            : null;
+        return GameInfoPanel(
+          info: _info,
+          atariLegend: al,
+          pirateFinderMatch: pfMatch,
+          onAtariLegend: al == null
+              ? null
+              : () => showAtariLegendDialog(
+                  context,
+                  game: al,
+                  textsLoader: widget.controller.atariLegendTexts,
+                ),
+          onPirateFinder: pfMatch == null
+              ? null
+              : () => showPirateFinderDialog(
+                  context,
+                  controller: widget.controller,
+                  card: item is GameCard ? item : null,
+                  entry: item is Entry ? item : null,
+                ),
+          extras: localAssets == null
+              ? null
+              : LocalAssetsChips(
+                  assets: localAssets,
+                  service: widget.controller.localAssetsService,
+                ),
+          variant: v == null
+              ? null
+              : ZipVariantView(
+                  name: v.title,
+                  status: v.status,
+                  kind: v.kind,
+                  layer: v.layer,
+                  rel: v.rel,
+                  size: v.size,
+                  missing: v.missing,
+                  tos: v.tos,
+                ),
+          filter: widget.controller.filter,
+          onPlay: v == null ? null : _launchCurrent,
+          variants: _launchVariants,
+          onPlayVariant: v == null
+              ? null
+              : (variant) => _launchCurrent(variant: variant),
+          // Group click: switch to that crew's/cracker's variant; no matching
+          // ZIP ("not found") jumps to variant 0 (the header shows the
+          // "… ZIP not found —" prefix when a focus filter missed).
+          onSelectGroup: (value, kind) {
+            final item = _item;
+            if (item is! GameCard) return;
+            final orig = focusVariant(item, value, kind);
+            final target = orig >= 0 ? orig : 0;
+            final vs = _variants;
+            final pos = vs.indexWhere((x) => x.origIndex == target);
+            _setVariant(pos >= 0 ? pos : 0);
+          },
+        );
       },
     );
   }

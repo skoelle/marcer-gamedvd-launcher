@@ -10,22 +10,17 @@ import '../piratefinder_names.dart';
 import 'piratefinder_link.dart';
 
 /// Opens the PirateFinder details dialog for a catalog card or browse entry.
-/// Data is loaded lazily; [rel] is the selected ZIP (exact-hash match).
+/// The catalogue is preloaded; matches use title/crew metadata.
 Future<void> showPirateFinderDialog(
   BuildContext context, {
   required CatalogController controller,
   GameCard? card,
   Entry? entry,
-  String? rel,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => PirateFinderDialog(
-      controller: controller,
-      card: card,
-      entry: entry,
-      rel: rel,
-    ),
+    builder: (_) =>
+        PirateFinderDialog(controller: controller, card: card, entry: entry),
   );
 }
 
@@ -35,13 +30,11 @@ class PirateFinderDialog extends StatefulWidget {
     required this.controller,
     this.card,
     this.entry,
-    this.rel,
   });
 
   final CatalogController controller;
   final GameCard? card;
   final Entry? entry;
-  final String? rel;
 
   @override
   State<PirateFinderDialog> createState() => _PirateFinderDialogState();
@@ -49,7 +42,6 @@ class PirateFinderDialog extends StatefulWidget {
 
 class _PirateFinderDialogState extends State<PirateFinderDialog> {
   late final Future<_PfLookup?> _future;
-  PirateFinderDisk? _selected;
 
   @override
   void initState() {
@@ -59,16 +51,11 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
 
   Future<_PfLookup?> _load() async {
     final data = widget.controller.pirateFinderData;
-    final index = await data?.ensureIndex();
+    var index = data?.index;
+    index ??= await data?.ensureIndex();
     final match = widget.card != null
-        ? await widget.controller.pirateFinderMatchForCard(
-            widget.card!,
-            rel: widget.rel,
-          )
-        : await widget.controller.pirateFinderMatchForEntry(
-            widget.entry!,
-            rel: widget.rel,
-          );
+        ? widget.controller.pirateFinderTitleMatchForCard(widget.card!)
+        : widget.controller.pirateFinderTitleMatchForEntry(widget.entry!);
     if (index == null) {
       return _PfLookup(index: null, match: match, error: data?.indexError);
     }
@@ -110,8 +97,7 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
                 'No catalogue record matched this title, crew or ZIP hash.',
               );
             }
-            final selected = _selected ?? match.disk;
-            return _content(lookup.index!, match, selected);
+            return _content(lookup.index!, match);
           },
         ),
       ),
@@ -164,40 +150,44 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
     );
   }
 
-  Widget _content(
-    PirateFinderIndex index,
-    PirateFinderMatch match,
-    PirateFinderDisk disk,
-  ) {
+  Widget _content(PirateFinderIndex index, PirateFinderMatch match) {
     final candidates = match.candidates;
-    final series = index.seriesForDisk(disk);
-    final crew = index.crewForDisk(disk);
-    final appearances = index.appearancesForDisk(disk);
-    final trivia = index.triviaForDisk(disk.id);
+    final first = match.disk;
+    final appearances = <int, PirateFinderDisk>{};
+    final trivia = <int, PirateFinderTrivia>{};
+    for (final candidate in candidates) {
+      for (final menu in index.appearancesForDisk(candidate)) {
+        appearances[menu.id] = menu;
+      }
+      for (final item in index.triviaForDisk(candidate.id)) {
+        trivia[item.id] = item;
+      }
+    }
+    final menus = appearances.values.toList()
+      ..sort((a, b) => a.label.compareTo(b.label));
+    final triviaItems = trivia.values.toList();
     return DefaultTabController(
-      length: 5,
+      length: 4,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _header(match, disk, candidates),
+          _header(match),
           const Divider(height: 1),
-          const TabBar(
+          TabBar(
             isScrollable: true,
             tabs: [
-              Tab(text: 'Release'),
-              Tab(text: 'Crew'),
-              Tab(text: 'Menus'),
-              Tab(text: 'Trivia'),
-              Tab(text: 'Sources'),
+              Tab(text: 'Release (${candidates.length})'),
+              Tab(text: 'Menus (${menus.length})'),
+              Tab(text: 'Trivia (${triviaItems.length})'),
+              const Tab(text: 'Sources'),
             ],
           ),
           Flexible(
             child: TabBarView(
               children: [
-                _scroll(_releaseTab(index, disk, series)),
-                _scroll(_crewTab(crew)),
-                _scroll(_menusTab(appearances)),
-                _scroll(_triviaTab(trivia)),
+                _scroll(_releaseTab(index, match, first)),
+                _scroll(_menusTab(menus)),
+                _scroll(_triviaTab(triviaItems)),
                 _scroll(_sourcesTab(index)),
               ],
             ),
@@ -224,11 +214,8 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
     );
   }
 
-  Widget _header(
-    PirateFinderMatch match,
-    PirateFinderDisk disk,
-    List<PirateFinderDisk> candidates,
-  ) {
+  Widget _header(PirateFinderMatch match) {
+    final disk = match.disk;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
       child: Row(
@@ -240,11 +227,15 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      kPirateFinderCatalogName,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
+                    const Flexible(
+                      child: Text(
+                        kPirateFinderCatalogName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -261,29 +252,6 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
                   disk.label,
                   style: const TextStyle(fontSize: 13, color: Colors.white70),
                 ),
-                if (candidates.length > 1) ...[
-                  const SizedBox(height: 6),
-                  DropdownButton<int>(
-                    value: disk.id,
-                    isDense: true,
-                    items: [
-                      for (final candidate in candidates)
-                        DropdownMenuItem(
-                          value: candidate.id,
-                          child: Text(
-                            candidate.label,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                    ],
-                    onChanged: (id) {
-                      final next = candidates
-                          .where((c) => c.id == id)
-                          .firstOrNull;
-                      if (next != null) setState(() => _selected = next);
-                    },
-                  ),
-                ],
               ],
             ),
           ),
@@ -301,59 +269,33 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
 
   Widget _releaseTab(
     PirateFinderIndex index,
-    PirateFinderDisk disk,
-    PirateFinderSeries? series,
+    PirateFinderMatch match,
+    PirateFinderDisk first,
   ) {
-    final contents = index.contentsForDisk(disk.id);
-    final links = index.linksForDisk(disk.id);
+    final series = index.seriesForDisk(first);
+    final links = index.linksForDisk(first.id);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _kv('Label', disk.label),
-        _kv('Title', disk.title),
+        if (first.publisher.isNotEmpty) _kv('Publisher', first.publisher),
         if (series != null) ...[
           _kv('Series', series.name),
           if (series.groupName.isNotEmpty) _kv('Group', series.groupName),
         ],
-        _kv(
-          'Number',
-          [
-            if (disk.number != null) '${disk.number}',
-            if (disk.part.isNotEmpty) 'part ${disk.part}',
-            if (disk.version.isNotEmpty) 'version ${disk.version}',
-          ].join(' · '),
-        ),
-        _kv('Kind', disk.kind),
-        _kv('Category', disk.category),
-        _kv('Date', _date(disk)),
-        _kv('Publisher', disk.publisher),
-        _kv('Cracker', disk.cracker),
-        _kv('Crew', disk.crew),
-        _kv('Condition', disk.condition),
-        if (contents.isNotEmpty) ...[
-          _section('Contents (${contents.length})'),
-          for (final item in contents)
-            _bullet(
-              item.title,
-              [
-                if (item.kind.isNotEmpty) item.kind,
-                if (item.publisher.isNotEmpty) item.publisher,
-                if (item.cracker.isNotEmpty) 'cr ${item.cracker}',
-              ].join(' · '),
-            ),
-        ],
-        if (disk.notes.isNotEmpty) ...[
+        _kv('Kind', first.kind),
+        _kv('Category', first.category),
+        if (first.notes.isNotEmpty) ...[
           _section('Notes'),
-          SelectableText(disk.notes, style: const TextStyle(fontSize: 12)),
+          SelectableText(first.notes, style: const TextStyle(fontSize: 12)),
         ],
-        if (disk.credits.isNotEmpty) ...[
+        if (first.credits.isNotEmpty) ...[
           _section('Credits'),
-          SelectableText(disk.credits, style: const TextStyle(fontSize: 12)),
+          SelectableText(first.credits, style: const TextStyle(fontSize: 12)),
         ],
-        if (disk.menuText.isNotEmpty) ...[
+        if (first.menuText.isNotEmpty) ...[
           _section('Menu text'),
           SelectableText(
-            disk.menuText,
+            first.menuText,
             style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
           ),
         ],
@@ -361,39 +303,59 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
           _section('Links'),
           for (final link in links) _link(link.label, link.url),
         ],
+        _section('Releases (${match.candidates.length})'),
+        for (final candidate in match.candidates)
+          _releaseEntry(index, candidate),
       ],
     );
   }
 
-  Widget _crewTab(PirateFinderCrew? crew) {
-    if (crew == null) {
-      return const Text(
-        'No crew history in the $kPirateFinderCatalogName.',
-        style: TextStyle(fontSize: 12, color: Colors.grey),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _kv('Name', crew.name),
-        _kv('Founded', crew.founded),
-        _kv('Source', crew.source),
-        if (crew.members.isNotEmpty) ...[
-          _section('Members'),
-          SelectableText(crew.members, style: const TextStyle(fontSize: 12)),
+  Widget _releaseEntry(PirateFinderIndex index, PirateFinderDisk disk) {
+    final crew = index.crewForDisk(disk);
+    final contents = index.contentsForDisk(disk.id);
+    final date = _date(disk);
+    final crewName = disk.crew.isNotEmpty ? disk.crew : disk.cracker;
+    final showContents =
+        contents.isNotEmpty && (contents.length > 1 || disk.kind != 'single');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _kv('Release Name', disk.label),
+          if (crewName.isNotEmpty)
+            _kv('Crew', date.isEmpty ? crewName : '$crewName ($date)')
+          else if (date.isNotEmpty)
+            _kv('Release date', date),
+          if (crew != null) ...[
+            _kv('Members', crew.members),
+            _kv('History', crew.notes),
+            if (crew.wikipedia.isNotEmpty)
+              _link(
+                'Wikipedia: ${crew.wikipedia}',
+                'https://en.wikipedia.org/wiki/${Uri.encodeComponent(crew.wikipedia.replaceAll(' ', '_'))}',
+              ),
+          ],
+          if (showContents) ...[
+            _section('Contents (${contents.length})'),
+            for (final item in contents)
+              _bullet(
+                item.title,
+                [
+                  if (item.kind.isNotEmpty) item.kind,
+                  if (item.publisher.isNotEmpty) item.publisher,
+                  if (item.cracker.isNotEmpty) 'cr ${item.cracker}',
+                ].join(' · '),
+              ),
+          ],
         ],
-        if (crew.notes.isNotEmpty) ...[
-          _section('History'),
-          SelectableText(crew.notes, style: const TextStyle(fontSize: 12)),
-        ],
-        if (crew.url.isNotEmpty) _link('Open crew page', crew.url),
-        if (crew.wikipedia.isNotEmpty) ...[
-          _link(
-            'Wikipedia: ${crew.wikipedia}',
-            'https://en.wikipedia.org/wiki/${Uri.encodeComponent(crew.wikipedia.replaceAll(' ', '_'))}',
-          ),
-        ],
-      ],
+      ),
     );
   }
 

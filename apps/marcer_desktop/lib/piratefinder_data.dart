@@ -226,6 +226,14 @@ typedef PirateFinderProgress = void Function(
   int total,
 );
 
+/// Parses the catalogue in a background isolate.
+///
+/// Kept top-level so the isolate closure captures only [path]; a closure
+/// created inside the controller would capture `this` (and its listener /
+/// service graph), which is not sendable.
+Future<PirateFinderIndex> _parsePirateFinderIndexInIsolate(String path) =>
+    Isolate.run(() => PirateFinderIndex.fromGzipFile(path));
+
 /// Downloads one PF catalogue asset (injectable for tests).
 abstract class PirateFinderDownloader {
   Future<void> download({
@@ -368,6 +376,9 @@ class PirateFinderDataController extends ChangeNotifier {
 
   bool get hasIndex => _index != null;
 
+  /// Parsed catalog, once [ensureIndex] has completed.
+  PirateFinderIndex? get index => _index;
+
   /// Parses the downloaded PF JSON on first use, in a background isolate.
   Future<PirateFinderIndex?> ensureIndex({bool force = false}) {
     if (_index != null && !force) return Future.value(_index);
@@ -378,12 +389,9 @@ class PirateFinderDataController extends ChangeNotifier {
     if (!File(path).existsSync()) return Future.value(null);
     indexLoading = true;
     indexError = null;
-    _notify();
     final future = () async {
       try {
-        final value = await Isolate.run(
-          () => PirateFinderIndex.fromGzipFile(path),
-        );
+        final value = await _parsePirateFinderIndexInIsolate(path);
         _index = value;
         return value;
       } catch (e) {

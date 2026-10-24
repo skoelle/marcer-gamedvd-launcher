@@ -692,6 +692,24 @@ class _SettingsFormState extends State<SettingsForm> {
                               ),
                             ],
                           ),
+                          if (hasDataDir) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              pf.indexError != null
+                                  ? 'index: ${pf.indexError}'
+                                  : pf.indexLoading
+                                  ? 'index: loading…'
+                                  : pf.hasIndex
+                                  ? 'index: loaded'
+                                  : 'index: not loaded',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: pf.indexError != null
+                                    ? Colors.redAccent
+                                    : Colors.grey,
+                              ),
+                            ),
+                          ],
                           if (pf.error != null) ...[
                             const SizedBox(height: 2),
                             Text(
