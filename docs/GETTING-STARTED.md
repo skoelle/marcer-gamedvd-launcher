@@ -27,7 +27,9 @@ source.
    **AtariLegendDirectory** and click **Download AtariLegend data**
    ([FTP and catalog data](#4-ftp-connection-and-catalog-data)).
 6. Press **Save**. Install Hatari and download the TOS ROM when prompted
-   ([Hatari and TOS ROM](#5-hatari-and-tos-rom)).
+   ([Hatari and TOS ROM](#5-hatari-and-tos-rom)). Optional later: open
+   **Settings** and click **Install** on the **PirateFinder data** row
+   (GitHub, CC BY-NC-SA 4.0, not part of the Marcer catalog).
 7. Press `?` in the app for all keyboard shortcuts. The detailed sections
    below cover every option.
 
@@ -132,6 +134,7 @@ MarcersGameDVD-Data/
 | `ScreenshotDirectory` | no | Target for the screenshot index (`index.json`, `index-pd.json`, `index-utils.json`, `index-magazine.json`, `index-falcon.json`) and the PNG previews. |
 | `GameinfoDirectory` | no | Target for the game metadata (`games-*.json`) and the optional crew data (`crews.json`, `crew-images.json`). There is no implicit fallback. |
 | `AtariLegendDirectory` | no | Optional AtariLegend metadata cache (`atarilegend.json`, `atarilegend-texts.json`). |
+| `PirateFinder data` (app-managed) | no | Optional PF catalogue JSON, downloaded from GitHub into `downloadedDataDir/piratefinder/`. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog. |
 
 Without screenshots/gameinfo the catalog is empty or incomplete; the app then
 shows a notice that points to the download buttons and to the status filter
@@ -237,7 +240,12 @@ download buttons. The same connection is used for:
    data**. This downloads the weekly AtariLegend dump, builds the compact cache
    and can be repeated later. AtariLegend data is CC BY-NC-SA 4.0 and is not
    bundled.
-5. Press **Save**. The catalog reloads with the new data.
+5. Optional: click **Install** on the **PirateFinder data** row. This downloads
+   the generic PF catalogue JSON from the GitHub `piratefinder-catalog-json`
+   release and stores it under the app data directory. It is offered again in
+   the top-bar **Catalog data** dialog (third row) when newer data exists. It is
+   CC BY-NC-SA 4.0, not part of the Marcer catalog, and never bundled.
+6. Press **Save**. The catalog reloads with the new data.
 
 Downloads show progress and can be cancelled. The newest archive is chosen by
 the timestamp in its name. The applied archive is recorded in

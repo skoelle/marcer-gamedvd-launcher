@@ -86,6 +86,15 @@ Save, the manual screenshot curation described below.
   AtariLegend publishers. Nothing is bundled — the data is downloaded at
   runtime and is **CC BY-NC-SA 4.0** (non-commercial, attribution, share-alike):
   see [License](#license).
+- **Optional PirateFinder metadata** — download the generic
+  [PirateFinder catalogue JSON](https://github.com/skoelle/piratefinder-catalog-json)
+  from the settings **PirateFinder data** row (Install/Update): catalogue facts,
+  crew histories, menu-disk appearances, trivia and media references. The data
+  is app-managed under `downloadedDataDir/piratefinder/`, checked at startup
+  (release builds) and listed in the same **Catalog data** dialog as gameinfo
+  and screenshots. It is **CC BY-NC-SA 4.0**, not part of the Marcer catalog,
+  never bundled and never uploaded. This phase downloads/updates the data; the
+  PF detail button follows in a later phase.
 - **Crew / cracker focus** — pick a crew or cracker and each card jumps to
   *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
   matching tolerates `&`/`and` and small typos).
@@ -363,7 +372,9 @@ installation** and **TOS ROM** rows); the two catalog-data fields each carry a
 `screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
 into the target directory (the gameinfo directory has **no** implicit
 fallback), and **AtariLegendDirectory** has a **Download AtariLegend data**
-button (optional, see [License](#license)). **Save** writes them back to the
+button, and the app-managed **PirateFinder data** row offers **Install/Update**
+for the optional PF catalogue JSON (GitHub, CC BY-NC-SA 4.0, see
+[License](#license)). **Save** writes them back to the
 same `desktop.config.json` and reloads the catalog in place, so new paths apply
 without restarting the app; window settings and the remaining fields stay
 untouched.
@@ -382,6 +393,7 @@ optional (needed to launch, not to browse).
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
 | `GameinfoDirectory` | no | gameinfo JSONs (no implicit fallback; fill it or download) |
 | `AtariLegendDirectory` | no | optional AtariLegend metadata cache (`atarilegend.json` + `atarilegend-texts.json`); filled by **Download AtariLegend data** |
+| `PirateFinder data` (app-managed) | no | optional PF-only catalogue JSON; **Install/Update** downloads it from GitHub into `downloadedDataDir/piratefinder/`. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog |
 | `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
 | `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
@@ -584,6 +596,14 @@ Some optional downloads are **not** covered by the MIT license:
   [AtariLegend](https://www.atarilegend.com/) and share-alike. It is never
   bundled with this repository or the release; if you redistribute it, you must
   follow that license.
+- **PirateFinder** data (catalogue facts, crew histories, trivia, media
+  references) is fetched on demand by the desktop app from the generic
+  [piratefinder-catalog-json](https://github.com/skoelle/piratefinder-catalog-json)
+  release and is licensed
+  **[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)** —
+  non-commercial use, attribution and share-alike. It is never bundled with
+  this repository or the release and is never written into the Marcer catalog
+  artifacts.
 - **TOS ROM images** are Atari-copyrighted and are only offered for
   non-commercial use.
 - **Hatari** is free software under the **GPL-2.0**, downloaded from the

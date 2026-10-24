@@ -11,6 +11,7 @@ import '../atarilegend_fetcher.dart';
 import '../catalog_assets.dart';
 import '../ftp_downloader.dart';
 import '../hatari_installer.dart';
+import '../piratefinder_data.dart';
 import '../tos_rom.dart';
 import 'hatari_install_dialog.dart';
 import 'tos_rom_dialog.dart';
@@ -103,6 +104,7 @@ class SettingsForm extends StatefulWidget {
     this.tosDownloader = const HttpTosRomDownloader(),
     this.hatariDownloader = const HttpHatariDownloader(),
     this.atariLegendFetcher = const HttpAtariLegendFetcher(),
+    this.pirateFinderData,
     this.hatariBuild,
   });
 
@@ -134,6 +136,10 @@ class SettingsForm extends StatefulWidget {
   /// for tests).
   final AtariLegendFetcher atariLegendFetcher;
 
+  /// Shared PF catalogue download/update state. When omitted (first-run
+  /// setup, tests) the form owns a private controller.
+  final PirateFinderDataController? pirateFinderData;
+
   /// Overrides the platform build lookup for the Hatari install row (tests);
   /// `null` uses [hatariBuildFor] for the current platform.
   final HatariBuild? hatariBuild;
@@ -152,6 +158,9 @@ class _SettingsFormState extends State<SettingsForm> {
   bool _cancelRequested = false;
 
   bool _fetchingAtariLegend = false;
+  late final PirateFinderDataController _pirateFinder;
+  late final bool _ownsPirateFinder;
+  bool _pirateFinderCancel = false;
   String _atariLegendMessage = '';
   int _atariLegendDone = 0;
   int _atariLegendTotal = 0;
@@ -208,6 +217,12 @@ class _SettingsFormState extends State<SettingsForm> {
           optionalHint: 'empty → bundled MarcerGameDvd-Hatari.cfg')
         ..controller.text = c.hatariConfigFile,
     ];
+    _ownsPirateFinder = widget.pirateFinderData == null;
+    _pirateFinder =
+        widget.pirateFinderData ?? PirateFinderDataController();
+    _pirateFinder.config = widget.initial;
+    _pirateFinder.addListener(_onPirateFinderChanged);
+    _pirateFinder.refreshLocal();
     for (final f in _fields) {
       f.controller.addListener(_revalidate);
     }
@@ -220,12 +235,18 @@ class _SettingsFormState extends State<SettingsForm> {
       f.controller.removeListener(_revalidate);
       f.controller.dispose();
     }
+    _pirateFinder.removeListener(_onPirateFinderChanged);
+    if (_ownsPirateFinder) _pirateFinder.dispose();
     super.dispose();
   }
 
   void _revalidate() {
     setState(() {});
     _emit();
+  }
+
+  void _onPirateFinderChanged() {
+    if (mounted) setState(() {});
   }
 
   void _emit() {
@@ -278,7 +299,11 @@ class _SettingsFormState extends State<SettingsForm> {
       : _textOf(_Field.gameinfo);
 
   Future<void> _downloadAsset(CatalogAsset asset, {bool force = false}) async {
-    if (_downloading != null || _fetchingAtariLegend) return;
+    if (_downloading != null ||
+        _fetchingAtariLegend ||
+        _pirateFinder.busy) {
+      return;
+    }
     if (!currentConfig.ftpConfigured) {
       _snack('FTP host missing — enter the FTP server above first.');
       return;
@@ -342,7 +367,11 @@ class _SettingsFormState extends State<SettingsForm> {
   /// Downloads the newest AtariLegend dump and writes the compact metadata
   /// cache into the configured directory (created when it does not exist).
   Future<void> _downloadAtariLegend() async {
-    if (_downloading != null || _fetchingAtariLegend) return;
+    if (_downloading != null ||
+        _fetchingAtariLegend ||
+        _pirateFinder.busy) {
+      return;
+    }
     final target = _textOf(_Field.atariLegend);
     if (target.isEmpty) {
       _snack('Choose an AtariLegend directory first.');
@@ -388,6 +417,36 @@ class _SettingsFormState extends State<SettingsForm> {
       widget.onBusyChanged?.call(false);
       _revalidate();
     }
+  }
+
+  /// Downloads the PF catalogue JSON from GitHub (offered only; never
+  /// applied automatically). The data stays in the app-managed PF directory.
+  Future<void> _downloadPirateFinder() async {
+    if (_pirateFinder.busy ||
+        _downloading != null ||
+        _fetchingAtariLegend) {
+      return;
+    }
+    _pirateFinder.config = currentConfig;
+    _pirateFinderCancel = false;
+    widget.onBusyChanged?.call(true);
+    try {
+      final ok = await _pirateFinder.update(
+          isCancelled: () => _pirateFinderCancel);
+      if (!mounted) return;
+      if (ok) {
+        _snack('PirateFinder data updated.');
+      } else if (_pirateFinder.error != null) {
+        _snack(_pirateFinder.error!);
+      }
+    } finally {
+      widget.onBusyChanged?.call(false);
+    }
+  }
+
+  Future<void> _checkPirateFinder() async {
+    _pirateFinder.config = currentConfig;
+    await _pirateFinder.check(force: true);
   }
 
   /// Asks whether the already-applied (up-to-date) archive should be
@@ -461,10 +520,136 @@ class _SettingsFormState extends State<SettingsForm> {
         for (final field in _fields) ...[
           if (field.sectionHeader != null) _sectionHeader(field.sectionHeader!),
           _fieldRow(field),
+          if (field.field == _Field.atariLegend &&
+              widget.pirateFinderData != null)
+            _pirateFinderRow(),
           const SizedBox(height: 8),
         ],
         _hatariRow(),
         _tosRow(),
+      ],
+    );
+  }
+
+  /// Optional PF catalogue data row (app-managed, downloaded from GitHub).
+  Widget _pirateFinderRow() {
+    final pf = _pirateFinder;
+    final remote = pf.remote;
+    final local = pf.local;
+    final pending = pf.hasPending;
+    final busy = pf.busy || _downloading != null || _fetchingAtariLegend;
+    final localLabel = local == null
+        ? 'not installed'
+        : 'catalogue ${local.sourceTag} · ${local.generatedAt}';
+    final remoteLabel = remote == null
+        ? (pf.checking ? 'checking…' : 'not available')
+        : 'catalogue ${pf.latest?.sourceTag ?? '?'} · '
+            '${pf.latest?.generatedAt ?? '?'}';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: _labelWidth,
+          child: const Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: Text(
+              'PirateFinder data',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('local:  $localLabel',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.grey)),
+                          Text('remote: $remoteLabel',
+                              style: const TextStyle(fontSize: 11)),
+                          if (pf.error != null) ...[
+                            const SizedBox(height: 2),
+                            Text(pf.error!,
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.redAccent)),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (!pf.downloading)
+                    SizedBox(
+                      height: 40,
+                      child: remote == null
+                          ? TextButton(
+                              onPressed: busy ? null : _checkPirateFinder,
+                              child: const Text('Check'),
+                            )
+                          : pending
+                              ? FilledButton.tonal(
+                                  onPressed: busy ? null : _downloadPirateFinder,
+                                  child:
+                                      Text(local == null ? 'Install' : 'Update'),
+                                )
+                              : const Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Padding(
+                                    padding: EdgeInsets.only(right: 8),
+                                    child: Text('up to date',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF4CAF50))),
+                                  ),
+                                ),
+                    ),
+                ],
+              ),
+              if (pf.downloading) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: pf.total > 0
+                          ? LinearProgressIndicator(
+                              value: pf.done / pf.total, minHeight: 6)
+                          : const LinearProgressIndicator(minHeight: 6),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(pf.message,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey)),
+                    ),
+                    const SizedBox(width: 4),
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => _pirateFinderCancel = true),
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 4),
+              const Text(
+                'GitHub · CC BY-NC-SA 4.0 · not part of the Marcer catalog',
+                style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -527,7 +712,8 @@ class _SettingsFormState extends State<SettingsForm> {
                       height: 40,
                       child: FilledButton.tonal(
                         onPressed: _downloading == null &&
-                                !_fetchingAtariLegend
+                                !_fetchingAtariLegend &&
+                                !_pirateFinder.busy
                             ? () => _downloadAsset(field.download!)
                             : null,
                         child: const Text('Download from FTP'),
@@ -540,7 +726,8 @@ class _SettingsFormState extends State<SettingsForm> {
                       height: 40,
                       child: FilledButton.tonal(
                         onPressed: _downloading == null &&
-                                !_fetchingAtariLegend
+                                !_fetchingAtariLegend &&
+                                !_pirateFinder.busy
                             ? _downloadAtariLegend
                             : null,
                         child: const Text('Download AtariLegend data'),

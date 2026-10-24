@@ -143,6 +143,27 @@ images carry **no** `virus`, `virus_damage` or `antivirus` flags. A virus
 warning for the ST cracked section therefore cannot be sourced from this
 catalogue.
 
+## 4a. Implemented in the desktop app (Phase A)
+
+The desktop app now has an optional, app-managed **PirateFinder data** row in
+the shared settings form (below `AtariLegendDirectory`; no config path) and a
+third **PirateFinder** row in the existing top-bar **Catalog data** dialog:
+
+- `lib/piratefinder_data.dart` fetches the small `latest.json` pointer from the
+  generic `skoelle/piratefinder-catalog-json` GitHub release
+  (`catalog-latest`) and downloads
+  `piratefinder-catalog-atari-st.json.gz` on request (no auto-download).
+- The asset is verified against its SHA-256 and stored under
+  `downloadedDataDir/piratefinder/` with a `.piratefinder-catalog.json` marker
+  (`source_tag`, `generated_at`, `asset`, `sha256`, `applied_at`).
+- Release builds check silently at startup; the dataset badge counts a pending
+  PF update. The settings row and dialog show the local/remote catalogue tag and
+  generation date; a not-installed row shows the **Install** hint right away.
+- The data is CC BY-NC-SA 4.0, is never written into `GameinfoDirectory` or any
+  Marcer artifact, and is never bundled/uploaded.
+- Phase A only downloads/updates the data. The PF detail button, runtime
+  matching and the tabbed detail dialog are a later phase.
+
 ## 4. What this enables (next phases)
 
 1. **Crew view / crew dialog.** Use `crews-st.json` for history, members,

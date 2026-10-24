@@ -10,6 +10,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../asset_updater.dart';
 import '../catalog_controller.dart';
+import '../piratefinder_data.dart';
 import '../self_updater.dart';
 
 /// Global filter bar in two rows plus section tabs and letter row, matching
@@ -25,6 +26,7 @@ class FilterBar extends StatefulWidget {
     this.onOpenSettings,
     this.updater,
     this.assetUpdater,
+    this.pirateFinderUpdater,
     this.onOpenAssetUpdates,
   });
 
@@ -49,6 +51,10 @@ class FilterBar extends StatefulWidget {
   /// Catalog-data (screenshots/gameinfo) update state; a green badge appears
   /// when newer asset archives are available.
   final AssetUpdateController? assetUpdater;
+
+  /// Optional PF catalogue data state; its pending update is counted in the
+  /// same dataset badge/dialog as the Marcer catalog assets.
+  final PirateFinderDataController? pirateFinderUpdater;
 
   /// Opens the catalog-data update dialog (from the green badge).
   final VoidCallback? onOpenAssetUpdates;
@@ -87,6 +93,7 @@ class _FilterBarState extends State<FilterBar> {
     widget.controller.addListener(_onControllerChanged);
     widget.updater?.addListener(_onUpdaterChanged);
     widget.assetUpdater?.addListener(_onUpdaterChanged);
+    widget.pirateFinderUpdater?.addListener(_onUpdaterChanged);
   }
 
   @override
@@ -110,6 +117,10 @@ class _FilterBarState extends State<FilterBar> {
       oldWidget.assetUpdater?.removeListener(_onUpdaterChanged);
       widget.assetUpdater?.addListener(_onUpdaterChanged);
     }
+    if (oldWidget.pirateFinderUpdater != widget.pirateFinderUpdater) {
+      oldWidget.pirateFinderUpdater?.removeListener(_onUpdaterChanged);
+      widget.pirateFinderUpdater?.addListener(_onUpdaterChanged);
+    }
   }
 
   @override
@@ -118,6 +129,7 @@ class _FilterBarState extends State<FilterBar> {
     widget.controller.removeListener(_onControllerChanged);
     widget.updater?.removeListener(_onUpdaterChanged);
     widget.assetUpdater?.removeListener(_onUpdaterChanged);
+    widget.pirateFinderUpdater?.removeListener(_onUpdaterChanged);
     _search.dispose();
     super.dispose();
   }
@@ -574,12 +586,14 @@ class _FilterBarState extends State<FilterBar> {
     return ListenableBuilder(
       listenable: a,
       builder: (context, _) {
-        final n = a.pendingAssets().length;
+        final n = a.pendingAssets().length +
+            (widget.pirateFinderUpdater?.hasPending == true ? 1 : 0);
         final button = SizedBox(
           width: 32,
           height: 28,
           child: Tooltip(
-            message: 'Check catalog assets (screenshots / game info)',
+            message: 'Check catalog assets (screenshots / game info / '
+                'PirateFinder data)',
             child: TextButton(
               onPressed: widget.onOpenAssetUpdates,
               style: TextButton.styleFrom(

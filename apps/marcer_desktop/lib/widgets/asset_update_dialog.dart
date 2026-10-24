@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../asset_updater.dart';
+import '../piratefinder_data.dart';
 import '../catalog_assets.dart';
 
 /// Shows the catalog-data update dialog (gameinfo first, then screenshots).
@@ -12,14 +13,19 @@ import '../catalog_assets.dart';
 Future<void> showAssetUpdateDialog(
   BuildContext context, {
   required AssetUpdateController controller,
+  PirateFinderDataController? pirateFinder,
   required void Function() onApplied,
 }) {
-  // Refresh the remote stand whenever the dialog opens.
+  // Refresh both remote stands whenever the dialog opens.
   controller.check(force: true);
+  pirateFinder?.check(force: true);
   return showDialog<void>(
     context: context,
-    builder: (_) =>
-        AssetUpdateDialog(controller: controller, onApplied: onApplied),
+    builder: (_) => AssetUpdateDialog(
+      controller: controller,
+      pirateFinder: pirateFinder,
+      onApplied: onApplied,
+    ),
   );
 }
 
@@ -29,10 +35,12 @@ class AssetUpdateDialog extends StatefulWidget {
   const AssetUpdateDialog({
     super.key,
     required this.controller,
+    this.pirateFinder,
     required this.onApplied,
   });
 
   final AssetUpdateController controller;
+  final PirateFinderDataController? pirateFinder;
   final void Function() onApplied;
 
   @override
@@ -41,8 +49,18 @@ class AssetUpdateDialog extends StatefulWidget {
 
 class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
   bool _cancelRequested = false;
+  late final Listenable _listenable;
 
   static const _order = [CatalogAsset.gameinfo, CatalogAsset.screenshots];
+
+  @override
+  void initState() {
+    super.initState();
+    final pf = widget.pirateFinder;
+    _listenable = pf == null
+        ? widget.controller
+        : Listenable.merge([widget.controller, pf]);
+  }
 
   Future<void> _update(CatalogAsset asset) async {
     _cancelRequested = false;
@@ -52,10 +70,17 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
     if (ok) widget.onApplied();
   }
 
+  Future<void> _updatePirateFinder() async {
+    final pf = widget.pirateFinder;
+    if (pf == null || pf.busy) return;
+    _cancelRequested = false;
+    await pf.update(isCancelled: () => _cancelRequested);
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: _listenable,
       builder: (context, _) {
         final c = widget.controller;
         final rows = _order
@@ -71,8 +96,9 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Newer screenshot/game-info archives are available on the '
-                    'server. Update them here (downloaded via FTP).',
+                    'Newer catalog data is available. Marcer screenshots/game '
+                    'info come from the FTP; PirateFinder data comes from '
+                    'GitHub (CC BY-NC-SA 4.0, not part of the Marcer catalog).',
                     style: TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                   const SizedBox(height: 12),
@@ -84,6 +110,12 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                     ),
                   for (final asset in rows) ...[
                     _row(c, asset),
+                    const SizedBox(height: 8),
+                  ],
+                  if (widget.pirateFinder != null) ...[
+                    const Divider(),
+                    const SizedBox(height: 4),
+                    _pirateFinderRow(widget.pirateFinder!),
                     const SizedBox(height: 8),
                   ],
                   if (c.error != null) ...[
@@ -107,6 +139,123 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
     );
   }
 
+  Widget _pirateFinderRow(PirateFinderDataController pf) {
+    final remote = pf.remote;
+    final local = pf.local;
+    final pending = pf.hasPending;
+    final busy = pf.busy || widget.controller.busy;
+    final localLabel = local == null
+        ? 'not installed'
+        : 'catalogue ${local.sourceTag} · ${local.generatedAt}';
+    final remoteLabel = remote == null
+        ? (pf.checking ? 'checking…' : 'not available')
+        : 'catalogue ${pf.latest?.sourceTag ?? '?'} · '
+            '${pf.latest?.generatedAt ?? '?'}';
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                width: 90,
+                child: Text(
+                  'PirateFinder',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'local:  $localLabel',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    Text('remote: $remoteLabel',
+                        style: const TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'GitHub · CC BY-NC-SA 4.0 · not part of the Marcer catalog',
+            style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+          ),
+          const SizedBox(height: 6),
+          if (pf.downloading)
+            Row(
+              children: [
+                Expanded(
+                  child: pf.total > 0
+                      ? LinearProgressIndicator(
+                          value: pf.done / pf.total, minHeight: 6)
+                      : const LinearProgressIndicator(minHeight: 6),
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    pf.message,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                TextButton(
+                  onPressed: () => setState(() => _cancelRequested = true),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            )
+          else if (remote == null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: busy ? null : () => pf.check(force: true),
+                  child: const Text('Check'),
+                ),
+              ],
+            )
+          else if (pending)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FilledButton(
+                  onPressed: busy ? null : _updatePirateFinder,
+                  child: Text(local == null ? 'Install' : 'Update'),
+                ),
+              ],
+            )
+          else
+            const Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'up to date',
+                style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
+              ),
+            ),
+          if (pf.error != null && remote == null) ...[
+            const SizedBox(height: 4),
+            Text(
+              pf.error!,
+              style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _row(AssetUpdateController c, CatalogAsset asset) {
     final remote = c.remoteFor(asset)!;
     final local = c.localFor(asset);
@@ -115,6 +264,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
         (dataPresent ? 'version unknown (data present)' : 'not installed');
     final pending = c.isPending(asset);
     final updating = c.updatingAsset == asset;
+    final busy = c.busy || (widget.pirateFinder?.busy ?? false);
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -178,12 +328,12 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 OutlinedButton(
-                  onPressed: c.busy ? null : () => c.skip(asset),
+                  onPressed: busy ? null : () => c.skip(asset),
                   child: const Text('Skip this version'),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: c.busy ? null : () => _update(asset),
+                  onPressed: busy ? null : () => _update(asset),
                   child: Text(local == null
                       ? (dataPresent ? 'Overwrite' : 'Install')
                       : 'Update'),

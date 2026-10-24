@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
+import '../piratefinder_data.dart';
 import 'settings_form.dart';
 
 /// Modal editor for the path fields of `desktop.config.json` (opened via the
@@ -20,12 +21,17 @@ Future<DesktopConfig?> showSettingsDialog(
   required DesktopConfig config,
   String title = 'Settings',
   String subtitle = 'desktop.config.json — paths',
+  PirateFinderDataController? pirateFinderData,
 }) {
   return showDialog<DesktopConfig>(
     context: context,
     barrierDismissible: false,
-    builder: (_) =>
-        SettingsDialog(config: config, title: title, subtitle: subtitle),
+    builder: (_) => SettingsDialog(
+      config: config,
+      title: title,
+      subtitle: subtitle,
+      pirateFinderData: pirateFinderData,
+    ),
   );
 }
 
@@ -35,11 +41,16 @@ class SettingsDialog extends StatefulWidget {
     required this.config,
     this.title = 'Settings',
     this.subtitle = 'desktop.config.json — paths',
+    this.pirateFinderData,
   });
 
   final DesktopConfig config;
   final String title;
   final String subtitle;
+
+  /// Shared PF catalogue download state (optional; the form creates one when
+  /// omitted, e.g. on the first-run setup page).
+  final PirateFinderDataController? pirateFinderData;
 
   @override
   State<SettingsDialog> createState() => _SettingsDialogState();
@@ -135,6 +146,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                       child: SingleChildScrollView(
                         child: SettingsForm(
                           initial: widget.config,
+                          pirateFinderData: widget.pirateFinderData,
                           onChanged: (config, valid) {
                             _latest = config;
                             _valid = valid;

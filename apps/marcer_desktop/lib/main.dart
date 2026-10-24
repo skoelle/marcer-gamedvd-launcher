@@ -17,6 +17,7 @@ import 'config_locator.dart';
 import 'hatari_installer.dart';
 import 'self_updater.dart';
 import 'asset_updater.dart';
+import 'piratefinder_data.dart';
 import 'theme.dart';
 import 'tos_rom.dart';
 import 'window_layout.dart';
@@ -372,6 +373,8 @@ class _HomePageState extends State<HomePage> {
   final FocusNode _centerFocus = FocusNode(debugLabel: 'center');
   final SelfUpdateController _updater = SelfUpdateController();
   final AssetUpdateController _assetUpdater = AssetUpdateController();
+  final PirateFinderDataController _pirateFinderData =
+      PirateFinderDataController();
   bool _showHelp = false;
   bool _showingLaunchError = false;
   bool _showingDownloadError = false;
@@ -411,6 +414,8 @@ class _HomePageState extends State<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _controller.init());
     _updater.addListener(_onUpdateChanged);
     _assetUpdater.config = _config;
+    _pirateFinderData.config = _config;
+    _pirateFinderData.refreshLocal();
     _loadAppVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initSelfUpdate());
     WidgetsBinding.instance.addPostFrameCallback((_) => _warnIfTranslocated());
@@ -451,6 +456,7 @@ class _HomePageState extends State<HomePage> {
     _centerFocus.dispose();
     _updater.dispose();
     _assetUpdater.dispose();
+    _pirateFinderData.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -469,6 +475,7 @@ class _HomePageState extends State<HomePage> {
     }
     await _updater.check();
     await _assetUpdater.check();
+    await _pirateFinderData.check();
   }
 
   /// Surfaces failed update installs as a modal, once per error.
@@ -585,7 +592,11 @@ class _HomePageState extends State<HomePage> {
   /// `desktop.config.json` and reloads the catalog in place so the new
   /// paths take effect without restarting the app.
   Future<void> _openSettings() async {
-    final edited = await showSettingsDialog(context, config: _config);
+    final edited = await showSettingsDialog(
+      context,
+      config: _config,
+      pirateFinderData: _pirateFinderData,
+    );
     if (edited == null || !mounted) return;
     try {
       edited.save(widget.configPath);
@@ -620,6 +631,9 @@ class _HomePageState extends State<HomePage> {
     _controller.init();
     _assetUpdater.config = config;
     _assetUpdater.check();
+    _pirateFinderData.config = config;
+    _pirateFinderData.refreshLocal();
+    _pirateFinderData.check();
   }
 
   /// Opens the catalog-data update dialog (green badge); a successful update
@@ -628,6 +642,7 @@ class _HomePageState extends State<HomePage> {
     await showAssetUpdateDialog(
       context,
       controller: _assetUpdater,
+      pirateFinder: _pirateFinderData,
       onApplied: () => _applyConfig(_config),
     );
   }
@@ -816,6 +831,7 @@ class _HomePageState extends State<HomePage> {
             onOpenSettings: _openSettings,
             updater: _updater,
             assetUpdater: _assetUpdater,
+            pirateFinderUpdater: _pirateFinderData,
             onOpenAssetUpdates: _openAssetUpdates,
           ),
           const Divider(height: 1),
