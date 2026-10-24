@@ -51,9 +51,11 @@ Everything else is *(untested)* and must be confirmed during implementation.
   not to `MARCER_DATA_DIR`, not to the repository working tree. The app is a
   strictly read-only consumer.
 - **LAN bind by default.** Default bind is `0.0.0.0` so the app is
-  reachable from other devices on the local network. There is no
-  authentication, no TLS, no public deployment story; loopback-only binds
-  are available via config/CLI (`--host 127.0.0.1`).
+  reachable from other devices on the local network. The app itself has no
+  authentication, no TLS and no public deployment story; loopback-only binds
+  are available via config/CLI (`--host 127.0.0.1`). For community
+  deployments, bind to loopback and put the app behind a reverse proxy that
+  provides **Basic Auth and TLS**; the proxy must protect all routes.
 - **No live refresh in v1.** Changes made by a running `shotgen run` become
   visible when the user reloads (the server revalidates the section indices
   on each API request, see section 8.4). There is no polling, push or
@@ -987,9 +989,13 @@ mirrors SPEC-screenshot-generator.md §9 write safety (S1/S2).
 
 ### 8.3 Network exposure
 
-- Default `host = 0.0.0.0` (LAN-reachable; no auth). Loopback-only binds
-  are available via config/CLI flag (`--host 127.0.0.1`); a bind to a
+- Default `host = 0.0.0.0` (LAN-reachable; no app-level auth). Loopback-only
+  binds are available via config/CLI flag (`--host 127.0.0.1`); a bind to a
   non-loopback address still prints a clear warning (no auth exists).
+- Community deployment: bind to loopback and place the app behind a reverse
+  proxy providing Basic Auth and TLS. The proxy must protect `/`, `/api/*`
+  (including `/api/local-assets`), `/img/*` and `/static/*`. Basic Auth/TLS
+  are **not** implemented by the app.
 - No CORS headers for arbitrary origins; the app is same-origin only.
 
 ### 8.4 Data freshness (v1)
@@ -1082,7 +1088,10 @@ Manual test pass (required before delivery, per AGENTS.md policy):
    `?q=…&status=…`, Back/Forward behavior.
 10. **Security**: `/img/../../etc/passwd`, `/img/..%2f..%2fetc/passwd`,
     absolute paths, symlink attempt → all `404`; non-PNG img → `404`;
-    bind warning on default `0.0.0.0` (no auth on LAN).
+    bind warning on default `0.0.0.0` (no auth on LAN). In a community
+    deployment, verify the reverse proxy enforces Basic Auth and TLS for
+    `/`, `/api/*` (including `/api/local-assets`), `/img/*` and
+    `/static/*`.
 11. **Freshness**: start server, run `shotgen run --limit 1`, reload page →
     new/updated card visible (section 8.4 reload path).
 12. **Performance**: `/api/entries` timings on the full dataset with the
@@ -1213,7 +1222,7 @@ A conforming implementation satisfies all of the following.
 - [x] U8 Lightbox filmstrip order (screenshots first), header badges and
       clickable crew/cracker groups follow section 6.5. The side panel
       shows **This ZIP** (with the `Kind` row) before **Release variants**.
-- [ ] U9 No hover info on touch/mobile: panel gated behind
+- [x] U9 No hover info on touch/mobile: panel gated behind
       `(hover: hover) and (pointer: fine)`, sticky `:hover` highlights
       behind `@media (hover: hover)`, panel dismissed on key press/scroll
       (section 6.4); keyboard focus styles unaffected.

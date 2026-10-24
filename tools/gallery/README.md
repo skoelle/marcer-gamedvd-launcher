@@ -28,9 +28,12 @@ tools/gallery/run.sh --port 9000     # other port
 tools/gallery/run.sh --host 127.0.0.1  # loopback only
 ```
 
-There is no authentication or TLS — anyone who can reach the bind address
-can browse the archive. Use `--host 127.0.0.1` (or a firewall) if that is
-not desired.
+The app itself has no authentication or TLS — anyone who can reach the bind
+address can browse the archive. Use `--host 127.0.0.1` (or a firewall) if
+that is not desired. For community deployments, bind to loopback and put the
+app behind a reverse proxy with **Basic Auth and TLS**; the proxy must
+protect `/`, `/api/*` (including `/api/local-assets`), `/img/*` and
+`/static/*`.
 
 The server revalidates the section indices and the metadata files on each
 API request (mtime check), so a page reload shows the latest screenshot-run
