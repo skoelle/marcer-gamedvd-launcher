@@ -15,7 +15,9 @@ specification.
     indices (`index.json`, `index-pd.json`, `index-utils.json`,
     `index-magazine.json`, `index-falcon.json`) + PNGs
   - `MARCER_DATA_DIR` (optional): `games-*.json` from `tools/gameinfo-gen`
-    (adds metadata facets and hover info to the index-backed cards)
+    (adds metadata facets and hover info to the index-backed cards) plus the
+    optional `crews.json`/`crew-images.json` from `tools/crew-analysis` for
+    the Crews tab
   - `MARCER_ROOT_DIR` / `MARCER_PATCH_DIR` (optional): overlay trees for
     metadata-only boxscan/manual counts in the lightbox (read-only; no media
     is served, extracted or downloaded)
@@ -49,11 +51,11 @@ Backend filter/card helpers use stdlib `unittest` only:
 
 ## Features & Keyboard
 
-- **Sections**: tabs for games (cracked) / pd / utils / magazines / falcon
-  (a tab appears when its index or gameinfo data exists). Each section joins
-  its own screenshot index with the matching `games-*.json`; the `magazines`
-  and `falcon` sections are index-only (`index-magazine.json`,
-  `index-falcon.json`; no gameinfo).
+- **Sections**: tabs for games (cracked) / pd / utils / magazines / falcon /
+  crews (a tab appears when its index or gameinfo data exists; `crews`
+  requires `crews.json`). Each game section joins its own screenshot index
+  with the matching `games-*.json`; the `magazines` and `falcon` sections
+  are index-only (`index-magazine.json`, `index-falcon.json`; no gameinfo).
 - **Filters**: status preset (including the strict `desktop text` /
   `desktop black` ZIP-level presets), search, letter nav, publisher/crew/
   cracker/language/year facets, RAW/PASTI/Boxscan tri-state flags, TOS/Bad
@@ -82,6 +84,13 @@ Backend filter/card helpers use stdlib `unittest` only:
   (including the `Kind` row) before the release-variant table, the open ZIP
   highlighted, and **clickable crew/cracker groups** (Game info values and
   release-variant rows jump to that group's ZIP), deep link `?entry=<rel>`.
+- **Crews**: the last tab lists the top 128 non-excluded groups from
+  `crews.json` with curated/release previews and a `crew`/`cracker` badge;
+  search covers group names, aliases and all release fields. Clicking a crew
+  card opens the release browser: screenshot grid + compact release panel,
+  search/sort, arrow/PgUp/PgDn/Home/End navigation, and `Enter`/double-click
+  opens the selected release in the normal game lightbox (no launch/play
+  button).
 - **Local asset metadata**: the lightbox side panel shows boxscan/manual
   counts and edition/manual labels for the selected card when
   `MARCER_ROOT_DIR` is configured. It reads directory listings and ZIP
@@ -101,6 +110,7 @@ Backend filter/card helpers use stdlib `unittest` only:
 |---|---|
 | Grid | `←` `→` `↑` `↓` move · `Enter`/`Space` open · `PgUp`/`PgDn` page · `Home`/`End` first/last · `/` search · `?` help · `Esc` clear focus |
 | Lightbox | `←` `→` previous/next card · `↑` `↓` variant (screenshots first) · `PgUp`/`PgDn` image · `Esc` close (also backdrop click) · click a crew/cracker group to jump to its ZIP |
+| Crew browser | `←` `→` `↑` `↓` move · `PgUp`/`PgDn` page · `Home`/`End` first/last · `Enter` open game lightbox · `/` filter releases · `Esc` clear filter / close |
 
 ## Troubleshooting
 
@@ -112,6 +122,8 @@ Backend filter/card helpers use stdlib `unittest` only:
 - `MARCER_ROOT_DIR not a directory` → warning only; boxscan/manual metadata
   is disabled. An empty/missing `MARCER_PATCH_DIR` just disables the patch
   layer for that metadata.
+- `crews.json not found` → the Crews tab is hidden; run
+  `tools/crew-analysis/run.sh` to generate it in `MARCER_DATA_DIR`.
 - Stale data → reload the page (mtime revalidation runs per request).
 
 ## Config

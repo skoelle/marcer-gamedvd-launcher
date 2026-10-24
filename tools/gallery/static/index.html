@@ -21,6 +21,7 @@
   <button data-section="utils" type="button">utils</button>
   <button data-section="magazine" type="button">magazines</button>
   <button data-section="falcon" type="button">falcon</button>
+  <button data-section="crew" type="button">crews</button>
 </nav>
 
 <div class="banner" id="banner" hidden></div>
@@ -100,7 +101,41 @@
           <tr><td><kbd>Esc</kbd> / click</td><td>close (backdrop click closes too)</td></tr>
           <tr><td>click group</td><td>crew / cracker jump to that ZIP</td></tr>
         </table>
+        <h3 style="margin-top:14px">Crew browser</h3>
+        <table>
+          <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>move through releases</td></tr>
+          <tr><td><kbd>PgUp</kbd> <kbd>PgDn</kbd></td><td>previous / next page</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>open the selected release in the game lightbox</td></tr>
+          <tr><td><kbd>/</kbd></td><td>focus the release filter</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>clear the filter / close the crew browser</td></tr>
+        </table>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="crew-lightbox" id="crew-lightbox" hidden role="dialog" aria-modal="true" aria-label="Crew releases">
+  <div class="crew-inner">
+    <div class="crew-header">
+      <div class="crew-heading">
+        <strong id="crew-title"></strong>
+        <span class="crew-sub" id="crew-sub"></span>
+        <span class="crew-aliases" id="crew-aliases"></span>
+      </div>
+      <div class="crew-controls">
+        <input id="crew-search" type="search" placeholder="Filter releases…" autocomplete="off" spellcheck="false">
+        <select id="crew-sort" aria-label="Sort releases">
+          <option value="year_asc">year asc</option>
+          <option value="year_desc">year desc</option>
+          <option value="title_asc">title A–Z</option>
+        </select>
+        <span id="crew-pos"></span>
+        <button id="crew-close" type="button" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <div class="crew-body">
+      <div class="crew-grid" id="crew-grid" tabindex="0"></div>
+      <aside class="crew-side" id="crew-side"></aside>
     </div>
   </div>
 </div>

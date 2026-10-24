@@ -5,10 +5,12 @@
 Run with the repo venv:
     .venv/bin/python -m unittest discover -s tools/gallery -p 'test_*.py'
 """
+import json
 import os
 import tempfile
 import unittest
 import zipfile
+from pathlib import Path
 from unittest import mock
 
 import gallery
@@ -230,6 +232,140 @@ class LocalAssetsTest(unittest.TestCase):
         assets = service.discover(self.folder)
         self.assertFalse(assets["boxscans"]["editions"])
         self.assertFalse(assets["manuals"]["items"])
+
+
+class CrewDataTest(unittest.TestCase):
+    tree = "Title Sorted/Cracked Games - Title Sorted"
+    rel_a = f"{tree}/A/Alpha/a.zip"
+    rel_a2 = f"{tree}/A/Alpha/a_v2.zip"
+    rel_b = f"{tree}/B/Beta/b.zip"
+
+    def _write_json(self, path, data):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    def _store(self, groups):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        out = os.path.join(self.tmp.name, "out")
+        data = os.path.join(self.tmp.name, "data")
+        os.makedirs(out)
+        os.makedirs(data)
+        index = {
+            self.rel_a: {
+                "status": "done", "kind": "game", "layer": "ROOT",
+                "preview": "a.png", "candidates": [],
+            },
+            self.rel_a2: {
+                "status": "done", "kind": "game", "layer": "ROOT",
+                "preview": None, "candidates": [],
+            },
+            self.rel_b: {
+                "status": "done", "kind": "game", "layer": "ROOT",
+                "preview": "b.png", "candidates": [],
+            },
+        }
+        self._write_json(os.path.join(out, "index.json"),
+                         {"version": 1, "entries": index})
+        self._write_json(os.path.join(data, "games-cracked.json"), {
+            "games": [
+                {"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
+                 "variants": [{"title": "Alpha", "release": "1990"}]},
+                {"letter": "B", "folder": "Beta", "layers": ["ROOT"],
+                 "variants": [{"title": "Beta", "release": "1991"}]},
+            ],
+        })
+        for name in ("games-pd.json", "games-utils.json"):
+            self._write_json(os.path.join(data, name), {"games": []})
+        self._write_json(os.path.join(data, "manifest.json"), {"sources": []})
+        self._write_json(os.path.join(data, "crews.json"), {
+            "schema": 1,
+            "generated_at": "2026-10-24T00:00:00Z",
+            "groups": groups,
+        })
+        curated = os.path.join(out, self.rel_a.rsplit("/", 1)[0],
+                               "curated.png")
+        os.makedirs(os.path.dirname(curated), exist_ok=True)
+        with open(curated, "wb") as f:
+            f.write(b"x")
+        self._write_json(os.path.join(data, "crew-images.json"), {
+            "schema": 1,
+            "images": {
+                "Alpha Crew": {
+                    "rel": self.rel_a, "name": "curated.png",
+                    "source": "manual",
+                },
+            },
+        })
+        return gallery.DataStore(out, data)
+
+    @staticmethod
+    def _group(group_id, name, kind, zips, releases, excluded=False):
+        return {
+            "id": group_id, "name": name, "kind": kind, "rank": 1,
+            "zips": zips, "excluded": excluded, "aliases": [name],
+            "releases": releases,
+        }
+
+    def test_loads_visible_groups_search_and_previews(self):
+        groups = [
+            self._group("alpha-crew", "Alpha Crew", "crew", 2, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha",
+                 "year": "1990"},
+                {"rel": self.rel_a2, "zip": "a_v2.zip", "title": "Alpha v2",
+                 "year": "1991"},
+            ]),
+            self._group("beta-crackers", "Beta Crackers", "cracker", 1, [
+                {"rel": self.rel_b, "zip": "b.zip", "title": "Beta",
+                 "year": "1991"},
+            ]),
+            self._group("hidden", "Hidden", "crew", 99, [], excluded=True),
+        ]
+        store = self._store(groups)
+        self.assertEqual(len(store.crews), 2)
+        self.assertNotIn("hidden", store.crew_groups)
+        self.assertEqual(store.crews[0]["name"], "Alpha Crew")
+        self.assertEqual(store.crews[0]["preview"],
+                         f"{self.tree}/A/Alpha/curated.png")
+        self.assertEqual(store.crews[1]["preview"],
+                         f"{self.tree}/B/Beta/b.png")
+        self.assertIn("beta crackers", store.crews[1]["_search"])
+        self.assertEqual(store.meta["crews"]["groups"], 2)
+        self.assertEqual(store.meta["crews"]["visible_groups"], 2)
+        self.assertEqual(store.meta["crews"]["releases"], 3)
+        self.assertEqual(store.meta["sections"]["crew"]["cards"], 2)
+
+    def test_crew_detail_joins_release_preview_and_legacy_rel(self):
+        store = self._store([
+            self._group("alpha-crew", "Alpha Crew", "crew", 2, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha",
+                 "year": "1990"},
+                {"rel": "A/Alpha/a_v2.zip", "zip": "a_v2.zip",
+                 "title": "Alpha v2", "year": "1991"},
+            ]),
+        ])
+        group = store.crew_groups["alpha-crew"]
+        detail = store.crew_detail(group)
+        self.assertEqual(len(detail["releases"]), 2)
+        first = detail["releases"][0]
+        self.assertEqual(first["preview"],
+                         f"{self.tree}/A/Alpha/a.png")
+        self.assertEqual(first["status"], "done")
+        self.assertEqual(first["kind"], "game")
+        legacy = detail["releases"][1]
+        self.assertEqual(legacy["index_rel"], self.rel_a2)
+        self.assertIsNone(legacy["preview"])
+
+    def test_top_128_limit_and_visible_count(self):
+        groups = [
+            self._group(f"crew-{i}", f"Crew {i:03d}", "crew", 1000 - i, [])
+            for i in range(130)
+        ]
+        store = self._store(groups)
+        self.assertEqual(len(store.crews), 128)
+        self.assertEqual(store.meta["crews"]["groups"], 128)
+        self.assertEqual(store.meta["crews"]["visible_groups"], 130)
 
 
 if __name__ == "__main__":

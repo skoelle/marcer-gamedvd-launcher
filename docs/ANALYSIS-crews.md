@@ -117,6 +117,16 @@ The full data for all 888 groups is already in `crews.json`; the tab selection
 is controlled by `tools/crew-analysis/crew-tab.json` (`include_until`, `keep`,
 `exclude`) and can be expanded up to the 128 cap without a data change.
 
+### Gallery webapp
+
+`tools/gallery` consumes the same `crews.json`/`crew-images.json` artifact as a
+read-only **Crews** tab (top 128 non-excluded groups). The gallery joins each
+release `rel` back to the cracked screenshot index for preview/status/kind,
+shows a release browser with a screenshot grid and compact metadata panel, and
+opens the existing game lightbox from a release. It has no launch/play control.
+Legacy section-relative release paths are resolved through the cracked tree
+prefix, as in the desktop app.
+
 ## Cracktro image suggestions
 
 `tools/crew-analysis/run.sh images --top 128` generates a review set of typical

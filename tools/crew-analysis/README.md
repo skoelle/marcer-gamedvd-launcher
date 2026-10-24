@@ -69,7 +69,8 @@ Environment (via the repo `local/paths.env`):
 
 ### `crews.json` (GameinfoDirectory)
 
-The per-crew release list consumed by the desktop app's **Crews** tab:
+The per-crew release list consumed by the desktop app's and gallery webapp's
+**Crews** tabs:
 
 ```json
 {

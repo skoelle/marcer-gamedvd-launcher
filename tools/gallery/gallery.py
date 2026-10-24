@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-TOOL_VERSION = "0.3.0"
+TOOL_VERSION = "0.4.0"
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
@@ -76,6 +76,9 @@ BOX_IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg"})
 MANUAL_IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".gif"})
 MANUAL_DOC_EXTS = frozenset({".pdf", ".doc", ".txt", ".msa"})
 MAX_ZIP_ENTRIES = 10000
+CREW_FILE = "crews.json"
+CREW_IMAGES_FILE = "crew-images.json"
+CREW_INITIAL_LIMIT = 128
 
 
 def log(msg):
@@ -121,6 +124,16 @@ def _section_tree(entries):
         if len(parts) >= 4:
             return "/".join(parts[:2])
     return ""
+
+
+def _variant_rank(variant):
+    if variant.get("status") == "done" and variant.get("kind") == "game":
+        return 0
+    if variant.get("status") == "done":
+        return 1
+    if variant.get("status") == "desktop":
+        return 2
+    return 3
 
 
 def _empty_local_assets():
@@ -899,6 +912,16 @@ class DataStore:
         self.gameinfo_available = False
         self.kinds_loaded = set()
         self.manifest = {}
+        self.crews = []
+        self.crew_groups = {}
+        self.crew_generated_at = ""
+        self.crew_error = None
+        self._crew_total_groups = 0
+        self._crew_visible_groups = 0
+        self._crew_release_count = 0
+        self._crew_images = {}
+        self._release_lookup = {}
+        self._cracked_tree = ""
         self.assets = LocalAssetsService(
             root_dir, patch_dir, assets_cache_seconds)
         self.reload(force=True)
@@ -922,6 +945,12 @@ class DataStore:
                     self.data / "manifest.json")
             except OSError:
                 stamps["manifest"] = None
+            for name in (CREW_FILE, CREW_IMAGES_FILE):
+                try:
+                    stamps[f"crew_{name}"] = os.path.getmtime(
+                        self.data / name)
+                except OSError:
+                    stamps[f"crew_{name}"] = None
         return stamps
 
     def check_changed(self):
@@ -1005,6 +1034,8 @@ class DataStore:
             section_tree=section_trees["falcon"])
         self.facets = {kind: _facets(self.cards[kind], kind)
                        for kind in SECTION_INDEX_NAMES}
+        self._cracked_tree = section_trees.get("cracked", "")
+        self._load_crews()
 
         coverage = {}
         for src in self.manifest.get("sources") or []:
@@ -1081,6 +1112,256 @@ class DataStore:
             "tool_version": TOOL_VERSION,
             "local_assets": self.assets.enabled,
         }
+        self.meta["sections"]["crew"] = {
+            "games": 0,
+            "cards": len(self.crews),
+            "with_screenshot": sum(1 for c in self.crews if c["preview"]),
+            "no_info": 0,
+        }
+        self.meta["crews"] = {
+            "available": bool(self.crews),
+            "groups": len(self.crews),
+            "visible_groups": self._crew_visible_groups,
+            "total_groups": self._crew_total_groups,
+            "releases": self._crew_release_count,
+            "generated_at": self.crew_generated_at,
+            "error": self.crew_error,
+        }
+
+    def _load_crews(self):
+        self.crews = []
+        self.crew_groups = {}
+        self.crew_generated_at = ""
+        self.crew_error = None
+        self._crew_total_groups = 0
+        self._crew_visible_groups = 0
+        self._crew_release_count = 0
+        self._crew_images = {}
+        self._release_lookup = {}
+        if not self.data:
+            self.crew_error = "gameinfo unavailable"
+            return
+        path = self.data / CREW_FILE
+        if not path.is_file():
+            self.crew_error = f"{CREW_FILE} not found"
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as exc:  # noqa: BLE001
+            self.crew_error = f"{CREW_FILE}: {exc}"
+            return
+        raw_groups = data.get("groups") or []
+        if not isinstance(raw_groups, list):
+            raw_groups = []
+        self._crew_total_groups = len(raw_groups)
+        groups = [
+            g for g in raw_groups
+            if isinstance(g, dict) and not g.get("excluded")
+        ]
+        groups.sort(key=lambda g: (
+            -int(g.get("zips") or 0),
+            str(g.get("name") or "").lower(),
+        ))
+        self._load_crew_images()
+        self._release_lookup = {}
+        for card in self.cards["cracked"]:
+            for index, variant in enumerate(card["variants"]):
+                self._release_lookup[variant["rel"]] = (card, index)
+        for group in groups:
+            group_id = str(group.get("id") or "").strip()
+            name = str(group.get("name") or "").strip()
+            if not group_id or not name or group_id in self.crew_groups:
+                continue
+            releases = [
+                r for r in (group.get("releases") or [])
+                if isinstance(r, dict) and str(r.get("rel") or "").strip()
+            ]
+            normalized = dict(group)
+            normalized["id"] = group_id
+            normalized["name"] = name
+            normalized["releases"] = releases
+            preview = self._crew_preview(normalized)
+            summary = {
+                "id": group_id,
+                "name": name,
+                "kind": str(group.get("kind") or "crew"),
+                "rank": int(group.get("rank") or 0),
+                "zips": int(group.get("zips") or 0),
+                "releases": len(releases),
+                "aliases": self._crew_aliases(group),
+                "preview": preview,
+                "crew": True,
+                "_search": self._crew_search_text(normalized),
+            }
+            self.crew_groups[group_id] = normalized
+            self.crews.append(summary)
+        self.crew_generated_at = str(data.get("generated_at") or "")
+        self._crew_visible_groups = len(self.crew_groups)
+        self._crew_release_count = sum(
+            len(g.get("releases") or []) for g in self.crew_groups.values())
+        self.crews = self.crews[:CREW_INITIAL_LIMIT]
+
+    def _load_crew_images(self):
+        self._crew_images = {}
+        if not self.data:
+            return
+        path = self.data / CREW_IMAGES_FILE
+        if not path.is_file():
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as exc:  # noqa: BLE001
+            log(f"[warn] {CREW_IMAGES_FILE}: {exc}")
+            return
+        images = data.get("images") or {}
+        if not isinstance(images, dict):
+            return
+        for key, value in images.items():
+            if isinstance(value, dict):
+                self._crew_images[str(key).strip().lower()] = value
+
+    @staticmethod
+    def _crew_aliases(group):
+        aliases = group.get("aliases") or []
+        if not isinstance(aliases, list):
+            return []
+        return [str(a).strip() for a in aliases if str(a).strip()]
+
+    @staticmethod
+    def _crew_search_text(group):
+        parts = [str(group.get("name") or ""), str(group.get("kind") or "")]
+        aliases = group.get("aliases") or []
+        if isinstance(aliases, list):
+            parts.extend(str(a) for a in aliases)
+        for release in group.get("releases") or []:
+            if not isinstance(release, dict):
+                continue
+            for key in ("title", "folder", "zip", "year", "publisher",
+                        "cracked_by", "crew"):
+                value = release.get(key)
+                if value:
+                    parts.append(str(value))
+        return " ".join(p for p in parts if p).lower()
+
+    def _crew_image_for(self, group):
+        name = str(group.get("name") or "").strip().lower()
+        group_id = str(group.get("id") or "").strip().lower()
+        return self._crew_images.get(name) or self._crew_images.get(group_id)
+
+    def _crew_image_path(self, image):
+        rel = str(image.get("rel") or "").strip()
+        name = str(image.get("name") or "").strip()
+        if not rel or not name:
+            return None
+        rels = [rel]
+        if self._cracked_tree and not rel.startswith(self._cracked_tree + "/"):
+            rels.append(f"{self._cracked_tree}/{rel}")
+        for candidate in rels:
+            safe = _safe_rel(candidate)
+            if not safe:
+                continue
+            path = _full_png(safe, name)
+            if not path or ".." in path.split("/"):
+                continue
+            if (self.out / path).is_file():
+                return path
+        return None
+
+    def _resolve_release(self, rel):
+        rel = str(rel or "").replace("\\", "/")
+        if not rel:
+            return "", None
+        hit = self._release_lookup.get(rel)
+        if hit is not None:
+            return rel, hit
+        if self._cracked_tree and not rel.startswith(self._cracked_tree + "/"):
+            full = f"{self._cracked_tree}/{rel}"
+            hit = self._release_lookup.get(full)
+            if hit is not None:
+                return full, hit
+        return rel, None
+
+    def _crew_preview(self, group):
+        image = self._crew_image_for(group)
+        if image:
+            path = self._crew_image_path(image)
+            if path:
+                return path
+        best = None
+        best_rank = 99
+        for release in group.get("releases") or []:
+            _, hit = self._resolve_release(release.get("rel"))
+            if hit is None:
+                continue
+            card, index = hit
+            variant = card["variants"][index]
+            preview = variant.get("preview")
+            if not preview:
+                continue
+            rank = _variant_rank(variant)
+            if rank < best_rank:
+                best = preview
+                best_rank = rank
+                if rank == 0:
+                    break
+        return best
+
+    def crew_detail(self, group):
+        out = {
+            "id": group["id"],
+            "name": group["name"],
+            "kind": str(group.get("kind") or "crew"),
+            "rank": int(group.get("rank") or 0),
+            "zips": int(group.get("zips") or 0),
+            "aliases": self._crew_aliases(group),
+            "generated_at": self.crew_generated_at,
+            "releases": [],
+        }
+        for release in group.get("releases") or []:
+            item = {
+                "rel": str(release.get("rel") or ""),
+                "zip": str(release.get("zip") or ""),
+                "title": str(release.get("title") or ""),
+                "year": str(release.get("year") or ""),
+                "publisher": str(release.get("publisher") or ""),
+                "cracked_by": str(release.get("cracked_by") or ""),
+                "crew": str(release.get("crew") or ""),
+                "language": str(release.get("language") or ""),
+                "disks": int(release.get("disks") or 0),
+                "raw_dump": release.get("raw_dump") is True,
+                "pasti_dump": release.get("pasti_dump") is True,
+                "boxscan": release.get("boxscan") is True,
+                "tos_bad": str(release.get("tos_bad") or ""),
+                "special_flag": str(release.get("special_flag") or ""),
+                "special_note": str(release.get("special_note") or ""),
+                "source": str(release.get("source") or ""),
+                "ambiguous": release.get("ambiguous") is True,
+            }
+            index_rel, hit = self._resolve_release(item["rel"])
+            item["index_rel"] = index_rel or item["rel"]
+            item["found"] = hit is not None
+            if hit is None:
+                item.update({
+                    "preview": None,
+                    "status": "",
+                    "kind": "",
+                    "layer": "",
+                    "size": None,
+                })
+            else:
+                card, index = hit
+                variant = card["variants"][index]
+                item.update({
+                    "preview": variant.get("preview"),
+                    "status": variant.get("status") or "",
+                    "kind": variant.get("kind") or "",
+                    "layer": variant.get("layer") or "",
+                    "size": variant.get("size"),
+                })
+            out["releases"].append(item)
+        return out
 
     def assets_for_card(self, card):
         return self.assets.discover(card.get("_folder_rel", ""))
@@ -1207,6 +1488,20 @@ def _sort_cards(cards, sort, order):
     cards[:] = known + unknown
 
 
+def _public_crew_card(card):
+    return {
+        "id": card["id"],
+        "name": card["name"],
+        "kind": card["kind"],
+        "rank": card["rank"],
+        "zips": card["zips"],
+        "releases": card["releases"],
+        "aliases": card["aliases"],
+        "preview": card["preview"],
+        "crew": True,
+    }
+
+
 def _public_card(card, section):
     out = {
         "id": card["id"],
@@ -1278,6 +1573,9 @@ class GalleryHandler(BaseHTTPRequestHandler):
             if path == "/api/local-assets":
                 self.store.reload()
                 return self._local_assets()
+            if path == "/api/crews":
+                self.store.reload()
+                return self._crews()
             if path.startswith("/img/"):
                 return self._image(unquote(path[len("/img/"):]))
             return self._error(404, "not found")
@@ -1319,6 +1617,36 @@ class GalleryHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", f"public, max-age={max_age}")
         self.end_headers()
         self.wfile.write(body)
+
+    def _crews(self):
+        params = self._params()
+        crew_id = (params.get("id") or "").strip()
+        if crew_id.startswith("crew:"):
+            crew_id = crew_id[5:]
+        if crew_id:
+            group = self.store.crew_groups.get(crew_id)
+            if group is None:
+                return self._error(404, "crew not found")
+            return self._json(self.store.crew_detail(group))
+        q = (params.get("q") or "").strip().lower()
+        cards = [c for c in self.store.crews
+                 if not q or q in c.get("_search", "")]
+        try:
+            limit = int(params.get("limit", self.cfg["page_size"]))
+        except ValueError:
+            limit = self.cfg["page_size"]
+        limit = max(1, min(200, limit))
+        try:
+            offset = max(0, int(params.get("offset", 0)))
+        except ValueError:
+            offset = 0
+        page = cards[offset:offset + limit]
+        return self._json({
+            "total": len(cards),
+            "offset": offset,
+            "limit": limit,
+            "cards": [_public_crew_card(c) for c in page],
+        })
 
     def _local_assets(self):
         params = self._params()

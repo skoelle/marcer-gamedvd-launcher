@@ -25,6 +25,7 @@ const SECTION_INDEX_NAMES = {
   cracked: "index.json", pd: "index-pd.json", utils: "index-utils.json",
   magazine: "index-magazine.json", falcon: "index-falcon.json",
 };
+const SECTION_KEYS = [...Object.keys(SECTION_INDEX_NAMES), "crew"];
 
 const SECTION_CONTROLS = {
   cracked: ["status", "publisher", "crew", "cracker", "language", "year",
@@ -71,6 +72,9 @@ let defaultStatus = "with_screenshot";  // from meta.default_status (config)
 const assetCache = new Map();
 const assetPending = new Map();
 let assetKey = null;
+const crewCache = new Map();
+let crewView = null;
+let crewSearchTimer = null;
 
 // Every section starts with the configured preset (usually `with_screenshot`).
 const sectionDefaultStatus = () => defaultStatus;
@@ -93,7 +97,7 @@ function readURL() {
   }
   if (u.has("offset")) state.offset = Math.max(0, parseInt(u.get("offset"), 10) || 0);
   if (u.has("entry")) state.entry = u.get("entry");
-  if (!Object.prototype.hasOwnProperty.call(SECTION_INDEX_NAMES, state.section)) {
+  if (!SECTION_KEYS.includes(state.section)) {
     state.section = "cracked";
   }
 }
@@ -104,16 +108,19 @@ function writeURL(push) {
     if (v != null && v !== "" && v !== dflt) u.set(k, v);
   };
   keep("section", state.section, "cracked");
-  keep("status", state.status, sectionDefaultStatus());
   keep("q", state.q, "");
-  keep("letter", state.letter, "any");
-  for (const k of ["publisher", "crew", "cracker", "language", "year",
-    "raw", "pasti", "boxscan", "tos"]) keep(k, state[k], "any");
-  keep("sort", state.sort, "name");
-  keep("order", state.order, "asc");
   keep("offset", state.offset ? String(state.offset) : "", "0");
-  if (lb && pageCards[lb.idx] && pageCards[lb.idx].variants[lb.variant]) {
-    u.set("entry", pageCards[lb.idx].variants[lb.variant].rel);
+  if (state.section !== "crew") {
+    keep("status", state.status, sectionDefaultStatus());
+    keep("letter", state.letter, "any");
+    for (const k of ["publisher", "crew", "cracker", "language", "year",
+      "raw", "pasti", "boxscan", "tos"]) keep(k, state[k], "any");
+    keep("sort", state.sort, "name");
+    keep("order", state.order, "asc");
+  }
+  if (lb && !lb.standalone && lb.cards[lb.idx] &&
+      lb.cards[lb.idx].variants[lb.variant]) {
+    u.set("entry", lb.cards[lb.idx].variants[lb.variant].rel);
   }
   const url = location.pathname + (u.toString() ? "?" + u : "");
   if (push) history.pushState(null, "", url);
@@ -153,6 +160,14 @@ function entriesQuery(extra) {
   return "/api/entries?" + p;
 }
 
+function crewsQuery() {
+  const p = new URLSearchParams();
+  if (state.q) p.set("q", state.q);
+  p.set("offset", String(state.offset));
+  p.set("limit", String(state.limit));
+  return "/api/crews?" + p;
+}
+
 // ---------------------------------------------------------------- controls
 function buildStatusOptions() {
   const sel = $("status");
@@ -172,6 +187,7 @@ function facetOptions(id, values, anyLabel) {
 
 function buildFacets() {
   const section = state.section;
+  const isCrew = section === "crew";
   const facets = (meta && meta.facets && meta.facets[section]) || {};
   const fields = SECTION_CONTROLS[section] || [];
   // hide controls not available for this section / without gameinfo
@@ -180,12 +196,17 @@ function buildFacets() {
     "search"]) {
     const el = $(id);
     if (!el) continue;
+    if (isCrew) {
+      el.hidden = id !== "search" && id !== "clear";
+      continue;
+    }
     if (id === "sort" || id === "clear" || id === "search") {
       el.hidden = false;
       continue;
     }
     el.hidden = !fields.includes(id);
   }
+  if (isCrew) return;
   if (!meta || !meta.gameinfo) {
     for (const id of ["publisher", "crew", "cracker", "language", "year",
       "raw", "pasti", "boxscan", "tos"]) $(id).hidden = true;
@@ -209,6 +230,12 @@ function buildFacets() {
 
 function buildLetters() {
   const box = $("letters");
+  if (state.section === "crew") {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
   const avail = new Set(((meta && meta.facets &&
     meta.facets[state.section] && meta.facets[state.section].letters) || []));
   let html = `<button data-letter="any" class="${state.letter === "any" ? "active" : ""}">Any</button>`;
@@ -223,6 +250,28 @@ function buildLetters() {
 function renderStats(extra) {
   if (!meta) return;
   const section = state.section;
+  if (section === "crew") {
+    const crew = meta.crews || {};
+    const parts = [];
+    if (crew.error) {
+      parts.push(`<span class="st">crew data: ${esc(crew.error)}</span>`);
+    } else {
+      const groups = crew.visible_groups || 0;
+      const shown = crew.groups || 0;
+      parts.push(`<span class="st"><b>${groups}</b> crews</span>`);
+      parts.push(`<span class="st"><b>${crew.releases || 0}</b> releases</span>`);
+      if (groups > shown) {
+        parts.push(`<span class="st">top <b>${shown}</b> of ${groups}</span>`);
+      }
+      if (crew.generated_at) {
+        parts.push(`<span class="st">crews: ${esc(crew.generated_at)}</span>`);
+      }
+    }
+    if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
+    parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
+    $("stats").innerHTML = parts.join("");
+    return;
+  }
   const sec = (meta.sections && meta.sections[section]) || {};
   const sc = (meta.status_counts && meta.status_counts[section]) || {};
   const gc = (meta.game_status_counts && meta.game_status_counts[section]) || {};
@@ -271,6 +320,13 @@ function renderStats(extra) {
 function renderFooter() {
   if (!meta) return;
   const bits = [];
+  if (state.section === "crew") {
+    const crew = meta.crews || {};
+    if (crew.generated_at) bits.push("crews: " + crew.generated_at);
+    if (crew.error) bits.push("crew data: " + crew.error);
+    $("footer").textContent = bits.join("  ·  ");
+    return;
+  }
   const idx = (meta.index && meta.index[state.section]) || {};
   if (idx.mtime) {
     const name = SECTION_INDEX_NAMES[state.section] || "index.json";
@@ -292,6 +348,10 @@ function showBanner(msg, retry) {
 function hideBanner() { $("banner").hidden = true; }
 
 // ---------------------------------------------------------------- grid
+function isCrewCard(card) {
+  return !!(card && card.crew);
+}
+
 function badgeFor(card) {
   if (!card.display_status) {
     return `<span class="badge b-other">meta</span>`;
@@ -317,6 +377,17 @@ function renderGrid(cards) {
   }
   $("empty").hidden = true;
   grid.innerHTML = cards.map((c, i) => {
+    if (isCrewCard(c)) {
+      const kind = c.kind === "cracker" ? "cracker" : "crew";
+      const preview = c.preview
+        ? `<img loading="lazy" src="${imgSrc(c.preview)}" alt="">`
+        : `<div class="ph crew-ph">CREW</div>`;
+      return `<div class="card crew-card" data-idx="${i}" data-v="0" tabindex="-1">` +
+        `<span class="badge ${kind === "cracker" ? "b-cracker" : "b-crew"}">${kind}</span>` +
+        `<span class="chip">${c.zips} ZIPs</span>` +
+        `<div class="name">${esc(c.name)}</div>` +
+        `<div class="crew-release-count">${c.releases} releases</div>${preview}</div>`;
+    }
     const nzip = c.variants.length;
     const chip = nzip > 1 ? `<span class="chip">×${nzip}</span>` : "";
     const layer = c.layer ? `<span class="layer">${esc(c.layer)}</span>` : "";
@@ -481,11 +552,24 @@ async function loadEntries() {
   try {
     hideBanner();
     if (lb) { lb = null; $("lightbox").hidden = true; }
+    if (crewView) closeCrewBrowser(false);
+    if (state.section === "crew") {
+      const data = await api(crewsQuery());
+      renderGrid(data.cards);
+      renderPager(data.total);
+      $("result-count").textContent = `${data.total} crew${data.total === 1 ? "" : "s"}`;
+      writeURL(false);
+      renderStats();
+      renderFooter();
+      return;
+    }
     const data = await api(entriesQuery());
     renderGrid(data.cards);
     renderPager(data.total);
     $("result-count").textContent = `${data.total} results`;
     writeURL(false);
+    renderStats();
+    renderFooter();
   } catch (err) {
     showBanner(err.message, () => loadEntries());
     $("grid").innerHTML = "";
@@ -506,7 +590,12 @@ function hoverHTML(card) {
     if (v !== "" && v != null && v !== false) rows.push(
       `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`);
   };
-  if (card.info) {
+  if (isCrewCard(card)) {
+    add("Kind", card.kind === "cracker" ? "individual cracker" : "crew");
+    add("ZIPs", card.zips);
+    add("Releases", card.releases);
+    add("Aliases", (card.aliases || []).join(", "));
+  } else if (card.info) {
     const i = card.info;
     add("Title", i.title);
     add("Publisher", i.publisher);
@@ -561,17 +650,38 @@ function hideHover() {
 // ---------------------------------------------------------------- lightbox
 function openLightbox(idx, variant, img) {
   if (idx < 0 || idx >= pageCards.length) return;
-  lb = { idx, variant: variant || 0, img: img || 0 };
+  lb = {
+    cards: pageCards, idx, variant: variant || 0, img: img || 0,
+    section: state.section, standalone: false,
+  };
   $("lightbox").hidden = false;
   renderLightbox();
   writeURL(true);
 }
 
+function openStandaloneLightbox(card, variant) {
+  lb = {
+    cards: [card], idx: 0, variant: variant || 0, img: 0,
+    section: "cracked", standalone: true,
+  };
+  assetKey = null;
+  $("lightbox").hidden = false;
+  renderLightbox();
+}
+
 function closeLightbox() {
+  const wasStandalone = !!(lb && lb.standalone);
   lb = null;
   assetKey = null;
   $("lightbox").hidden = true;
-  writeURL(false);
+  if (!wasStandalone) writeURL(false);
+  if (wasStandalone && crewView) {
+    const card = $("crew-grid").querySelector(
+      `.crew-release[data-idx="${crewView.selected}"]`);
+    if (card) card.focus();
+    else $("crew-grid").focus();
+    return;
+  }
   const card = $("grid").querySelector(`.card[data-idx="${focusIdx}"]`);
   if (card) card.focus();
 }
@@ -597,7 +707,7 @@ function filmOrder(card) {
 
 // ↑/↓: move to the previous/next variant in filmstrip display order
 function lbMoveVariant(delta) {
-  const card = pageCards[lb.idx];
+  const card = lb.cards[lb.idx];
   if (!card || card.variants.length < 2) return;
   const order = filmOrder(card);
   let pos = order.indexOf(lb.variant);
@@ -667,7 +777,7 @@ function lbGroupVariant(card, value, kind) {
 // (desktop `onSelectGroup`).
 function lbSelectGroup(value, kind) {
   if (!lb) return;
-  const card = pageCards[lb.idx];
+  const card = lb.cards[lb.idx];
   if (!card) return;
   const target = lbGroupVariant(card, value, kind);
   lb.variant = target >= 0 ? target : 0;
@@ -737,7 +847,8 @@ function localAssetsHtml(data) {
 }
 
 function updateLocalAssets(card) {
-  const key = `${state.section}:${card.id}`;
+  const section = (lb && lb.section) || state.section;
+  const key = `${section}:${card.id}`;
   assetKey = key;
   const target = $("lb-assets");
   if (!target) return;
@@ -752,7 +863,7 @@ function updateLocalAssets(card) {
   target.innerHTML = "";
   let pending = assetPending.get(key);
   if (!pending) {
-    const query = `section=${encodeURIComponent(state.section)}` +
+    const query = `section=${encodeURIComponent(section)}` +
       `&id=${encodeURIComponent(card.id)}`;
     pending = api("/api/local-assets?" + query)
       .then((data) => {
@@ -772,14 +883,14 @@ function updateLocalAssets(card) {
 
 function renderLightbox() {
   if (!lb) return;
-  const card = pageCards[lb.idx];
+  const card = lb.cards[lb.idx];
   if (!card) return closeLightbox();
   lb.variant = Math.min(lb.variant, Math.max(0, card.variants.length - 1));
 
   $("lb-badge").innerHTML = badgeFor(card);
   $("lb-title").textContent = card.name;
   const v = card.variants[lb.variant];
-  const missPrefix = card.focus_variant === -1
+  const missPrefix = !lb.standalone && card.focus_variant === -1
     ? (state.cracker !== "any" ? "cracker ZIP not found — "
       : "crew ZIP not found — ") : "";
   $("lb-sub").textContent = v
@@ -798,7 +909,10 @@ function renderLightbox() {
   }
   $("lb-badges").innerHTML = badgeRow.join("");
 
-  const pos = `${lb.idx + 1} / ${pageCards.length}`;
+  const pos = `${lb.idx + 1} / ${lb.cards.length}`;
+  const standalone = !!lb.standalone;
+  $("lb-prev").hidden = standalone;
+  $("lb-next").hidden = standalone;
   // the variant counter shows the FILMSTRIP position (screenshot variants
   // first), not the raw variant index
   const order = filmOrder(card);
@@ -943,22 +1057,338 @@ function renderLightbox() {
   updateLocalAssets(card);
 }
 
+function crewSearchText(release) {
+  return [
+    release.title, release.folder, release.zip, release.year,
+    release.publisher, release.cracked_by, release.crew, release.language,
+    release.special_flag, release.special_note,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function crewApplyFilter() {
+  if (!crewView) return [];
+  const query = crewView.query.trim().toLowerCase();
+  const list = crewView.releases.filter((release) =>
+    !query || crewSearchText(release).includes(query));
+  if (crewView.sort === "year_desc") {
+    list.sort((a, b) => {
+      const ay = parseInt(a.year, 10);
+      const by = parseInt(b.year, 10);
+      if (Number.isNaN(ay) && Number.isNaN(by)) return crewTitleCompare(a, b);
+      if (Number.isNaN(ay)) return 1;
+      if (Number.isNaN(by)) return -1;
+      return by - ay || crewTitleCompare(a, b);
+    });
+  } else if (crewView.sort === "title_asc") {
+    list.sort(crewTitleCompare);
+  } else {
+    list.sort((a, b) => {
+      const ay = parseInt(a.year, 10);
+      const by = parseInt(b.year, 10);
+      if (Number.isNaN(ay) && Number.isNaN(by)) return crewTitleCompare(a, b);
+      if (Number.isNaN(ay)) return 1;
+      if (Number.isNaN(by)) return -1;
+      return ay - by || crewTitleCompare(a, b);
+    });
+  }
+  return list;
+}
+
+function crewTitleCompare(a, b) {
+  const at = (a.title || a.folder || a.zip || a.rel).toLowerCase();
+  const bt = (b.title || b.folder || b.zip || b.rel).toLowerCase();
+  return at.localeCompare(bt) ||
+    (a.zip || a.rel).toLowerCase().localeCompare((b.zip || b.rel).toLowerCase());
+}
+
+function crewColumns() {
+  const grid = $("crew-grid");
+  const card = grid.querySelector(".crew-release");
+  if (!card) return 1;
+  const style = getComputedStyle(grid);
+  const gap = parseFloat(style.columnGap || style.gap) || 8;
+  const width = card.getBoundingClientRect().width + gap;
+  return Math.max(1, Math.round(grid.clientWidth / width));
+}
+
+function crewPageSize() {
+  const grid = $("crew-grid");
+  const card = grid.querySelector(".crew-release");
+  const cols = crewColumns();
+  if (!card) return cols;
+  const style = getComputedStyle(grid);
+  const gap = parseFloat(style.rowGap || style.gap) || 8;
+  const height = card.getBoundingClientRect().height + gap;
+  const rows = Math.max(1, Math.floor(grid.clientHeight / height));
+  return rows * cols;
+}
+
+function crewRenderGrid() {
+  const grid = $("crew-grid");
+  if (!crewView || !crewView.filtered.length) {
+    grid.innerHTML = `<div class="crew-empty">No releases match the filter.</div>`;
+    return;
+  }
+  grid.innerHTML = crewView.filtered.map((release, index) => {
+    const preview = release.preview
+      ? `<img loading="lazy" src="${imgSrc(release.preview)}" alt="">`
+      : `<div class="crew-thumb-ph">NO SHOT</div>`;
+    const badges = [
+      release.status
+        ? `<span class="badge ${release.status === "done" ? "b-game" :
+          release.status === "desktop" ? "b-desktop" : "b-failed"}">${esc(release.status)}</span>`
+        : "",
+      release.kind ? `<span class="badge b-other">${esc(release.kind)}</span>` : "",
+      release.layer ? `<span class="badge b-layer">${esc(release.layer)}</span>` : "",
+      release.ambiguous ? `<span class="badge b-amb">ambiguous</span>` : "",
+    ].join("");
+    const credits = [release.cracked_by, release.crew]
+      .filter(Boolean).join(" · ");
+    return `<div class="crew-release ${index === crewView.selected ? "selected" : ""}" ` +
+      `data-idx="${index}" tabindex="-1">` +
+      `<div class="crew-thumb">${preview}</div>` +
+      `<div class="crew-release-body">` +
+      `<div class="crew-release-badges">${badges}</div>` +
+      `<div class="crew-release-title">${esc(release.title || release.zip || release.rel)}</div>` +
+      `<div class="crew-release-meta">` +
+      `${release.year ? esc(release.year) : ""}` +
+      `${release.year && credits ? " · " : ""}${esc(credits)}</div>` +
+      `</div></div>`;
+  }).join("");
+}
+
+function crewRenderSide() {
+  const side = $("crew-side");
+  if (!crewView || !crewView.filtered.length) {
+    side.innerHTML = `<div class="crew-side-empty">No release selected.</div>`;
+    return;
+  }
+  crewView.selected = Math.max(0, Math.min(
+    crewView.selected, crewView.filtered.length - 1));
+  const release = crewView.filtered[crewView.selected];
+  const rows = [];
+  const add = (label, value) => {
+    if (value !== "" && value != null && value !== false) {
+      rows.push(`<tr><td>${esc(label)}</td><td>${esc(value)}</td></tr>`);
+    }
+  };
+  add("Title", release.title);
+  add("Year", release.year);
+  add("Publisher", release.publisher);
+  add("Cracked by", release.cracked_by);
+  add("Crew", release.crew);
+  add("Language", release.language);
+  add("Disks", release.disks || "");
+  const flags = [];
+  if (release.raw_dump) flags.push("RAW");
+  if (release.pasti_dump) flags.push("PASTI");
+  if (release.boxscan) flags.push("Boxscan");
+  if (release.tos_bad) flags.push("TOS/Bad");
+  add("Flags", flags.join(", "));
+  add("ZIP", release.zip);
+  add("Status", release.status);
+  add("Kind", release.kind);
+  add("Layer", release.layer);
+  if (release.ambiguous) add("Ambiguous", "yes");
+  let html = `<h3>Release</h3><table>${rows.join("")}</table>`;
+  if (release.found) {
+    html += `<button type="button" id="crew-open">Open game lightbox</button>` +
+      `<div class="crew-hint">Double-click / Enter opens the existing game lightbox.</div>`;
+  } else {
+    html += `<div class="crew-hint">Not found in the screenshot index — no game lightbox available.</div>`;
+  }
+  side.innerHTML = html;
+}
+
+function crewRenderSelection() {
+  if (!crewView) return;
+  document.querySelectorAll("#crew-grid .crew-release").forEach((el, index) => {
+    el.classList.toggle("selected", index === crewView.selected);
+  });
+  const total = crewView.filtered.length;
+  $("crew-pos").textContent = total
+    ? `${crewView.selected + 1} / ${total}` : "0 / 0";
+  crewRenderSide();
+  const selected = $("crew-grid").querySelector(
+    `.crew-release[data-idx="${crewView.selected}"]`);
+  if (selected) selected.scrollIntoView({ block: "nearest" });
+}
+
+function renderCrewBrowser() {
+  if (!crewView) return;
+  const crew = crewView.group;
+  $("crew-title").textContent = crew.name;
+  $("crew-sub").textContent =
+    `${crew.kind === "cracker" ? "Individual cracker" : "Crew"} · ` +
+    `${crew.zips} ZIPs · ${crew.releases.length} releases`;
+  const aliases = (crew.aliases || []).filter((a) => a !== crew.name);
+  $("crew-aliases").textContent = aliases.length
+    ? `Also known as: ${aliases.join(", ")}` : "";
+  if ($("crew-search").value !== crewView.query) {
+    $("crew-search").value = crewView.query;
+  }
+  $("crew-sort").value = crewView.sort;
+  crewView.filtered = crewApplyFilter();
+  if (crewView.selected >= crewView.filtered.length) {
+    crewView.selected = Math.max(0, crewView.filtered.length - 1);
+  }
+  crewRenderGrid();
+  crewRenderSelection();
+}
+
+function crewSelect(index) {
+  if (!crewView || !crewView.filtered.length) return;
+  crewView.selected = Math.max(0, Math.min(
+    index, crewView.filtered.length - 1));
+  crewRenderSelection();
+}
+
+function showCrewBrowser(crew) {
+  crewView = {
+    group: crew,
+    releases: crew.releases || [],
+    filtered: [],
+    selected: 0,
+    query: "",
+    sort: "year_asc",
+  };
+  crewView.filtered = crewApplyFilter();
+  const withPreview = crewView.filtered.findIndex((r) => r.preview);
+  crewView.selected = withPreview >= 0 ? withPreview : 0;
+  $("crew-lightbox").hidden = false;
+  renderCrewBrowser();
+  if (crewView.filtered.length) crewSelect(crewView.selected);
+  requestAnimationFrame(() => $("crew-grid").focus());
+}
+
+async function openCrewBrowser(card) {
+  try {
+    const cached = crewCache.get(card.id);
+    if (cached) {
+      showCrewBrowser(cached);
+      return;
+    }
+    const data = await api("/api/crews?id=" + encodeURIComponent(card.id));
+    crewCache.set(card.id, data);
+    showCrewBrowser(data);
+  } catch (err) {
+    showBanner("Cannot load crew releases: " + err.message, () => {
+      hideBanner();
+    });
+  }
+}
+
+function closeCrewBrowser(restoreFocus = true) {
+  crewView = null;
+  $("crew-lightbox").hidden = true;
+  if (restoreFocus) {
+    const card = $("grid").querySelector(`.card[data-idx="${focusIdx}"]`);
+    if (card) card.focus();
+  }
+}
+
+async function crewOpenSelected() {
+  if (!crewView || !crewView.filtered.length) return;
+  const release = crewView.filtered[crewView.selected];
+  if (!release || !release.found || !release.index_rel) return;
+  try {
+    const data = await api("/api/entries?section=cracked&entry=" +
+      encodeURIComponent(release.index_rel));
+    const card = data.cards && data.cards[0];
+    if (!card) {
+      showBanner("Release not found in the cracked catalog.");
+      return;
+    }
+    const variant = card.variants.findIndex((v) => v.rel === release.index_rel);
+    openStandaloneLightbox(card, variant >= 0 ? variant : 0);
+  } catch (err) {
+    showBanner("Cannot open release: " + err.message, () => hideBanner());
+  }
+}
+
+function crewKeydown(e) {
+  if (!crewView || lb) return;
+  const inInput = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (inInput) {
+    if (e.key === "Escape") {
+      if ($("crew-search").value) {
+        $("crew-search").value = "";
+        crewView.query = "";
+        crewView.selected = 0;
+        renderCrewBrowser();
+        $("crew-grid").focus();
+      } else {
+        closeCrewBrowser();
+      }
+      e.preventDefault();
+    }
+    return;
+  }
+  const cols = crewColumns();
+  switch (e.key) {
+    case "ArrowRight":
+      e.preventDefault();
+      crewSelect(crewView.selected + 1);
+      break;
+    case "ArrowLeft":
+      e.preventDefault();
+      crewSelect(crewView.selected - 1);
+      break;
+    case "ArrowDown":
+      e.preventDefault();
+      crewSelect(crewView.selected + cols);
+      break;
+    case "ArrowUp":
+      e.preventDefault();
+      crewSelect(crewView.selected - cols);
+      break;
+    case "PageDown":
+      e.preventDefault();
+      crewSelect(crewView.selected + crewPageSize());
+      break;
+    case "PageUp":
+      e.preventDefault();
+      crewSelect(crewView.selected - crewPageSize());
+      break;
+    case "Home":
+      e.preventDefault();
+      crewSelect(0);
+      break;
+    case "End":
+      e.preventDefault();
+      crewSelect(crewView.filtered.length - 1);
+      break;
+    case "Enter":
+      e.preventDefault();
+      crewOpenSelected();
+      break;
+    case "Escape":
+      e.preventDefault();
+      closeCrewBrowser();
+      break;
+    case "/":
+      e.preventDefault();
+      $("crew-search").focus();
+      break;
+  }
+}
+
 function lbPrev() {
-  if (!lb) return;
+  if (!lb || lb.standalone) return;
   if (lb.idx > 0) {
     lb.idx--;
     // open on the first filmstrip entry (first variant with a screenshot)
-    lb.variant = filmOrder(pageCards[lb.idx])[0] || 0;
+    lb.variant = filmOrder(lb.cards[lb.idx])[0] || 0;
     lb.img = 0;
     renderLightbox();
     writeURL(true);
   }
 }
 function lbNext() {
-  if (!lb) return;
-  if (lb.idx < pageCards.length - 1) {
+  if (!lb || lb.standalone) return;
+  if (lb.idx < lb.cards.length - 1) {
     lb.idx++;
-    lb.variant = filmOrder(pageCards[lb.idx])[0] || 0;
+    lb.variant = filmOrder(lb.cards[lb.idx])[0] || 0;
     lb.img = 0;
     renderLightbox();
     writeURL(true);
@@ -992,8 +1422,12 @@ function gridKeydown(e) {
     case "Enter": case " ":
       e.preventDefault();
       if (focusIdx >= 0) {
-        const fv = parseInt(cards[focusIdx].dataset.v || "0", 10);
-        openLightbox(focusIdx, fv);
+        if (isCrewCard(pageCards[focusIdx])) {
+          openCrewBrowser(pageCards[focusIdx]);
+        } else {
+          const fv = parseInt(cards[focusIdx].dataset.v || "0", 10);
+          openLightbox(focusIdx, fv);
+        }
       }
       break;
     case "Escape":
@@ -1028,6 +1462,7 @@ function globalKeydown(e) {
     if (!e.repeat) { e.preventDefault(); closeHelp(); }
     return;
   }
+  if (crewView && !lb) return;
   if (e.key === "Escape") {
     if (lb) { e.preventDefault(); closeLightbox(); return; }
     if (inInput && document.activeElement.id === "search") {
@@ -1045,8 +1480,8 @@ function globalKeydown(e) {
       case "ArrowRight": e.preventDefault(); lbNext(); return;
       case "ArrowDown": e.preventDefault(); lbMoveVariant(1); return;
       case "ArrowUp": e.preventDefault(); lbMoveVariant(-1); return;
-      case "PageDown": { e.preventDefault(); const imgs = lightboxImages(pageCards[lb.idx]); if (imgs.length) { lb.img = (lb.img + 1) % imgs.length; renderLightbox(); } return; }
-      case "PageUp": { e.preventDefault(); const imgs = lightboxImages(pageCards[lb.idx]); if (imgs.length) { lb.img = (lb.img - 1 + imgs.length) % imgs.length; renderLightbox(); } return; }
+      case "PageDown": { e.preventDefault(); const imgs = lightboxImages(lb.cards[lb.idx]); if (imgs.length) { lb.img = (lb.img + 1) % imgs.length; renderLightbox(); } return; }
+      case "PageUp": { e.preventDefault(); const imgs = lightboxImages(lb.cards[lb.idx]); if (imgs.length) { lb.img = (lb.img - 1 + imgs.length) % imgs.length; renderLightbox(); } return; }
     }
     return;
   }
@@ -1095,6 +1530,10 @@ function wireEvents() {
     if (!cardEl) return;
     const idx = parseInt(cardEl.dataset.idx, 10);
     const fv = parseInt(cardEl.dataset.v || "0", 10);
+    if (isCrewCard(pageCards[idx])) {
+      openCrewBrowser(pageCards[idx]);
+      return;
+    }
     if (varV) {
       openLightbox(idx, parseInt(varV.dataset.varv, 10) || 0);
       return;
@@ -1183,7 +1622,13 @@ function wireEvents() {
     state.status = sectionDefaultStatus();
     for (const k of ["raw", "pasti", "boxscan", "tos", "crew", "cracker"])
       state[k] = "any";
-    if (state.sort === "cracker" && !["cracked", "utils"].includes(state.section)) {
+    if (state.section === "crew") {
+      state.letter = "any";
+      state.sort = "name";
+      state.order = "asc";
+      for (const k of ["publisher", "language", "year"]) state[k] = "any";
+    } else if (state.sort === "cracker" &&
+        !["cracked", "utils"].includes(state.section)) {
       state.sort = "name";
     }
     syncControls();
@@ -1211,6 +1656,43 @@ function wireEvents() {
     const ci = e.target.closest("#lb-cands img");
     if (ci) { lb.img = parseInt(ci.dataset.img, 10); renderLightbox(); }
   });
+
+  // crew release browser
+  $("crew-close").addEventListener("click", () => closeCrewBrowser());
+  $("crew-lightbox").addEventListener("click", (e) => {
+    if (e.target === $("crew-lightbox")) closeCrewBrowser();
+  });
+  $("crew-grid").addEventListener("click", (e) => {
+    const release = e.target.closest(".crew-release");
+    if (!release) return;
+    crewSelect(parseInt(release.dataset.idx, 10));
+  });
+  $("crew-grid").addEventListener("dblclick", (e) => {
+    const release = e.target.closest(".crew-release");
+    if (!release) return;
+    crewSelect(parseInt(release.dataset.idx, 10));
+    crewOpenSelected();
+  });
+  $("crew-side").addEventListener("click", (e) => {
+    if (e.target.closest("#crew-open")) crewOpenSelected();
+  });
+  $("crew-search").addEventListener("input", () => {
+    clearTimeout(crewSearchTimer);
+    crewSearchTimer = setTimeout(() => {
+      if (!crewView) return;
+      crewView.query = $("crew-search").value;
+      crewView.selected = 0;
+      renderCrewBrowser();
+    }, 120);
+  });
+  $("crew-sort").addEventListener("change", () => {
+    if (!crewView) return;
+    crewView.sort = $("crew-sort").value;
+    crewView.selected = 0;
+    renderCrewBrowser();
+    $("crew-grid").focus();
+  });
+  document.addEventListener("keydown", crewKeydown);
 }
 
 function syncControls() {
@@ -1242,11 +1724,14 @@ async function boot() {
   // or gameinfo-derived), even without gameinfo; hide empty tabs individually
   const secMeta = (meta && meta.sections) || {};
   const secHasData = (s) => !!(secMeta[s] && (secMeta[s].games || secMeta[s].cards));
-  $("tabs").hidden = !(secHasData("pd") || secHasData("utils") ||
-    secHasData("magazine") || secHasData("falcon"));
+  const crewAvailable = !!(meta.crews && meta.crews.available);
+  if (state.section === "crew" && !crewAvailable) state.section = "cracked";
+  $("tabs").hidden = !(crewAvailable || secHasData("pd") ||
+    secHasData("utils") || secHasData("magazine") || secHasData("falcon"));
   for (const b of $("tabs").querySelectorAll("button")) {
     const s = b.dataset.section;
-    b.hidden = s !== "cracked" && !secHasData(s);
+    b.hidden = s === "crew" ? !crewAvailable
+      : (s !== "cracked" && !secHasData(s));
   }
   syncControls();
   renderStats();
