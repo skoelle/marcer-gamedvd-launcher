@@ -13,6 +13,7 @@ import 'atari_legend_dialog.dart';
 import 'game_info_panel.dart';
 import 'game_lightbox.dart';
 import 'local_assets_chips.dart';
+import 'piratefinder_dialog.dart';
 
 /// Crew release browser: all releases of a crew as a vertical screenshot list
 /// on the left, the normal lightbox info sidebar for the selected ZIP on the
@@ -648,6 +649,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
     final card = hit.card;
     final variant = card.variants[hit.index];
     final atariLegend = widget.controller.atariLegendForCard(card);
+    final pfMatch = widget.controller.pirateFinderTitleMatchForCard(card);
     return GameInfoPanel(
       info: card.info,
       variant: ZipVariantView(
@@ -669,6 +671,14 @@ class _CrewLightboxState extends State<CrewLightbox> {
               context,
               game: atariLegend,
               textsLoader: widget.controller.atariLegendTexts,
+            ),
+      pirateFinderMatch: pfMatch,
+      onPirateFinder: pfMatch == null
+          ? null
+          : () => showPirateFinderDialog(
+              context,
+              controller: widget.controller,
+              card: card,
             ),
       extras: LocalAssetsChips(
         assets: widget.controller.localAssetsForCard(card),

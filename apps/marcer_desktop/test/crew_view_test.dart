@@ -9,8 +9,36 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_controller.dart';
+import 'package:marcer_desktop/piratefinder_data.dart';
 import 'package:marcer_desktop/widgets/crew_detail_panel.dart';
 import 'package:marcer_desktop/widgets/crew_lightbox.dart';
+
+/// PF data controller with an injected index (no file/isolate needed).
+class _FakePirateFinderData extends PirateFinderDataController {
+  _FakePirateFinderData(this.value);
+  PirateFinderIndex? value;
+  @override
+  PirateFinderIndex? get index => value;
+}
+
+PirateFinderIndex _alphaIndex() => PirateFinderIndex.fromJson({
+  'generated_at': '2026-10-24T12:34:16Z',
+  'source': {'tag': 'catalogue-2026-10-19'},
+  'disks': [
+    {
+      'id': 1,
+      'kind': 'single',
+      'title': 'Alpha (1990)(Publisher A)[cr Alpha Crew]',
+      'label': 'Alpha',
+      'publisher': 'Publisher A',
+      'cracker': 'Alpha Crew',
+      'crew': 'Alpha Crew',
+      'year': 1990,
+    },
+  ],
+  'contents': [],
+  'images': [],
+});
 
 /// Crews tab: `crews.json` loading, top-N cards, search and the release ->
 /// cracked-card lookup used to open the existing game lightbox.
@@ -319,6 +347,37 @@ void main() {
     await tester.pump();
     expect(find.text('Alpha v2'), findsOneWidget);
     expect(find.text('a_v2.zip'), findsOneWidget);
+  });
+
+  testWidgets('crew lightbox side panel shows the PirateFinder section', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await c.init();
+    });
+    final crew = c.crews.groups.firstWhere(
+      (group) => group.name == 'Alpha Crew',
+    );
+    // Inject a PF index so the Alpha card has a title match.
+    final fake = _FakePirateFinderData(_alphaIndex());
+    c.pirateFinderData = fake;
+
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CrewLightbox(controller: c, crew: crew),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('PirateFinder Crew Releases (1)'), findsOneWidget);
+    expect(find.text('Crews'), findsOneWidget);
   });
 
   testWidgets('crew detail lists releases and opens one on tap', (
