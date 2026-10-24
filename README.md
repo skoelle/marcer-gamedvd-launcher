@@ -290,6 +290,10 @@ Download the ZIP for your platform from the [Releases](https://github.com/skoell
 | Linux | `MarcerDesktop-*-linux-x64.zip` |
 | macOS | `MarcerDesktop-*-osx-arm64.zip` |
 
+**Minimum requirements:** Windows 10/11 (64-bit; the ZIP includes the Visual
+C++ runtime), Ubuntu 24.04 LTS+ (64-bit, GTK3), macOS 12 Monterey+ on Apple
+Silicon. Intel Macs are not supported.
+
 The release ZIPs ship `desktop.config.example.json` **and** the bundled
 `MarcerGameDvd-Hatari.cfg` — copy the example next to the executable (or the
 `.app`), rename it to `desktop.config.json`, and set your absolute paths. For
@@ -529,6 +533,7 @@ The design and specification documents live in [`docs/`](docs/README.md):
 | Document | Contents |
 |---|---|
 | [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Release setup guide for users: first start, macOS notes, game/patch directories (`ftp-sync`), FTP settings, catalog-data downloads and troubleshooting. |
+| [`docs/IDEAS.md`](docs/IDEAS.md) | Living desktop-app backlog: planned, deferred and explicitly rejected ideas. |
 | [`docs/SPEC.md`](docs/SPEC.md) | Technology-neutral behavioral specification of the launcher (overlay rules, navigation, rendering, launch) — the basis for reimplementing it in any language. |
 | [`docs/ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) | Analysis of the external game metadata sources (XLS workbooks, data model, matching, roadmap). |
 | [`docs/ANALYSIS-boxscan-manual-structure.md`](docs/ANALYSIS-boxscan-manual-structure.md) | Analysis of the `Boxscan/` and `Manual/` companion folders (location, naming, ZIP/loose-file structure, edge cases, consumer requirements). |

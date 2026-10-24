@@ -9,6 +9,7 @@ per-app/per-tool READMEs stay next to their code.
 | File | What it covers |
 |---|---|
 | [`GETTING-STARTED.md`](GETTING-STARTED.md) | Quick start plus detailed release setup guide for users: first start, macOS (Gatekeeper/translocation/TCC), game and patch directories, `ftp-sync`, FTP settings, catalog-data downloads and troubleshooting. |
+| [`IDEAS.md`](IDEAS.md) | Living backlog: planned, deferred and explicitly rejected ideas for the desktop app (Surface B, Hatari stage 2, local index, filters, persistence). |
 
 ## Specs
 

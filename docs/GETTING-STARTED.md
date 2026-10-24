@@ -53,6 +53,14 @@ Download the ZIP for your platform from the
 | Linux | `MarcerDesktop-<version>-linux-x64.zip` | `./MarcerGameDVDLauncher` |
 | macOS (Apple Silicon) | `MarcerDesktop-<version>-osx-arm64.zip` | `MarcerGameDVDLauncher.app` |
 
+### System requirements
+
+| Platform | Minimum |
+|---|---|
+| Windows | Windows 10/11 (64-bit). The ZIP includes the Visual C++ runtime DLLs. |
+| Linux | Ubuntu 24.04 LTS or newer (64-bit, GTK3). The release is built on Ubuntu 24.04; older distributions may work with glibc 2.34 or newer, but are not tested. |
+| macOS | macOS 12 Monterey or newer on Apple Silicon. **Intel Macs are not supported** (no x64 build). |
+
 Extract the ZIP to a normal folder, for example:
 
 - Windows: `C:\Games\MarcerGameDVDLauncher\`
@@ -283,9 +291,11 @@ Downloaded Hatari/TOS files are stored next to the app on Windows/Linux and in
 
 ## 7. macOS
 
-The macOS release is an **Apple Silicon** build (`osx-arm64`). It is ad-hoc
-signed and **not notarized**, and it is **not sandboxed** (it must read game
-folders you choose, launch Hatari and update its own bundle).
+The macOS release is an **Apple Silicon** build (`osx-arm64`) and requires
+macOS 12 Monterey or newer. **Intel Macs are not supported** (there is no x64
+build). The app is ad-hoc signed and **not notarized**, and it is **not
+sandboxed** (it must read game folders you choose, launch Hatari and update its
+own bundle).
 
 ### 7.1 Gatekeeper
 

@@ -51,6 +51,14 @@ For the quick start and release setup (first start, macOS notes, `ftp-sync`,
 FTP/catalog-data downloads) see
 [`docs/GETTING-STARTED.md`](../../docs/GETTING-STARTED.md).
 
+## Release platform support
+
+| Platform | Minimum |
+|---|---|
+| Windows | Windows 10/11 (64-bit); the release ZIP bundles the Visual C++ runtime DLLs. |
+| Linux | Ubuntu 24.04 LTS+ (64-bit, GTK3); built on Ubuntu 24.04. Older distributions may work with glibc 2.34+ but are untested. |
+| macOS | macOS 12 Monterey+ on Apple Silicon; Intel Macs are not supported. |
+
 ## Prerequisites
 
 - Flutter SDK (stable) in `~/flutter` (`export PATH="$HOME/flutter/bin:$PATH"`)
