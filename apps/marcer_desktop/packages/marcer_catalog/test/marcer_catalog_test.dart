@@ -216,7 +216,7 @@ void main() {
       expect(c.copyWith(patchDirectory: '/p').downloadTargetDirectory, '/p');
     });
 
-    test('resolveGameinfoDirectory has no implicit fallback', () {
+    test('resolveGameinfoDirectory uses DataDir/gameinfo (no fallback)', () {
       final f = File('${tmp.path}/desktop.config.json')
         ..writeAsStringSync(
             '{"RootDirectory": "/r", "PatchDirectory": "/p"}');
@@ -224,7 +224,7 @@ void main() {
       expect(c.resolveGameinfoDirectory(), '',
           reason: 'no <Patch>/../Data fallback anymore');
       expect(c.copyWith(gameinfoDirectory: '/data').resolveGameinfoDirectory(),
-          '/data');
+          '/data/gameinfo');
     });
 
     test('resolveAtariLegendDirectory has no implicit fallback', () {
