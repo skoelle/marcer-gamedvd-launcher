@@ -40,3 +40,9 @@ desktop.config.json
 /tools/atarilegend-gen/__pycache__/
 /tools/asset-manifest/__pycache__/
 /tools/gallery/__pycache__
+
+# Local tool data (paths.env, PirateFinder catalogue, analysis outputs)
+/local/
+
+# PirateFinder tool bytecode
+/tools/piratefinder-gen/**/__pycache__/
