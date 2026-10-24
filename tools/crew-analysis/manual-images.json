@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "images": {
+    "Replicants": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/V/Vroom - Multiplayer/Vroom Multiplayer - Replicants.zip",
+      "name": "Vroom Multiplayer - Replicants.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Atari Legend": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/I/Into the Mystic/Into the Mystic - Atari Legend.zip",
+      "name": "Into the Mystic - Atari Legend.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Cynix": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/D/Dogfight/Dogfight - Cynix - Disk 1.zip",
+      "name": "Dogfight - Cynix - Disk 1.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Medway Boys - TMB": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/B/Battle Chess/Battle chess - Medway Boys.zip",
+      "name": "Battle chess - Medway Boys.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Bust": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/E/European Football Champ/European Football Champ - Bust + Intro.zip",
+      "name": "European Football Champ - Bust + Intro.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Delight": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/R/Robocop/Robocop - Tr - Delight.zip",
+      "name": "Robocop - Tr - Delight.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Vmax": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/G/Gobliiins/Gobliiins - Vmax - disk 1.zip",
+      "name": "Gobliiins - Vmax - disk 1.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Pompey Pirates": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/W/Wonderland/Wonderland v1.27 - Pompey Pirates - Disk 1.zip",
+      "name": "Wonderland v1.27 - Pompey Pirates - Disk 1.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Atariforce": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/M/Mewilo/Mewilo - German - Atariforce.zip",
+      "name": "Mewilo - German - Atariforce.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Vectronix": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/T/Trex Warrior/Trex Warrior v3.02 - Tr - Vectronix.zip",
+      "name": "Trex Warrior v3.02 - Tr - Vectronix.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Boss": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/G/Great Giana Sisters/Great Giana Sisters - Tr - Boss.zip",
+      "name": "Great Giana Sisters - Tr - Boss.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Superior": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/E/Eco Phantoms/Eco Phantoms - Superior.zip",
+      "name": "Eco Phantoms - Superior.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Revolution": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/R/Roll Out/Roll Out - Revolution.zip",
+      "name": "Roll Out - Revolution.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    }
+  }
+}

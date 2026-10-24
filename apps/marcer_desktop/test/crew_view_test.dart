@@ -105,6 +105,24 @@ void main() {
       }),
     );
 
+    final curated = File(
+      '${tmp.path}/out/Title Sorted/Cracked Games - Title Sorted/A/Alpha/curated.png',
+    );
+    curated.parent.createSync(recursive: true);
+    curated.createSync();
+    File('${tmp.path}/data/crew-images.json').writeAsStringSync(
+      jsonEncode({
+        'schema': 1,
+        'images': {
+          'Alpha Crew': {
+            'rel': relA,
+            'name': 'curated.png',
+            'source': 'manual',
+          },
+        },
+      }),
+    );
+
     File('${tmp.path}/data/crews.json').writeAsStringSync(
       jsonEncode({
         'schema': 1,
@@ -185,6 +203,12 @@ void main() {
     if (tmp.existsSync()) tmp.deleteSync(recursive: true);
   });
 
+  test('crew images are optional', () {
+    final index = CrewImageIndex.load('${tmp.path}/missing-data');
+    expect(index.length, 0);
+    expect(index.loadError, isNull);
+  });
+
   test('crews tab builds top-N cards, searches and maps releases', () async {
     await c.init();
     expect(c.crews.length, 2);
@@ -193,8 +217,11 @@ void main() {
     c.setSection('crew');
     expect(c.catalogCards, hasLength(2));
     expect(c.selectedCard?.crew?.name, 'Alpha Crew');
-    expect(c.selectedCard?.previewPath, isNotNull);
-    expect(c.displayPreviewPathForCard(c.selectedCard!), isNotNull);
+    expect(c.selectedCard?.previewPath, endsWith('curated.png'));
+    expect(
+      c.displayPreviewPathForCard(c.selectedCard!),
+      endsWith('curated.png'),
+    );
     expect(c.countText, '2 crews');
     expect(c.statusLine, contains('3 releases'));
 
@@ -219,6 +246,38 @@ void main() {
     c.setStatus('any');
     expect(c.catalogCards, hasLength(2));
     expect(c.catalogCards.every((card) => card.crew == null), isTrue);
+  });
+
+  test('crews tab shows only the top 48 groups', () async {
+    final groups = [
+      for (var i = 1; i <= 50; i++)
+        {
+          'id': 'crew-$i',
+          'name': 'Crew ${i.toString().padLeft(2, '0')}',
+          'kind': 'crew',
+          'rank': i,
+          'zips': 51 - i,
+          'aliases': ['Crew $i'],
+          'image': null,
+          'releases': <Map<String, dynamic>>[],
+        },
+    ];
+    File('${tmp.path}/data/crews.json')
+        .writeAsStringSync(jsonEncode({'schema': 1, 'groups': groups}));
+    final c2 = CatalogController(
+      DesktopConfig(
+        rootDirectory: '${tmp.path}/root',
+        screenshotDirectory: '${tmp.path}/out',
+        gameinfoDirectory: '${tmp.path}/data',
+      ),
+    );
+    addTearDown(c2.dispose);
+    await c2.init();
+    c2.setSection('crew');
+    expect(c2.crews.length, 50);
+    expect(c2.catalogCards, hasLength(48));
+    expect(c2.catalogCards.first.crew?.name, 'Crew 01');
+    expect(c2.statusLine, contains('top 48 of 50'));
   });
 
   testWidgets('crew detail lists releases and opens one on tap', (

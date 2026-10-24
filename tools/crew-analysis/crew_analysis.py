@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import csv
 import difflib
+import html
 import json
 import os
 import re
@@ -407,6 +408,369 @@ def slugify(value: str) -> str:
     return slug or "group"
 
 
+# --------------------------------------------------------------------------
+# crew image suggestions (cracktro candidates)
+# --------------------------------------------------------------------------
+
+
+def phash_distance(a: str, b: str) -> int:
+    try:
+        return bin(int(a, 16) ^ int(b, 16)).count("1")
+    except (TypeError, ValueError):
+        return 999
+
+
+def compute_phash(path: Path) -> str:
+    """Optional pHash fallback for images without sidecar metadata."""
+    try:
+        import imagehash
+        from PIL import Image
+    except Exception:
+        return ""
+    try:
+        with Image.open(path) as image:
+            return str(imagehash.phash(image))
+    except Exception:
+        return ""
+
+
+def read_sidecar(screenshot_dir: Path, rel: str) -> dict | None:
+    sidecar = screenshot_dir / Path(rel).parent / (Path(rel).stem + ".json")
+    if not sidecar.is_file():
+        return None
+    try:
+        return json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def entry_image_candidates(screenshot_dir: Path, release: dict, entry: dict) -> list[dict]:
+    """Candidate images of one release with pHash/kind/quality metadata.
+
+    The screenshot index only stores image basenames. The sidecar JSON keeps
+    the pHashes and capture statistics; replaying the generator's
+    preview/candidate ordering maps the retained `_cNN` files back to those
+    shots. Unmapped images fall back to a locally computed pHash when
+    Pillow/imagehash are available.
+    """
+    rel = release.get("rel", "")
+    folder = release.get("folder", "")
+    if not rel:
+        return []
+
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(
+        file: str | None,
+        phash: str | None,
+        kind: str | None,
+        status: str | None,
+        shot: dict | None,
+        order: int,
+    ) -> None:
+        if not file or not phash:
+            return
+        key = (rel, file)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append({
+            "release_rel": rel,
+            "folder": folder,
+            "file": file,
+            "phash": phash,
+            "kind": kind or "",
+            "status": status or "",
+            "order": order,
+            "entropy": float((shot or {}).get("entropy") or 0),
+            "std": float((shot or {}).get("std") or 0),
+            "edges": float((shot or {}).get("edges") or 0),
+            "score": float((shot or {}).get("score") or 0),
+        })
+
+    meta = read_sidecar(screenshot_dir, rel)
+    if meta:
+        shots = meta.get("shots", []) or []
+        survivors = [
+            shot for shot in shots
+            if shot.get("kind") != "black"
+            and not shot.get("boot_logo")
+            and shot.get("dropped") != "duplicate"
+        ]
+        games = [shot for shot in survivors if shot.get("kind") == "game"]
+        desktops = [shot for shot in survivors if shot.get("kind") == "desktop"]
+        pick = max(games, key=lambda shot: shot.get("score") or 0, default=None)
+        if pick is None:
+            pick = max(desktops, key=lambda shot: shot.get("score") or 0, default=None)
+
+        if pick is not None and entry.get("preview"):
+            add(entry["preview"], pick.get("phash"), pick.get("kind"),
+                entry.get("status"), pick, -1)
+        others = [shot for shot in survivors if shot is not pick]
+        candidate_names = list(entry.get("candidates") or [])
+        for index, shot in enumerate(others):
+            if index >= len(candidate_names):
+                break
+            add(candidate_names[index], shot.get("phash"), shot.get("kind"),
+                entry.get("status"), shot, index)
+
+    # Fallback for images the sidecar mapping did not cover.
+    mapped = {item["file"] for item in out}
+    for file in [entry.get("preview"), *(entry.get("candidates") or [])]:
+        if not file or file in mapped:
+            continue
+        phash = compute_phash(screenshot_dir / Path(rel).parent / file)
+        if phash:
+            add(file, phash, entry.get("kind"), entry.get("status"), None, 1000)
+    return out
+
+
+def cluster_candidates(candidates: list[dict], threshold: int) -> list[list[dict]]:
+    """Greedy perceptual clusters (Hamming distance on the 64-bit pHash)."""
+    clusters: list[list[dict]] = []
+    ordered = sorted(candidates, key=lambda item: (
+        item["release_rel"], item["order"], item["file"]))
+    for candidate in ordered:
+        for cluster in clusters:
+            if min(phash_distance(candidate["phash"], member["phash"])
+                   for member in cluster) <= threshold:
+                cluster.append(candidate)
+                break
+        else:
+            clusters.append([candidate])
+    return clusters
+
+
+def candidate_quality(candidate: dict) -> float:
+    weight = {
+        "textscreen": 1.10,
+        "darkscreen": 1.05,
+        "game": 1.0,
+        "desktop": 0.55,
+    }.get(candidate.get("kind", ""), 0.8)
+    entropy = candidate.get("entropy") or 0.0
+    std = candidate.get("std") or 0.0
+    edges = candidate.get("edges") or 0.0
+    return (entropy + std / 100.0 + edges / 100.0) * weight
+
+
+def cluster_stats(cluster: list[dict], total_releases: int) -> dict:
+    releases = {item["release_rel"] for item in cluster}
+    games = {item["folder"] for item in cluster}
+    best = max(cluster, key=lambda item: (
+        candidate_quality(item), -item["order"], item.get("entropy") or 0))
+    coverage = len(releases) / max(1, total_releases)
+    quality = candidate_quality(best)
+    return {
+        "distinct_releases": len(releases),
+        "distinct_games": len(games),
+        "coverage": round(coverage, 4),
+        "quality": round(quality, 4),
+        "phash": best["phash"],
+        "image_rel": best["release_rel"],
+        "image_name": best["file"],
+        "kind": best["kind"],
+        "status": best["status"],
+        "entropy": best["entropy"],
+        "std": best["std"],
+        "edges": best["edges"],
+        "rank_key": (len(games), len(releases), coverage, quality),
+    }
+
+
+PLAIN_DESKTOP_PHASHES = {"ffbf9c9c9c888088"}
+GENERIC_CREW_THRESHOLD = 3
+
+
+def suggest_crew_images(
+    groups: list[dict],
+    index: dict,
+    screenshot_dir: Path,
+    per_crew: int,
+    phash_threshold: int,
+) -> list[dict]:
+    # First pass: gather per-crew candidates and how many crews share a pHash.
+    # Generic screens (TOS/GEM desktop, common menus) appear across many crews;
+    # a crew cracktro is usually specific to that crew.
+    gathered: list[tuple[dict, list[dict], int]] = []
+    phash_crews: dict[str, set[str]] = defaultdict(set)
+    for group in groups:
+        name = group.get("name", "")
+        candidates: list[dict] = []
+        releases_with_images = 0
+        for release in group.get("releases", []):
+            entry = index.get(release.get("rel", ""))
+            if not entry:
+                continue
+            images = entry_image_candidates(screenshot_dir, release, entry)
+            if images:
+                releases_with_images += 1
+                candidates.extend(images)
+        candidates = [
+            candidate for candidate in candidates
+            if candidate["phash"] not in PLAIN_DESKTOP_PHASHES
+        ]
+        for candidate in candidates:
+            phash_crews[candidate["phash"]].add(name)
+        gathered.append((group, candidates, releases_with_images))
+
+    suggestions: list[dict] = []
+    for group, candidates, releases_with_images in gathered:
+        if not candidates:
+            suggestions.append({
+                "group": group.get("name", ""),
+                "crew_rank": group.get("rank", 0),
+                "zips": group.get("zips", 0),
+                "releases_with_images": 0,
+                "suggestions": [],
+            })
+            continue
+        clusters = cluster_candidates(candidates, phash_threshold)
+        stats = []
+        for cluster in clusters:
+            item = cluster_stats(cluster, releases_with_images)
+            cross = max(
+                len(phash_crews.get(member["phash"], ())) for member in cluster)
+            item["cross_crews"] = cross
+            item["generic"] = cross > GENERIC_CREW_THRESHOLD
+            item["rank_key"] = (
+                0 if item["generic"] else 1,
+                item["distinct_games"],
+                item["distinct_releases"],
+                item["coverage"],
+                item["quality"],
+            )
+            stats.append(item)
+        stats.sort(key=lambda item: item["rank_key"], reverse=True)
+        selected = []
+        for position, item in enumerate(stats[:per_crew], 1):
+            selected.append({
+                "position": position,
+                "distinct_releases": item["distinct_releases"],
+                "distinct_games": item["distinct_games"],
+                "coverage": item["coverage"],
+                "quality": item["quality"],
+                "cross_crews": item["cross_crews"],
+                "generic": item["generic"],
+                "phash": item["phash"],
+                "image_rel": item["image_rel"],
+                "image_name": item["image_name"],
+                "kind": item["kind"],
+                "status": item["status"],
+                "entropy": item["entropy"],
+                "std": item["std"],
+                "edges": item["edges"],
+            })
+        suggestions.append({
+            "group": group.get("name", ""),
+            "crew_rank": group.get("rank", 0),
+            "zips": group.get("zips", 0),
+            "releases_with_images": releases_with_images,
+            "suggestions": selected,
+        })
+    return suggestions
+
+
+def write_image_suggestions(
+    suggestions: list[dict],
+    screenshot_dir: Path,
+    outdir: Path,
+    generated: str,
+) -> None:
+    outdir.mkdir(parents=True, exist_ok=True)
+    flat: list[dict] = []
+    for crew in suggestions:
+        for item in crew["suggestions"]:
+            flat.append({
+                "group": crew["group"],
+                "crew_rank": crew["crew_rank"],
+                "zips": crew["zips"],
+                "releases_with_images": crew["releases_with_images"],
+                **item,
+                "path": str(screenshot_dir / Path(item["image_rel"]).parent / item["image_name"]),
+            })
+
+    with (outdir / "crew-image-suggestions.csv").open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow([
+            "group", "crew_rank", "position", "distinct_games",
+            "distinct_releases", "coverage", "cross_crews", "generic",
+            "kind", "phash", "image_rel", "image_name", "path",
+        ])
+        for item in flat:
+            writer.writerow([
+                item["group"], item["crew_rank"], item["position"],
+                item["distinct_games"], item["distinct_releases"],
+                item["coverage"], item["cross_crews"],
+                "yes" if item["generic"] else "no",
+                item["kind"], item["phash"],
+                item["image_rel"], item["image_name"], item["path"],
+            ])
+
+    payload = {
+        "schema": SCHEMA_VERSION,
+        "generated_at": generated,
+        "screenshot_directory": str(screenshot_dir),
+        "crews": suggestions,
+    }
+    (outdir / "crew-image-suggestions.json").write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    lines = [
+        f"# Crew image suggestions ({generated})",
+        "",
+        "| Crew | # | Games | Releases | Cross-crews | Kind | Image |",
+        "|---|---:|---:|---:|---:|---|---|",
+    ]
+    for item in flat:
+        lines.append(
+            f"| {item['group']} | {item['position']} | {item['distinct_games']} | "
+            f"{item['distinct_releases']} | {item['cross_crews']} | "
+            f"{item['kind']} | `{item['path']}` |")
+    (outdir / "crew-image-suggestions.md").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8")
+
+    html_lines = [
+        "<!doctype html><html><head><meta charset='utf-8'>",
+        "<title>Crew image suggestions</title>",
+        "<style>body{background:#111;color:#ddd;font:13px sans-serif}"
+        "table{border-collapse:collapse;margin:8px 0 24px}"
+        "td,th{border:1px solid #333;padding:6px;vertical-align:top}"
+        "img{max-width:320px;max-height:240px;display:block}"
+        ".muted{color:#888}</style></head><body>",
+        f"<h1>Crew image suggestions</h1><p class='muted'>{html.escape(generated)}</p>",
+    ]
+    current = None
+    for item in flat:
+        if item["group"] != current:
+            if current is not None:
+                html_lines.append("</table>")
+            current = item["group"]
+            html_lines.append(f"<h2>{html.escape(current)}</h2><table>")
+            html_lines.append(
+                "<tr><th>#</th><th>Image</th><th>Stats</th></tr>")
+        path = Path(item["path"])
+        uri = path.as_uri() if path.is_absolute() else str(path)
+        html_lines.append(
+            "<tr>"
+            f"<td>{item['position']}</td>"
+            f"<td><a href='{html.escape(uri)}'><img src='{html.escape(uri)}'></a>"
+            f"<div class='muted'>{html.escape(item['image_name'])}</div></td>"
+            f"<td>games {item['distinct_games']} · releases {item['distinct_releases']} · "
+            f"coverage {item['coverage']:.1%} · cross-crews {item['cross_crews']}"
+            f"{' · GENERIC' if item['generic'] else ''} · kind {html.escape(item['kind'])}<br>"
+            f"<span class='muted'>{html.escape(item['image_rel'])}</span></td>"
+            "</tr>")
+    if current is not None:
+        html_lines.append("</table>")
+    html_lines.append("</body></html>")
+    (outdir / "crew-image-suggestions.html").write_text(
+        "\n".join(html_lines) + "\n", encoding="utf-8")
+
+
 def load_zips_from_index(path: Path, include_subdirs: bool) -> list[tuple[str, str, str, str, int | None, bool]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -538,8 +902,111 @@ def alias_hits(
 # --------------------------------------------------------------------------
 
 
+def run_images(args) -> int:
+    gameinfo_dir = Path(args.gameinfo).expanduser() if args.gameinfo else None
+    if not gameinfo_dir or not gameinfo_dir.is_dir():
+        sys.exit("error: GameinfoDirectory missing (set MARCER_DATA_DIR or --gameinfo)")
+
+    crews_path = (
+        Path(args.crews).expanduser()
+        if args.crews
+        else gameinfo_dir / "crews.json"
+    )
+    if not crews_path.is_file():
+        sys.exit(f"error: {crews_path} not found — run the ranking command first")
+
+    if not args.index:
+        sys.exit("error: ScreenshotDirectory missing (set MARCER_OUT_DIR or --index)")
+    candidate = Path(args.index).expanduser()
+    index_path = candidate if candidate.is_file() else candidate / "index.json"
+    if not index_path.is_file():
+        sys.exit(f"error: screenshot index not found: {index_path}")
+    screenshot_dir = index_path.parent
+
+    try:
+        crew_data = json.loads(crews_path.read_text(encoding="utf-8"))
+        index_data = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        sys.exit(f"error: cannot read crew/index data: {exc}")
+    groups = crew_data.get("groups", [])
+    if args.top > 0:
+        groups = groups[:args.top]
+    entries = index_data.get("entries", index_data)
+
+    generated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    suggestions = suggest_crew_images(
+        groups, entries, screenshot_dir, args.per_crew, args.phash_distance)
+
+    outdir = Path(args.out).expanduser()
+    write_image_suggestions(suggestions, screenshot_dir, outdir, generated)
+
+    print(f"crews analysed: {len(groups)}")
+    print(f"suggestions: {sum(len(c['suggestions']) for c in suggestions)}")
+    print(f"screenshot dir: {screenshot_dir}")
+    print(f"output: {outdir}")
+    for crew in suggestions:
+        top = crew["suggestions"][0] if crew["suggestions"] else None
+        if top is None:
+            print(f"  {crew['crew_rank']:>3} {crew['group']}: no image candidates")
+            continue
+        print(f"  {crew['crew_rank']:>3} {crew['group']}: "
+              f"{top['image_name']} (games {top['distinct_games']}, "
+              f"releases {top['distinct_releases']}, kind {top['kind']})")
+
+    if args.write_images:
+        crew_images_path = (
+            Path(args.crew_images_out).expanduser()
+            if args.crew_images_out
+            else gameinfo_dir / "crew-images.json"
+        )
+        if crew_images_path.exists() and not args.force:
+            print(f"crew-images: {crew_images_path} exists (use --force to overwrite)")
+        else:
+            images = {}
+            for crew in suggestions:
+                if not crew["suggestions"]:
+                    continue
+                top = crew["suggestions"][0]
+                images[crew["group"]] = {
+                    "rel": top["image_rel"],
+                    "name": top["image_name"],
+                    "source": "auto",
+                    "note": (
+                        f"auto suggestion rank {top['position']}; "
+                        f"games {top['distinct_games']}, "
+                        f"releases {top['distinct_releases']}, "
+                        f"cross-crews {top['cross_crews']}"
+                    ),
+                    "phash": top["phash"],
+                }
+            manual_path = Path(args.manual_images).expanduser()
+            if manual_path.is_file():
+                try:
+                    manual = json.loads(manual_path.read_text(encoding="utf-8"))
+                    for group, image in (manual.get("images") or {}).items():
+                        if isinstance(image, dict):
+                            images[group] = image
+                except (OSError, ValueError) as exc:
+                    print(f"manual images ignored: {exc}")
+            payload = {
+                "schema": SCHEMA_VERSION,
+                "generated_at": generated,
+                "images": images,
+            }
+            crew_images_path.parent.mkdir(parents=True, exist_ok=True)
+            crew_images_path.write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            print(f"crew-images: {crew_images_path} "
+                  f"({len(images)} entries, manual overrides included)")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Rank cracked-game crews by direct release ZIPs.")
+    parser.add_argument("command", nargs="?", default="ranking", choices=["ranking", "images"],
+                        help="ranking (default) or images (suggest cracktro card images)")
     parser.add_argument("--root", default=env("MARCER_ROOT_DIR"), help="Root game directory (MARCER_ROOT_DIR)")
     parser.add_argument("--patch", default=env("MARCER_PATCH_DIR"), help="Patch directory (MARCER_PATCH_DIR)")
     parser.add_argument("--gameinfo", default=env("MARCER_DATA_DIR"), help="Directory containing games-cracked.json")
@@ -551,7 +1018,18 @@ def main() -> int:
     parser.add_argument("--aliases", default=str(Path(__file__).with_name("aliases.json")))
     parser.add_argument("--exclude", default=str(Path(__file__).with_name("exclude.txt")))
     parser.add_argument("--crews-out", default="", help="crews.json path (default: <GameinfoDirectory>/crews.json)")
+    parser.add_argument("--crews", default="", help="crews.json input for `images` (default: <GameinfoDirectory>/crews.json)")
+    parser.add_argument("--per-crew", type=int, default=3, help="image suggestions per crew (default: 3)")
+    parser.add_argument("--phash-distance", type=int, default=8, help="pHash Hamming threshold for image clustering (default: 8)")
+    parser.add_argument("--write-images", action="store_true", help="write <GameinfoDirectory>/crew-images.json from the top suggestions")
+    parser.add_argument("--crew-images-out", default="", help="crew-images.json output path for --write-images")
+    parser.add_argument("--manual-images", default=str(Path(__file__).with_name("manual-images.json")),
+                        help="curated crew image overrides merged by --write-images")
+    parser.add_argument("--force", action="store_true", help="overwrite an existing crew-images.json")
     args = parser.parse_args()
+
+    if args.command == "images":
+        return run_images(args)
 
     root = Path(args.root).expanduser() if args.root else None
     if not root or not root.is_dir():

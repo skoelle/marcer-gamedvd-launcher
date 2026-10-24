@@ -61,6 +61,7 @@ class CatalogController extends ChangeNotifier {
   AtariLegendIndex atariLegend = AtariLegendIndex.empty();
   late CatalogUniverse universe;
   late CrewIndex crews;
+  late CrewImageIndex crewImages;
   FavoritesService? favorites;
 
   /// Section → tree directory rel path (e.g.
@@ -131,6 +132,7 @@ class CatalogController extends ChangeNotifier {
       screenshots = bundle.index;
       gameinfo = bundle.info;
       crews = bundle.crews;
+      crewImages = bundle.crewImages;
       atariLegend = bundle.atariLegend;
       universe = bundle.universe;
       _statusLineCache.clear();
@@ -419,6 +421,11 @@ class CatalogController extends ChangeNotifier {
   /// Best available screenshot of a crew's releases (temporary card image
   /// until the curated cracktro image phase lands).
   String? _crewPreview(CrewGroup group) {
+    final curated = crewImages.imageFor(group);
+    if (curated != null) {
+      final path = _curatedCrewImagePath(curated);
+      if (path != null) return path;
+    }
     if (group.image != null && group.image!.isNotEmpty) return group.image;
     String? best;
     var bestRank = 99;
@@ -436,6 +443,21 @@ class CatalogController extends ChangeNotifier {
       }
     }
     return best;
+  }
+
+  String? _curatedCrewImagePath(CrewImage image) {
+    final base = config.screenshotDirectory.trim();
+    if (base.isEmpty) return null;
+    final rels = <String>[image.rel];
+    final tree = sectionTrees['cracked'];
+    if (tree != null && !image.rel.startsWith('$tree/')) {
+      rels.add('$tree/${image.rel}');
+    }
+    for (final rel in rels) {
+      final path = p.normalize(p.join(base, p.dirname(rel), image.name));
+      if (File(path).existsSync()) return path;
+    }
+    return null;
   }
 
   static int _previewRank(CardVariant variant) {

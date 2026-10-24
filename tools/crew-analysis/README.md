@@ -5,7 +5,7 @@ ZIPs. The result is the "crew view" used when looking at the cracked section the
 same way the catalog exposes `games`, `pd`, `utils`, `magazines` and `falcon`.
 
 See [`ANALYSIS-crews.md`](../../docs/ANALYSIS-crews.md) for the methodology,
-the current top 24 and the data-quality caveats.
+the current top 48 and the data-quality caveats.
 
 ## Data sources
 
@@ -19,11 +19,16 @@ the current top 24 and the data-quality caveats.
 ## Usage
 
 ```sh
-tools/crew-analysis/run.sh                    # top 24, writes local/crew-analysis/
+tools/crew-analysis/run.sh                    # ranking, top 24
 tools/crew-analysis/run.sh --top 50
 tools/crew-analysis/run.sh --scan             # ignore index.json, scan Title Sorted on disk
 tools/crew-analysis/run.sh --include-subdirs  # include STX/Original/Demo/RAW/... subfolders
 tools/crew-analysis/run.sh --out /tmp/crews
+
+# Phase 2: cracktro image suggestions for the top crews
+tools/crew-analysis/run.sh images --top 48 --per-crew 3
+tools/crew-analysis/run.sh images --top 48 --write-images   # starter crew-images.json
+# curated overrides in tools/crew-analysis/manual-images.json are merged
 ```
 
 Environment (via the repo `local/paths.env`):
@@ -69,9 +74,37 @@ The per-crew release list consumed by the desktop app's **Crews** tab:
 }
 ```
 
-It contains **all** groups (the UI starts with the top 24 cards). The
+It contains **all** groups (the UI starts with the top 48 cards). The
 `image` field is reserved for the later cracktro/logo curation phase.
 `--crews-out` overrides the path (default `<GameinfoDirectory>/crews.json`).
+
+### `crew-images.json` (GameinfoDirectory)
+
+Curated card image per crew (optional). The `images` command can create a
+starter file from its best suggestions (`source: "auto"`); review/replace the
+entries manually.
+
+```json
+{
+  "schema": 1,
+  "images": {
+    "Replicants": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/T/Treasure Trap/...zip",
+      "name": "Treasure Trap v1.07 - Replicants.png",
+      "source": "auto",
+      "note": "review me"
+    }
+  }
+}
+```
+
+`rel` is the full release index path and `name` the image basename below its
+screenshot directory. The app prefers this image, then the best release
+screenshot, then the group icon.
+
+Manual corrections live in `manual-images.json` (same schema, keyed by crew
+name). `images --write-images` merges them over the automatic top suggestions,
+so re-running the pipeline never silently replaces a curated pick.
 
 ### `local/crew-analysis/`
 
@@ -83,6 +116,10 @@ It contains **all** groups (the UI starts with the top 24 cards). The
 | `groups-review.csv` | every gameinfo label with its canonical group and mapping status |
 | `unmatched.txt` | direct ZIPs that could not be attributed |
 | `ambiguous.txt` | ZIPs with an ambiguous exact Crew-Sorted basename |
+| `crew-image-suggestions.json` | top cracktro candidates per crew (pHashes, stats) |
+| `crew-image-suggestions.csv` | flat suggestion list incl. image paths |
+| `crew-image-suggestions.md` | review table |
+| `crew-image-suggestions.html` | contact sheet with the candidate images |
 
 ## Registry
 
@@ -94,6 +131,11 @@ The tool applies the registry plus generic rules (leading `The`, region
 descriptors such as `- USA`, combined-credit normalization, abbreviations and a
 strict fuzzy fallback). New gameinfo labels become their own canonical groups,
 so `groups-review.csv` is the audit trail for curating `aliases.json`.
+
+The `images` command additionally reads the per-ZIP screenshot sidecars
+(`shots[].phash`) and clusters repeated screens per crew. A screen that appears
+across many **different crews** is treated as generic (TOS/GEM desktop, common
+menu) and ranked lower; the plain-desktop hash is filtered outright.
 
 ## Rules
 

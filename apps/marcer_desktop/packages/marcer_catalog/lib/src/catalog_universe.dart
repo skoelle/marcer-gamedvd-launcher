@@ -435,6 +435,7 @@ class CatalogBundle {
     required this.index,
     required this.info,
     required this.crews,
+    required this.crewImages,
     required this.atariLegend,
     required this.universe,
     required this.warnings,
@@ -528,6 +529,7 @@ class CatalogBundle {
 
     onProgress?.call('Loading crew data…');
     final crews = CrewIndex.load(gameinfoDir);
+    final crewImages = CrewImageIndex.load(gameinfoDir);
 
     onProgress?.call('Loading AtariLegend data…');
     final atariLegend =
@@ -545,6 +547,7 @@ class CatalogBundle {
       index: index,
       info: info,
       crews: crews,
+      crewImages: crewImages,
       atariLegend: atariLegend,
       universe: universe,
       warnings: warnings,
@@ -554,6 +557,7 @@ class CatalogBundle {
   final ScreenshotIndices index;
   final GameInfoIndex info;
   final CrewIndex crews;
+  final CrewImageIndex crewImages;
   final AtariLegendIndex atariLegend;
   final CatalogUniverse universe;
   final List<String> warnings;

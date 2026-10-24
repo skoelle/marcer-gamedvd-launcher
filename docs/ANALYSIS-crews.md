@@ -63,11 +63,10 @@ by prefixing the discovered cracked tree.
 
 The desktop app loads it as part of the catalog bundle:
 
-- a new **`crews`** section/tab shows the top 24 groups by ZIP count
+- a new **`crews`** section/tab (last tab) shows the top 48 groups by ZIP count
   (`kCrewInitialLimit`), searchable by crew name, aliases and release titles;
-- a crew card uses the best available screenshot of its releases as a
-  temporary image (replaced by the curated cracktro image in phase 2) and a
-  group icon as fallback;
+- a crew card prefers a curated image from `crew-images.json`, then the best
+  available release screenshot, then a group icon;
 - the detail panel lists **all releases** without screenshots, with year,
   publisher, cracker/crew, language, disks, RAW/PASTI/Boxscan, TOS/Bad and the
   ZIP name;
@@ -75,7 +74,50 @@ The desktop app loads it as part of the catalog bundle:
   cracked-game card/ZIP, without leaving the Crews tab.
 
 The full data for all 888 groups is already in `crews.json`; expanding the tab
-beyond the top 24 is a UI change only.
+beyond the top 48 is a UI change only.
+
+## Cracktro image suggestions
+
+`tools/crew-analysis/run.sh images --top 48` generates a review set of typical
+repeated screens per crew. It uses the existing per-ZIP screenshot sidecars
+(`shots[].phash`, quality statistics) and the index preview/candidate mapping;
+no new capture run is needed.
+
+Ranking:
+
+- clusters pHashes per crew (Hamming distance, default 8);
+- prefers screens repeated across many **different games**, then many releases;
+- filters the known plain TOS/GEM desktop hash and ranks screens that appear
+  across many **other crews** lower (generic screens);
+- writes the top 3 candidates per crew.
+
+Outputs in `local/crew-analysis/`: `crew-image-suggestions.json`/`.csv`/`.md`
+and a self-contained `crew-image-suggestions.html` contact sheet with the image
+files. `--write-images` writes a starter
+`<GameinfoDirectory>/crew-images.json` from the top suggestion per crew
+(`source: "auto"`); entries should be reviewed/replaced manually. Curated
+overrides in `tools/crew-analysis/manual-images.json` (same schema, keyed by
+crew name) are merged over the automatic picks, so a later pipeline run does
+not silently revert them.
+
+`crew-images.json` schema:
+
+```json
+{
+  "schema": 1,
+  "images": {
+    "Replicants": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/T/Treasure Trap/...zip",
+      "name": "Treasure Trap v1.07 - Replicants.png",
+      "source": "auto|manual",
+      "note": "review me"
+    }
+  }
+}
+```
+
+The app resolves `rel` + `name` against `ScreenshotDirectory`; if the file is
+missing, the release-screenshot fallback is used.
 
 ## Current result
 
@@ -89,7 +131,7 @@ Generated from the local game tree (2026-10-24):
 - Match sources: exact 5,796 · gameinfo crew 2,900 · gameinfo cracker 658 ·
   alias/fuzzy 868
 
-### Top 24
+### Top 24 (curated core)
 
 | # | Group | ZIPs |
 |---:|---|---:|
@@ -117,6 +159,10 @@ Generated from the local game tree (2026-10-24):
 | 22 | Boss | 80 |
 | 23 | Superior | 80 |
 | 24 | Revolution | 64 |
+
+The Crews tab now shows the top 48; ranks 25-48 are in
+`local/crew-analysis/crew-ranking.csv` and use the auto image suggestions until
+curated.
 
 `Bust`, `Klapauzius` and `Boss` are individual crackers in the gameinfo data;
 they appear because their releases have no separate crew label (the crew view
@@ -158,11 +204,13 @@ tools/crew-analysis/run.sh --scan --top 50
 
 Outputs:
 
-- `<GameinfoDirectory>/crews.json` — runtime crew/Release artifact consumed by
+- `<GameinfoDirectory>/crews.json` — runtime crew/release artifact consumed by
   the desktop app.
+- `<GameinfoDirectory>/crew-images.json` — optional curated cracktro images.
 - `local/crew-analysis/` (git-ignored) — `crew-ranking.md`,
   `crew-ranking.csv`, `crew-ranking.json`, `groups-review.csv`,
-  `unmatched.txt`, `ambiguous.txt`.
+  `unmatched.txt`, `ambiguous.txt`, `crew-image-suggestions.*` (after
+  `images`).
 
 ## License
 
