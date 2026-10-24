@@ -5,7 +5,11 @@
 Run with the repo venv:
     .venv/bin/python -m unittest discover -s tools/gallery -p 'test_*.py'
 """
+import os
+import tempfile
 import unittest
+import zipfile
+from unittest import mock
 
 import gallery
 
@@ -101,6 +105,131 @@ class VariantPayloadTest(unittest.TestCase):
         cards = gallery._build_indexed_cards(entries, [], "cracked", False)
         self.assertEqual(len(cards), 1)
         self.assertEqual(cards[0]["variants"][0]["kind"], "textscreen")
+
+
+class CardFolderTest(unittest.TestCase):
+    def test_indexed_card_folder_rel(self):
+        rel = "Title Sorted/Cracked Games - Title Sorted/A/Buggy Boy/" \
+              "Buggy Boy.zip"
+        entries = {rel: {"status": "done", "kind": "game"}}
+        cards = gallery._build_indexed_cards(entries, [], "cracked", False)
+        self.assertEqual(
+            cards[0]["_folder_rel"],
+            "Title Sorted/Cracked Games - Title Sorted/A/Buggy Boy")
+
+    def test_metadata_only_card_uses_section_tree(self):
+        card = gallery._simple_card(
+            {"letter": "A", "folder": "Alpha", "layers": ["ROOT"]},
+            "pd", "Title Sorted/PD Games - Title Sorted")
+        self.assertEqual(
+            card["_folder_rel"],
+            "Title Sorted/PD Games - Title Sorted/A/Alpha")
+
+
+class LocalAssetsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = os.path.join(self.tmp.name, "root")
+        self.patch = os.path.join(self.tmp.name, "patch")
+        self.folder = os.path.join(
+            "Title Sorted", "Cracked Games - Title Sorted", "A", "Buggy Boy")
+        for base in (self.root, self.patch):
+            os.makedirs(base, exist_ok=True)
+        self.root_game = os.path.join(self.root, self.folder)
+        self.patch_game = os.path.join(self.patch, self.folder)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write(self, base, rel, data=b"x"):
+        path = os.path.join(base, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+
+    def _zip(self, base, rel, members):
+        path = os.path.join(base, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with zipfile.ZipFile(path, "w") as zf:
+            for name in members:
+                zf.writestr(name, b"x")
+
+    def test_boxscan_metadata_merges_loose_and_zip_images(self):
+        self._write(self.root_game, "Boxscan/loose1.jpg")
+        self._write(self.root_game, "Boxscan/Edition/loose2.png")
+        self._write(self.patch_game, "Boxscan/loose1.jpg")
+        self._write(self.patch_game, "Boxscan/patch.png")
+        self._zip(self.root_game, "Boxscan/Edition Zip.zip", [
+            "img1.jpg", "folder/img2.png", "readme.txt"])
+        service = gallery.LocalAssetsService(
+            self.root, self.patch, cache_seconds=0)
+        assets = service.discover(self.folder)
+        box = assets["boxscans"]
+        self.assertEqual(box["edition_count"], 3)
+        self.assertEqual(box["image_count"], 5)
+        editions = {e["label"]: e["image_count"] for e in box["editions"]}
+        self.assertEqual(editions["Boxscan"], 2)
+        self.assertEqual(editions["Edition"], 1)
+        self.assertEqual(editions["Edition Zip"], 2)
+
+    def test_manual_metadata_groups_variants_and_skips_unknown(self):
+        self._zip(self.root_game, "Manual/Alien Syndrome.zip",
+                  ["Alien Syndrome.pdf"])
+        self._zip(self.root_game, "Manual/Alien Syndrome_text.zip",
+                  ["Alien Syndrome_text.pdf"])
+        self._write(self.root_game, "Manual/Loose.pdf")
+        self._zip(self.root_game, "manual/Docs.zip", [
+            "readme.txt", "manual.doc", "page1.jpg", "page2.jpg",
+            "disk.msa", "unknown.rar"])
+        self._write(self.patch_game, "Manuals/Patch.pdf")
+        service = gallery.LocalAssetsService(
+            self.root, self.patch, cache_seconds=0)
+        assets = service.discover(self.folder)
+        manuals = assets["manuals"]
+        self.assertEqual(manuals["title_count"], 4)
+        self.assertEqual(manuals["file_count"], 9)
+        items = {item["label"]: item for item in manuals["items"]}
+        alien = {v["label"]: v for v in items["Alien Syndrome"]["variants"]}
+        self.assertEqual(alien["Scan"]["format"], "PDF")
+        self.assertEqual(alien["Text"]["format"], "PDF")
+        docs = {v["label"]: v for v in items["Docs"]["variants"]}
+        self.assertEqual(docs["Document"]["file_count"], 2)
+        self.assertEqual(docs["Image pages"]["file_count"], 2)
+        self.assertEqual(docs["Original disk"]["format"], "MSA")
+        self.assertEqual(docs["Original disk"]["file_count"], 1)
+
+    def test_manual_image_pages_and_msa_are_metadata_only(self):
+        self._zip(self.root_game, "Manual/Pics.zip", [
+            "one.jpg", "two.png", "disk.msa", "notes.txt"])
+        service = gallery.LocalAssetsService(self.root, "", cache_seconds=0)
+        assets = service.discover(self.folder)
+        item = assets["manuals"]["items"][0]
+        variants = {v["label"]: v for v in item["variants"]}
+        self.assertEqual(variants["Image pages"]["file_count"], 2)
+        self.assertEqual(variants["Original disk"]["kind"], "diskImage")
+        self.assertEqual(variants["Document"]["format"], "TXT")
+
+    def test_discovery_never_opens_zip_members(self):
+        self._zip(self.root_game, "Manual/Test.zip", ["Test.pdf"])
+        service = gallery.LocalAssetsService(self.root, "", cache_seconds=0)
+        with mock.patch.object(
+                zipfile.ZipFile, "open",
+                side_effect=AssertionError("zip member opened")):
+            assets = service.discover(self.folder)
+        self.assertEqual(assets["manuals"]["title_count"], 1)
+
+    def test_no_root_returns_empty_metadata(self):
+        service = gallery.LocalAssetsService("", "", cache_seconds=0)
+        self.assertFalse(service.enabled)
+        assets = service.discover(self.folder)
+        self.assertEqual(assets["boxscans"]["edition_count"], 0)
+        self.assertEqual(assets["manuals"]["title_count"], 0)
+
+    def test_missing_assets_returns_empty_metadata(self):
+        service = gallery.LocalAssetsService(self.root, "", cache_seconds=0)
+        assets = service.discover(self.folder)
+        self.assertFalse(assets["boxscans"]["editions"])
+        self.assertFalse(assets["manuals"]["items"])
 
 
 if __name__ == "__main__":

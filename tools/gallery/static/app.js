@@ -68,6 +68,9 @@ let lb = null;          // lightbox state {cards, idx, variant, img}
 let searchTimer = null;
 let showCands = true;       // from meta.show_candidates (config)
 let defaultStatus = "with_screenshot";  // from meta.default_status (config)
+const assetCache = new Map();
+const assetPending = new Map();
+let assetKey = null;
 
 // Every section starts with the configured preset (usually `with_screenshot`).
 const sectionDefaultStatus = () => defaultStatus;
@@ -566,6 +569,7 @@ function openLightbox(idx, variant, img) {
 
 function closeLightbox() {
   lb = null;
+  assetKey = null;
   $("lightbox").hidden = true;
   writeURL(false);
   const card = $("grid").querySelector(`.card[data-idx="${focusIdx}"]`);
@@ -688,6 +692,84 @@ function fitIntegerScale(img) {
   img.style.height = (img.naturalHeight * scale) + "px";
 }
 
+function manualVariantLabel(variant) {
+  if (variant.kind === "pdf") return `${variant.label} (PDF)`;
+  if (variant.kind === "document") return `${variant.label} (${variant.format})`;
+  if (variant.kind === "imagePages") {
+    return `${variant.label}: ${variant.file_count} ${variant.format}`;
+  }
+  if (variant.kind === "diskImage") return `${variant.label} (${variant.format})`;
+  return variant.label;
+}
+
+function localAssetsHtml(data) {
+  const box = data && data.boxscans;
+  const manuals = data && data.manuals;
+  const rows = [];
+  if (box && box.edition_count) {
+    rows.push(`<tr><td>Box scans</td><td>${box.edition_count} ` +
+      `edition${box.edition_count === 1 ? "" : "s"}, ${box.image_count} ` +
+      `image${box.image_count === 1 ? "" : "s"}</td></tr>`);
+  }
+  if (manuals && manuals.title_count) {
+    rows.push(`<tr><td>Manuals</td><td>${manuals.title_count} ` +
+      `title${manuals.title_count === 1 ? "" : "s"}, ${manuals.file_count} ` +
+      `file${manuals.file_count === 1 ? "" : "s"}</td></tr>`);
+  }
+  if (!rows.length) return "";
+  let html = `<h3>Local assets</h3><table>${rows.join("")}</table>`;
+  if (box && box.edition_count) {
+    html += `<ul class="asset-list">` +
+      box.editions.map((edition) =>
+        `<li>${esc(edition.label)} (${edition.image_count})</li>`).join("") +
+      `</ul>`;
+  }
+  if (manuals && manuals.title_count) {
+    html += `<ul class="asset-list">` +
+      manuals.items.map((item) => {
+        const variants = (item.variants || [])
+          .map(manualVariantLabel).join(", ");
+        return `<li>${esc(item.label)} — ${esc(variants)}</li>`;
+      }).join("") +
+      `</ul>`;
+  }
+  return html;
+}
+
+function updateLocalAssets(card) {
+  const key = `${state.section}:${card.id}`;
+  assetKey = key;
+  const target = $("lb-assets");
+  if (!target) return;
+  if (meta && meta.local_assets === false) {
+    target.innerHTML = "";
+    return;
+  }
+  if (assetCache.has(key)) {
+    target.innerHTML = localAssetsHtml(assetCache.get(key));
+    return;
+  }
+  target.innerHTML = "";
+  let pending = assetPending.get(key);
+  if (!pending) {
+    const query = `section=${encodeURIComponent(state.section)}` +
+      `&id=${encodeURIComponent(card.id)}`;
+    pending = api("/api/local-assets?" + query)
+      .then((data) => {
+        assetCache.set(key, data);
+        return data;
+      })
+      .catch(() => null)
+      .finally(() => assetPending.delete(key));
+    assetPending.set(key, pending);
+  }
+  pending.then((data) => {
+    if (!data || !lb || assetKey !== key) return;
+    const current = $("lb-assets");
+    if (current) current.innerHTML = localAssetsHtml(data);
+  });
+}
+
 function renderLightbox() {
   if (!lb) return;
   const card = pageCards[lb.idx];
@@ -796,7 +878,8 @@ function renderLightbox() {
     if (i.pasti_dump) flags.push("PASTI dump");
     if (i.boxscan) flags.push("Boxscan");
     add("Flags", flags.join(", "));
-    let html = `<h3>Game info</h3><table>${rows.join("")}</table>`;
+    let html = `<div id="lb-assets"></div>` +
+      `<h3>Game info</h3><table>${rows.join("")}</table>`;
     if (v) {
       html += `<h3>This ZIP</h3><table>` +
         `<tr><td>File</td><td>${esc(v.name)}</td></tr>` +
@@ -846,7 +929,7 @@ function renderLightbox() {
     }
     side.innerHTML = html;
   } else {
-    let html = `<h3>No game info</h3>`;
+    let html = `<div id="lb-assets"></div><h3>No game info</h3>`;
     if (v) {
       html += `<table><tr><td>File</td><td>${esc(v.name)}</td></tr>` +
         `<tr><td>Status</td><td>${esc(v.status)}</td></tr>` +
@@ -857,6 +940,7 @@ function renderLightbox() {
     }
     side.innerHTML = html;
   }
+  updateLocalAssets(card);
 }
 
 function lbPrev() {

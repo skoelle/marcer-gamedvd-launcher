@@ -460,6 +460,13 @@ footer {
 .lb-side table { border-collapse: collapse; width: 100%; margin-bottom: 10px; }
 .lb-side td { padding: 2px 8px 2px 0; vertical-align: top; }
 .lb-side td:first-child { color: #789; white-space: nowrap; }
+.lb-side .asset-list {
+  margin: -4px 0 10px;
+  padding-left: 18px;
+  font-size: 0.88em;
+  color: #9ab;
+}
+.lb-side .asset-list li { margin: 1px 0; }
 .lb-side .variants-table { font-size: 0.92em; }
 .lb-side .variants-table th {
   text-align: left;

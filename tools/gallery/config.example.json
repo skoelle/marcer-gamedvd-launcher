@@ -4,5 +4,6 @@
   "page_size": 60,
   "show_candidates": true,
   "default_status": "with_screenshot",
-  "image_cache_seconds": 86400
+  "image_cache_seconds": 86400,
+  "local_assets_cache_seconds": 60
 }

@@ -16,6 +16,9 @@ specification.
     `index-magazine.json`, `index-falcon.json`) + PNGs
   - `MARCER_DATA_DIR` (optional): `games-*.json` from `tools/gameinfo-gen`
     (adds metadata facets and hover info to the index-backed cards)
+  - `MARCER_ROOT_DIR` / `MARCER_PATCH_DIR` (optional): overlay trees for
+    metadata-only boxscan/manual counts in the lightbox (read-only; no media
+    is served, extracted or downloaded)
 
 ## Usage
 
@@ -76,6 +79,11 @@ Backend filter/card helpers use stdlib `unittest` only:
   (including the `Kind` row) before the release-variant table, the open ZIP
   highlighted, and **clickable crew/cracker groups** (Game info values and
   release-variant rows jump to that group's ZIP), deep link `?entry=<rel>`.
+- **Local asset metadata**: the lightbox side panel shows boxscan/manual
+  counts and edition/manual labels for the selected card when
+  `MARCER_ROOT_DIR` is configured. It reads directory listings and ZIP
+  central directories only — no scan/PDF bytes, no extraction, no downloads
+  and no play/open controls.
 - **Deep links**: `?entry=…` jumps to the card's page and opens it;
   closing the lightbox keeps the list state.
 - **Help**: `?` opens the keyboard overview; any key closes it.
@@ -98,6 +106,9 @@ Backend filter/card helpers use stdlib `unittest` only:
 - `MARCER_DATA_DIR not a directory` → warning only; the app runs in
   screenshots-only mode (no facets/hover metadata; the pd/utils/magazine/
   falcon tabs still appear when their own indices exist).
+- `MARCER_ROOT_DIR not a directory` → warning only; boxscan/manual metadata
+  is disabled. An empty/missing `MARCER_PATCH_DIR` just disables the patch
+  layer for that metadata.
 - Stale data → reload the page (mtime revalidation runs per request).
 
 ## Config
@@ -107,9 +118,11 @@ Defaults live in `gallery.py`. Override via `config.example.json` (copy to
 never configured here — they come from `local/paths.env` via `run.sh`.
 
 Keys: `host`, `port`, `page_size`, `show_candidates` (grid candidate
-strip on/off), `default_status` (initial status preset), and
-`image_cache_seconds` (HTTP cache for PNGs). `show_candidates` and
-`default_status` are delivered to the frontend via `/api/meta`.
+strip on/off), `default_status` (initial status preset),
+`image_cache_seconds` (HTTP cache for PNGs) and
+`local_assets_cache_seconds` (metadata discovery cache for boxscans/
+manuals, default 60). `show_candidates`, `default_status` and
+`local_assets` are delivered to the frontend via `/api/meta`.
 
 ## License
 

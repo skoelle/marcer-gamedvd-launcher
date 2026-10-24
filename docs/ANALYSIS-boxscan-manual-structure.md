@@ -469,6 +469,10 @@ loose non-ZIP files (PDFs, PNGs) are invisible, which is why
   `Box scans`/`Manuals` chips (section 8). The flag and the folder are
   independent signals: a title can carry the XLS flag without a `Boxscan/`
   folder and vice versa.
+- The **gallery webapp** (`tools/gallery`) is metadata-only: it lists loose
+  files and ZIP central directories for the selected lightbox card and shows
+  counts plus edition/manual labels. It never opens ZIP members, extracts
+  media, serves scan/PDF bytes or offers download/open controls.
 
 ---
 

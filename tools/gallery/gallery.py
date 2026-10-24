@@ -15,11 +15,12 @@ import signal
 import sys
 import threading
 import time
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-TOOL_VERSION = "0.2.0"
+TOOL_VERSION = "0.3.0"
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
@@ -30,6 +31,7 @@ DEFAULTS = {
     "show_candidates": True,
     "default_status": "with_screenshot",
     "image_cache_seconds": 86400,
+    "local_assets_cache_seconds": 60,
 }
 
 # display order for status aggregation (SPEC-gallery-webapp.md 4.4)
@@ -61,6 +63,19 @@ SECTION_INDEX_NAMES = {
     "magazine": "index-magazine.json",
     "falcon": "index-falcon.json",
 }
+CANONICAL_SECTION_TREES = {
+    "cracked": "Title Sorted/Cracked Games - Title Sorted",
+    "pd": "Title Sorted/PD Games - Title Sorted",
+    "utils": "Title Sorted/Utilitys - Title Sorted",
+    "magazine": "Bonus/Magazine Cover Disks",
+    "falcon": "Falcon 030/Title Sorted",
+}
+BOXSCAN_DIR_NAMES = frozenset({"boxscan", "box scan"})
+MANUAL_DIR_NAMES = frozenset({"manual", "manuals"})
+BOX_IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg"})
+MANUAL_IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".gif"})
+MANUAL_DOC_EXTS = frozenset({".pdf", ".doc", ".txt", ".msa"})
+MAX_ZIP_ENTRIES = 10000
 
 
 def log(msg):
@@ -98,6 +113,330 @@ def _full_png(rel, name):
     if not name:
         return None
     return f"{_rel_dir(rel)}/{name}" if _rel_dir(rel) else name
+
+
+def _section_tree(entries):
+    for rel in entries:
+        parts = rel.split("/")
+        if len(parts) >= 4:
+            return "/".join(parts[:2])
+    return ""
+
+
+def _empty_local_assets():
+    return {
+        "boxscans": {
+            "edition_count": 0,
+            "image_count": 0,
+            "editions": [],
+        },
+        "manuals": {
+            "title_count": 0,
+            "file_count": 0,
+            "items": [],
+        },
+    }
+
+
+def _safe_rel(rel):
+    raw = (rel or "").replace("\\", "/")
+    if not raw or raw.startswith("/") or re.match(r"^[A-Za-z]:", raw):
+        return ""
+    parts = [p for p in raw.split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." for p in parts):
+        return ""
+    return "/".join(parts)
+
+
+def _real_dir(path):
+    if not path:
+        return ""
+    try:
+        if not os.path.isdir(path):
+            return ""
+        return os.path.realpath(path)
+    except OSError:
+        return ""
+
+
+def _is_within(base, path):
+    return path == base or path.startswith(base + os.sep)
+
+
+def _resolve_child_dir(parent, name):
+    if not name or name in (".", ".."):
+        return ""
+    exact = os.path.join(parent, name)
+    try:
+        if os.path.isdir(exact) and not os.path.islink(exact):
+            real = os.path.realpath(exact)
+            return real if _is_within(os.path.realpath(parent), real) else ""
+        with os.scandir(parent) as it:
+            entries = sorted(it, key=lambda e: e.name.casefold())
+    except OSError:
+        return ""
+    wanted = name.casefold()
+    for entry in entries:
+        if entry.name.casefold() != wanted:
+            continue
+        try:
+            if entry.is_dir(follow_symlinks=False):
+                real = os.path.realpath(entry.path)
+                return real if _is_within(os.path.realpath(parent), real) else ""
+        except OSError:
+            continue
+    return ""
+
+
+def _resolve_game_dir(base, folder_rel):
+    base_real = os.path.realpath(base)
+    current = base_real
+    for part in folder_rel.split("/"):
+        current = _resolve_child_dir(current, part)
+        if not current:
+            return ""
+    return current if _is_within(base_real, current) else ""
+
+
+def _walk_files(base, rel=""):
+    try:
+        with os.scandir(base) as it:
+            entries = sorted(it, key=lambda e: e.name.casefold())
+    except OSError:
+        return
+    for entry in entries:
+        if entry.name.startswith(".") or entry.name.casefold() == "@eadir":
+            continue
+        child_rel = f"{rel}/{entry.name}" if rel else entry.name
+        try:
+            if entry.is_dir(follow_symlinks=False):
+                yield from _walk_files(entry.path, child_rel)
+            elif entry.is_file(follow_symlinks=False):
+                yield child_rel, entry.path
+        except OSError:
+            continue
+
+
+def _find_asset_dirs(game_dir):
+    try:
+        with os.scandir(game_dir) as it:
+            entries = sorted(it, key=lambda e: e.name.casefold())
+    except OSError:
+        return []
+    out = []
+    for entry in entries:
+        try:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+        except OSError:
+            continue
+        name = entry.name.casefold()
+        if name in BOXSCAN_DIR_NAMES:
+            out.append((True, entry.path))
+        elif name in MANUAL_DIR_NAMES:
+            out.append((False, entry.path))
+    return out
+
+
+def _zip_infos(path):
+    out = []
+    try:
+        with zipfile.ZipFile(path) as zf:
+            for info in zf.infolist():
+                out.append(info)
+                if len(out) >= MAX_ZIP_ENTRIES:
+                    break
+    except (OSError, zipfile.BadZipFile):
+        return []
+    return out
+
+
+def _zip_basename(info):
+    if info.is_dir():
+        return ""
+    name = info.filename.replace("\\", "/")
+    return name.rsplit("/", 1)[-1] if name else ""
+
+
+def _stem_parts(name):
+    stem = os.path.splitext(os.path.basename(name))[0]
+    text = stem.casefold().endswith("_text")
+    return (stem[:-5] if text else stem), text
+
+
+def _add_manual_variant(group, ext, text_variant):
+    if ext == ".pdf":
+        label = "Text" if text_variant else "Scan"
+        kind, fmt = "pdf", "PDF"
+    elif ext in (".doc", ".txt"):
+        label = "Text" if text_variant else "Document"
+        kind, fmt = "document", ext[1:].upper()
+    elif ext in MANUAL_IMAGE_EXTS:
+        label = "Image pages"
+        kind, fmt = "imagePages", "JPG" if ext in (".jpg", ".jpeg") else ext[1:].upper()
+        text_variant = False
+    elif ext == ".msa":
+        label = "Original disk"
+        kind, fmt = "diskImage", "MSA"
+        text_variant = False
+    else:
+        return
+    key = (label, kind)
+    variant = group["variants"].get(key)
+    if variant is None:
+        variant = {"label": label, "kind": kind, "format": fmt, "file_count": 0}
+        group["variants"][key] = variant
+    else:
+        variant["format"] = "/".join(sorted(
+            set(variant["format"].split("/")) | {fmt}))
+    variant["file_count"] += 1
+
+
+def _discover_local_assets(root_dir, patch_dir, folder_rel):
+    box_loose = {}
+    box_zips = {}
+    manual_sources = {}
+    for base in (root_dir, patch_dir):
+        if not base:
+            continue
+        game_dir = _resolve_game_dir(base, folder_rel)
+        if not game_dir:
+            continue
+        for is_box, asset_dir in _find_asset_dirs(game_dir):
+            prefix = "box" if is_box else "manual"
+            for rel, path in _walk_files(asset_dir):
+                key = f"{prefix}/{rel.casefold()}"
+                ext = os.path.splitext(path)[1].lower()
+                if is_box:
+                    if ext in BOX_IMAGE_EXTS:
+                        edition = rel.split("/")[0] if "/" in rel else "Boxscan"
+                        box_loose[key] = {
+                            "name": os.path.basename(path),
+                            "edition": edition,
+                        }
+                    elif ext == ".zip":
+                        box_zips[key] = {
+                            "path": path,
+                            "label": os.path.splitext(os.path.basename(path))[0],
+                        }
+                elif ext == ".zip":
+                    stem, text = _stem_parts(path)
+                    manual_sources[key] = {
+                        "kind": "zip",
+                        "path": path,
+                        "stem": stem,
+                        "text": text,
+                    }
+                elif ext in MANUAL_DOC_EXTS or ext in MANUAL_IMAGE_EXTS:
+                    stem, text = _stem_parts(path)
+                    manual_sources[key] = {
+                        "kind": "loose",
+                        "path": path,
+                        "stem": stem,
+                        "text": text,
+                        "name": os.path.basename(path),
+                    }
+
+    editions = {}
+
+    def add_edition(label, name):
+        key = label.casefold()
+        edition = editions.get(key)
+        if edition is None:
+            edition = {"label": label, "images": set()}
+            editions[key] = edition
+        edition["images"].add(name.casefold())
+
+    for image in box_loose.values():
+        add_edition(image["edition"], image["name"])
+    for source in box_zips.values():
+        for info in _zip_infos(source["path"]):
+            name = _zip_basename(info)
+            ext = os.path.splitext(name)[1].lower()
+            if name and ext in BOX_IMAGE_EXTS:
+                add_edition(source["label"], name)
+    box_editions = [
+        {"label": edition["label"], "image_count": len(edition["images"])}
+        for edition in sorted(editions.values(),
+                              key=lambda e: e["label"].casefold())
+        if edition["images"]
+    ]
+
+    groups = {}
+    for source in manual_sources.values():
+        key = source["stem"].casefold()
+        group = groups.setdefault(key, {
+            "label": source["stem"],
+            "variants": {},
+        })
+        if source["kind"] == "zip":
+            for info in _zip_infos(source["path"]):
+                name = _zip_basename(info)
+                if not name:
+                    continue
+                ext = os.path.splitext(name)[1].lower()
+                _add_manual_variant(group, ext, source["text"])
+        else:
+            ext = os.path.splitext(source["name"])[1].lower()
+            _add_manual_variant(group, ext, source["text"])
+
+    manual_items = []
+    for group in groups.values():
+        variants = sorted(group["variants"].values(),
+                          key=lambda v: (v["label"].casefold(), v["format"]))
+        if not variants:
+            continue
+        manual_items.append({
+            "label": group["label"],
+            "variants": variants,
+        })
+    manual_items.sort(key=lambda item: item["label"].casefold())
+
+    return {
+        "boxscans": {
+            "edition_count": len(box_editions),
+            "image_count": sum(e["image_count"] for e in box_editions),
+            "editions": box_editions,
+        },
+        "manuals": {
+            "title_count": len(manual_items),
+            "file_count": sum(
+                sum(v["file_count"] for v in item["variants"])
+                for item in manual_items),
+            "items": manual_items,
+        },
+    }
+
+
+class LocalAssetsService:
+    def __init__(self, root_dir, patch_dir, cache_seconds=60):
+        self.root_dir = _real_dir(root_dir)
+        self.patch_dir = _real_dir(patch_dir)
+        self.enabled = bool(self.root_dir)
+        try:
+            self.cache_seconds = max(0, int(cache_seconds))
+        except (TypeError, ValueError):
+            self.cache_seconds = 60
+        self._cache = {}
+        self._lock = threading.Lock()
+
+    def discover(self, folder_rel):
+        if not self.enabled:
+            return _empty_local_assets()
+        rel = _safe_rel(folder_rel)
+        if not rel:
+            return _empty_local_assets()
+        now = time.monotonic()
+        with self._lock:
+            cached = self._cache.get(rel)
+            if (cached is not None and self.cache_seconds > 0
+                    and now - cached[0] < self.cache_seconds):
+                return cached[1]
+        result = _discover_local_assets(
+            self.root_dir, self.patch_dir, rel)
+        with self._lock:
+            self._cache[rel] = (now, result)
+        return result
 
 
 def _variant_info_summary(info):
@@ -205,7 +544,8 @@ def _group_key(rel, kind):
     return letter, folder, folder, ""
 
 
-def _build_indexed_cards(entries, games, kind, union_gameinfo):
+def _build_indexed_cards(entries, games, kind, union_gameinfo,
+                         section_tree=""):
     """Group index entries by (letter, folder) into cards joined with gameinfo.
 
     With ``union_gameinfo`` (pd/utils) gameinfo-only folders without an index
@@ -272,11 +612,19 @@ def _build_indexed_cards(entries, games, kind, union_gameinfo):
                            None)
         layer = next(iter(layers)) if len(layers) == 1 else "BOTH"
         info = info_by_key.get((letter, folder))
+        first_rel = items[0][0]
+        parts = first_rel.split("/")
+        tree = ("/".join(parts[:2]) if len(parts) >= 4
+                else (section_tree or CANONICAL_SECTION_TREES.get(kind, "")))
+        folder_rel = (_rel_dir(first_rel) if kind == "magazine"
+                      else (f"{tree}/{letter}/{folder}" if tree
+                            else _rel_dir(first_rel)))
         card = {
             "id": f"{letter}/{folder}",
             "name": group["display"] or folder,
             "letter": letter,
             "folder": folder,
+            "_folder_rel": folder_rel,
             "display_status": display_status,
             "screenshots": preview is not None,
             "status_counts": scounts,
@@ -301,20 +649,23 @@ def _build_indexed_cards(entries, games, kind, union_gameinfo):
                    g.get("folder", "").lower())
             if key in seen:
                 continue
-            cards.append(_simple_card(g, kind))
+            cards.append(_simple_card(g, kind, section_tree))
     return cards
 
 
-def _simple_card(g, kind):
+def _simple_card(g, kind, section_tree=""):
     letter = g.get("letter", "")
     folder = g.get("folder", "")
     layers = g.get("layers") or []
     layer = "BOTH" if len(layers) > 1 else (layers[0] if layers else "")
+    tree = section_tree or CANONICAL_SECTION_TREES.get(kind, "")
+    folder_rel = f"{tree}/{letter}/{folder}" if tree and letter and folder else ""
     card = {
         "id": f"{letter}/{folder}",
         "name": folder,
         "letter": letter,
         "folder": folder,
+        "_folder_rel": folder_rel,
         "display_status": "",
         "screenshots": False,
         "status_counts": {},
@@ -535,7 +886,8 @@ def _apply_focus(card, value, kind):
 class DataStore:
     """In-memory index + metadata with mtime-based revalidation."""
 
-    def __init__(self, out_dir, data_dir):
+    def __init__(self, out_dir, data_dir, root_dir="", patch_dir="",
+                 assets_cache_seconds=60):
         self.out = Path(out_dir)
         self.data = Path(data_dir) if data_dir and os.path.isdir(data_dir) \
             else None
@@ -547,6 +899,8 @@ class DataStore:
         self.gameinfo_available = False
         self.kinds_loaded = set()
         self.manifest = {}
+        self.assets = LocalAssetsService(
+            root_dir, patch_dir, assets_cache_seconds)
         self.reload(force=True)
 
     def _stamps(self):
@@ -623,22 +977,32 @@ class DataStore:
                 log(f"[warn] manifest.json: {exc}")
                 self.manifest = {}
 
+        section_trees = {
+            sec: (_section_tree(entries[sec])
+                  or CANONICAL_SECTION_TREES.get(sec, ""))
+            for sec in SECTION_INDEX_NAMES
+        }
         self.cards["cracked"] = _build_indexed_cards(
             entries["cracked"],
             games["cracked"] if "cracked" in self.kinds_loaded else [],
-            "cracked", union_gameinfo=False)
+            "cracked", union_gameinfo=False,
+            section_tree=section_trees["cracked"])
         self.cards["pd"] = _build_indexed_cards(
             entries["pd"],
             games["pd"] if "pd" in self.kinds_loaded else [],
-            "pd", union_gameinfo=True)
+            "pd", union_gameinfo=True,
+            section_tree=section_trees["pd"])
         self.cards["utils"] = _build_indexed_cards(
             entries["utils"],
             games["utils"] if "utils" in self.kinds_loaded else [],
-            "utils", union_gameinfo=True)
+            "utils", union_gameinfo=True,
+            section_tree=section_trees["utils"])
         self.cards["magazine"] = _build_indexed_cards(
-            entries["magazine"], [], "magazine", union_gameinfo=False)
+            entries["magazine"], [], "magazine", union_gameinfo=False,
+            section_tree=section_trees["magazine"])
         self.cards["falcon"] = _build_indexed_cards(
-            entries["falcon"], [], "falcon", union_gameinfo=False)
+            entries["falcon"], [], "falcon", union_gameinfo=False,
+            section_tree=section_trees["falcon"])
         self.facets = {kind: _facets(self.cards[kind], kind)
                        for kind in SECTION_INDEX_NAMES}
 
@@ -715,7 +1079,11 @@ class DataStore:
             "facets": self.facets,
             "generated_at": self.manifest.get("generated_at"),
             "tool_version": TOOL_VERSION,
+            "local_assets": self.assets.enabled,
         }
+
+    def assets_for_card(self, card):
+        return self.assets.discover(card.get("_folder_rel", ""))
 
     def meta_payload(self, cfg=None):
         m = json.loads(json.dumps(self.meta))
@@ -907,6 +1275,9 @@ class GalleryHandler(BaseHTTPRequestHandler):
             if path == "/api/entries":
                 self.store.reload()
                 return self._entries()
+            if path == "/api/local-assets":
+                self.store.reload()
+                return self._local_assets()
             if path.startswith("/img/"):
                 return self._image(unquote(path[len("/img/"):]))
             return self._error(404, "not found")
@@ -948,6 +1319,20 @@ class GalleryHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", f"public, max-age={max_age}")
         self.end_headers()
         self.wfile.write(body)
+
+    def _local_assets(self):
+        params = self._params()
+        section = params.get("section", "cracked") or "cracked"
+        if section not in SECTION_INDEX_NAMES:
+            return self._error(400, "invalid section")
+        card_id = params.get("id", "") or ""
+        if not card_id:
+            return self._error(400, "id required")
+        card = next((c for c in self.store.cards[section]
+                     if c["id"] == card_id), None)
+        if card is None:
+            return self._error(404, "card not found")
+        return self._json(self.store.assets_for_card(card))
 
     def _entries(self):
         params = self._params()
@@ -1052,6 +1437,16 @@ def main():
         log(f"[warn] MARCER_DATA_DIR not a directory ({data_dir!r}) — "
             f"screenshots-only mode")
         data_dir = ""
+    root_dir = os.environ.get("MARCER_ROOT_DIR", "").strip()
+    if root_dir and not os.path.isdir(root_dir):
+        log(f"[warn] MARCER_ROOT_DIR not a directory ({root_dir!r}) — "
+            f"boxscan/manual metadata disabled")
+        root_dir = ""
+    patch_dir = os.environ.get("MARCER_PATCH_DIR", "").strip()
+    if patch_dir and not os.path.isdir(patch_dir):
+        log(f"[warn] MARCER_PATCH_DIR not a directory ({patch_dir!r}) — "
+            f"patch layer ignored")
+        patch_dir = ""
 
     if not STATIC_DIR.is_dir():
         log(f"[error] static assets missing: {STATIC_DIR}")
@@ -1068,7 +1463,9 @@ def main():
     signal.signal(signal.SIGTERM, _sigterm)
 
     log("[data] loading …")
-    store = DataStore(out_dir, data_dir)
+    store = DataStore(
+        out_dir, data_dir, root_dir=root_dir, patch_dir=patch_dir,
+        assets_cache_seconds=cfg.get("local_assets_cache_seconds", 60))
     GalleryHandler.store = store
     GalleryHandler.cfg = cfg
 

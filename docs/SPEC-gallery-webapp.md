@@ -60,6 +60,11 @@ Everything else is *(untested)* and must be confirmed during implementation.
   WebSocket.
 - **No thumbnails.** Original PNGs are served as-is (user decision); lazy
   loading and pagination keep the load manageable.
+- **No local media distribution.** Boxscan images and manual documents
+  (PDF/DOC/TXT/image pages) are never served, streamed, extracted or
+  downloaded. The lightbox shows only metadata (counts, edition/manual
+  labels and format kinds) read from directory listings and ZIP central
+  directories.
 - **No game launching** and no replacement of the console launcher (SPEC.md)
   or the future desktop app (DECISION-app-architecture.md).
 - **No user accounts, no write-back** (no favorites, no annotations), no
@@ -79,8 +84,8 @@ Read from `local/paths.env` (git-ignored), exactly like the other tools:
 |---|---|---|
 | `MARCER_OUT_DIR` | **yes** | screenshot output root: section indices + mirrored PNG tree |
 | `MARCER_DATA_DIR` | no | game metadata: `games-cracked.json`, `games-pd.json`, `games-utils.json`, `manifest.json` |
-| `MARCER_ROOT_DIR` | no | not read by this app (listed for completeness) |
-| `MARCER_PATCH_DIR` | no | not read by this app (listed for completeness) |
+| `MARCER_ROOT_DIR` | no | game root layer; used read-only for boxscan/manual metadata |
+| `MARCER_PATCH_DIR` | no | patch layer; merged read-only for boxscan/manual metadata |
 
 Rules:
 
@@ -91,6 +96,10 @@ Rules:
   facets and hover info are hidden and `/api/meta` reports
   `gameinfo: false` (section 4.6). The PD/Utils views remain available
   whenever their own indices exist (index-backed cards without metadata).
+- Missing or unreadable `MARCER_ROOT_DIR` → boxscan/manual metadata is
+  disabled (`/api/meta` `local_assets: false`); missing/empty
+  `MARCER_PATCH_DIR` → patch layer ignored. Both are optional and never
+  prevent startup.
 - Variable values never appear in committed files, logs or documentation
   (same rule as SPEC-screenshot-generator.md section 11).
 
@@ -345,6 +354,7 @@ error body `{ "error": "<message>" }`.
 | `/static/<file>` | serves `app.js`, `style.css`, `favicon.svg` (fixed file set, no listing) |
 | `/api/meta` | statistics, facets, availability, ordering info |
 | `/api/entries` | filtered/sorted/paginated cards (section 5.3) |
+| `/api/local-assets` | boxscan/manual metadata for one card (section 5.5) |
 | `/img/<rel path>` | original preview/candidate PNG (section 5.4) |
 
 ### 5.2 `/api/meta`
@@ -401,7 +411,8 @@ error body `{ "error": "<message>" }`.
   "show_candidates": true,
   "default_status": "with_screenshot",
   "generated_at": "…",
-  "tool_version": "0.2.0"
+  "tool_version": "0.3.0",
+  "local_assets": true
 }
 ```
 
@@ -435,6 +446,10 @@ error body `{ "error": "<message>" }`.
   (section 9): the frontend disables the card candidate strip when
   `show_candidates` is false and uses `default_status` as the initial
   status preset for every section (URL parameters always win).
+- `local_assets` is `true` when `MARCER_ROOT_DIR` is configured and
+  readable; the lightbox then asks for boxscan/manual metadata. Without it
+  the endpoint returns empty metadata and the lightbox shows no local-assets
+  section.
 
 ### 5.3 `/api/entries`
 
@@ -574,7 +589,72 @@ Response:
   `Cache-Control: public, max-age=86400` (safe: PNGs are artifacts; a
   changed screenshot reappears after the cache window or with a hard reload).
 
-### 5.5 Error behavior
+### 5.5 `/api/local-assets`
+
+Query parameters:
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `section` | `cracked` (default) \| `pd` \| `utils` \| `magazine` \| `falcon` | section of the card |
+| `id` | card `id` (`<letter>/<folder>`) | required; looked up in the section |
+
+Response (metadata only — **never** file paths, URLs, bytes or file names
+of individual scans/documents):
+
+```json
+{
+  "boxscans": {
+    "edition_count": 2,
+    "image_count": 7,
+    "editions": [
+      { "label": "Boxscan", "image_count": 2 },
+      { "label": "Rainbird - bluebox", "image_count": 5 }
+    ]
+  },
+  "manuals": {
+    "title_count": 1,
+    "file_count": 2,
+    "items": [
+      {
+        "label": "Alien Syndrome",
+        "variants": [
+          { "label": "Scan", "kind": "pdf", "format": "PDF", "file_count": 1 },
+          { "label": "Text", "kind": "pdf", "format": "PDF", "file_count": 1 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Semantics:
+
+- The card's game folder is derived from its section tree and
+  `<letter>/<folder>` (magazine cards: the ZIP's parent folder; pd/utils
+  metadata-only cards: the canonical section tree).
+- Both `MARCER_ROOT_DIR` and `MARCER_PATCH_DIR` are consulted read-only;
+  patch wins for the same relative asset path.
+- Child folders `boxscan`/`box scan` and `manual`/`manuals` are matched
+  case-insensitively. Hidden entries and `@eaDir` are skipped.
+- Boxscans: loose images (`.png`/`.jpg`/`.jpeg`) are grouped by their first
+  subfolder (label `Boxscan` at the top level); ZIPs are labelled by their
+  stem and their image members are counted recursively from the central
+  directory. Non-image members are ignored.
+- Manuals: grouped by stem; `_text` marks the text variant. `.pdf`,
+  `.doc`, `.txt`, manual image pages and `.msa` (disk image, info-only) are
+  represented; `.rar`/unknown formats are skipped. Scan/text pairs and
+  half-broken pairs are tolerated.
+- **No ZIP member is ever opened**: only `ZipFile.infolist()` (central
+  directory metadata) is read. There is no extraction, no temp file and no
+  content endpoint.
+- Discovery is cached per game folder for
+  `local_assets_cache_seconds` (default 60). Missing root/patch, unreadable
+  folders or missing assets yield the empty structure above (never an
+  error).
+- `400` for an invalid section or missing `id`; `404` when the card does not
+  exist.
+
+### 5.6 Error behavior
 
 | Condition | Response |
 |---|---|
@@ -720,6 +800,16 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
   variant selectable. The strip always reserves a fixed height (~56 px)
   so the layout does not jump when candidates appear/disappear between
   variants.
+- **Local assets (metadata only)**: the side panel shows a
+  `Local assets` block at the top when the card has boxscans or manuals.
+  It contains `Box scans — N editions, M images` and/or
+  `Manuals — N titles, M files`, followed by one line per edition label
+  (`<label> (N)`) and per manual label with its variants/formats
+  (e.g. `Alien Syndrome — Scan (PDF), Text (PDF)`). The block is rendered
+  for the lightbox card only (also for `pd`/`utils` metadata-only cards)
+  and is fetched lazily from `/api/local-assets`; it has **no links,
+  images, PDFs or download/open controls**. Without assets or without
+  `MARCER_ROOT_DIR` the block is omitted.
 - **Metadata table** (right-hand side panel, fixed width ~380 px): all
   fields of the selected variant's gameinfo entry, then the **This ZIP**
   table (File, Status, **Kind**, TOS, Layer, Size, Path) and finally all
@@ -947,7 +1037,8 @@ capped at 200.
   "page_size": 60,
   "show_candidates": true,
   "default_status": "with_screenshot",
-  "image_cache_seconds": 86400
+  "image_cache_seconds": 86400,
+  "local_assets_cache_seconds": 60
 }
 ```
 
@@ -958,6 +1049,8 @@ capped at 200.
   are unaffected.
 - `default_status`: initial status preset of **every** section
   (delivered via `/api/meta`; a `status` URL parameter always wins).
+- `local_assets_cache_seconds`: TTL of the per-card boxscan/manual
+  metadata discovery cache (default 60; `0` disables caching).
 - Data paths are **never** configured here — `local/paths.env` only
   (same rule as the sibling tools).
 
@@ -1023,6 +1116,14 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     taps leave no sticky `:hover` highlight. With a mouse the panel still
     appears after ≥ 400 ms, vanishes on mouse leave, key press and scroll,
     and `:focus-visible`/keyboard focus styling keeps working.
+17. **Local asset metadata**: with `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR`
+    set, open cards with boxscans/manuals in the lightbox → counts and
+    edition/manual labels appear, patch/root files are merged, case
+    variants and loose/ZIP shapes work, `.msa` is info-only and unknown
+    formats are skipped. Verify in the network tab that only
+    `/api/local-assets` JSON is requested (no ZIP/PDF/image bytes), there
+    are no download/open controls, and `/local-asset`-style content routes
+    do not exist. Without the env vars the block is absent.
 
 ---
 
@@ -1061,6 +1162,8 @@ A conforming implementation satisfies all of the following.
 - [x] S3 `/img/` and `/static/` reject traversal (realpath containment,
       PNG-only), verified with the section 10 attacks.
 - [x] S4 Default bind is `0.0.0.0`; non-loopback binds print a warning.
+- [x] S5 Boxscan/manual media is never served, streamed, extracted or
+      written; there is no content endpoint for local assets.
 
 **Data**
 - [x] D1 Join uses `parts[2]`/`parts[3]` only; entries without gameinfo are
@@ -1076,13 +1179,19 @@ A conforming implementation satisfies all of the following.
       `no_usable_shots_any` rules (sections 5.2/5.3), and those filters match
       per ZIP, not via `display_status`. `desktop_text`/`desktop_black`
       match status `desktop` + the corresponding `kind` per ZIP.
+- [x] D6 Local asset metadata is derived from directory listings and ZIP
+      central directories only (`ZipFile.infolist()`); no ZIP member is
+      opened and no temp extraction exists.
 
 **API**
 - [x] A1 All endpoints of section 5 exist with the documented parameters.
 - [x] A2 Pagination is stable (total order, section 5.3) — no duplicate or
       skipped cards across consecutive pages.
 - [x] A3 `entry` returns a single card with `position`.
-- [x] A4 Errors follow section 5.5 (400/404/503), JSON error bodies.
+- [x] A4 Errors follow section 5.6 (400/404/503), JSON error bodies.
+- [x] A5 `/api/local-assets` returns only metadata (counts, labels, kinds,
+      formats) for a valid card; no file paths, URLs or bytes. Invalid
+      section/id → 400, unknown card → 404.
 
 **UI**
 - [x] U1 Visual design matches the `GALLERY_TEMPLATE` language (colors,
@@ -1108,6 +1217,9 @@ A conforming implementation satisfies all of the following.
       `(hover: hover) and (pointer: fine)`, sticky `:hover` highlights
       behind `@media (hover: hover)`, panel dismissed on key press/scroll
       (section 6.4); keyboard focus styles unaffected.
+- [x] U10 The lightbox shows the metadata-only `Local assets` block
+      (boxscan editions/counts and manual labels/formats) when assets
+      exist; it has no links, media or download/open controls.
 
 **Process**
 - [x] P1 Zero new packages in the repo `.venv` (stdlib only).
