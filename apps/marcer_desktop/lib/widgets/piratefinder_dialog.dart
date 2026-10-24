@@ -6,6 +6,8 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../catalog_controller.dart';
+import '../piratefinder_names.dart';
+import 'piratefinder_link.dart';
 
 /// Opens the PirateFinder details dialog for a catalog card or browse entry.
 /// Data is loaded lazily; [rel] is the selected ZIP (exact-hash match).
@@ -95,15 +97,16 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
             final lookup = snapshot.data;
             if (lookup == null || lookup.index == null) {
               return _message(
-                'PirateFinder data is not available.',
+                '$kPirateFinderCatalogName is not available.',
                 lookup?.error ??
-                    'Install or update it in Settings → PirateFinder data.',
+                    'Download it in Settings → '
+                        '$kPirateFinderCatalogShortName.',
               );
             }
             final match = lookup.match;
             if (match == null || match.candidates.isEmpty) {
               return _message(
-                'No PirateFinder match',
+                'No $kPirateFinderCatalogShortName match',
                 'No catalogue record matched this title, crew or ZIP hash.',
               );
             }
@@ -126,7 +129,7 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
             children: [
               const Expanded(
                 child: Text(
-                  'PirateFinder',
+                  kPirateFinderCatalogName,
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -143,9 +146,17 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
           const SizedBox(height: 16),
           const Align(
             alignment: Alignment.centerRight,
-            child: Text(
-              'PirateFinder data · CC BY-NC-SA 4.0 · not part of the Marcer catalog',
-              style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.end,
+              children: [
+                PirateFinderGithubLink(),
+                Text(
+                  ' · $kPirateFinderCatalogName · CC BY-NC-SA 4.0 · '
+                  'not part of the Marcer catalog',
+                  style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+                ),
+              ],
             ),
           ),
         ],
@@ -153,7 +164,11 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
     );
   }
 
-  Widget _content(PirateFinderIndex index, PirateFinderMatch match, PirateFinderDisk disk) {
+  Widget _content(
+    PirateFinderIndex index,
+    PirateFinderMatch match,
+    PirateFinderDisk disk,
+  ) {
     final candidates = match.candidates;
     final series = index.seriesForDisk(disk);
     final crew = index.crewForDisk(disk);
@@ -190,14 +205,18 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
           const Divider(height: 1),
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Data from PirateFinder (CC BY-NC-SA 4.0). '
-                'Includes Atari Legend, Demozoo, libretro and other sources. '
-                'Not part of the Marcer catalog.',
-                style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
-              ),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                PirateFinderGithubLink(),
+                Text(
+                  ' · Data from the $kPirateFinderCatalogName '
+                  '(CC BY-NC-SA 4.0). Includes Atari Legend, Demozoo, '
+                  'libretro and other sources. '
+                  'Not part of the Marcer catalog.',
+                  style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+                ),
+              ],
             ),
           ),
         ],
@@ -222,7 +241,7 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
                 Row(
                   children: [
                     const Text(
-                      'PirateFinder',
+                      kPirateFinderCatalogName,
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -258,7 +277,9 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
                         ),
                     ],
                     onChanged: (id) {
-                      final next = candidates.where((c) => c.id == id).firstOrNull;
+                      final next = candidates
+                          .where((c) => c.id == id)
+                          .firstOrNull;
                       if (next != null) setState(() => _selected = next);
                     },
                   ),
@@ -347,7 +368,7 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
   Widget _crewTab(PirateFinderCrew? crew) {
     if (crew == null) {
       return const Text(
-        'No crew history in the PirateFinder catalogue.',
+        'No crew history in the $kPirateFinderCatalogName.',
         style: TextStyle(fontSize: 12, color: Colors.grey),
       );
     }
@@ -402,7 +423,7 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
   Widget _triviaTab(List<PirateFinderTrivia> trivia) {
     if (trivia.isEmpty) {
       return const Text(
-        'No trivia in the PirateFinder catalogue.',
+        'No trivia in the $kPirateFinderCatalogName.',
         style: TextStyle(fontSize: 12, color: Colors.grey),
       );
     }
@@ -441,10 +462,13 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
       children: [
         _kv('Catalogue', index.sourceTag),
         _kv('Generated', index.generatedAt),
-        _kv('Licence', 'CC BY-NC-SA 4.0 — non-commercial, attribution, share-alike'),
+        _kv(
+          'Licence',
+          'CC BY-NC-SA 4.0 — non-commercial, attribution, share-alike',
+        ),
         const SizedBox(height: 4),
         const Text(
-          'Derived from the public PirateFinder catalogue. '
+          'Derived from the public $kPirateFinderCatalogName. '
           'Not part of the Marcer catalog.',
           style: TextStyle(fontSize: 11, color: Colors.grey),
         ),
@@ -452,9 +476,10 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
         for (final source in index.sources)
           _bullet(
             source.name,
-            [source.licence, if (source.records > 0) '${source.records} records']
-                .where((value) => value.isNotEmpty)
-                .join(' · '),
+            [
+              source.licence,
+              if (source.records > 0) '${source.records} records',
+            ].where((value) => value.isNotEmpty).join(' · '),
           ),
       ],
     );
@@ -475,10 +500,7 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
             ),
           ),
           Expanded(
-            child: SelectableText(
-              value,
-              style: const TextStyle(fontSize: 12),
-            ),
+            child: SelectableText(value, style: const TextStyle(fontSize: 12)),
           ),
         ],
       ),
@@ -486,65 +508,59 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
   }
 
   Widget _section(String title) => Padding(
-        padding: const EdgeInsets.only(top: 12, bottom: 5),
-        child: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.cyan,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(top: 12, bottom: 5),
+    child: Text(
+      title,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        color: Colors.cyan,
+      ),
+    ),
+  );
 
   Widget _bullet(String title, String subtitle) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 12)),
-            if (subtitle.isNotEmpty)
-              Text(
-                subtitle,
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
-              ),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 12)),
+        if (subtitle.isNotEmpty)
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 10, color: Colors.grey),
+          ),
+      ],
+    ),
+  );
 
   Widget _link(String label, String url) => Padding(
-        padding: const EdgeInsets.only(top: 3, bottom: 3),
-        child: InkWell(
-          onTap: () => launchUrl(
-            Uri.parse(url),
-            mode: LaunchMode.externalApplication,
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.lightBlueAccent,
-              decoration: TextDecoration.underline,
-            ),
-          ),
+    padding: const EdgeInsets.only(top: 3, bottom: 3),
+    child: InkWell(
+      onTap: () =>
+          launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 12,
+          color: Colors.lightBlueAccent,
+          decoration: TextDecoration.underline,
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _badge(String label, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(3),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 9,
-            color: color,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.16),
+      borderRadius: BorderRadius.circular(3),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.bold),
+    ),
+  );
 
   String _date(PirateFinderDisk disk) {
     if (disk.day != null && disk.month != null && disk.year != null) {

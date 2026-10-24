@@ -155,8 +155,9 @@ The setup/settings form lays the fields out as: **RootDirectory**,
 and for the catalog-data downloads), then **ScreenshotDirectory** and
 **GameinfoDirectory** — the data directory, with **Download from FTP** next to
 *Browse…* — then the **AtariLegend data** row (**Download AtariLegend data**)
-and the **PirateFinder data** row (Install/Update, no path field), and finally
-the Hatari settings plus the **Hatari installation** and **TOS ROM** rows
+and the **PirateFinder-Catalog** row (**PirateFinder-Catalog**, no path
+field), and finally the Hatari settings plus the **Hatari installation** and
+**TOS ROM** rows
 (download/install on demand, see below).
 
 | Field | Required | Notes |
@@ -166,7 +167,7 @@ the Hatari settings plus the **Hatari installation** and **TOS ROM** rows
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`/`index-magazine.json`/`index-falcon.json`, PNGs) |
 | `GameinfoDirectory` | no | **data directory**: `gameinfo/` (games JSON, `crews.json`, `crew-images.json`), `atarilegend/`, `piratefinder/`; screenshots stay separate. No implicit fallback |
 | `AtariLegendDirectory` (legacy) | no | old separate AtariLegend path; migrated at startup into `<GameinfoDirectory>/atarilegend`, no longer shown in the form |
-| `PirateFinder data` | no | optional PF-only catalogue JSON; **Install/Update** downloads `piratefinder-catalog-atari-st.json.gz` from the GitHub `piratefinder-catalog-json` release into `<GameinfoDirectory>/piratefinder/`. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog |
+| `PirateFinder-Catalog` | no | optional PirateFinder-Catalog-only catalogue JSON; **PirateFinder-Catalog** downloads `piratefinder-catalog-atari-st.json.gz` from the GitHub `piratefinder-catalog-json` release into `<GameinfoDirectory>/piratefinder/` and links to the original PirateFinder project. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog |
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
 | `Hatari.ConfigFile` | no | empty ⇒ bundled `MarcerGameDvd-Hatari.cfg` |
 | `Hatari.ArgsTemplate` | no | must contain `{cfg}` and `{zip}` |
@@ -617,33 +618,38 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   dialog only) — see
   [`../../docs/ANALYSIS-atarilegend.md`](../../docs/ANALYSIS-atarilegend.md).
 
-## PirateFinder data (optional)
+## Pete Clarke Greaseweazle PirateFinder Catalog (optional)
 
-The optional **PirateFinder data** row (below AtariLegend data, no path field)
-downloads the generic PirateFinder catalogue JSON from
+The optional **PirateFinder-Catalog** row (below AtariLegend data, no path
+field) downloads the generic Pete Clarke Greaseweazle PirateFinder Catalog
+JSON from
 [`skoelle/piratefinder-catalog-json`](https://github.com/skoelle/piratefinder-catalog-json).
 The app stores it under `<GameinfoDirectory>/piratefinder/`, never in the
-Marcer game trees or catalog artifacts.
+Marcer game trees or catalog artifacts. A **PirateFinder-Catalog on GitHub**
+link points to the
+[original PirateFinder project](https://github.com/peteclarke-del/PirateFinder).
 
 - Asset: `piratefinder-catalog-atari-st.json.gz` (Atari ST subset, ~6.7 MB gz)
   from the fixed `catalog-latest` GitHub prerelease.
 - Startup check (release builds only): fetches the small `latest.json` pointer
   and compares the remote asset SHA-256 / `generated_at` with the local marker
   `.piratefinder-catalog.json`.
-- The same **Catalog data** dialog gains a third row, **PirateFinder**, with
+- The same **Catalog data** dialog gains a third row, **PirateFinder-Catalog**,
+  with
   local/remote catalogue tag + generation date and **Install**/**Update** (or
   **up to date**). If the data is not installed yet, the row shows the install
   hint right away. It is always offered, never downloaded automatically.
-- The PF **detail button is hidden for this release**; the data row and dialog
+- The PirateFinder-Catalog **detail button is hidden for this release**; the data row and dialog
   code stay in place for the next release.
-- The settings row also shows the local/remote date and has a **Check**
-  button; while a download runs, Save/Cancel are blocked and the transfer can
-  be cancelled inline.
+- The settings row mirrors the AtariLegend row: local status/path, a single
+  **PirateFinder-Catalog** button (it refreshes `latest.json` and then
+  downloads), and a **PirateFinder-Catalog on GitHub** link; while a download runs,
+  Save/Cancel are blocked and the transfer can be cancelled inline.
 - Data license: **CC BY-NC-SA 4.0** (non-commercial, attribution, share-alike).
   It is not part of the Marcer catalog and is never bundled or uploaded.
 
-The PF data row downloads into `<GameinfoDirectory>/piratefinder/`. The
-compact **PF detail button is hidden for this release**; the tabbed dialog
+The PirateFinder-Catalog data row downloads into `<GameinfoDirectory>/piratefinder/`. The
+compact **PirateFinder-Catalog detail button is hidden for this release**; the tabbed dialog
 (Release/Crew/Menus/Trivia/Sources), exact hash matching and title fallback stay
 implemented for the next release. The dialog is metadata-only (no media tab and
 no card-preview fallback yet).
@@ -658,11 +664,11 @@ the top bar (always available, right of the version badge) and shows a small
 green count badge when updates are pending.
 
 Clicking it opens the **Catalog data** dialog, listing **game info first, then
-screenshots**, then the optional **PirateFinder** data with the local and
+screenshots**, then the optional **PirateFinder-Catalog** data with the local and
 remote catalogue date/asset and per asset:
 
 - **Update** (or **Install** when nothing is applied yet) — downloads the newest
-  archive from the FTP (Marcer assets) or GitHub (PirateFinder data) and
+  archive from the FTP (Marcer assets) or GitHub (PirateFinder-Catalog data) and
   extracts/applies it; progress and **Cancel** show inline.
   When the extracted data is present but the applied version is unknown (no
   `.marcer-assets.json`) the row shows **version unknown (data present)** and the
@@ -680,8 +686,9 @@ If the pointer provides a `sha256`, the downloaded archive is verified against
 it; a mismatch aborts the update. After a successful update the catalog reloads
 in place.
 
-The **PirateFinder** row is fetched from GitHub, not the FTP, and carries a
-clear `GitHub · CC BY-NC-SA 4.0 · not part of the Marcer catalog` hint.
+The **PirateFinder-Catalog** row is fetched from GitHub, not the FTP, links to
+the original PirateFinder project and carries a clear
+`CC BY-NC-SA 4.0 · not part of the Marcer catalog` hint.
 
 ## Catalog coverage
 

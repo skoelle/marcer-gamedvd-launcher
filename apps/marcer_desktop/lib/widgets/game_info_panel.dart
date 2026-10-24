@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
+import '../piratefinder_names.dart';
 import '../theme.dart';
 
 /// One ZIP as shown in the gallery-style info panel ("This ZIP" table).
@@ -109,10 +110,7 @@ class GameInfoPanel extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        if (extras != null) ...[
-          extras!,
-          const SizedBox(height: 8),
-        ],
+        if (extras != null) ...[extras!, const SizedBox(height: 8)],
         if (info == null) ...[
           _headingRow('No game info', trailing: _actionButtonsOrNull()),
           if (variant != null) ...[
@@ -142,11 +140,11 @@ class GameInfoPanel extends StatelessWidget {
   /// Heading with an optional trailing action on the right (e.g. the PLAY
   /// split button or the AtariLegend button).
   Widget _headingRow(String text, {Widget? trailing}) => Row(
-        children: [
-          Expanded(child: _heading(text)),
-          ?trailing,
-        ],
-      );
+    children: [
+      Expanded(child: _heading(text)),
+      ?trailing,
+    ],
+  );
 
   Widget? _playButtonOrNull() => onPlay == null ? null : _playButton();
 
@@ -168,10 +166,10 @@ class GameInfoPanel extends StatelessWidget {
     );
   }
 
-  /// Compact indigo "PF" button (PirateFinder), next to AtariLegend.
+  /// Compact indigo "PF" button (PirateFinder-Catalog), next to AtariLegend.
   Widget _pirateFinderButton() {
     return Tooltip(
-      message: 'PirateFinder data',
+      message: kPirateFinderCatalogShortName,
       child: Material(
         color: Colors.transparent,
         child: Ink(
@@ -285,9 +283,10 @@ class GameInfoPanel extends StatelessWidget {
             ),
             if (showDropdown) ...[
               Container(
-                  width: 1,
-                  height: 18,
-                  color: Colors.white.withValues(alpha: 0.3)),
+                width: 1,
+                height: 18,
+                color: Colors.white.withValues(alpha: 0.3),
+              ),
               PopupMenuButton<HatariVariant>(
                 tooltip: 'Play as…',
                 onSelected: (v) => onPlayVariant!(v),
@@ -303,8 +302,11 @@ class GameInfoPanel extends StatelessWidget {
                 ],
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  child:
-                      Icon(Icons.arrow_drop_down, size: 18, color: Colors.white),
+                  child: Icon(
+                    Icons.arrow_drop_down,
+                    size: 18,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],
@@ -315,16 +317,19 @@ class GameInfoPanel extends StatelessWidget {
   }
 
   Widget _heading(String text) => Text(
-        text,
-        style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: Colors.white70,
-            decoration: TextDecoration.underline),
-      );
+    text,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.bold,
+      color: Colors.white70,
+      decoration: TextDecoration.underline,
+    ),
+  );
 
   List<Widget> _infoRows(
-      InfoSummary info, void Function(String value, String kind)? onSelectGroup) {
+    InfoSummary info,
+    void Function(String value, String kind)? onSelectGroup,
+  ) {
     final rows = <Widget>[];
     const fields = <String, String>{
       'publisher': 'Publisher',
@@ -362,12 +367,18 @@ class GameInfoPanel extends StatelessWidget {
     fields.forEach((key, label) {
       final val = values[key] ?? '';
       if (val.isEmpty) return;
-      final groupKind =
-          key == 'crew' ? 'crew' : (key == 'cracked_by' ? 'cracker' : null);
-      rows.add(_kv(label, val,
+      final groupKind = key == 'crew'
+          ? 'crew'
+          : (key == 'cracked_by' ? 'cracker' : null);
+      rows.add(
+        _kv(
+          label,
+          val,
           onTap: (groupKind != null && onSelectGroup != null)
               ? () => onSelectGroup(val, groupKind)
-              : null));
+              : null,
+        ),
+      );
     });
     final flags = <String>[
       if (info.rawDump) 'RAW dump',
@@ -384,8 +395,12 @@ class GameInfoPanel extends StatelessWidget {
   /// crew/cracker filter whose ZIP could not be identified, the group's row
   /// is highlighted instead (cracker first). Rows are clickable when
   /// [onSelectGroup] is set (crew first, else cracker).
-  Widget _variantsTable(InfoSummary info, ZipVariantView? v, CatalogFilter? filter,
-      void Function(String value, String kind)? onSelectGroup) {
+  Widget _variantsTable(
+    InfoSummary info,
+    ZipVariantView? v,
+    CatalogFilter? filter,
+    void Function(String value, String kind)? onSelectGroup,
+  ) {
     final f = filter;
     var selIdx = -1;
     if (v != null) {
@@ -404,21 +419,27 @@ class GameInfoPanel extends StatelessWidget {
     if (selIdx == -1 && f != null && f.cracker != 'any') {
       final target = normCrew(f.cracker);
       final idx = info.variants.indexWhere(
-          (rv) => normCrew(rv['cracked_by'] as String?) == target);
+        (rv) => normCrew(rv['cracked_by'] as String?) == target,
+      );
       if (idx >= 0) selIdx = idx;
     }
     if (selIdx == -1 && f != null && f.crew != 'any') {
       final target = normCrew(f.crew);
       final idx = info.variants.indexWhere(
-          (rv) => normCrew(rv['crew'] as String?) == target);
+        (rv) => normCrew(rv['crew'] as String?) == target,
+      );
       if (idx >= 0) selIdx = idx;
     }
     const header = TextStyle(
-        fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey);
+      fontSize: 10,
+      fontWeight: FontWeight.bold,
+      color: Colors.grey,
+    );
     const cell = TextStyle(fontSize: 10, color: Colors.white70);
     return Container(
-      decoration:
-          BoxDecoration(border: Border.all(color: const Color(0xFF2A2A2A))),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -431,9 +452,13 @@ class GameInfoPanel extends StatelessWidget {
                 Expanded(flex: 3, child: Text('Cracker', style: header)),
                 Expanded(flex: 3, child: Text('Crew', style: header)),
                 SizedBox(
-                    width: 44,
-                    child: Text('Year',
-                        style: header, textAlign: TextAlign.right)),
+                  width: 44,
+                  child: Text(
+                    'Year',
+                    style: header,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
               ],
             ),
           ),
@@ -444,8 +469,12 @@ class GameInfoPanel extends StatelessWidget {
     );
   }
 
-  Widget _variantRow(Map<String, dynamic> rv, bool selected,
-      TextStyle cell, void Function(String value, String kind)? onSelectGroup) {
+  Widget _variantRow(
+    Map<String, dynamic> rv,
+    bool selected,
+    TextStyle cell,
+    void Function(String value, String kind)? onSelectGroup,
+  ) {
     final crew = (rv['crew'] ?? '').toString().trim();
     final cracker = (rv['cracked_by'] ?? '').toString().trim();
     VoidCallback? onTap;
@@ -467,29 +496,32 @@ class GameInfoPanel extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-              flex: 4,
-              child: Text(
-                '${rv['title'] ?? ''}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: rowStyle,
-              )),
+            flex: 4,
+            child: Text(
+              '${rv['title'] ?? ''}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: rowStyle,
+            ),
+          ),
           Expanded(
-              flex: 3,
-              child: Text(
-                cracker,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: rowStyle,
-              )),
+            flex: 3,
+            child: Text(
+              cracker,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: rowStyle,
+            ),
+          ),
           Expanded(
-              flex: 3,
-              child: Text(
-                crew,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: rowStyle,
-              )),
+            flex: 3,
+            child: Text(
+              crew,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: rowStyle,
+            ),
+          ),
           SizedBox(
             width: 44,
             child: Text(
@@ -508,8 +540,7 @@ class GameInfoPanel extends StatelessWidget {
   }
 
   List<Widget> _zipTable(ZipVariantView v) {
-    final kind =
-        (v.kind == null || v.kind!.isEmpty) ? '—' : v.kind!;
+    final kind = (v.kind == null || v.kind!.isEmpty) ? '—' : v.kind!;
     return [
       _kv('File', v.name),
       _kv('Status', v.status),
@@ -517,7 +548,8 @@ class GameInfoPanel extends StatelessWidget {
       if (v.tos != null && v.tos!.isNotEmpty) _kv('TOS', v.tos!),
       if (v.missing) _kv('Missing', 'yes — not present locally'),
       if (v.layer.isNotEmpty) _kv('Layer', v.layer),
-      if (v.size != null) _kv('Size', '${(v.size! / 1024).toStringAsFixed(0)} KB'),
+      if (v.size != null)
+        _kv('Size', '${(v.size! / 1024).toStringAsFixed(0)} KB'),
       _kv('Path', v.rel),
     ];
   }
@@ -528,12 +560,16 @@ class GameInfoPanel extends StatelessWidget {
       children: [
         SizedBox(
           width: 110,
-          child: Text(label,
-              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
         ),
         Expanded(
-          child: Text(value,
-              style: const TextStyle(fontSize: 12, color: Colors.white70)),
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 12, color: Colors.white70),
+          ),
         ),
       ],
     );
@@ -542,7 +578,11 @@ class GameInfoPanel extends StatelessWidget {
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(3), child: row),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(3),
+        child: row,
+      ),
     );
   }
 }

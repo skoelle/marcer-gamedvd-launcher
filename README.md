@@ -86,15 +86,18 @@ Save, the manual screenshot curation described below.
   AtariLegend publishers. Nothing is bundled — the data is downloaded at
   runtime and is **CC BY-NC-SA 4.0** (non-commercial, attribution, share-alike):
   see [License](#license).
-- **Optional PirateFinder metadata** — download the generic
+- **Optional Pete Clarke Greaseweazle PirateFinder Catalog metadata** —
+  download the generic
   [PirateFinder catalogue JSON](https://github.com/skoelle/piratefinder-catalog-json)
-  from the settings **PirateFinder data** row (Install/Update): catalogue facts,
-  crew histories, menu-disk appearances, trivia and media references. The data
-  lives under `<GameinfoDirectory>/piratefinder/`, checked at startup (release
-  builds) and listed in the same **Catalog data** dialog as gameinfo and
-  screenshots. It is **CC BY-NC-SA 4.0**, not part of the Marcer catalog, never
-  bundled and never uploaded. The PF detail button is hidden for this release;
-  the download/update row stays available.
+  from the settings **PirateFinder-Catalog** row:
+  catalogue facts, crew histories, menu-disk appearances, trivia and media
+  references. The data lives under `<GameinfoDirectory>/piratefinder/`, checked
+  at startup (release builds) and listed in the same **Catalog data** dialog as
+  gameinfo and screenshots. The row links to the
+  [original PirateFinder project](https://github.com/peteclarke-del/PirateFinder).
+  It is **CC BY-NC-SA 4.0**, not part of the Marcer catalog, never bundled and
+  never uploaded. The PirateFinder-Catalog detail button is hidden for this release; the download
+  row stays available.
 - **Crew / cracker focus** — pick a crew or cracker and each card jumps to
   *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
   matching tolerates `&`/`and` and small typos).
@@ -367,12 +370,12 @@ fields for the downloads
 (`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase`,
 `Ftp.AssetsRemote` — free text, never block saving). The form is ordered
 **RootDirectory → PatchDirectory → FTP → ScreenshotDirectory /
-GameinfoDirectory (data directory) → PirateFinder data → Hatari** (with the
+GameinfoDirectory (data directory) → PirateFinder-Catalog → Hatari** (with the
 **Hatari installation** and **TOS ROM** rows); the two catalog-data fields each carry a
 **Download from FTP** button next to *Browse…* that pulls the newest
 `screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
 into the target directory (the gameinfo directory has **no** implicit
-fallback), the **AtariLegend data** row downloads into `<GameinfoDirectory>/atarilegend`, and the **PirateFinder data** row offers **Install/Update** for the optional PF catalogue JSON in `<GameinfoDirectory>/piratefinder` (GitHub, CC BY-NC-SA 4.0, see [License](#license)). **Save** writes them back to the
+fallback), the **AtariLegend data** row downloads into `<GameinfoDirectory>/atarilegend`, and the **PirateFinder-Catalog** row offers **PirateFinder-Catalog** for the optional PirateFinder-Catalog JSON in `<GameinfoDirectory>/piratefinder` (GitHub, CC BY-NC-SA 4.0, see [License](#license)). **Save** writes them back to the
 same `desktop.config.json` and reloads the catalog in place, so new paths apply
 without restarting the app; window settings and the remaining fields stay
 untouched.
@@ -391,7 +394,7 @@ optional (needed to launch, not to browse).
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
 | `GameinfoDirectory` | no | **data directory**: `gameinfo/`, `atarilegend/`, `piratefinder/`; screenshots stay separate. No implicit fallback |
 | `AtariLegendDirectory` (legacy) | no | old separate AtariLegend path; migrated at startup into `<GameinfoDirectory>/atarilegend` and no longer shown in the settings form |
-| `PirateFinder data` | no | optional PF-only catalogue JSON; **Install/Update** downloads it from GitHub into `<GameinfoDirectory>/piratefinder/`. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog |
+| `PirateFinder-Catalog` | no | optional PirateFinder-Catalog-only catalogue JSON; **PirateFinder-Catalog** downloads it from GitHub into `<GameinfoDirectory>/piratefinder/` and links to the original PirateFinder project. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog |
 | `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
 | `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
 | `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
@@ -492,7 +495,7 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 |---|---|---|
 | [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) |
 | [`tools/crew-analysis`](tools/crew-analysis/README.md) | Ranks cracked-game crews/scene groups by direct release ZIPs (crew view) by joining the `Crew Sorted` tree, the `Title Sorted` ZIP list and `games-cracked.json`; writes ranking + audit files to `local/crew-analysis/` and suggests cracktro card images (`images`, pHash clusters seeded into `crew-images.json`). | [`tools/crew-analysis/README.md`](tools/crew-analysis/README.md), [`ANALYSIS-crews.md`](docs/ANALYSIS-crews.md) |
-| [`tools/piratefinder-gen`](tools/piratefinder-gen/README.md) | Fetches the weekly PirateFinder SQLite catalogue, verifies its SHA-256, extracts the Atari ST subset and matches the cracked ZIPs by decoded image hashes (with a title fallback); writes match/crew/alias/gap reports to `local/piratefinder/`. Data is CC BY-NC-SA 4.0 and is never redistributed. | [`tools/piratefinder-gen/README.md`](tools/piratefinder-gen/README.md), [`ANALYSIS-piratefinder.md`](docs/ANALYSIS-piratefinder.md) |
+| [`tools/piratefinder-gen`](tools/piratefinder-gen/README.md) | Fetches the weekly Pete Clarke Greaseweazle PirateFinder Catalog SQLite data, verifies its SHA-256, extracts the Atari ST subset and matches the cracked ZIPs by decoded image hashes (with a title fallback); writes match/crew/alias/gap reports to `local/piratefinder/`. Data is CC BY-NC-SA 4.0 and is never redistributed. | [`tools/piratefinder-gen/README.md`](tools/piratefinder-gen/README.md), [`ANALYSIS-piratefinder.md`](docs/ANALYSIS-piratefinder.md) |
 | [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR`), the Crews tab from optional `crews.json`/`crew-images.json`, and optional metadata-only boxscan/manual counts from `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR`. | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) |
 | [`tools/asset-manifest`](tools/asset-manifest/README.md) | Lists the newest `screenshots-*.zip` / `gameinfo-*.zip` on the Marcer FTP (read-only: connect + list, never uploads) and publishes a `latest.json` pointer as a GitHub release asset on the fixed `catalog-latest` prerelease (used by the desktop update check). | [`tools/asset-manifest/README.md`](tools/asset-manifest/README.md) |
 | [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`; entry kinds are `game`, `desktop`, `textscreen`, `darkscreen`,
@@ -594,8 +597,10 @@ Some optional downloads are **not** covered by the MIT license:
   [AtariLegend](https://www.atarilegend.com/) and share-alike. It is never
   bundled with this repository or the release; if you redistribute it, you must
   follow that license.
-- **PirateFinder** data (catalogue facts, crew histories, trivia, media
-  references) is fetched on demand by the desktop app from the generic
+- **PirateFinder-Catalog** data (catalogue facts, crew histories, trivia, media
+  references) from the
+  [PirateFinder project](https://github.com/peteclarke-del/PirateFinder) is
+  fetched on demand by the desktop app from the generic
   [piratefinder-catalog-json](https://github.com/skoelle/piratefinder-catalog-json)
   release and is licensed
   **[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)** —

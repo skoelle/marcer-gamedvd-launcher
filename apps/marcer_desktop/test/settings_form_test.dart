@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/atarilegend_fetcher.dart';
 import 'package:marcer_desktop/catalog_assets.dart';
 import 'package:marcer_desktop/hatari_installer.dart';
+import 'package:marcer_desktop/piratefinder_data.dart';
 import 'package:marcer_desktop/widgets/settings_form.dart';
 import 'package:path/path.dart' as p;
 
@@ -61,6 +63,25 @@ class _HangingAtariLegendFetcher implements AtariLegendFetcher {
   }) {
     lastTargetDir = targetDir;
     return completer.future;
+  }
+}
+
+class _FakePirateFinderDownloader implements PirateFinderDownloader {
+  String? lastTargetDir;
+  int calls = 0;
+
+  @override
+  Future<void> download({
+    required PirateFinderRemoteAsset asset,
+    required String targetDir,
+    PirateFinderProgress? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    calls++;
+    lastTargetDir = targetDir;
+    Directory(targetDir).createSync(recursive: true);
+    File(p.join(targetDir, asset.file)).writeAsStringSync('fake catalogue');
+    onProgress?.call('Downloading…', 1, 1);
   }
 }
 
@@ -330,4 +351,78 @@ void main() {
     await tester.pumpAndSettle();
     expect(busy, isFalse);
   });
+
+  testWidgets(
+    'PirateFinder-Catalog row has one download action and a GitHub link',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 1500);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final dir = Directory.systemTemp.createTempSync('settings_form_pf');
+      addTearDown(() {
+        if (dir.existsSync()) dir.deleteSync(recursive: true);
+      });
+
+      final downloader = _FakePirateFinderDownloader();
+      var fetches = 0;
+      final pf = PirateFinderDataController(
+        fetcher: (_) async {
+          fetches++;
+          return jsonEncode({
+            'generated_at': '2026-10-24T12:34:16Z',
+            'source': {'tag': 'catalogue-2026-10-19'},
+            'assets': {
+              'atari-st': {
+                'file': 'piratefinder-catalog-atari-st.json.gz',
+                'size': 123,
+                'sha256': 'abc123',
+              },
+            },
+          });
+        },
+        downloader: downloader,
+      );
+
+      DesktopConfig? latest;
+      bool? valid;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: SettingsForm(
+                initial: DesktopConfig(
+                  rootDirectory: dir.path,
+                  gameinfoDirectory: dir.path,
+                ),
+                onChanged: (c, v) {
+                  latest = c;
+                  valid = v;
+                },
+                pirateFinderData: pf,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(valid, isTrue);
+      expect(latest!.gameinfoDirectory, dir.path);
+      final button = find.widgetWithText(FilledButton, 'PirateFinder-Catalog');
+      expect(button, findsOneWidget);
+      expect(find.text('Check'), findsNothing);
+      expect(find.text('Install'), findsNothing);
+      expect(find.text('PirateFinder-Catalog on GitHub'), findsOneWidget);
+
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      expect(fetches, 1);
+      expect(downloader.calls, 1);
+      expect(downloader.lastTargetDir, p.join(dir.path, 'piratefinder'));
+      expect(find.textContaining('installed · catalogue'), findsOneWidget);
+    },
+  );
 }

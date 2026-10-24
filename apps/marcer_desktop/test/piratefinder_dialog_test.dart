@@ -9,82 +9,94 @@ import 'package:marcer_desktop/piratefinder_data.dart';
 import 'package:marcer_desktop/widgets/piratefinder_dialog.dart';
 
 PirateFinderIndex _index() => PirateFinderIndex.fromJson({
-      'generated_at': '2026-10-24T12:34:16Z',
-      'source': {'tag': 'catalogue-2026-10-19'},
-      'sources': [
-        {
-          'id': 'atari-legend',
-          'name': 'Atari Legend',
-          'url': 'https://atarilegend.com',
-          'licence': 'CC BY-NC-SA 4.0',
-          'records': 10,
-        },
-      ],
-      'series': [
-        {
-          'id': 'automation',
-          'name': 'Automation',
-          'platform': 'atari-st',
-          'kind': 'menu',
-          'group_name': 'Automation',
-        },
-      ],
-      'crews': [
-        {
-          'id': 1,
-          'name': 'Replicants',
-          'platform': 'atari-st',
-          'members': 'Orion, Snake',
-          'founded': '1988',
-          'notes': 'A crew founded in 1988.',
-          'disk_count': 1,
-        },
-      ],
-      'disks': [
-        {
-          'id': 1,
-          'kind': 'single',
-          'title': 'Arkanoid (1987)(Imagine)[cr Replicants]',
-          'label': 'Arkanoid [cr Replicants]',
-          'publisher': 'Imagine',
-          'cracker': 'Replicants',
-          'crew': 'Replicants',
-          'crew_id': 1,
-          'year': 1987,
-        },
-        {
-          'id': 2,
-          'series_id': 'automation',
-          'kind': 'menu',
-          'number': 250,
-          'label': 'Automation 250',
-          'title': 'Automation 250',
-          'crew': 'Automation',
-          'year': 1990,
-        },
-      ],
-      'contents': [
-        {'id': 10, 'disk_id': 1, 'position': 1, 'title': 'Arkanoid', 'kind': 'game'},
-        {'id': 11, 'disk_id': 2, 'position': 1, 'title': 'Arkanoid', 'kind': 'game'},
-      ],
-      'trivia': [
-        {
-          'id': 900,
-          'disk_id': 1,
-          'kind': 'fact',
-          'text': 'Cleaned and upscaled box art.',
-          'source': 'atari-legend',
-          'licence': 'CC BY-NC-SA 4.0',
-        },
-      ],
-      'links': [
-        {
-          'disk_id': 1,
-          'label': 'Atari Legend',
-          'url': 'https://atarilegend.com/games/x',
-        },
-      ],
-    });
+  'generated_at': '2026-10-24T12:34:16Z',
+  'source': {'tag': 'catalogue-2026-10-19'},
+  'sources': [
+    {
+      'id': 'atari-legend',
+      'name': 'Atari Legend',
+      'url': 'https://atarilegend.com',
+      'licence': 'CC BY-NC-SA 4.0',
+      'records': 10,
+    },
+  ],
+  'series': [
+    {
+      'id': 'automation',
+      'name': 'Automation',
+      'platform': 'atari-st',
+      'kind': 'menu',
+      'group_name': 'Automation',
+    },
+  ],
+  'crews': [
+    {
+      'id': 1,
+      'name': 'Replicants',
+      'platform': 'atari-st',
+      'members': 'Orion, Snake',
+      'founded': '1988',
+      'notes': 'A crew founded in 1988.',
+      'disk_count': 1,
+    },
+  ],
+  'disks': [
+    {
+      'id': 1,
+      'kind': 'single',
+      'title': 'Arkanoid (1987)(Imagine)[cr Replicants]',
+      'label': 'Arkanoid [cr Replicants]',
+      'publisher': 'Imagine',
+      'cracker': 'Replicants',
+      'crew': 'Replicants',
+      'crew_id': 1,
+      'year': 1987,
+    },
+    {
+      'id': 2,
+      'series_id': 'automation',
+      'kind': 'menu',
+      'number': 250,
+      'label': 'Automation 250',
+      'title': 'Automation 250',
+      'crew': 'Automation',
+      'year': 1990,
+    },
+  ],
+  'contents': [
+    {
+      'id': 10,
+      'disk_id': 1,
+      'position': 1,
+      'title': 'Arkanoid',
+      'kind': 'game',
+    },
+    {
+      'id': 11,
+      'disk_id': 2,
+      'position': 1,
+      'title': 'Arkanoid',
+      'kind': 'game',
+    },
+  ],
+  'trivia': [
+    {
+      'id': 900,
+      'disk_id': 1,
+      'kind': 'fact',
+      'text': 'Cleaned and upscaled box art.',
+      'source': 'atari-legend',
+      'licence': 'CC BY-NC-SA 4.0',
+    },
+  ],
+  'links': [
+    {
+      'disk_id': 1,
+      'label': 'Atari Legend',
+      'url': 'https://atarilegend.com/games/x',
+    },
+  ],
+});
 
 class _FakeData extends PirateFinderDataController {
   _FakeData(this.index);
@@ -106,13 +118,12 @@ class _FakeController extends CatalogController {
   Future<PirateFinderMatch?> pirateFinderMatchForEntry(
     Entry entry, {
     String? rel,
-  }) async =>
-      PirateFinderMatch(
-        disk: index.disk(1)!,
-        candidates: [index.disk(1)!, index.disk(2)!],
-        method: 'hash',
-        confidence: 'exact',
-      );
+  }) async => PirateFinderMatch(
+    disk: index.disk(1)!,
+    candidates: [index.disk(1)!, index.disk(2)!],
+    method: 'hash',
+    confidence: 'exact',
+  );
 }
 
 void main() {
@@ -153,7 +164,11 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('PirateFinder'), findsOneWidget);
+    expect(
+      find.text('Pete Clarke Greaseweazle PirateFinder Catalog'),
+      findsOneWidget,
+    );
+    expect(find.text('PirateFinder-Catalog on GitHub'), findsOneWidget);
     expect(find.text('EXACT'), findsOneWidget);
     for (final tab in ['Release', 'Crew', 'Menus', 'Trivia', 'Sources']) {
       expect(find.widgetWithText(Tab, tab), findsOneWidget);

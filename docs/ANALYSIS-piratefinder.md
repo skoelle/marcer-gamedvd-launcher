@@ -1,20 +1,20 @@
-# ANALYSIS: PirateFinder Catalogue
+# ANALYSIS: Pete Clarke Greaseweazle PirateFinder Catalog
 
-Analysis of the [PirateFinder](https://github.com/peteclarke-del/PirateFinder)
+Analysis of the [Pete Clarke Greaseweazle PirateFinder Catalog](https://github.com/peteclarke-del/PirateFinder)
 catalogue and how its Atari ST data can be used for the Marcer GameDVD
 project. The implementation is the read-only tool
 [`tools/piratefinder-gen`](../tools/piratefinder-gen/README.md).
 
 **Status of verified facts:** everything in sections 2–6 was measured on
-2026-10-24 against the real Marcer trees and the PirateFinder release
+2026-10-24 against the real Marcer trees and the PirateFinder-Catalog release
 `catalogue-2026-10-19` (schema/layout 3). Paths come from the git-ignored
 `local/paths.env`; the catalogue is kept in `MARCER_PIRATEFINDER_DIR`
 (default `local/piratefinder/`).
 
-**Licence:** the PirateFinder catalogue is **CC BY-NC-SA 4.0**, because it
+**Licence:** the PirateFinder-Catalog is **CC BY-NC-SA 4.0**, because it
 includes Atari Legend data under that licence. The tool does not redistribute
 the database or derived index files; it fetches the release from
-PirateFinder's GitHub releases and keeps everything local. The raw SQLite is
+PirateFinder-Catalog's GitHub releases and keeps everything local. The raw SQLite is
 not committed and must not be published with the Marcer artifacts.
 
 ---
@@ -75,10 +75,10 @@ from `index.json` by default or from disk with `--scan`.
 
 1. **Hash (exact).** Every `.msa`/`.st`/`.stx` member of a ZIP is decoded and
    hashed. MSA is unpacked to raw sectors with the same rules as
-   PirateFinder's vendored decoder; `.st` is hashed as-is; `.stx` is hashed as
+   PirateFinder-Catalog's vendored decoder; `.st` is hashed as-is; `.stx` is hashed as
    a file. Lookup order is SHA-1, MD5, SHA-512, then CRC32 + size.
 2. **Title (likely).** ZIPs with no hash match are matched by a normalised
-   title against PirateFinder's single-disk rows. The ZIP stem’s cracker part
+   title against PirateFinder-Catalog's single-disk rows. The ZIP stem’s cracker part
    (“Game - Cracker”), part number (“Disk 2”), gameinfo crew/cracker labels,
    year and publisher narrow the candidates. A short local title may match a
    longer catalogue title as a prefix (“Ween” → “Ween - The Prophecy”).
@@ -121,9 +121,9 @@ differ from the TOSEC/Atari Legend entries; it is not a decoder failure
 ### Crew data
 
 - `crew-coverage.csv`: 1,440 distinct Marcer crew/cracker labels from
-  `games-cracked.json`; 376 are covered exactly or through a PirateFinder
+  `games-cracked.json`; 376 are covered exactly or through a PirateFinder-Catalog
   alias/abbreviation.
-- `alias-candidates.csv`: 100 uncovered labels with a plausible PirateFinder
+- `alias-candidates.csv`: 100 uncovered labels with a plausible PirateFinder-Catalog
   crew name, e.g. `No Limits` → `no limit`, `Mug UK` → `mug u k`,
   `I.Cs Workshop` → `i c workshop`, `Medway Boys / BBC` → `medway boys`.
 - The 532 ST crew histories (members, founding date, notes, Wikipedia) are
@@ -133,21 +133,21 @@ differ from the TOSEC/Atari Legend entries; it is not a decoder failure
 ### Metadata gaps
 
 `gameinfo-gaps.csv` lists matched releases where the local XLS variant has no
-year, publisher, crew or cracker but PirateFinder does. It is a candidate list
+year, publisher, crew or cracker but PirateFinder-Catalog does. It is a candidate list
 for a review/merge step, not an automatic overwrite.
 
 ### Virus flags
 
-PirateFinder's 1,288 virus-flagged images are all Amiga; the extracted ST
+PirateFinder-Catalog's 1,288 virus-flagged images are all Amiga; the extracted ST
 images carry **no** `virus`, `virus_damage` or `antivirus` flags. A virus
 warning for the ST cracked section therefore cannot be sourced from this
 catalogue.
 
 ## 4a. Implemented in the desktop app (Phase A/B1)
 
-The desktop app now has an optional **PirateFinder data** row in the shared
+The desktop app now has an optional **PirateFinder-Catalog** row in the shared
 settings form (below the data-directory field; no config path) and a third
-**PirateFinder** row in the existing top-bar **Catalog data** dialog:
+**PirateFinder-Catalog** row in the existing top-bar **Catalog data** dialog:
 
 - `lib/piratefinder_data.dart` fetches the small `latest.json` pointer from the
   generic `skoelle/piratefinder-catalog-json` GitHub release
@@ -157,12 +157,16 @@ settings form (below the data-directory field; no config path) and a third
   `<GameinfoDirectory>/piratefinder/` with a `.piratefinder-catalog.json` marker
   (`source_tag`, `generated_at`, `asset`, `sha256`, `applied_at`).
 - Release builds check silently at startup; the dataset badge counts a pending
-  PF update. The settings row and dialog show the local/remote catalogue tag and
-  generation date; a not-installed row shows the **Install** hint right away.
+  PirateFinder-Catalog update. The settings row mirrors AtariLegend: local status/path and a
+  single **PirateFinder-Catalog** button that refreshes `latest.json` and
+  then downloads; it also links to the
+  [original PirateFinder project](https://github.com/peteclarke-del/PirateFinder).
+  The **Catalog data** dialog still shows local/remote catalogue tag and
+  generation date with **Install**/**Update**.
 - The data is CC BY-NC-SA 4.0, lives inside the data directory
   (`GameinfoDirectory/piratefinder`) and is never written into the game trees
   or published artifacts.
-- A compact **PF** button next to AtariLegend is implemented but **hidden for
+- A compact **PirateFinder-Catalog** button next to AtariLegend is implemented but **hidden for
   this release**; it opens the tabbed dialog (Release/Crew/Menus/Trivia/
   Sources). The selected ZIP is matched by decoded `.msa`/`.st`/`.stx` hashes;
   title + gameinfo crew/cracker/year is the fallback. B1 is metadata-only;
@@ -182,7 +186,7 @@ settings form (below the data-directory field; no config path) and a third
 2. **Alias curation.** Feed the reviewed `alias-candidates.csv` into
    `tools/crew-analysis/aliases.json`; do not merge automatically, because
    individual crackers and crews share names.
-3. **Release metadata overlay.** Show the matched PirateFinder label, year,
+3. **Release metadata overlay.** Show the matched PirateFinder-Catalog label, year,
    publisher, cracker and crew in “This ZIP”, and use the menu appearances
    for “also on Automation 250 / D-Bug 100 / …”.
 4. **Search.** Reuse the catalogue’s per-title appearances and aliases to

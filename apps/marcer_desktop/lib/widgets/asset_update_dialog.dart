@@ -4,8 +4,10 @@
 import 'package:flutter/material.dart';
 
 import '../asset_updater.dart';
-import '../piratefinder_data.dart';
 import '../catalog_assets.dart';
+import '../piratefinder_data.dart';
+import '../piratefinder_names.dart';
+import 'piratefinder_link.dart';
 
 /// Shows the catalog-data update dialog (gameinfo first, then screenshots).
 /// [onApplied] is called after a successful update so the caller can reload the
@@ -64,8 +66,10 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
 
   Future<void> _update(CatalogAsset asset) async {
     _cancelRequested = false;
-    final ok = await widget.controller
-        .update(asset, isCancelled: () => _cancelRequested);
+    final ok = await widget.controller.update(
+      asset,
+      isCancelled: () => _cancelRequested,
+    );
     if (!mounted) return;
     if (ok) widget.onApplied();
   }
@@ -97,16 +101,19 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 children: [
                   const Text(
                     'Newer catalog data is available. Marcer screenshots/game '
-                    'info come from the FTP; PirateFinder data comes from '
-                    'GitHub (CC BY-NC-SA 4.0, not part of the Marcer catalog).',
+                    'info come from the FTP; the $kPirateFinderCatalogName '
+                    'comes from GitHub (CC BY-NC-SA 4.0, not part of the '
+                    'Marcer catalog).',
                     style: TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                   const SizedBox(height: 12),
                   if (c.latest == null)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('No catalog-data info available.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      child: Text(
+                        'No catalog-data info available.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                     ),
                   for (final asset in rows) ...[
                     _row(c, asset),
@@ -120,9 +127,13 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                   ],
                   if (c.error != null) ...[
                     const SizedBox(height: 4),
-                    Text(c.error!,
-                        style: const TextStyle(
-                            fontSize: 12, color: Colors.redAccent)),
+                    Text(
+                      c.error!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.redAccent,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -153,7 +164,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
         : remote == null
         ? (pf.checking ? 'checking…' : 'not available')
         : 'catalogue ${pf.latest?.sourceTag ?? '?'} · '
-            '${pf.latest?.generatedAt ?? '?'}';
+              '${pf.latest?.generatedAt ?? '?'}';
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -170,7 +181,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
               const SizedBox(
                 width: 90,
                 child: Text(
-                  'PirateFinder',
+                  kPirateFinderCatalogShortName,
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -182,17 +193,25 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                       'local:  $localLabel',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
-                    Text('remote: $remoteLabel',
-                        style: const TextStyle(fontSize: 11)),
+                    Text(
+                      'remote: $remoteLabel',
+                      style: const TextStyle(fontSize: 11),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          const Text(
-            'GitHub · CC BY-NC-SA 4.0 · not part of the Marcer catalog',
-            style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+          const Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              PirateFinderGithubLink(),
+              Text(
+                ' · CC BY-NC-SA 4.0 · not part of the Marcer catalog',
+                style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
           if (pf.downloading)
@@ -201,7 +220,9 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 Expanded(
                   child: pf.total > 0
                       ? LinearProgressIndicator(
-                          value: pf.done / pf.total, minHeight: 6)
+                          value: pf.done / pf.total,
+                          minHeight: 6,
+                        )
                       : const LinearProgressIndicator(minHeight: 6),
                 ),
                 const SizedBox(width: 10),
@@ -236,9 +257,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 FilledButton(
-                  onPressed: busy || !hasDataDir
-                      ? null
-                      : _updatePirateFinder,
+                  onPressed: busy || !hasDataDir ? null : _updatePirateFinder,
                   child: Text(local == null ? 'Install' : 'Update'),
                 ),
               ],
@@ -267,7 +286,8 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
     final remote = c.remoteFor(asset)!;
     final local = c.localFor(asset);
     final dataPresent = c.dataPresentFor(asset);
-    final localLabel = local ??
+    final localLabel =
+        local ??
         (dataPresent ? 'version unknown (data present)' : 'not installed');
     final pending = c.isPending(asset);
     final updating = c.updatingAsset == asset;
@@ -290,18 +310,23 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 child: Text(
                   asset == CatalogAsset.gameinfo ? 'game info' : 'screenshots',
                   style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.bold),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('local:  $localLabel',
-                        style:
-                            const TextStyle(fontSize: 11, color: Colors.grey)),
-                    Text('remote: ${remote.archive}',
-                        style: const TextStyle(fontSize: 11)),
+                    Text(
+                      'local:  $localLabel',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    Text(
+                      'remote: ${remote.archive}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
                   ],
                 ),
               ),
@@ -314,14 +339,18 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 Expanded(
                   child: c.updateTotal > 0
                       ? LinearProgressIndicator(
-                          value: c.updateDone / c.updateTotal, minHeight: 6)
+                          value: c.updateDone / c.updateTotal,
+                          minHeight: 6,
+                        )
                       : const LinearProgressIndicator(minHeight: 6),
                 ),
                 const SizedBox(width: 10),
                 Flexible(
-                  child: Text(c.updateMessage,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  child: Text(
+                    c.updateMessage,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
                 ),
                 const SizedBox(width: 4),
                 TextButton(
@@ -341,17 +370,21 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: busy ? null : () => _update(asset),
-                  child: Text(local == null
-                      ? (dataPresent ? 'Overwrite' : 'Install')
-                      : 'Update'),
+                  child: Text(
+                    local == null
+                        ? (dataPresent ? 'Overwrite' : 'Install')
+                        : 'Update',
+                  ),
                 ),
               ],
             )
           else
             const Align(
               alignment: Alignment.centerRight,
-              child: Text('up to date',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50))),
+              child: Text(
+                'up to date',
+                style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
+              ),
             ),
         ],
       ),

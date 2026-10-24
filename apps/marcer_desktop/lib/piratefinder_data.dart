@@ -12,11 +12,16 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
 import 'ftp_downloader.dart';
+import 'piratefinder_names.dart';
 
 /// Fixed GitHub release/tag publishing the generic PirateFinder catalogue
 /// JSON (`https://github.com/skoelle/piratefinder-catalog-json`).
 const String kPirateFinderDataRepo = 'skoelle/piratefinder-catalog-json';
 const String kPirateFinderDataTag = 'catalog-latest';
+
+/// Original PirateFinder project (the catalogue's upstream source).
+const String kPirateFinderProjectUrl =
+    'https://github.com/peteclarke-del/PirateFinder';
 
 /// Platform asset used by the desktop app (the Atari ST catalogue).
 const String kPirateFinderPlatform = 'atari-st';
@@ -243,7 +248,9 @@ class HttpPirateFinderDownloader implements PirateFinderDownloader {
     bool Function()? isCancelled,
   }) async {
     if (asset.file.isEmpty) {
-      throw ArgumentError('The PirateFinder asset has no file name.');
+      throw ArgumentError(
+        'The $kPirateFinderCatalogShortName asset has no file name.',
+      );
     }
     final directory = Directory(targetDir)..createSync(recursive: true);
     final destination = File(p.join(directory.path, p.basename(asset.file)));
@@ -271,7 +278,11 @@ class HttpPirateFinderDownloader implements PirateFinderDownloader {
           }
           sink.add(chunk);
           done += chunk.length;
-          onProgress?.call('Downloading PirateFinder data…', done, total);
+          onProgress?.call(
+            'Downloading $kPirateFinderCatalogShortName…',
+            done,
+            total,
+          );
         }
       } finally {
         await sink.close();
@@ -376,7 +387,7 @@ class PirateFinderDataController extends ChangeNotifier {
         _index = value;
         return value;
       } catch (e) {
-        indexError = 'Could not read PirateFinder data: $e';
+        indexError = 'Could not read $kPirateFinderCatalogShortName: $e';
         return null;
       } finally {
         indexLoading = false;
@@ -409,7 +420,7 @@ class PirateFinderDataController extends ChangeNotifier {
       }
       latest = parsed;
     } catch (e) {
-      error = 'Could not check PirateFinder data: $e';
+      error = 'Could not check $kPirateFinderCatalogShortName: $e';
     } finally {
       checking = false;
       refreshLocal();
@@ -456,16 +467,34 @@ class PirateFinderDataController extends ChangeNotifier {
       invalidateIndex();
       return true;
     } on DownloadCancelledException {
-      error = 'PirateFinder download cancelled.';
+      error = '$kPirateFinderCatalogShortName download cancelled.';
       return false;
     } catch (e) {
-      error = 'PirateFinder data download failed: $e';
+      error = '$kPirateFinderCatalogShortName download failed: $e';
       return false;
     } finally {
       downloading = false;
       message = '';
       _notify();
     }
+  }
+
+  /// Refreshes the remote pointer and downloads the newest Atari ST asset.
+  ///
+  /// Used by the settings row's single "PirateFinder-Catalog" action:
+  /// it always checks for the newest catalogue first, then overwrites the
+  /// local data. Returns `false` (with [error] set) when the check or the
+  /// download fails.
+  Future<bool> downloadLatest({bool Function()? isCancelled}) async {
+    if (busy) return false;
+    await check(force: true);
+    if (error != null) return false;
+    if (remote == null) {
+      error = 'No $kPirateFinderCatalogShortName Atari ST data available.';
+      _notify();
+      return false;
+    }
+    return update(isCancelled: isCancelled);
   }
 
   @override

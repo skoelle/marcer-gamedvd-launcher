@@ -11,6 +11,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import '../asset_updater.dart';
 import '../catalog_controller.dart';
 import '../piratefinder_data.dart';
+import '../piratefinder_names.dart';
 import '../self_updater.dart';
 
 /// Global filter bar in two rows plus section tabs and letter row, matching
@@ -228,8 +229,11 @@ class _FilterBarState extends State<FilterBar> {
               children: [
                 if (c.catalogMode) ...[
                   for (final s in kSections) ...[
-                    _tabButton(_sectionLabel(s), f.section == s,
-                        () => c.setSection(s)),
+                    _tabButton(
+                      _sectionLabel(s),
+                      f.section == s,
+                      () => c.setSection(s),
+                    ),
                     const SizedBox(width: 6),
                   ],
                 ],
@@ -250,8 +254,11 @@ class _FilterBarState extends State<FilterBar> {
                   _settingsButton(widget.onOpenSettings!),
                   const SizedBox(width: 6),
                 ],
-                _labelButton(c.catalogMode ? 'Folders (T)' : 'Catalog (T)',
-                    c.toggleView, width: 92),
+                _labelButton(
+                  c.catalogMode ? 'Folders (T)' : 'Catalog (T)',
+                  c.toggleView,
+                  width: 92,
+                ),
               ],
             ),
             if (c.catalogMode) ...[
@@ -279,7 +286,9 @@ class _FilterBarState extends State<FilterBar> {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 10),
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
                           ),
                           style: const TextStyle(fontSize: 12),
                           onChanged: _onSearchChanged,
@@ -307,7 +316,9 @@ class _FilterBarState extends State<FilterBar> {
                             ? 'No crew data'
                             : 'Top ${c.crews.length < kCrewInitialLimit ? c.crews.length : kCrewInitialLimit} by ZIPs',
                         style: const TextStyle(
-                            fontSize: 11, color: Colors.grey),
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
                       ),
                     ),
                   if (withAtariLegend && fields.contains('genre'))
@@ -422,8 +433,12 @@ class _FilterBarState extends State<FilterBar> {
                   c.setLetter,
                   trailing: [
                     const SizedBox(width: 8),
-                    _labelButton('★ Favorites', c.toggleFavoritesOnly,
-                        width: 96, active: c.favoritesOnly),
+                    _labelButton(
+                      '★ Favorites',
+                      c.toggleFavoritesOnly,
+                      width: 96,
+                      active: c.favoritesOnly,
+                    ),
                     const SizedBox(width: 2),
                     _labelButton('clear', c.resetFilters, width: 52),
                   ],
@@ -439,11 +454,11 @@ class _FilterBarState extends State<FilterBar> {
   /// Display label for a section tab: the `cracked` section shows as
   /// `games` (the filter value / section key itself stays unchanged).
   String _sectionLabel(String section) => switch (section) {
-        'cracked' => 'games',
-        'crew' => 'crews',
-        'magazine' => 'magazines',
-        _ => section,
-      };
+    'cracked' => 'games',
+    'crew' => 'crews',
+    'magazine' => 'magazines',
+    _ => section,
+  };
 
   Widget _tabButton(String label, bool active, VoidCallback onTap) {
     return InkWell(
@@ -454,7 +469,8 @@ class _FilterBarState extends State<FilterBar> {
         decoration: BoxDecoration(
           color: active ? Colors.cyan.withValues(alpha: 0.25) : Colors.black,
           border: Border.all(
-              color: active ? Colors.cyan : Colors.grey.withValues(alpha: 0.4)),
+            color: active ? Colors.cyan : Colors.grey.withValues(alpha: 0.4),
+          ),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
@@ -484,7 +500,8 @@ class _FilterBarState extends State<FilterBar> {
         SizedBox(
           height: 28,
           child: Tooltip(
-            message: 'Save $n manual status/kind change(s)\n'
+            message:
+                'Save $n manual status/kind change(s)\n'
                 'to index.json (shotgen lock)',
             child: TextButton(
               onPressed: _savePending,
@@ -492,8 +509,10 @@ class _FilterBarState extends State<FilterBar> {
                 foregroundColor: Colors.cyan,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 minimumSize: const Size(0, 28),
-                textStyle:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               child: Text('Save ($n)'),
             ),
@@ -537,14 +556,16 @@ class _FilterBarState extends State<FilterBar> {
       builder: (context, _) {
         final info = u.available;
         final phase = u.phase;
-        final busy = phase == UpdatePhase.downloading ||
+        final busy =
+            phase == UpdatePhase.downloading ||
             phase == UpdatePhase.installing ||
             phase == UpdatePhase.restarting;
         if (info == null && !busy) return const SizedBox.shrink();
         final String label;
         if (phase == UpdatePhase.downloading) {
-          final pct =
-              u.progress == null ? '' : ' ${(u.progress! * 100).round()}%';
+          final pct = u.progress == null
+              ? ''
+              : ' ${(u.progress! * 100).round()}%';
           label = '⬇ updating$pct';
         } else if (phase == UpdatePhase.installing) {
           label = 'installing…';
@@ -559,17 +580,19 @@ class _FilterBarState extends State<FilterBar> {
             message: busy
                 ? 'Installing update ${info?.version}…'
                 : 'Update ${u.currentVersion} → ${info!.version}\n'
-                    'Download, install and restart the app',
+                      'Download, install and restart the app',
             child: TextButton(
               onPressed: busy ? null : () => u.install(),
               style: TextButton.styleFrom(
                 foregroundColor: const Color(0xFFFFD54A),
-                disabledForegroundColor:
-                    const Color(0xFFFFD54A).withValues(alpha: 0.6),
+                disabledForegroundColor: const Color(0xFFFFD54A)
+                    .withValues(alpha: 0.6),
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 minimumSize: const Size(0, 28),
                 textStyle: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.bold),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               child: Text(label),
             ),
@@ -586,14 +609,16 @@ class _FilterBarState extends State<FilterBar> {
     return ListenableBuilder(
       listenable: a,
       builder: (context, _) {
-        final n = a.pendingAssets().length +
+        final n =
+            a.pendingAssets().length +
             (widget.pirateFinderUpdater?.hasPending == true ? 1 : 0);
         final button = SizedBox(
           width: 32,
           height: 28,
           child: Tooltip(
-            message: 'Check catalog assets (screenshots / game info / '
-                'PirateFinder data)',
+            message:
+                'Check catalog assets (screenshots / game info / '
+                '$kPirateFinderCatalogShortName)',
             child: TextButton(
               onPressed: widget.onOpenAssetUpdates,
               style: TextButton.styleFrom(
@@ -641,8 +666,12 @@ class _FilterBarState extends State<FilterBar> {
     );
   }
 
-  Widget _labelButton(String text, VoidCallback onTap,
-      {double width = 48, bool active = false}) {
+  Widget _labelButton(
+    String text,
+    VoidCallback onTap, {
+    double width = 48,
+    bool active = false,
+  }) {
     return SizedBox(
       width: width,
       height: 28,
@@ -655,11 +684,13 @@ class _FilterBarState extends State<FilterBar> {
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           alignment: Alignment.center,
         ),
-        child: Text(text,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: active ? FontWeight.bold : FontWeight.normal,
-            )),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
       ),
     );
   }
@@ -676,8 +707,32 @@ class _FilterBarState extends State<FilterBar> {
     const all = [
       'any',
       '0-9',
-      'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-      'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+      'A',
+      'B',
+      'C',
+      'D',
+      'E',
+      'F',
+      'G',
+      'H',
+      'I',
+      'J',
+      'K',
+      'L',
+      'M',
+      'N',
+      'O',
+      'P',
+      'Q',
+      'R',
+      'S',
+      'T',
+      'U',
+      'V',
+      'W',
+      'X',
+      'Y',
+      'Z',
     ];
     return Wrap(
       spacing: 2,
@@ -705,8 +760,8 @@ class _FilterBarState extends State<FilterBar> {
                   color: current == l
                       ? Colors.cyan
                       : (l != 'any' && !facetLetters.contains(l)
-                          ? Colors.grey.withValues(alpha: 0.5)
-                          : Colors.grey),
+                            ? Colors.grey.withValues(alpha: 0.5)
+                            : Colors.grey),
                 ),
               ),
             ),
@@ -754,20 +809,25 @@ class _SelectMenuState extends State<_SelectMenu> {
     final menuWidth = math.min(280.0, MediaQuery.sizeOf(context).width - 32);
     // Up to ¾ of the screen, but shrink for short lists.
     final menuHeight = math.min(
-        screenHeight * 0.75, widget.items.length * 28.0 + 64.0);
+      screenHeight * 0.75,
+      widget.items.length * 28.0 + 64.0,
+    );
     return SizedBox(
       width: widget.width,
       height: 28,
       child: MenuAnchor(
         controller: _menu,
         style: MenuStyle(
-          backgroundColor:
-              const WidgetStatePropertyAll<Color>(Color(0xFF1B1B1B)),
+          backgroundColor: const WidgetStatePropertyAll<Color>(
+            Color(0xFF1B1B1B),
+          ),
           padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
-              EdgeInsets.zero),
+            EdgeInsets.zero,
+          ),
           minimumSize: WidgetStatePropertyAll<Size>(Size(menuWidth, 0)),
           maximumSize: WidgetStatePropertyAll<Size>(
-              Size(menuWidth, screenHeight * 0.75)),
+            Size(menuWidth, screenHeight * 0.75),
+          ),
         ),
         menuChildren: [
           _SelectMenuPanel(
@@ -802,12 +862,17 @@ class _SelectMenuState extends State<_SelectMenu> {
                         widget.labelOf(widget.value),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style:
-                            const TextStyle(fontSize: 12, color: Colors.white),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                    const Icon(Icons.arrow_drop_down,
-                        size: 20, color: Colors.white70),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      size: 20,
+                      color: Colors.white70,
+                    ),
                   ],
                 ),
               ),
@@ -857,7 +922,8 @@ class _SelectMenuPanelState extends State<_SelectMenuPanel> {
     final index = widget.items.indexOf(widget.value);
     _highlight = index < 0 ? 0 : index;
     _scroll = ScrollController(
-        initialScrollOffset: _highlight <= 0 ? 0.0 : _highlight * 28.0);
+      initialScrollOffset: _highlight <= 0 ? 0.0 : _highlight * 28.0,
+    );
   }
 
   @override
@@ -889,21 +955,25 @@ class _SelectMenuPanelState extends State<_SelectMenuPanel> {
     final offset = index * 28.0;
     final pos = _scroll.position;
     if (offset < pos.pixels) {
-      _scroll.animateTo(offset,
-          duration: const Duration(milliseconds: 80), curve: Curves.easeOut);
+      _scroll.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 80),
+        curve: Curves.easeOut,
+      );
     } else if (offset + 28 > pos.pixels + pos.viewportDimension) {
-      _scroll.animateTo(offset + 28 - pos.viewportDimension,
-          duration: const Duration(milliseconds: 80), curve: Curves.easeOut);
+      _scroll.animateTo(
+        offset + 28 - pos.viewportDimension,
+        duration: const Duration(milliseconds: 80),
+        curve: Curves.easeOut,
+      );
     }
   }
 
   void _choose(List<String> items) {
     if (items.isEmpty) return;
     final q = _query.trim().toLowerCase();
-    final exact = items.indexWhere(
-        (v) => widget.labelOf(v).toLowerCase() == q);
-    final index =
-        exact >= 0 ? exact : _highlight.clamp(0, items.length - 1);
+    final exact = items.indexWhere((v) => widget.labelOf(v).toLowerCase() == q);
+    final index = exact >= 0 ? exact : _highlight.clamp(0, items.length - 1);
     widget.onSelected(items[index]);
   }
 
@@ -938,8 +1008,10 @@ class _SelectMenuPanelState extends State<_SelectMenuPanel> {
                   hintText: 'Type to filter…',
                   hintStyle: TextStyle(fontSize: 12, color: Colors.grey),
                   border: OutlineInputBorder(),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
                 ),
                 onChanged: (v) {
                   setState(() {
@@ -954,8 +1026,10 @@ class _SelectMenuPanelState extends State<_SelectMenuPanel> {
             Expanded(
               child: items.isEmpty
                   ? const Center(
-                      child: Text('No matches',
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      child: Text(
+                        'No matches',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                     )
                   : ListView.builder(
                       controller: _scroll,
@@ -975,11 +1049,12 @@ class _SelectMenuPanelState extends State<_SelectMenuPanel> {
                               color: active
                                   ? const Color(0xFF2A3A3A)
                                   : (selected
-                                      ? const Color(0xFF1E3A3A)
-                                      : Colors.transparent),
+                                        ? const Color(0xFF1E3A3A)
+                                        : Colors.transparent),
                               alignment: Alignment.centerLeft,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
                               child: Text(
                                 widget.labelOf(v),
                                 maxLines: 1,
@@ -989,8 +1064,8 @@ class _SelectMenuPanelState extends State<_SelectMenuPanel> {
                                   color: selected
                                       ? Colors.cyan
                                       : (active
-                                          ? Colors.white
-                                          : Colors.white70),
+                                            ? Colors.white
+                                            : Colors.white70),
                                 ),
                               ),
                             ),

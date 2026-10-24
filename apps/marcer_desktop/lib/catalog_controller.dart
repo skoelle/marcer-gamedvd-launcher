@@ -62,7 +62,7 @@ class CatalogController extends ChangeNotifier {
   late GameInfoIndex gameinfo;
   AtariLegendIndex atariLegend = AtariLegendIndex.empty();
 
-  /// Optional PirateFinder data controller (set by the home page); used by
+  /// Optional PirateFinder-Catalog data controller (set by the home page); used by
   /// the PF detail button and the matching helper.
   PirateFinderDataController? pirateFinderData;
   late CatalogUniverse universe;

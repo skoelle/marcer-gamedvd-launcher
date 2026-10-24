@@ -12,8 +12,10 @@ import '../catalog_assets.dart';
 import '../ftp_downloader.dart';
 import '../hatari_installer.dart';
 import '../piratefinder_data.dart';
+import '../piratefinder_names.dart';
 import '../tos_rom.dart';
 import 'hatari_install_dialog.dart';
+import 'piratefinder_link.dart';
 import 'tos_rom_dialog.dart';
 
 /// Live validation state of a single path field, driving its trailing icon.
@@ -45,12 +47,16 @@ enum _Field {
 }
 
 class _PathField {
-  _PathField(this.field, this.label, this.kind,
-      {this.required = false,
-      this.optionalHint,
-      this.obscure = false,
-      this.sectionHeader,
-      this.download});
+  _PathField(
+    this.field,
+    this.label,
+    this.kind, {
+    this.required = false,
+    this.optionalHint,
+    this.obscure = false,
+    this.sectionHeader,
+    this.download,
+  });
 
   final _Field field;
   final String label;
@@ -160,50 +166,77 @@ class _SettingsFormState extends State<SettingsForm> {
     super.initState();
     final c = widget.initial;
     _fields = [
-      _PathField(_Field.root, 'RootDirectory', _PickerKind.directory,
-          required: true)
-        ..controller.text = c.rootDirectory,
-      _PathField(_Field.patch, 'PatchDirectory', _PickerKind.directory,
-          optionalHint: 'leave empty for no patch layer')
-        ..controller.text = c.patchDirectory,
-      _PathField(_Field.ftpHost, 'FTP host', _PickerKind.text,
-          sectionHeader: 'FTP — downloads from the server'
-              ' (game folders + catalog data)',
-          optionalHint: 'host or host:port')
-        ..controller.text = c.ftpHost,
+      _PathField(
+        _Field.root,
+        'RootDirectory',
+        _PickerKind.directory,
+        required: true,
+      )..controller.text = c.rootDirectory,
+      _PathField(
+        _Field.patch,
+        'PatchDirectory',
+        _PickerKind.directory,
+        optionalHint: 'leave empty for no patch layer',
+      )..controller.text = c.patchDirectory,
+      _PathField(
+        _Field.ftpHost,
+        'FTP host',
+        _PickerKind.text,
+        sectionHeader:
+            'FTP — downloads from the server'
+            ' (game folders + catalog data)',
+        optionalHint: 'host or host:port',
+      )..controller.text = c.ftpHost,
       _PathField(_Field.ftpUser, 'FTP user', _PickerKind.text)
         ..controller.text = c.ftpUser,
-      _PathField(_Field.ftpPass, 'FTP password', _PickerKind.text,
-          obscure: true)
-        ..controller.text = c.ftpPassword,
-      _PathField(_Field.ftpBase, 'FTP remote base dir (game folders)',
-          _PickerKind.text,
-          optionalHint: 'empty → FTP login root')
-        ..controller.text = c.ftpRemoteBase,
-      _PathField(_Field.ftpAssets, 'FTP asset dir (screenshots + gameinfo)',
-          _PickerKind.text,
-          optionalHint: kDefaultFtpAssetsRemote)
-        ..controller.text = c.ftpAssetsRemote,
-      _PathField(_Field.screenshot, 'ScreenshotDirectory', _PickerKind.directory,
-          sectionHeader: 'Catalog data',
-          optionalHint: 'screenshots + index.json',
-          download: CatalogAsset.screenshots)
-        ..controller.text = c.screenshotDirectory,
-      _PathField(_Field.gameinfo, 'Data directory (GameinfoDirectory)',
-          _PickerKind.directory,
-          optionalHint: 'gameinfo/, atarilegend/, piratefinder/',
-          download: CatalogAsset.gameinfo)
-        ..controller.text = c.gameinfoDirectory,
-      _PathField(_Field.hatariExec, 'Hatari executable', _PickerKind.executable,
-          sectionHeader: 'Hatari')
-        ..controller.text = c.hatariExecutable,
-      _PathField(_Field.hatariCfg, 'Hatari config file', _PickerKind.configFile,
-          optionalHint: 'empty → bundled MarcerGameDvd-Hatari.cfg')
-        ..controller.text = c.hatariConfigFile,
+      _PathField(
+        _Field.ftpPass,
+        'FTP password',
+        _PickerKind.text,
+        obscure: true,
+      )..controller.text = c.ftpPassword,
+      _PathField(
+        _Field.ftpBase,
+        'FTP remote base dir (game folders)',
+        _PickerKind.text,
+        optionalHint: 'empty → FTP login root',
+      )..controller.text = c.ftpRemoteBase,
+      _PathField(
+        _Field.ftpAssets,
+        'FTP asset dir (screenshots + gameinfo)',
+        _PickerKind.text,
+        optionalHint: kDefaultFtpAssetsRemote,
+      )..controller.text = c.ftpAssetsRemote,
+      _PathField(
+        _Field.screenshot,
+        'ScreenshotDirectory',
+        _PickerKind.directory,
+        sectionHeader: 'Catalog data',
+        optionalHint: 'screenshots + index.json',
+        download: CatalogAsset.screenshots,
+      )..controller.text = c.screenshotDirectory,
+      _PathField(
+        _Field.gameinfo,
+        'Data directory (GameinfoDirectory)',
+        _PickerKind.directory,
+        optionalHint: 'gameinfo/, atarilegend/, piratefinder/',
+        download: CatalogAsset.gameinfo,
+      )..controller.text = c.gameinfoDirectory,
+      _PathField(
+        _Field.hatariExec,
+        'Hatari executable',
+        _PickerKind.executable,
+        sectionHeader: 'Hatari',
+      )..controller.text = c.hatariExecutable,
+      _PathField(
+        _Field.hatariCfg,
+        'Hatari config file',
+        _PickerKind.configFile,
+        optionalHint: 'empty → bundled MarcerGameDvd-Hatari.cfg',
+      )..controller.text = c.hatariConfigFile,
     ];
     _ownsPirateFinder = widget.pirateFinderData == null;
-    _pirateFinder =
-        widget.pirateFinderData ?? PirateFinderDataController();
+    _pirateFinder = widget.pirateFinderData ?? PirateFinderDataController();
     _pirateFinder.config = widget.initial;
     _pirateFinder.addListener(_onPirateFinderChanged);
     _pirateFinder.refreshLocal();
@@ -246,18 +279,18 @@ class _SettingsFormState extends State<SettingsForm> {
   /// The config assembled from the current field values (untouched fields
   /// keep their initial value via [DesktopConfig.copyWith]).
   DesktopConfig get currentConfig => widget.initial.copyWith(
-        rootDirectory: _textOf(_Field.root),
-        patchDirectory: _textOf(_Field.patch),
-        screenshotDirectory: _textOf(_Field.screenshot),
-        gameinfoDirectory: _textOf(_Field.gameinfo),
-        hatariExecutable: _textOf(_Field.hatariExec),
-        hatariConfigFile: _textOf(_Field.hatariCfg),
-        ftpHost: _textOf(_Field.ftpHost),
-        ftpUser: _textOf(_Field.ftpUser),
-        ftpPassword: _textOf(_Field.ftpPass),
-        ftpRemoteBase: _textOf(_Field.ftpBase),
-        ftpAssetsRemote: _textOf(_Field.ftpAssets),
-      );
+    rootDirectory: _textOf(_Field.root),
+    patchDirectory: _textOf(_Field.patch),
+    screenshotDirectory: _textOf(_Field.screenshot),
+    gameinfoDirectory: _textOf(_Field.gameinfo),
+    hatariExecutable: _textOf(_Field.hatariExec),
+    hatariConfigFile: _textOf(_Field.hatariCfg),
+    ftpHost: _textOf(_Field.ftpHost),
+    ftpUser: _textOf(_Field.ftpUser),
+    ftpPassword: _textOf(_Field.ftpPass),
+    ftpRemoteBase: _textOf(_Field.ftpBase),
+    ftpAssetsRemote: _textOf(_Field.ftpAssets),
+  );
 
   /// True when no field is invalid (required filled + valid, optional either
   /// empty or valid).
@@ -282,9 +315,7 @@ class _SettingsFormState extends State<SettingsForm> {
       : currentConfig.resolveGameinfoDirectory();
 
   Future<void> _downloadAsset(CatalogAsset asset, {bool force = false}) async {
-    if (_downloading != null ||
-        _fetchingAtariLegend ||
-        _pirateFinder.busy) {
+    if (_downloading != null || _fetchingAtariLegend || _pirateFinder.busy) {
       return;
     }
     if (!currentConfig.ftpConfigured) {
@@ -350,9 +381,7 @@ class _SettingsFormState extends State<SettingsForm> {
   /// Downloads the newest AtariLegend dump and writes the compact metadata
   /// cache into the configured directory (created when it does not exist).
   Future<void> _downloadAtariLegend() async {
-    if (_downloading != null ||
-        _fetchingAtariLegend ||
-        _pirateFinder.busy) {
+    if (_downloading != null || _fetchingAtariLegend || _pirateFinder.busy) {
       return;
     }
     final target = currentConfig.resolveAtariLegendDirectory();
@@ -383,8 +412,10 @@ class _SettingsFormState extends State<SettingsForm> {
         isCancelled: () => _atariLegendCancel,
       );
       if (mounted) {
-        _snack('AtariLegend data: ${result.games} games '
-            '(${result.dumpFile}).');
+        _snack(
+          'AtariLegend data: ${result.games} games '
+          '(${result.dumpFile}).',
+        );
       }
     } on AtariLegendFetchCancelled {
       if (mounted) _snack('AtariLegend download cancelled.');
@@ -402,34 +433,28 @@ class _SettingsFormState extends State<SettingsForm> {
     }
   }
 
-  /// Downloads the PF catalogue JSON from GitHub (offered only; never
+  /// Downloads the newest PF catalogue JSON from GitHub (offered only; never
   /// applied automatically). The data stays in the app-managed PF directory.
   Future<void> _downloadPirateFinder() async {
-    if (_pirateFinder.busy ||
-        _downloading != null ||
-        _fetchingAtariLegend) {
+    if (_pirateFinder.busy || _downloading != null || _fetchingAtariLegend) {
       return;
     }
     _pirateFinder.config = currentConfig;
     _pirateFinderCancel = false;
     widget.onBusyChanged?.call(true);
     try {
-      final ok = await _pirateFinder.update(
-          isCancelled: () => _pirateFinderCancel);
+      final ok = await _pirateFinder.downloadLatest(
+        isCancelled: () => _pirateFinderCancel,
+      );
       if (!mounted) return;
       if (ok) {
-        _snack('PirateFinder data updated.');
+        _snack('$kPirateFinderCatalogShortName updated.');
       } else if (_pirateFinder.error != null) {
         _snack(_pirateFinder.error!);
       }
     } finally {
       widget.onBusyChanged?.call(false);
     }
-  }
-
-  Future<void> _checkPirateFinder() async {
-    _pirateFinder.config = currentConfig;
-    await _pirateFinder.check(force: true);
   }
 
   /// Asks whether the already-applied (up-to-date) archive should be
@@ -439,8 +464,10 @@ class _SettingsFormState extends State<SettingsForm> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Already up to date'),
-        content: Text('You already have the newest ${asset.label} ($archive). '
-            'Download it again anyway?'),
+        content: Text(
+          'You already have the newest ${asset.label} ($archive). '
+          'Download it again anyway?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -480,8 +507,9 @@ class _SettingsFormState extends State<SettingsForm> {
             type: field.kind == _PickerKind.configFile
                 ? FileType.custom
                 : FileType.any,
-            allowedExtensions:
-                field.kind == _PickerKind.configFile ? const ['cfg'] : null,
+            allowedExtensions: field.kind == _PickerKind.configFile
+                ? const ['cfg']
+                : null,
           );
           final path = result?.files.single.path;
           if (path != null) field.controller.text = path;
@@ -518,8 +546,8 @@ class _SettingsFormState extends State<SettingsForm> {
   /// AtariLegend cache row (no path field; target is `<DataDir>/atarilegend`).
   Widget _atariLegendRow() {
     final target = currentConfig.resolveAtariLegendDirectory();
-    final installed = target.isNotEmpty &&
-        File('$target/$kAtariLegendFileName').existsSync();
+    final installed =
+        target.isNotEmpty && File('$target/$kAtariLegendFileName').existsSync();
     final busy =
         _downloading != null || _fetchingAtariLegend || _pirateFinder.busy;
     return Row(
@@ -562,6 +590,14 @@ class _SettingsFormState extends State<SettingsForm> {
                               color: Colors.grey,
                             ),
                           ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'CC BY-NC-SA 4.0 · not part of the Marcer catalog',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF7A7A7A),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -582,11 +618,6 @@ class _SettingsFormState extends State<SettingsForm> {
                 const SizedBox(height: 6),
                 _atariLegendStatus(),
               ],
-              const SizedBox(height: 4),
-              const Text(
-                'CC BY-NC-SA 4.0 · not part of the Marcer catalog',
-                style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
-              ),
             ],
           ),
         ),
@@ -597,20 +628,14 @@ class _SettingsFormState extends State<SettingsForm> {
   /// Optional PF catalogue data row (`<DataDir>/piratefinder`).
   Widget _pirateFinderRow() {
     final pf = _pirateFinder;
-    final remote = pf.remote;
     final local = pf.local;
-    final pending = pf.hasPending;
     final busy = pf.busy || _downloading != null || _fetchingAtariLegend;
     final hasDataDir = pf.dataDir.isNotEmpty;
     final localLabel = local == null
         ? 'not installed'
-        : 'catalogue ${local.sourceTag} · ${local.generatedAt}';
-    final remoteLabel = !hasDataDir
-        ? 'set a data directory first'
-        : remote == null
-        ? (pf.checking ? 'checking…' : 'not available')
-        : 'catalogue ${pf.latest?.sourceTag ?? '?'} · '
-            '${pf.latest?.generatedAt ?? '?'}';
+        : local.sourceTag.isEmpty
+        ? 'installed'
+        : 'installed · catalogue ${local.sourceTag}';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,7 +645,7 @@ class _SettingsFormState extends State<SettingsForm> {
           child: const Padding(
             padding: EdgeInsets.only(top: 10),
             child: Text(
-              'PirateFinder data',
+              kPirateFinderCatalogShortName,
               style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
           ),
@@ -639,51 +664,58 @@ class _SettingsFormState extends State<SettingsForm> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('local:  $localLabel',
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.grey)),
-                          Text('remote: $remoteLabel',
-                              style: const TextStyle(fontSize: 11)),
+                          Text(
+                            localLabel,
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          Text(
+                            hasDataDir
+                                ? pf.dataDir
+                                : 'set a data directory first',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              PirateFinderGithubLink(),
+                              Text(
+                                ' · CC BY-NC-SA 4.0 · not part of the '
+                                'Marcer catalog',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF7A7A7A),
+                                ),
+                              ),
+                            ],
+                          ),
                           if (pf.error != null) ...[
                             const SizedBox(height: 2),
-                            Text(pf.error!,
-                                style: const TextStyle(
-                                    fontSize: 11, color: Colors.redAccent)),
+                            Text(
+                              pf.error!,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.redAccent,
+                              ),
+                            ),
                           ],
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (!pf.downloading)
-                    SizedBox(
-                      height: 40,
-                      child: remote == null
-                          ? TextButton(
-                              onPressed: busy || !hasDataDir
-                                  ? null
-                                  : _checkPirateFinder,
-                              child: const Text('Check'),
-                            )
-                          : pending
-                              ? FilledButton.tonal(
-                                  onPressed: busy || !hasDataDir
-                                      ? null
-                                      : _downloadPirateFinder,
-                                  child:
-                                      Text(local == null ? 'Install' : 'Update'),
-                                )
-                              : const Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Padding(
-                                    padding: EdgeInsets.only(right: 8),
-                                    child: Text('up to date',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            color: Color(0xFF4CAF50))),
-                                  ),
-                                ),
+                  SizedBox(
+                    height: 40,
+                    child: FilledButton.tonal(
+                      onPressed: busy || !hasDataDir
+                          ? null
+                          : _downloadPirateFinder,
+                      child: const Text(kPirateFinderCatalogShortName),
                     ),
+                  ),
                 ],
               ),
               if (pf.downloading) ...[
@@ -693,15 +725,21 @@ class _SettingsFormState extends State<SettingsForm> {
                     Expanded(
                       child: pf.total > 0
                           ? LinearProgressIndicator(
-                              value: pf.done / pf.total, minHeight: 6)
+                              value: pf.done / pf.total,
+                              minHeight: 6,
+                            )
                           : const LinearProgressIndicator(minHeight: 6),
                     ),
                     const SizedBox(width: 10),
                     Flexible(
-                      child: Text(pf.message,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 11, color: Colors.grey)),
+                      child: Text(
+                        pf.message,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 4),
                     TextButton(
@@ -712,11 +750,6 @@ class _SettingsFormState extends State<SettingsForm> {
                   ],
                 ),
               ],
-              const SizedBox(height: 4),
-              const Text(
-                'GitHub · CC BY-NC-SA 4.0 · not part of the Marcer catalog',
-                style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
-              ),
             ],
           ),
         ),
@@ -725,13 +758,16 @@ class _SettingsFormState extends State<SettingsForm> {
   }
 
   Widget _sectionHeader(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text,
-            style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-                fontWeight: FontWeight.bold)),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: const TextStyle(
+        color: Colors.white70,
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  );
 
   /// Width of the left label column.
   static const double _labelWidth = 260;
@@ -757,12 +793,17 @@ class _SettingsFormState extends State<SettingsForm> {
                       decoration: InputDecoration(
                         isDense: true,
                         suffixIcon: _statusIcon(_statusOf(field)),
-                        suffixIconConstraints:
-                            const BoxConstraints(minWidth: 32, minHeight: 32),
+                        suffixIconConstraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
                         border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(4)),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 10),
+                          horizontal: 8,
+                          vertical: 10,
+                        ),
                       ),
                     ),
                   ),
@@ -781,7 +822,8 @@ class _SettingsFormState extends State<SettingsForm> {
                     SizedBox(
                       height: 40,
                       child: FilledButton.tonal(
-                        onPressed: _downloading == null &&
+                        onPressed:
+                            _downloading == null &&
                                 !_fetchingAtariLegend &&
                                 !_pirateFinder.busy
                             ? () => _downloadAsset(field.download!)
@@ -806,17 +848,19 @@ class _SettingsFormState extends State<SettingsForm> {
   Future<void> _installHatari() async {
     final build = widget.hatariBuild ?? hatariBuildFor();
     if (build == null) return;
-    final exe = await showHatariInstallDialog(context,
-        config: currentConfig,
-        downloader: widget.hatariDownloader,
-        build: build);
+    final exe = await showHatariInstallDialog(
+      context,
+      config: currentConfig,
+      downloader: widget.hatariDownloader,
+      build: build,
+    );
     if (exe == null || !mounted) return;
-    final value =
-        hatariConfigExecutable(appDir: currentConfig.appDir, exePath: exe);
-    _fields
-        .firstWhere((f) => f.field == _Field.hatariExec)
-        .controller
-        .text = value;
+    final value = hatariConfigExecutable(
+      appDir: currentConfig.appDir,
+      exePath: exe,
+    );
+    _fields.firstWhere((f) => f.field == _Field.hatariExec).controller.text =
+        value;
     setState(() {});
   }
 
@@ -835,8 +879,10 @@ class _SettingsFormState extends State<SettingsForm> {
           width: _labelWidth,
           child: const Padding(
             padding: EdgeInsets.only(top: 11),
-            child: Text('Hatari installation',
-                style: TextStyle(color: Colors.white, fontSize: 12)),
+            child: Text(
+              'Hatari installation',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -853,10 +899,10 @@ class _SettingsFormState extends State<SettingsForm> {
                 child: Text(
                   !supported
                       ? 'No automatic install on this platform — install '
-                          'Hatari manually'
+                            'Hatari manually'
                       : installed
-                          ? 'Hatari is installed'
-                          : 'Hatari missing — download a prebuilt binary',
+                      ? 'Hatari is installed'
+                      : 'Hatari missing — download a prebuilt binary',
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ),
@@ -866,9 +912,9 @@ class _SettingsFormState extends State<SettingsForm> {
                   height: 40,
                   child: OutlinedButton(
                     onPressed: _installHatari,
-                    child: Text(installed
-                        ? 'Reinstall Hatari…'
-                        : 'Install Hatari…'),
+                    child: Text(
+                      installed ? 'Reinstall Hatari…' : 'Install Hatari…',
+                    ),
                   ),
                 ),
             ],
@@ -881,8 +927,11 @@ class _SettingsFormState extends State<SettingsForm> {
   /// Downloads a TOS ROM image (or replaces the existing one) and refreshes the
   /// section's status.
   Future<void> _downloadTos() async {
-    final ok = await showTosRomDialog(context,
-        config: currentConfig, downloader: widget.tosDownloader);
+    final ok = await showTosRomDialog(
+      context,
+      config: currentConfig,
+      downloader: widget.tosDownloader,
+    );
     if (ok && mounted) setState(() {});
   }
 
@@ -896,8 +945,10 @@ class _SettingsFormState extends State<SettingsForm> {
           width: _labelWidth,
           child: const Padding(
             padding: EdgeInsets.only(top: 11),
-            child: Text('TOS ROM',
-                style: TextStyle(color: Colors.white, fontSize: 12)),
+            child: Text(
+              'TOS ROM',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -924,7 +975,8 @@ class _SettingsFormState extends State<SettingsForm> {
                 child: OutlinedButton(
                   onPressed: _downloadTos,
                   child: Text(
-                      installed ? 'Replace TOS ROM…' : 'Download TOS ROM…'),
+                    installed ? 'Replace TOS ROM…' : 'Download TOS ROM…',
+                  ),
                 ),
               ),
             ],
@@ -937,105 +989,111 @@ class _SettingsFormState extends State<SettingsForm> {
   /// Left label column: the field label (with a required marker) and, below it,
   /// the optional hint in small grey text.
   Widget _label(_PathField field) => Padding(
-        padding: const EdgeInsets.only(top: 11),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text.rich(
-              TextSpan(
-                text: field.label,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-                children: [
-                  if (field.required)
-                    const TextSpan(
-                        text: ' *',
-                        style: TextStyle(color: Colors.redAccent)),
-                ],
-              ),
-            ),
-            if (field.optionalHint != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(field.optionalHint!,
-                    style: const TextStyle(color: Colors.grey, fontSize: 11)),
-              ),
-          ],
+    padding: const EdgeInsets.only(top: 11),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            text: field.label,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+            children: [
+              if (field.required)
+                const TextSpan(
+                  text: ' *',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+            ],
+          ),
         ),
-      );
+        if (field.optionalHint != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              field.optionalHint!,
+              style: const TextStyle(color: Colors.grey, fontSize: 11),
+            ),
+          ),
+      ],
+    ),
+  );
 
   Widget _downloadStatus() => Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: _downloadTotal > 0
-                  ? LinearProgressIndicator(
-                      value: _downloadDone / _downloadTotal,
-                      minHeight: 6,
-                      backgroundColor: const Color(0xFF2A2A2A),
-                    )
-                  : const LinearProgressIndicator(
-                      minHeight: 6,
-                      backgroundColor: Color(0xFF2A2A2A),
-                    ),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                _downloadMessage,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.grey, fontSize: 11),
-              ),
-            ),
-            const SizedBox(width: 4),
-            TextButton(
-              onPressed: () => setState(() => _cancelRequested = true),
-              child: const Text('Cancel'),
-            ),
-          ],
+    padding: const EdgeInsets.only(top: 8),
+    child: Row(
+      children: [
+        Expanded(
+          child: _downloadTotal > 0
+              ? LinearProgressIndicator(
+                  value: _downloadDone / _downloadTotal,
+                  minHeight: 6,
+                  backgroundColor: const Color(0xFF2A2A2A),
+                )
+              : const LinearProgressIndicator(
+                  minHeight: 6,
+                  backgroundColor: Color(0xFF2A2A2A),
+                ),
         ),
-      );
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            _downloadMessage,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.grey, fontSize: 11),
+          ),
+        ),
+        const SizedBox(width: 4),
+        TextButton(
+          onPressed: () => setState(() => _cancelRequested = true),
+          child: const Text('Cancel'),
+        ),
+      ],
+    ),
+  );
 
   Widget _atariLegendStatus() => Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: _atariLegendTotal > 0
-                  ? LinearProgressIndicator(
-                      value: _atariLegendDone / _atariLegendTotal,
-                      minHeight: 6,
-                      backgroundColor: const Color(0xFF2A2A2A),
-                    )
-                  : const LinearProgressIndicator(
-                      minHeight: 6,
-                      backgroundColor: Color(0xFF2A2A2A),
-                    ),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                _atariLegendMessage,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.grey, fontSize: 11),
-              ),
-            ),
-            const SizedBox(width: 4),
-            TextButton(
-              onPressed: () => setState(() => _atariLegendCancel = true),
-              child: const Text('Cancel'),
-            ),
-          ],
+    padding: const EdgeInsets.only(top: 8),
+    child: Row(
+      children: [
+        Expanded(
+          child: _atariLegendTotal > 0
+              ? LinearProgressIndicator(
+                  value: _atariLegendDone / _atariLegendTotal,
+                  minHeight: 6,
+                  backgroundColor: const Color(0xFF2A2A2A),
+                )
+              : const LinearProgressIndicator(
+                  minHeight: 6,
+                  backgroundColor: Color(0xFF2A2A2A),
+                ),
         ),
-      );
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            _atariLegendMessage,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.grey, fontSize: 11),
+          ),
+        ),
+        const SizedBox(width: 4),
+        TextButton(
+          onPressed: () => setState(() => _atariLegendCancel = true),
+          child: const Text('Cancel'),
+        ),
+      ],
+    ),
+  );
 
   Widget _statusIcon(FieldStatus status) {
     switch (status) {
       case FieldStatus.none:
         return const SizedBox.shrink();
       case FieldStatus.valid:
-        return const Icon(Icons.check_circle,
-            size: 18, color: Color(0xFF4CAF50));
+        return const Icon(
+          Icons.check_circle,
+          size: 18,
+          color: Color(0xFF4CAF50),
+        );
       case FieldStatus.invalid:
         return const Icon(Icons.cancel, size: 18, color: Colors.redAccent);
     }

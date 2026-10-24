@@ -13,8 +13,9 @@ import 'package:marcer_desktop/piratefinder_data.dart';
 import 'package:marcer_desktop/widgets/asset_update_dialog.dart';
 
 void main() {
-  testWidgets('shows gameinfo before screenshots with update/skip/close',
-      (tester) async {
+  testWidgets('shows gameinfo before screenshots with update/skip/close', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -27,12 +28,14 @@ void main() {
     Directory('${tmp.path}/screens').createSync();
     Directory('${tmp.path}/data').createSync();
 
-    final controller = AssetUpdateController(fetcher: (_) async {
-      return jsonEncode({
-        'screenshots': {'archive': 'screenshots-2.zip'},
-        'gameinfo': {'archive': 'gameinfo-2.zip'},
-      });
-    });
+    final controller = AssetUpdateController(
+      fetcher: (_) async {
+        return jsonEncode({
+          'screenshots': {'archive': 'screenshots-2.zip'},
+          'gameinfo': {'archive': 'gameinfo-2.zip'},
+        });
+      },
+    );
     controller.config = DesktopConfig(
       rootDirectory: '${tmp.path}/root',
       screenshotDirectory: '${tmp.path}/screens',
@@ -41,27 +44,34 @@ void main() {
     );
     await controller.check(force: true);
 
-    await tester.pumpWidget(MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: ElevatedButton(
-              onPressed: () => showAssetUpdateDialog(context,
-                  controller: controller, onApplied: () {}),
-              child: const Text('open'),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => showAssetUpdateDialog(
+                  context,
+                  controller: controller,
+                  onApplied: () {},
+                ),
+                child: const Text('open'),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
     expect(find.text('game info'), findsOneWidget);
     expect(find.text('screenshots'), findsOneWidget);
     // gameinfo row is rendered above the screenshots row.
-    expect(tester.getTopLeft(find.text('game info')).dy,
-        lessThan(tester.getTopLeft(find.text('screenshots')).dy));
+    expect(
+      tester.getTopLeft(find.text('game info')).dy,
+      lessThan(tester.getTopLeft(find.text('screenshots')).dy),
+    );
     // Both are pending (nothing applied) → Install buttons + skip + close.
     expect(find.text('Install'), findsNWidgets(2));
     expect(find.text('Skip this version'), findsNWidgets(2));
@@ -75,8 +85,9 @@ void main() {
     expect(find.text('Install'), findsOneWidget);
   });
 
-  testWidgets('shows version unknown + Overwrite when data is present',
-      (tester) async {
+  testWidgets('shows version unknown + Overwrite when data is present', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -91,12 +102,14 @@ void main() {
     // Screenshots data present but no marker (version unknown); gameinfo absent.
     File('${tmp.path}/screens/index.json').writeAsStringSync('{}');
 
-    final controller = AssetUpdateController(fetcher: (_) async {
-      return jsonEncode({
-        'screenshots': {'archive': 'screenshots-2.zip'},
-        'gameinfo': {'archive': 'gameinfo-2.zip'},
-      });
-    });
+    final controller = AssetUpdateController(
+      fetcher: (_) async {
+        return jsonEncode({
+          'screenshots': {'archive': 'screenshots-2.zip'},
+          'gameinfo': {'archive': 'gameinfo-2.zip'},
+        });
+      },
+    );
     controller.config = DesktopConfig(
       rootDirectory: '${tmp.path}/root',
       screenshotDirectory: '${tmp.path}/screens',
@@ -105,19 +118,24 @@ void main() {
     );
     await controller.check(force: true);
 
-    await tester.pumpWidget(MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: ElevatedButton(
-              onPressed: () => showAssetUpdateDialog(context,
-                  controller: controller, onApplied: () {}),
-              child: const Text('open'),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => showAssetUpdateDialog(
+                  context,
+                  controller: controller,
+                  onApplied: () {},
+                ),
+                child: const Text('open'),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
@@ -125,68 +143,74 @@ void main() {
     expect(find.text('Overwrite'), findsOneWidget); // screenshots
     expect(find.text('Install'), findsOneWidget); // gameinfo (no data)
   });
-  testWidgets('shows PirateFinder install hint and license in the same dialog',
-      (tester) async {
-    tester.view.physicalSize = const Size(1200, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'shows PirateFinder-Catalog install hint and license in the same dialog',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-    final tmp = Directory.systemTemp.createTempSync('asset_dialog_pf');
-    addTearDown(() {
-      if (tmp.existsSync()) tmp.deleteSync(recursive: true);
-    });
-    Directory('${tmp.path}/root').createSync();
-
-    final assets = AssetUpdateController(fetcher: (_) async => '{}');
-    assets.config = DesktopConfig(rootDirectory: '${tmp.path}/root');
-    await assets.check(force: true);
-
-    final pf = PirateFinderDataController(fetcher: (_) async {
-      return jsonEncode({
-        'generated_at': '2026-10-24T12:34:16Z',
-        'source': {'tag': 'catalogue-2026-10-19'},
-        'assets': {
-          'atari-st': {
-            'file': 'piratefinder-catalog-atari-st.json.gz',
-            'size': 10,
-            'sha256': 'abc',
-          },
-        },
+      final tmp = Directory.systemTemp.createTempSync('asset_dialog_pf');
+      addTearDown(() {
+        if (tmp.existsSync()) tmp.deleteSync(recursive: true);
       });
-    });
-    pf.config = DesktopConfig(
-      rootDirectory: '${tmp.path}/root',
-      appDir: tmp.path,
-    );
-    await pf.check(force: true);
+      Directory('${tmp.path}/root').createSync();
 
-    await tester.pumpWidget(MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: ElevatedButton(
-              onPressed: () => showAssetUpdateDialog(
-                context,
-                controller: assets,
-                pirateFinder: pf,
-                onApplied: () {},
+      final assets = AssetUpdateController(fetcher: (_) async => '{}');
+      assets.config = DesktopConfig(rootDirectory: '${tmp.path}/root');
+      await assets.check(force: true);
+
+      final pf = PirateFinderDataController(
+        fetcher: (_) async {
+          return jsonEncode({
+            'generated_at': '2026-10-24T12:34:16Z',
+            'source': {'tag': 'catalogue-2026-10-19'},
+            'assets': {
+              'atari-st': {
+                'file': 'piratefinder-catalog-atari-st.json.gz',
+                'size': 10,
+                'sha256': 'abc',
+              },
+            },
+          });
+        },
+      );
+      pf.config = DesktopConfig(
+        rootDirectory: '${tmp.path}/root',
+        appDir: tmp.path,
+      );
+      await pf.check(force: true);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () => showAssetUpdateDialog(
+                    context,
+                    controller: assets,
+                    pirateFinder: pf,
+                    onApplied: () {},
+                  ),
+                  child: const Text('open'),
+                ),
               ),
-              child: const Text('open'),
             ),
           ),
         ),
-      ),
-    ));
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('PirateFinder'), findsOneWidget);
-    expect(find.text('local:  not installed'), findsOneWidget);
-    expect(find.text('Install'), findsOneWidget);
-    expect(
-      find.text('GitHub · CC BY-NC-SA 4.0 · not part of the Marcer catalog'),
-      findsOneWidget,
-    );
-  });
-
+      expect(find.text('PirateFinder-Catalog'), findsOneWidget);
+      expect(find.text('local:  not installed'), findsOneWidget);
+      expect(find.text('Install'), findsOneWidget);
+      expect(find.text('PirateFinder-Catalog on GitHub'), findsOneWidget);
+      expect(
+        find.text(' · CC BY-NC-SA 4.0 · not part of the Marcer catalog'),
+        findsOneWidget,
+      );
+    },
+  );
 }

@@ -157,6 +157,45 @@ void main() {
     },
   );
 
+  test('downloadLatest refreshes the pointer before downloading', () async {
+    final downloader = _FakeDownloader();
+    var fetches = 0;
+    final c = PirateFinderDataController(
+      fetcher: (_) async {
+        fetches++;
+        return latestBody(tag: 'catalogue-2026-11-02');
+      },
+      downloader: downloader,
+    );
+    c.config = config();
+
+    final ok = await c.downloadLatest();
+
+    expect(ok, isTrue);
+    expect(fetches, 1);
+    expect(downloader.expectedSha256, 'abc123');
+    expect(c.local!.sourceTag, 'catalogue-2026-11-02');
+    expect(c.hasPending, isFalse);
+  });
+
+  test(
+    'downloadLatest does not download when the pointer check fails',
+    () async {
+      final downloader = _FakeDownloader();
+      final c = PirateFinderDataController(
+        fetcher: (_) async => throw const SocketException('offline'),
+        downloader: downloader,
+      );
+      c.config = config();
+
+      final ok = await c.downloadLatest();
+
+      expect(ok, isFalse);
+      expect(c.error, contains('Could not check'));
+      expect(downloader.expectedSha256, isNull);
+    },
+  );
+
   test('check failure keeps an error and no pending state', () async {
     final c = PirateFinderDataController(
       fetcher: (_) async => throw const SocketException('offline'),
