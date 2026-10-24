@@ -59,7 +59,9 @@ class _CenterGridState extends State<CenterGrid> {
   void initState() {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _focusNode.requestFocus(),
+    );
   }
 
   @override
@@ -93,16 +95,24 @@ class _CenterGridState extends State<CenterGrid> {
     if (!_scroll.hasClients) return;
     final columns = _lastColumns > 0 ? _lastColumns : 4;
     final extent = _lastItemExtent > 0 ? _lastItemExtent : 200.0;
-    final rowsVisible =
-        (_scroll.position.viewportDimension / extent).ceil().clamp(1, 1000).toInt();
+    final rowsVisible = (_scroll.position.viewportDimension / extent)
+        .ceil()
+        .clamp(1, 1000)
+        .toInt();
     final row = index ~/ columns;
     final firstRow = (_scroll.offset / extent).floor();
     if (row < firstRow) {
-      _scroll.animateTo(row * extent,
-          duration: const Duration(milliseconds: 80), curve: Curves.easeOut);
+      _scroll.animateTo(
+        row * extent,
+        duration: const Duration(milliseconds: 80),
+        curve: Curves.easeOut,
+      );
     } else if (row >= firstRow + rowsVisible - 1) {
-      _scroll.animateTo((row - rowsVisible + 2) * extent,
-          duration: const Duration(milliseconds: 80), curve: Curves.easeOut);
+      _scroll.animateTo(
+        (row - rowsVisible + 2) * extent,
+        duration: const Duration(milliseconds: 80),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -112,9 +122,10 @@ class _CenterGridState extends State<CenterGrid> {
   int get _pageItems {
     final columns = _lastColumns > 0 ? _lastColumns : 4;
     final extent = _lastItemExtent > 0 ? _lastItemExtent : 200.0;
-    final rows = (_scroll.position.viewportDimension / extent)
-        .floor()
-        .clamp(1, 1000);
+    final rows = (_scroll.position.viewportDimension / extent).floor().clamp(
+      1,
+      1000,
+    );
     return columns * rows;
   }
 
@@ -217,8 +228,9 @@ class _CenterGridState extends State<CenterGrid> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth;
-              final columns =
-                  ((width - 16) / (_cardWidth + _spacing)).floor().clamp(1, 12);
+              final columns = ((width - 16) / (_cardWidth + _spacing))
+                  .floor()
+                  .clamp(1, 12);
               final itemExtent = _itemExtent(width, columns);
               _lastColumns = columns;
               _lastItemExtent = itemExtent;
@@ -287,10 +299,10 @@ class _CenterGridState extends State<CenterGrid> {
 
   /// Number of shown variant thumbs that are real game screenshots
   /// (status `done` / "done (game)"); the rest are e.g. `desktop` shots.
-  int _doneThumbCount(CatalogController c, GameCard card) =>
-      _variantThumbs(c, card)
-          .where((t) => card.variants[t.index].status == 'done')
-          .length;
+  int _doneThumbCount(CatalogController c, GameCard card) => _variantThumbs(
+    c,
+    card,
+  ).where((t) => card.variants[t.index].status == 'done').length;
 
   /// True when the no-focus 2×2 variant grid applies. With a concrete status
   /// filter, ≥2 previews are enough (the selected status is ordered first).
@@ -305,56 +317,62 @@ class _CenterGridState extends State<CenterGrid> {
   /// ([GameCard.thumbIndices] with the active status filter prioritized,
   /// then status tier and `kind: game` before other kinds).
   List<({int index, String path})> _variantThumbs(
-          CatalogController c, GameCard card) =>
-      [
-        for (final i in c.displayThumbIndices(card))
-          (index: i, path: card.variants[i].previewPath!),
-      ];
+    CatalogController c,
+    GameCard card,
+  ) => [
+    for (final i in c.displayThumbIndices(card))
+      (index: i, path: card.variants[i].previewPath!),
+  ];
 
   Widget _thumbGrid(
-      CatalogController c, GameCard card, int index,
-      List<({int index, String path})> thumbs) {
+    CatalogController c,
+    GameCard card,
+    int index,
+    List<({int index, String path})> thumbs,
+  ) {
     void openVariant(({int index, String path}) t) {
       c.moveSelectionTo(index);
       widget.onOpenLightbox(t.index, 0);
     }
 
     Widget cell(({int index, String path}) t) => GestureDetector(
-          onTap: () => openVariant(t),
-          onDoubleTap: () => openVariant(t),
-          child: Padding(
-            padding: const EdgeInsets.all(2),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF2A2A2A)),
-                borderRadius: BorderRadius.circular(2),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Image.file(
-                io.File(t.path),
-                key: ValueKey('${t.path}#${c.imageVersionOf(t.path)}'),
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(color: Colors.black),
-              ),
-            ),
+      onTap: () => openVariant(t),
+      onDoubleTap: () => openVariant(t),
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFF2A2A2A)),
+            borderRadius: BorderRadius.circular(2),
           ),
-        );
+          clipBehavior: Clip.antiAlias,
+          child: Image.file(
+            io.File(t.path),
+            key: ValueKey('${t.path}#${c.imageVersionOf(t.path)}'),
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => Container(color: Colors.black),
+          ),
+        ),
+      ),
+    );
 
     // Two columns, at most two rows, evenly split over the available area
     // (so all four thumbnails fit without clipping).
     final rows = <Widget>[];
     for (var i = 0; i < thumbs.length && rows.length < 2; i += 2) {
-      rows.add(Expanded(
-        child: Row(
-          children: [
-            Expanded(child: cell(thumbs[i])),
-            if (i + 1 < thumbs.length)
-              Expanded(child: cell(thumbs[i + 1]))
-            else
-              const Expanded(child: SizedBox()),
-          ],
+      rows.add(
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: cell(thumbs[i])),
+              if (i + 1 < thumbs.length)
+                Expanded(child: cell(thumbs[i + 1]))
+              else
+                const Expanded(child: SizedBox()),
+            ],
+          ),
         ),
-      ));
+      );
     }
     return Padding(
       padding: const EdgeInsets.all(2),
@@ -379,8 +397,10 @@ class _CenterGridState extends State<CenterGrid> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(6, 4, 6, 0),
-            child: Text(label,
-                style: const TextStyle(fontSize: 10, color: Color(0xFFE6A23C))),
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 10, color: Color(0xFFE6A23C)),
+            ),
           ),
           Expanded(child: _thumbGrid(c, card, index, thumbs)),
         ],
@@ -403,13 +423,19 @@ class _CenterGridState extends State<CenterGrid> {
   }
 
   Widget _placeholder({bool crew = false}) => Center(
-        child: Icon(crew ? Icons.groups : Icons.videogame_asset,
-            size: crew ? 52 : 42,
-            color: crew ? Colors.white54 : Colors.white24),
-      );
+    child: Icon(
+      crew ? Icons.groups : Icons.videogame_asset,
+      size: crew ? 52 : 42,
+      color: crew ? Colors.white54 : Colors.white24,
+    ),
+  );
 
   Widget _cardTile(
-      CatalogController c, GameCard card, bool selected, int index) {
+    CatalogController c,
+    GameCard card,
+    bool selected,
+    int index,
+  ) {
     final crew = card.crew;
     // Never touch the filesystem while building a tile: read the async layer
     // cache and request a background scan for unknown folders. Badges appear
@@ -421,8 +447,7 @@ class _CenterGridState extends State<CenterGrid> {
     final chips = <String>[
       if (crew != null) '${crew.zips} ZIPs',
       if (crew == null && c.isFavoriteCard(card)) 'FAVORITE',
-      if (crew == null && card.variants.length > 1)
-        '×${card.variants.length}',
+      if (crew == null && card.variants.length > 1) '×${card.variants.length}',
       if (crew == null && layer != null && layer.isNotEmpty) layer,
       if (crew == null && missing == true) 'MISSING',
       if (crew == null &&
@@ -491,8 +516,10 @@ class _CenterGridState extends State<CenterGrid> {
     );
   }
 
-  Widget _candidateThumbs(List<String> cands,
-      {required void Function(int index) onPick}) {
+  Widget _candidateThumbs(
+    List<String> cands, {
+    required void Function(int index) onPick,
+  }) {
     return Align(
       alignment: Alignment.bottomLeft,
       child: Padding(
@@ -514,13 +541,14 @@ class _CenterGridState extends State<CenterGrid> {
                   child: Image.file(
                     io.File(cands[i]),
                     key: ValueKey(
-                        '${cands[i]}#${widget.controller.imageVersionOf(cands[i])}'),
+                      '${cands[i]}#${widget.controller.imageVersionOf(cands[i])}',
+                    ),
                     width: 44,
                     height: 26,
                     fit: BoxFit.cover,
                     filterQuality: FilterQuality.none,
-                    errorBuilder: (_, _, _) => Container(
-                        width: 44, height: 26, color: Colors.black),
+                    errorBuilder: (_, _, _) =>
+                        Container(width: 44, height: 26, color: Colors.black),
                   ),
                 ),
               ),
@@ -530,8 +558,7 @@ class _CenterGridState extends State<CenterGrid> {
     );
   }
 
-  Widget _entryTile(
-      CatalogController c, Entry e, bool selected, int index) {
+  Widget _entryTile(CatalogController c, Entry e, bool selected, int index) {
     if (e.kind == EntryKind.directory) {
       return _tileFrame(
         selected: selected,
@@ -582,9 +609,11 @@ class _CenterGridState extends State<CenterGrid> {
       fit: BoxFit.cover,
       cacheWidth: 440,
       errorBuilder: (_, _, _) => Center(
-        child: Icon(crew ? Icons.groups : Icons.broken_image,
-            size: crew ? 52 : 36,
-            color: crew ? Colors.white54 : Colors.white24),
+        child: Icon(
+          crew ? Icons.groups : Icons.broken_image,
+          size: crew ? 52 : 36,
+          color: crew ? Colors.white54 : Colors.white24,
+        ),
       ),
     );
   }
@@ -627,16 +656,17 @@ class _CenterGridState extends State<CenterGrid> {
                   child: Opacity(
                     opacity: dim ? 0.55 : 1,
                     child: icon != null
-                        ? Center(
-                            child: Icon(icon, size: 56, color: iconColor),
-                          )
+                        ? Center(child: Icon(icon, size: 56, color: iconColor))
                         : Stack(
                             fit: StackFit.expand,
                             children: [
                               image ??
                                   const Center(
-                                    child: Icon(Icons.videogame_asset,
-                                        size: 42, color: Colors.white24),
+                                    child: Icon(
+                                      Icons.videogame_asset,
+                                      size: 42,
+                                      color: Colors.white24,
+                                    ),
                                   ),
                               ?overlay,
                             ],
@@ -665,18 +695,21 @@ class _CenterGridState extends State<CenterGrid> {
                                     padding: const EdgeInsets.only(right: 4),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 1),
+                                        horizontal: 5,
+                                        vertical: 1,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.08),
-                                        borderRadius:
-                                            BorderRadius.circular(3),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.08,
+                                        ),
+                                        borderRadius: BorderRadius.circular(3),
                                       ),
                                       child: Text(
                                         b,
                                         style: const TextStyle(
-                                            fontSize: 9,
-                                            color: Colors.grey),
+                                          fontSize: 9,
+                                          color: Colors.grey,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -694,8 +727,9 @@ class _CenterGridState extends State<CenterGrid> {
                         style: TextStyle(
                           fontSize: 12,
                           color: selected ? Colors.cyan : Colors.white,
-                          fontWeight:
-                              selected ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: selected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                         ),
                       ),
                     ],
