@@ -60,6 +60,7 @@ class CatalogController extends ChangeNotifier {
   late GameInfoIndex gameinfo;
   AtariLegendIndex atariLegend = AtariLegendIndex.empty();
   late CatalogUniverse universe;
+  late CrewIndex crews;
   FavoritesService? favorites;
 
   /// Section → tree directory rel path (e.g.
@@ -92,6 +93,9 @@ class CatalogController extends ChangeNotifier {
   List<GameCard>? _catalogCache;
   bool _catalogDirty = true;
 
+  List<GameCard>? _crewCardsBase;
+  Map<String, ({GameCard card, int index})>? _releaseLookupCache;
+
   /// Catalog-only "★ Favorites" filter (not part of [CatalogFilter]).
   bool favoritesOnly = false;
 
@@ -105,6 +109,8 @@ class CatalogController extends ChangeNotifier {
     progress = 'Loading catalog…';
     _localAssetsCache.clear();
     _cardFolderLayersCache.clear();
+    _releaseLookupCache = null;
+    _crewCardsBase = null;
     notifyListeners();
     try {
       // Capture a plain config value (not `this`) so the loader stays
@@ -124,6 +130,7 @@ class CatalogController extends ChangeNotifier {
       notices.addAll(bundle.warnings);
       screenshots = bundle.index;
       gameinfo = bundle.info;
+      crews = bundle.crews;
       atariLegend = bundle.atariLegend;
       universe = bundle.universe;
       _statusLineCache.clear();
@@ -264,8 +271,12 @@ class CatalogController extends ChangeNotifier {
         kind: statusPreviewActive ? _preferredPreviewKind : null,
       );
 
-  String? displayPreviewPathForCard(GameCard card) =>
-      displayVariantForCard(card)?.previewPath;
+  String? displayPreviewPathForCard(GameCard card) {
+    final variant = displayVariantForCard(card);
+    // Synthetic crew cards have no CardVariant list but do carry a chosen
+    // preview path.
+    return variant?.previewPath ?? card.previewPath;
+  }
 
   List<int> displayThumbIndices(GameCard card, {int limit = 4}) =>
       card.thumbIndices(
@@ -280,6 +291,15 @@ class CatalogController extends ChangeNotifier {
   /// search and the sort stay active.
   List<GameCard> get catalogCards {
     if (!_catalogDirty && _catalogCache != null) return _catalogCache!;
+    if (filter.section == 'crew') {
+      final q = filter.q.trim().toLowerCase();
+      final base = _crewCards;
+      _catalogCache = q.isEmpty
+          ? base
+          : base.where((card) => card.searchText.contains(q)).toList();
+      _catalogDirty = false;
+      return _catalogCache!;
+    }
     final List<GameCard> cards;
     if (favoritesOnly) {
       final favCards = [
@@ -309,6 +329,122 @@ class CatalogController extends ChangeNotifier {
     return _catalogCache!;
   }
 
+  // ------------------------------------------------------------ crew view
+
+  /// Release ZIP lookup (`rel` -> cracked card + variant index), built once
+  /// from the cracked universe. Used for crew card previews and for opening a
+  /// crew release in the existing game lightbox.
+  Map<String, ({GameCard card, int index})> get _releaseLookup {
+    final cached = _releaseLookupCache;
+    if (cached != null) return cached;
+    final out = <String, ({GameCard card, int index})>{};
+    for (final card in universe.cardsFor('cracked')) {
+      for (var i = 0; i < card.variants.length; i++) {
+        out[card.variants[i].rel] = (card: card, index: i);
+      }
+    }
+    return _releaseLookupCache = out;
+  }
+
+  /// Cracked card + variant index for a crew release rel path. Accepts both
+  /// the full index rel and the legacy section-relative form written by older
+  /// `crews.json` artifacts (prefixes the discovered cracked tree).
+  ({GameCard card, int index})? releaseCardFor(String rel) {
+    final direct = _releaseLookup[rel];
+    if (direct != null) return direct;
+    final tree = sectionTrees['cracked'];
+    if (tree != null && !rel.startsWith('$tree/')) {
+      return _releaseLookup['$tree/$rel'];
+    }
+    return null;
+  }
+
+  /// Synthetic catalog cards for the Crews tab (top [kCrewInitialLimit] groups
+  /// by ZIP count; `crews.json` still contains every group).
+  List<GameCard> get _crewCards => _crewCardsBase ??= _buildCrewCards();
+
+  List<GameCard> _buildCrewCards() {
+    final cards = <GameCard>[];
+    for (final group in crews.top(kCrewInitialLimit)) {
+      final preview = _crewPreview(group);
+      final searchParts = <String>[group.name, group.kind, ...group.aliases];
+      for (final release in group.releases) {
+        searchParts
+          ..add(release.title)
+          ..add(release.folder)
+          ..add(release.zip)
+          ..add(release.year)
+          ..add(release.publisher)
+          ..add(release.crackedBy)
+          ..add(release.crew);
+      }
+      cards.add(GameCard(
+        id: 'crew:${group.id}',
+        name: group.name,
+        kind: 'crew',
+        letter: '',
+        folder: group.id,
+        displayStatus: '',
+        screenshots: preview != null,
+        statusCounts: const {},
+        layer: '',
+        year: 'unknown',
+        previewPath: preview,
+        variants: const [],
+        info: null,
+        yearNum: 0,
+        publishers: const [],
+        crews: const [],
+        crackers: const [],
+        languages: const [],
+        raw: null,
+        pasti: null,
+        boxscan: null,
+        tos: false,
+        publisherSort: '',
+        crewSort: group.name.toLowerCase(),
+        crackerSort: '',
+        languageSort: '',
+        searchText: searchParts
+            .where((part) => part.isNotEmpty)
+            .join(' ')
+            .toLowerCase(),
+        sortName: group.name.toLowerCase(),
+        crew: group,
+      ));
+    }
+    return cards;
+  }
+
+  /// Best available screenshot of a crew's releases (temporary card image
+  /// until the curated cracktro image phase lands).
+  String? _crewPreview(CrewGroup group) {
+    if (group.image != null && group.image!.isNotEmpty) return group.image;
+    String? best;
+    var bestRank = 99;
+    for (final release in group.releases) {
+      final hit = releaseCardFor(release.rel);
+      if (hit == null) continue;
+      final variant = hit.card.variants[hit.index];
+      final path = variant.previewPath;
+      if (path == null) continue;
+      final rank = _previewRank(variant);
+      if (rank < bestRank) {
+        best = path;
+        bestRank = rank;
+        if (rank == 0) break;
+      }
+    }
+    return best;
+  }
+
+  static int _previewRank(CardVariant variant) {
+    if (variant.status == 'done' && variant.kind == 'game') return 0;
+    if (variant.status == 'done') return 1;
+    if (variant.status == 'desktop') return 2;
+    return 3;
+  }
+
   GameCard? get selectedCard {
     if (!catalogMode) return null;
     final cards = catalogCards;
@@ -332,6 +468,7 @@ class CatalogController extends ChangeNotifier {
   void setSection(String value) {
     if (filter.section == value) return;
     filter.section = value;
+    if (value == 'crew') favoritesOnly = false;
     // Gallery section switch: reset incompatible filters.
     filter.status = config.defaultStatus;
     filter.raw = 'any';
@@ -1321,6 +1458,10 @@ class CatalogController extends ChangeNotifier {
   /// Count text for the status bar.
   String get countText {
     if (catalogMode) {
+      if (filter.section == 'crew') {
+        final n = catalogCards.length;
+        return '$n crew${n == 1 ? '' : 's'}';
+      }
       if (favoritesOnly) return '${catalogCards.length} favorites';
       final n = catalogCards.length;
       return '$n result${n == 1 ? '' : 's'}';
@@ -1341,6 +1482,16 @@ class CatalogController extends ChangeNotifier {
   /// rebuilt (curation) or reloaded.
   List<String> get statusLine {
     final section = filter.section;
+    if (section == 'crew') {
+      final err = crews.loadError;
+      if (err != null) return List<String>.unmodifiable(['crew data: $err']);
+      return List<String>.unmodifiable([
+        '${crews.totalReleases} releases',
+        if (crews.length > kCrewInitialLimit)
+          'top $kCrewInitialLimit of ${crews.length}',
+        if (crews.generatedAt.isNotEmpty) 'crews: ${crews.generatedAt}',
+      ]);
+    }
     final cached = _statusLineCache[section];
     if (cached != null) return cached;
     return _statusLineCache[section] =
@@ -1436,6 +1587,11 @@ class CatalogController extends ChangeNotifier {
   String? get catalogDataNotice {
     if (!catalogMode) return null;
     final section = filter.section;
+    if (section == 'crew') {
+      if (crews.groups.isNotEmpty) return null;
+      return 'No crew data loaded — run tools/crew-analysis/run.sh to '
+          'generate crews.json in the GameinfoDirectory.';
+    }
     if (universe.cardsFor(section).isNotEmpty) return null;
     final noIndex = screenshots.forSection(section).loadError != null;
     final noInfo = gameinfo.length == 0;

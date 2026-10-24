@@ -9,6 +9,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
+import 'crew_detail_panel.dart';
 import 'game_info_panel.dart';
 import 'local_assets_chips.dart';
 import 'open_folder_button.dart';
@@ -20,6 +21,7 @@ class DetailPanel extends StatelessWidget {
     super.key,
     required this.controller,
     this.onOpenLightbox,
+    this.onOpenCrewRelease,
   });
 
   final CatalogController controller;
@@ -27,6 +29,9 @@ class DetailPanel extends StatelessWidget {
   /// Opens the lightbox on a catalog card's variant index (same contract as
   /// `CenterGrid.onOpenLightbox`); used by crew/cracker group clicks.
   final void Function(int variant, int image)? onOpenLightbox;
+
+  /// Opens a crew release (ZIP rel path) in the existing game lightbox.
+  final void Function(String rel)? onOpenCrewRelease;
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +110,12 @@ class DetailPanel extends StatelessWidget {
             ? const Center(
                 child: Text('No selection',
                     style: TextStyle(color: Colors.grey, fontSize: 13)))
-            : _cardInfo(context, c, card),
+            : card.crew != null
+                ? CrewDetailPanel(
+                    crew: card.crew!,
+                    onOpenRelease: onOpenCrewRelease,
+                  )
+                : _cardInfo(context, c, card),
       );
     }
     final entry = c.selectedEntry;

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
 import 'atarilegend.dart';
+import 'crews.dart';
 import 'gameinfo.dart';
 import 'screenshot_index.dart';
 
@@ -208,6 +209,7 @@ class GameCard {
     this.focusVariant,
     this.tosVersion,
     this.atariLegend,
+    this.crew,
   });
 
   final String id;
@@ -261,6 +263,10 @@ class GameCard {
     }
     return previewVariant;
   }
+
+  /// Crew payload for a synthetic `kind == 'crew'` card (the crew view).
+  /// Null for every regular game/pd/utils/magazine/falcon card.
+  final CrewGroup? crew;
 
   /// AtariLegend match for this card's folder (`null` without data/match);
   /// supplies the genre/developer filters and the AtariLegend button.
@@ -765,5 +771,6 @@ GameCard _copyCard(
     focusVariant: focusVariant,
     tosVersion: card.tosVersion,
     atariLegend: card.atariLegend,
+    crew: card.crew,
   );
 }

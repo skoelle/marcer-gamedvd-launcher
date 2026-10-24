@@ -1,0 +1,302 @@
+// Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+// Licensed under the MIT License. See LICENSE file in project root for details.
+
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:marcer_catalog/marcer_catalog.dart';
+import 'package:marcer_desktop/catalog_controller.dart';
+import 'package:marcer_desktop/widgets/crew_detail_panel.dart';
+
+/// Crews tab: `crews.json` loading, top-N cards, search and the release ->
+/// cracked-card lookup used to open the existing game lightbox.
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late Directory tmp;
+  late CatalogController c;
+
+  const tree = 'Title Sorted/Cracked Games - Title Sorted';
+  const relA = '$tree/A/Alpha/a.zip';
+  const relA2 = '$tree/A/Alpha/a_v2.zip';
+  const relB = '$tree/B/Beta/b.zip';
+
+  setUp(() {
+    tmp = Directory.systemTemp.createTempSync('crew_view_test');
+    for (final rel in [relA, relA2, relB]) {
+      final file = File('${tmp.path}/root/$rel');
+      file.parent.createSync(recursive: true);
+      file.createSync();
+    }
+    Directory('${tmp.path}/data').createSync(recursive: true);
+    Directory('${tmp.path}/out').createSync(recursive: true);
+
+    File('${tmp.path}/out/index.json').writeAsStringSync(
+      jsonEncode({
+        'version': 1,
+        'entries': {
+          relA: {
+            'rel': relA,
+            'name': 'a.zip',
+            'status': 'done',
+            'kind': 'game',
+            'layer': 'ROOT',
+            'preview': 'a.png',
+            'candidates': <String>[],
+          },
+          relA2: {
+            'rel': relA2,
+            'name': 'a_v2.zip',
+            'status': 'done',
+            'kind': 'game',
+            'layer': 'ROOT',
+            'preview': null,
+            'candidates': <String>[],
+          },
+          relB: {
+            'rel': relB,
+            'name': 'b.zip',
+            'status': 'done',
+            'kind': 'game',
+            'layer': 'ROOT',
+            'preview': null,
+            'candidates': <String>[],
+          },
+        },
+      }),
+    );
+
+    File('${tmp.path}/data/games-cracked.json').writeAsStringSync(
+      jsonEncode({
+        'games': [
+          {
+            'letter': 'A',
+            'folder': 'Alpha',
+            'layers': ['ROOT'],
+            'variants': [
+              {
+                'title': 'Alpha',
+                'publisher': 'Publisher A',
+                'crew': 'Alpha Crew',
+                'cracked_by': '',
+                'release': '1990',
+                'language': 'English',
+                'disks': 1,
+              },
+            ],
+          },
+          {
+            'letter': 'B',
+            'folder': 'Beta',
+            'layers': ['ROOT'],
+            'variants': [
+              {
+                'title': 'Beta',
+                'publisher': 'Publisher B',
+                'crew': '',
+                'cracked_by': 'Beta Crackers',
+                'release': '1991',
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    File('${tmp.path}/data/crews.json').writeAsStringSync(
+      jsonEncode({
+        'schema': 1,
+        'generated_at': '2026-10-24T00:00:00Z',
+        'groups': [
+          {
+            'id': 'alpha-crew',
+            'name': 'Alpha Crew',
+            'kind': 'crew',
+            'rank': 1,
+            'zips': 2,
+            'aliases': ['Alpha Crew', 'Alpha'],
+            'image': null,
+            'releases': [
+              {
+                'rel': relA,
+                'letter': 'A',
+                'folder': 'Alpha',
+                'zip': 'a.zip',
+                'title': 'Alpha',
+                'year': '1990',
+                'publisher': 'Publisher A',
+                'crew': 'Alpha Crew',
+                'source': 'exact',
+                'disks': 1,
+              },
+              {
+                'rel': relA2,
+                'letter': 'A',
+                'folder': 'Alpha',
+                'zip': 'a_v2.zip',
+                'title': 'Alpha v2',
+                'year': '1991',
+                'publisher': 'Publisher A',
+                'crew': 'Alpha Crew',
+                'source': 'exact',
+                'disks': 1,
+              },
+            ],
+          },
+          {
+            'id': 'beta-crackers',
+            'name': 'Beta Crackers',
+            'kind': 'cracker',
+            'rank': 2,
+            'zips': 1,
+            'aliases': ['Beta Crackers'],
+            'image': null,
+            'releases': [
+              {
+                'rel': relB,
+                'letter': 'B',
+                'folder': 'Beta',
+                'zip': 'b.zip',
+                'title': 'Beta',
+                'year': '1991',
+                'publisher': 'Publisher B',
+                'cracked_by': 'Beta Crackers',
+                'source': 'gameinfo_cracker',
+                'disks': 1,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    c = CatalogController(
+      DesktopConfig(
+        rootDirectory: '${tmp.path}/root',
+        screenshotDirectory: '${tmp.path}/out',
+        gameinfoDirectory: '${tmp.path}/data',
+      ),
+    );
+  });
+
+  tearDown(() {
+    if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+  });
+
+  test('crews tab builds top-N cards, searches and maps releases', () async {
+    await c.init();
+    expect(c.crews.length, 2);
+    expect(c.crews.totalReleases, 3);
+
+    c.setSection('crew');
+    expect(c.catalogCards, hasLength(2));
+    expect(c.selectedCard?.crew?.name, 'Alpha Crew');
+    expect(c.selectedCard?.previewPath, isNotNull);
+    expect(c.displayPreviewPathForCard(c.selectedCard!), isNotNull);
+    expect(c.countText, '2 crews');
+    expect(c.statusLine, contains('3 releases'));
+
+    c.setQuery('beta');
+    expect(c.catalogCards, hasLength(1));
+    expect(c.catalogCards.single.crew?.name, 'Beta Crackers');
+
+    c.setQuery('');
+    final hit = c.releaseCardFor(relA2);
+    expect(hit, isNotNull);
+    expect(hit!.card.folder, 'Alpha');
+    expect(hit.card.variants[hit.index].rel, relA2);
+
+    // Legacy section-relative rel (older crews.json) resolves through the
+    // cracked tree prefix fallback.
+    final legacy = c.releaseCardFor('A/Alpha/a.zip');
+    expect(legacy, isNotNull);
+    expect(legacy!.card.variants[legacy.index].rel, relA);
+
+    // Back to a normal section: the synthetic crew cards must not leak.
+    c.setSection('cracked');
+    c.setStatus('any');
+    expect(c.catalogCards, hasLength(2));
+    expect(c.catalogCards.every((card) => card.crew == null), isTrue);
+  });
+
+  testWidgets('crew detail lists releases and opens one on tap', (
+    tester,
+  ) async {
+    const group = CrewGroup(
+      id: 'alpha-crew',
+      name: 'Alpha Crew',
+      kind: 'crew',
+      rank: 1,
+      zips: 2,
+      aliases: ['Alpha Crew', 'Alpha'],
+      releases: [
+        CrewRelease(
+          rel: relA,
+          letter: 'A',
+          folder: 'Alpha',
+          zip: 'a.zip',
+          title: 'Alpha',
+          year: '1990',
+          publisher: 'Publisher A',
+          crackedBy: 'Cracker',
+          crew: 'Alpha Crew',
+          language: 'English',
+          source: 'exact',
+          disks: 1,
+          rawDump: true,
+          pastiDump: false,
+          boxscan: false,
+          ambiguous: false,
+          tosBad: '',
+          specialFlag: '',
+          specialNote: '',
+        ),
+        CrewRelease(
+          rel: relA2,
+          letter: 'A',
+          folder: 'Alpha',
+          zip: 'a_v2.zip',
+          title: 'Alpha v2',
+          year: '1991',
+          publisher: 'Publisher A',
+          crackedBy: '',
+          crew: 'Alpha Crew',
+          language: 'English',
+          source: 'exact',
+          disks: 1,
+          rawDump: false,
+          pastiDump: false,
+          boxscan: false,
+          ambiguous: false,
+          tosBad: '',
+          specialFlag: '',
+          specialNote: '',
+        ),
+      ],
+    );
+    String? opened;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            height: 700,
+            child: CrewDetailPanel(
+              crew: group,
+              onOpenRelease: (rel) => opened = rel,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Alpha Crew'), findsOneWidget);
+    expect(find.text('Releases (2)'), findsOneWidget);
+    expect(find.text('Alpha'), findsOneWidget);
+    expect(find.text('Alpha v2'), findsOneWidget);
+    await tester.tap(find.text('Alpha'));
+    await tester.pump();
+    expect(opened, relA);
+  });
+}

@@ -200,6 +200,7 @@ class _FilterBarState extends State<FilterBar> {
     final f = c.filter;
     final facets = c.facets;
     final fields = kindFilters(f.section);
+    final isCrew = f.section == 'crew';
     // AtariLegend-only facets: hidden until the cache has been downloaded.
     final withAtariLegend = c.hasAtariLegend;
 
@@ -276,14 +277,27 @@ class _FilterBarState extends State<FilterBar> {
                   ),
                   // Status filter is available for every section now that
                   // pd/utils carry index-derived statuses; all sections start
-                  // with the configured `DefaultStatus`.
-                  _SelectMenu(
-                    value: f.status,
-                    items: ['with_screenshot', 'any', ...kStatusFilterKeys],
-                    labelOf: (v) => kStatusLabels[v] ?? v,
-                    onChanged: c.setStatus,
-                    width: 150,
-                  ),
+                  // with the configured `DefaultStatus`. Crew cards are not
+                  // screenshot-status driven.
+                  if (!isCrew)
+                    _SelectMenu(
+                      value: f.status,
+                      items: ['with_screenshot', 'any', ...kStatusFilterKeys],
+                      labelOf: (v) => kStatusLabels[v] ?? v,
+                      onChanged: c.setStatus,
+                      width: 150,
+                    ),
+                  if (isCrew)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Text(
+                        c.crews.length == 0
+                            ? 'No crew data'
+                            : 'Top ${c.crews.length < kCrewInitialLimit ? c.crews.length : kCrewInitialLimit} by ZIPs',
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.grey),
+                      ),
+                    ),
                   if (withAtariLegend && fields.contains('genre'))
                     _SelectMenu(
                       value: f.genre,
@@ -372,34 +386,37 @@ class _FilterBarState extends State<FilterBar> {
                       onChanged: c.setTos,
                       width: 120,
                     ),
-                  _SelectMenu(
-                    value: '${f.sort}:${f.order}',
-                    items: [
-                      for (final k in kSortKeys)
-                        for (final o in const ['asc', 'desc']) '$k:$o',
-                    ],
-                    labelOf: (v) => v.replaceFirst(':', ' '),
-                    onChanged: (v) {
-                      final i = v.lastIndexOf(':');
-                      c.setSortOrder(v.substring(0, i), v.substring(i + 1));
-                    },
-                    width: 120,
-                  ),
+                  if (!isCrew)
+                    _SelectMenu(
+                      value: '${f.sort}:${f.order}',
+                      items: [
+                        for (final k in kSortKeys)
+                          for (final o in const ['asc', 'desc']) '$k:$o',
+                      ],
+                      labelOf: (v) => v.replaceFirst(':', ' '),
+                      onChanged: (v) {
+                        final i = v.lastIndexOf(':');
+                        c.setSortOrder(v.substring(0, i), v.substring(i + 1));
+                      },
+                      width: 120,
+                    ),
                 ],
               ),
-              const SizedBox(height: 4),
-              _letterRow(
-                facets.letters,
-                f.letter,
-                c.setLetter,
-                trailing: [
-                  const SizedBox(width: 8),
-                  _labelButton('★ Favorites', c.toggleFavoritesOnly,
-                      width: 96, active: c.favoritesOnly),
-                  const SizedBox(width: 2),
-                  _labelButton('clear', c.resetFilters, width: 52),
-                ],
-              ),
+              if (!isCrew) ...[
+                const SizedBox(height: 4),
+                _letterRow(
+                  facets.letters,
+                  f.letter,
+                  c.setLetter,
+                  trailing: [
+                    const SizedBox(width: 8),
+                    _labelButton('★ Favorites', c.toggleFavoritesOnly,
+                        width: 96, active: c.favoritesOnly),
+                    const SizedBox(width: 2),
+                    _labelButton('clear', c.resetFilters, width: 52),
+                  ],
+                ),
+              ],
             ],
           ],
         ),
@@ -411,6 +428,7 @@ class _FilterBarState extends State<FilterBar> {
   /// `games` (the filter value / section key itself stays unchanged).
   String _sectionLabel(String section) => switch (section) {
         'cracked' => 'games',
+        'crew' => 'crews',
         'magazine' => 'magazines',
         _ => section,
       };

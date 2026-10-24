@@ -16,7 +16,7 @@ const Map<String, String> kSectionIndexNames = {
 };
 
 /// Section keys in UI order (gallery tabs), matching [kSectionIndexNames].
-const List<String> kSections = ['cracked', 'pd', 'utils', 'magazine', 'falcon'];
+const List<String> kSections = ['cracked', 'pd', 'utils', 'magazine', 'falcon', 'crew'];
 
 /// Screenshot index lookup (`SPEC-screenshot-generator.md`, `index.json`).
 ///

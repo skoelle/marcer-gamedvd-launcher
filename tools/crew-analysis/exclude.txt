@@ -1,0 +1,29 @@
+# Labels that are not scene groups / crackers.
+# One normalized label per line (lowercase, & / + collapsed to "and").
+# Lines starting with # are comments.
+
+original
+unknown
+cracked
+cracked v2
+not cracked
+none
+n/a
+?
+????
+????
+no 1 & no 2
+no 1 and no 2
+demo
+demo version
+budget
+cheat
+patched
+translation
+usa
+europe
+us release
+eu release
+english
+german
+french

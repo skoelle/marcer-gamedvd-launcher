@@ -254,6 +254,7 @@ class _CenterGridState extends State<CenterGrid> {
   void _openLightboxForSelection({int image = 0}) {
     final c = widget.controller;
     final card = c.selectedCard;
+    if (card?.crew != null) return;
     widget.onOpenLightbox(card == null ? 0 : _bestVariant(c, card), image);
   }
 
@@ -381,35 +382,43 @@ class _CenterGridState extends State<CenterGrid> {
       return Stack(
         fit: StackFit.expand,
         children: [
-          _previewImage(preview),
+          _previewImage(preview, crew: card.crew != null),
           ?_candidatesOverlay(c, card, index),
         ],
       );
     }
-    return _placeholder();
+    return _placeholder(crew: card.crew != null);
   }
 
-  Widget _placeholder() => const Center(
-        child: Icon(Icons.videogame_asset, size: 42, color: Colors.white24),
+  Widget _placeholder({bool crew = false}) => Center(
+        child: Icon(crew ? Icons.groups : Icons.videogame_asset,
+            size: crew ? 52 : 42,
+            color: crew ? Colors.white54 : Colors.white24),
       );
 
   Widget _cardTile(
       CatalogController c, GameCard card, bool selected, int index) {
+    final crew = card.crew;
     // Never touch the filesystem while building a tile: read the async layer
     // cache and request a background scan for unknown folders. Badges appear
-    // as soon as the scan result arrives (throttled notify).
-    c.ensureCardScanned(card);
-    final layer = c.cachedCardLayer(card);
-    final missing = c.cachedCardMissing(card);
+    // as soon as the scan result arrives (throttled notify). Crew cards are
+    // synthetic and have no ZIP/folder layer of their own.
+    if (crew == null) c.ensureCardScanned(card);
+    final layer = crew == null ? c.cachedCardLayer(card) : null;
+    final missing = crew == null ? c.cachedCardMissing(card) : null;
     final chips = <String>[
-      if (c.isFavoriteCard(card)) 'FAVORITE',
-      if (card.variants.length > 1) '×${card.variants.length}',
-      if (layer != null && layer.isNotEmpty) layer,
-      if (missing == true) 'MISSING',
-      if (card.tosVersion != null && card.tosVersion!.isNotEmpty)
+      if (crew != null) '${crew.zips} ZIPs',
+      if (crew == null && c.isFavoriteCard(card)) 'FAVORITE',
+      if (crew == null && card.variants.length > 1)
+        '×${card.variants.length}',
+      if (crew == null && layer != null && layer.isNotEmpty) layer,
+      if (crew == null && missing == true) 'MISSING',
+      if (crew == null &&
+          card.tosVersion != null &&
+          card.tosVersion!.isNotEmpty)
         'TOS ${card.tosVersion}',
-      if (card.displayStatus.isNotEmpty) card.displayStatus,
-      if (card.year != 'unknown') card.year,
+      if (crew == null && card.displayStatus.isNotEmpty) card.displayStatus,
+      if (crew == null && card.year != 'unknown') card.year,
     ];
     final preview = c.displayPreviewPathForCard(card);
     final thumbsBody = card.focusVariant == -1
@@ -421,12 +430,12 @@ class _CenterGridState extends State<CenterGrid> {
       onTap: () => c.moveSelectionTo(index),
       onDoubleTap: () {
         c.moveSelectionTo(index);
-        if (c.activate()) _openLightboxForSelection();
+        if (card.crew == null && c.activate()) _openLightboxForSelection();
       },
       image: _cardBody(c, card, index),
       badges: chips,
       title: card.name,
-      dim: preview == null && !thumbsBody,
+      dim: crew == null && preview == null && !thumbsBody,
     );
   }
 
@@ -547,19 +556,19 @@ class _CenterGridState extends State<CenterGrid> {
     );
   }
 
-  Widget _previewImage(String? path) {
+  Widget _previewImage(String? path, {bool crew = false}) {
     if (path == null) {
-      return const Center(
-        child: Icon(Icons.videogame_asset, size: 42, color: Colors.white24),
-      );
+      return _placeholder(crew: crew);
     }
     return Image.file(
       io.File(path),
       key: ValueKey('$path#${widget.controller.imageVersionOf(path)}'),
       fit: BoxFit.cover,
       cacheWidth: 440,
-      errorBuilder: (_, _, _) => const Center(
-        child: Icon(Icons.broken_image, size: 36, color: Colors.white24),
+      errorBuilder: (_, _, _) => Center(
+        child: Icon(crew ? Icons.groups : Icons.broken_image,
+            size: crew ? 52 : 36,
+            color: crew ? Colors.white54 : Colors.white24),
       ),
     );
   }

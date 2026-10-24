@@ -24,6 +24,7 @@ per-app/per-tool READMEs stay next to their code.
 | File | What it contains |
 |---|---|
 | [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md) | Analysis of the external game metadata (XLS workbooks): data model, matching rules, `games-*.json` schema, roadmap. |
+| [`ANALYSIS-crews.md`](ANALYSIS-crews.md) | Crew ranking for the cracked section: data sources, attribution/alias rules, current top crews and caveats (`tools/crew-analysis`). |
 | [`ANALYSIS-atarilegend.md`](ANALYSIS-atarilegend.md) | Analysis of the weekly AtariLegend database dumps: contents/coverage, folder↔game matching, asset/URL conventions, the runtime index + detail payload (app builds it from the gz; tool-side SQLite is analysis only) and roadmap. |
 | [`ANALYSIS-piratefinder.md`](ANALYSIS-piratefinder.md) | Analysis of the PirateFinder catalogue: SQLite schema/coverage, licence, the local `tools/piratefinder-gen` import, hash/title matching against the cracked ZIPs, measured match rates, crew/menu-disk metadata and limitations. |
 | [`ANALYSIS-boxscan-manual-structure.md`](ANALYSIS-boxscan-manual-structure.md) | Analysis of the `Boxscan/` and `Manual/` companion folders: location, naming variants, ZIP/loose-file structure, edge cases, requirements for a UI consumer (Flutter desktop). |

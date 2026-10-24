@@ -15,6 +15,7 @@ Set<String> kindFilters(String kind) => switch (kind) {
         },
       'magazine' => {'year'},
       'falcon' => const {},
+      'crew' => const {},
       'utils' => {
           'publisher',
           'genre',

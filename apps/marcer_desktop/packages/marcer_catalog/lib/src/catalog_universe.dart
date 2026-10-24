@@ -6,6 +6,7 @@ import 'dart:isolate';
 
 import 'atarilegend.dart';
 import 'card.dart';
+import 'crews.dart';
 import 'gameinfo.dart';
 import 'magazine.dart';
 import 'screenshot_index.dart';
@@ -178,6 +179,9 @@ class CatalogUniverse {
         'utils' => utils,
         'magazine' => magazine,
         'falcon' => falcon,
+        // The crew section is built by the controller from `crews.json`
+        // (not from a screenshot index), so the universe has no cards here.
+        'crew' => const <GameCard>[],
         _ => cracked,
       };
 
@@ -186,6 +190,7 @@ class CatalogUniverse {
         'utils' => utilsFacets,
         'magazine' => magazineFacets,
         'falcon' => falconFacets,
+        'crew' => const CatalogFacets(),
         _ => crackedFacets,
       };
 
@@ -400,6 +405,7 @@ Set<String> kindFields(String kind) => switch (kind) {
       'pd' => {'publisher', 'language', 'release', 'tos_bad'},
       'magazine' => const {},
       'falcon' => const {},
+      'crew' => const {},
       'utils' => {
           'publisher',
           'crew',
@@ -428,6 +434,7 @@ class CatalogBundle {
   CatalogBundle({
     required this.index,
     required this.info,
+    required this.crews,
     required this.atariLegend,
     required this.universe,
     required this.warnings,
@@ -519,6 +526,9 @@ class CatalogBundle {
       }
     }
 
+    onProgress?.call('Loading crew data…');
+    final crews = CrewIndex.load(gameinfoDir);
+
     onProgress?.call('Loading AtariLegend data…');
     final atariLegend =
         AtariLegendIndex.load(atariLegendDir, warnings: warnings);
@@ -534,6 +544,7 @@ class CatalogBundle {
     return CatalogBundle(
       index: index,
       info: info,
+      crews: crews,
       atariLegend: atariLegend,
       universe: universe,
       warnings: warnings,
@@ -542,6 +553,7 @@ class CatalogBundle {
 
   final ScreenshotIndices index;
   final GameInfoIndex info;
+  final CrewIndex crews;
   final AtariLegendIndex atariLegend;
   final CatalogUniverse universe;
   final List<String> warnings;

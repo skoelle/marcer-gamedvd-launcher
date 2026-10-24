@@ -34,9 +34,14 @@ class GameLightbox extends StatefulWidget {
     this.initialVariant = 0,
     this.initialImage = 0,
     this.onToggleHelp,
+    this.fixedCard,
   });
 
   final CatalogController controller;
+
+  /// When set, the lightbox is pinned to this cracked-game card (used by the
+  /// Crews tab release list) instead of the active catalog selection.
+  final GameCard? fixedCard;
 
   /// Initial variant index (crew focus) and image index (0 = preview,
   /// gallery `openLightbox(idx, variant, img)` semantics).
@@ -60,6 +65,30 @@ class GameLightbox extends StatefulWidget {
       barrierColor: Colors.black87,
       builder: (_) => GameLightbox(
         controller: c,
+        initialVariant: variant,
+        initialImage: image,
+        onToggleHelp: onToggleHelp,
+      ),
+    );
+  }
+
+  /// Opens the lightbox pinned to [card] (e.g. a release clicked in the Crews
+  /// tab), without changing the active catalog section/selection.
+  static Future<void> showCard(
+    BuildContext context,
+    CatalogController c, {
+    required GameCard card,
+    int variant = 0,
+    int image = 0,
+    Future<void> Function()? onToggleHelp,
+  }) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black87,
+      builder: (_) => GameLightbox(
+        controller: c,
+        fixedCard: card,
         initialVariant: variant,
         initialImage: image,
         onToggleHelp: onToggleHelp,
@@ -100,7 +129,10 @@ class _GameLightboxState extends State<GameLightbox> {
 
   void _rebuildItems() {
     final c = widget.controller;
-    if (c.catalogMode) {
+    if (widget.fixedCard != null) {
+      _items = <Object>[widget.fixedCard!];
+      _itemIdx = 0;
+    } else if (c.catalogMode) {
       _items = List<Object>.of(c.catalogCards);
       _itemIdx = c.selectedIndex.clamp(0, math.max(0, _items.length - 1));
     } else {

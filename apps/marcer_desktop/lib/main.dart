@@ -711,11 +711,24 @@ class _HomePageState extends State<HomePage> {
     if (!c.catalogMode) {
       final e = c.selectedEntry;
       if (e == null || e.kind != EntryKind.zip) return;
-    } else if (c.selectedCard == null) {
-      return;
+    } else {
+      final card = c.selectedCard;
+      if (card == null || card.crew != null) return;
     }
     GameLightbox.show(context, c,
         variant: variant, image: image, onToggleHelp: _toggleHelpAsync);
+  }
+
+  /// Opens a crew release in the existing game lightbox without leaving the
+  /// Crews tab (the lightbox is pinned to the cracked card of that ZIP).
+  void _openCrewRelease(String rel) {
+    final hit = _controller.releaseCardFor(rel);
+    if (hit == null) return;
+    GameLightbox.showCard(context, _controller,
+        card: hit.card,
+        variant: hit.index,
+        image: 0,
+        onToggleHelp: _toggleHelpAsync);
   }
 
   @override
@@ -856,6 +869,7 @@ class _HomePageState extends State<HomePage> {
                     builder: (context, _) => DetailPanel(
                       controller: c,
                       onOpenLightbox: _openLightbox,
+                      onOpenCrewRelease: _openCrewRelease,
                     ),
                   ),
                 ),
