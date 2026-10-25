@@ -126,6 +126,30 @@ Disabling the sandbox also unblocks the in-process `swapInstall` of the `.app`
 bundle (`self_updater.dart`) and launching Hatari installed in the per-user data
 directory.
 
+### 3.6 Self-update must preserve framework symlinks
+The macOS `.app` bundle is a versioned framework layout whose top-level entries
+are **Unix symlinks** (`MarcerGameDVDLauncher.app/Contents/Frameworks/
+App.framework/App` → `Versions/Current/App`, `Versions/Current` → `A`, and the
+same for `FlutterMacOS.framework`). The release ZIP preserves them via
+`ditto -c -k --sequesterRsrc`.
+
+The self-update extractor must recreate these as real symlinks. An earlier
+build extracted them as regular files, so after a self-update the Flutter engine
+could not resolve the AOT snapshot (`assetsPath` was nil) and the app crashed in
+`NSApplicationMain` before any Dart ran (`SIGABRT`, `+[NSArray
+arrayWithObjects:count:]`) — the bundle was unstartable. The fix:
+
+- `extractArchiveToDir` recreates symlink entries (`ArchiveFile.isSymbolicLink`
+  + `nameOfLinkedFile`, which Dart `archive` populates from `ditto` zips) as
+  `Link.create`, and `_copyDir`/`swapInstall`/`_deletePathBestEffort` also handle
+  `Link` entries.
+- After `swapInstall`, `verifyMacOsFrameworkLinks` asserts the framework links
+  are still links; a failure triggers `rollbackInstall` from the `*.old`
+  backups so a broken swap never replaces a working install.
+- `resignMacOsBundle` re-signs the swapped `.app` ad-hoc
+  (`codesign --force --deep --sign -`) because the copy invalidates the
+  signature.
+
 ## 4. Deferred / Follow-up Ideas
 
 1. **Notarization (idea).** Add Developer ID signing + `notarytool` to the macOS

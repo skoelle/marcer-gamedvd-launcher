@@ -119,6 +119,8 @@ void _deletePathBestEffort(String path) {
       e.deleteSync();
     } else if (e is Directory) {
       e.deleteSync(recursive: true);
+    } else if (Link(path).existsSync()) {
+      Link(path).deleteSync();
     }
   } catch (_) {
     // best effort — a stale .old is retried on the next start
@@ -130,7 +132,12 @@ void _copyDir(Directory src, String destPath) {
   for (final e in src.listSync(followLinks: false)) {
     final name = p.basename(e.path);
     final dest = p.join(destPath, name);
-    if (e is Directory) {
+    if (e is Link) {
+      // Preserve symlinks (macOS *.framework structure); copying the target
+      // as a file would break the framework.
+      _deletePathBestEffort(dest);
+      Link(dest).createSync(e.targetSync());
+    } else if (e is Directory) {
       _copyDir(e, dest);
     } else if (e is File) {
       e.copySync(dest);
@@ -484,28 +491,40 @@ String windowsUpdateTaskCommand({required String launcherPath}) =>
 /// fine everywhere, but Windows additionally locks loaded libraries
 /// (`data\app.so`, `flutter_windows.dll`) against rename — see
 /// [windowsUpdateHelperScript] for the two-phase Windows path.
-void swapInstall({required Directory from, required Directory into}) {
+///
+/// Returns the list of staged top-level entry names that were installed (the
+/// non-`__MACOSX` entries), so the caller can verify or roll back.
+List<String> swapInstall({required Directory from, required Directory into}) {
   into.createSync(recursive: true);
+  final installed = <String>[];
   for (final entity in from.listSync(followLinks: false)) {
     final name = p.basename(entity.path);
     if (name == '__MACOSX') continue;
     final target = p.join(into.path, name);
     final oldPath = '$target.old';
     _deletePathBestEffort(oldPath);
-    final existing = _entry(target);
-    if (existing != null) {
-      if (existing is Directory) {
-        existing.renameSync(oldPath);
-      } else if (existing is File) {
-        existing.renameSync(oldPath);
+    final existing = FileSystemEntity.typeSync(target, followLinks: false);
+    if (existing != FileSystemEntityType.notFound) {
+      final backup = _entry(target);
+      if (backup is Directory) {
+        backup.renameSync(oldPath);
+      } else if (backup is File) {
+        backup.renameSync(oldPath);
+      } else if (Link(target).existsSync()) {
+        Link(target).renameSync(oldPath);
       }
     }
-    if (entity is Directory) {
+    if (entity is Link) {
+      _deletePathBestEffort(target);
+      Link(target).createSync(entity.targetSync());
+    } else if (entity is Directory) {
       _copyDir(entity, target);
     } else if (entity is File) {
       entity.copySync(target);
     }
+    installed.add(name);
   }
+  return installed;
 }
 
 /// Best-effort removal of `<name>.old` leftovers next to the executable
@@ -531,6 +550,89 @@ Future<void> cleanupOldFiles(String installDir) async {
     }
   } catch (_) {
     // best effort
+  }
+}
+
+/// macOS: the framework symlinks that must still be *links* after an install
+/// (relative to the staged top-level entry). A regular file here means the
+/// extraction broke the bundle and the app would fail to launch.
+const List<String> kMacOsRequiredSymlinks = [
+  'MarcerGameDVDLauncher.app/Contents/Frameworks/App.framework/App',
+  'MarcerGameDVDLauncher.app/Contents/Frameworks/App.framework/Resources',
+  'MarcerGameDVDLauncher.app/Contents/Frameworks/App.framework/Versions/Current',
+  'MarcerGameDVDLauncher.app/Contents/Frameworks/FlutterMacOS.framework/'
+      'FlutterMacOS',
+  'MarcerGameDVDLauncher.app/Contents/Frameworks/FlutterMacOS.framework/'
+      'Resources',
+  'MarcerGameDVDLauncher.app/Contents/Frameworks/FlutterMacOS.framework/'
+      'Versions/Current',
+];
+
+/// Verifies that [into] still contains the macOS framework symlinks listed in
+/// [kMacOsRequiredSymlinks] as real links. Returns the missing/broken paths
+/// (empty = OK). No-op on other platforms.
+List<String> verifyMacOsFrameworkLinks(Directory into) {
+  if (!Platform.isMacOS) return const [];
+  final broken = <String>[];
+  for (final rel in kMacOsRequiredSymlinks) {
+    final path = p.join(into.path, rel);
+    if (FileSystemEntity.typeSync(path, followLinks: false) !=
+        FileSystemEntityType.link) {
+      broken.add(rel);
+    }
+  }
+  return broken;
+}
+
+/// Rolls back the entries named in [installed] to their `<name>.old` backups
+/// (best effort) — used when a macOS install failed verification, so a broken
+/// swap never leaves an unstartable app behind.
+void rollbackInstall({
+  required Directory into,
+  required List<String> installed,
+}) {
+  for (final name in installed) {
+    final target = p.join(into.path, name);
+    final oldPath = '$target.old';
+    if (FileSystemEntity.typeSync(oldPath, followLinks: false) ==
+        FileSystemEntityType.notFound) {
+      continue;
+    }
+    _deletePathBestEffort(target);
+    final backup = _entry(oldPath);
+    if (backup is Directory) {
+      backup.renameSync(target);
+    } else if (backup is File) {
+      backup.renameSync(target);
+    } else if (Link(oldPath).existsSync()) {
+      Link(oldPath).renameSync(target);
+    }
+  }
+}
+
+/// Ad-hoc re-signs the macOS app bundle with `codesign --force --deep -s -`
+/// after a swap (best effort; the copied bundle would otherwise carry a stale
+/// signature). No-op on other platforms or when `codesign` is unavailable.
+void resignMacOsBundle(Directory installDir) {
+  if (!Platform.isMacOS) return;
+  try {
+    String? appPath;
+    for (final e in installDir.listSync(followLinks: false)) {
+      if (e is Directory && e.path.endsWith('.app')) {
+        appPath = e.path;
+        break;
+      }
+    }
+    if (appPath == null) return;
+    Process.runSync('codesign', [
+      '--force',
+      '--deep',
+      '--sign',
+      '-',
+      appPath,
+    ]);
+  } catch (_) {
+    // best effort — an unsigned bundle still runs from a normal location
   }
 }
 
@@ -653,8 +755,25 @@ class SelfUpdateController extends ChangeNotifier {
         exit(0);
       }
 
-      swapInstall(from: extractDir, into: Directory(installDir));
-      log.line('in-process swap done');
+      final installed = swapInstall(from: extractDir, into: Directory(installDir));
+      log.line('in-process swap done (${installed.length} entries)');
+
+      // macOS: a broken framework symlink makes the app unstartable. Verify
+      // and roll back to the previous install instead of leaving a broken one.
+      final broken = verifyMacOsFrameworkLinks(Directory(installDir));
+      if (broken.isNotEmpty) {
+        log.line('macOS framework link check FAILED: ${broken.join(', ')}');
+        rollbackInstall(into: Directory(installDir), installed: installed);
+        log.line('rolled back to the previous install');
+        throw StateError(
+            'Update verification failed (broken framework links: '
+            '${broken.join(', ')}). The previous version was restored.');
+      }
+      if (Platform.isMacOS) {
+        log.line('framework link check ok');
+        resignMacOsBundle(Directory(installDir));
+        log.line('re-signed app bundle (ad-hoc)');
+      }
 
       phase = UpdatePhase.restarting;
       notifyListeners();
@@ -835,6 +954,12 @@ class SelfUpdateController extends ChangeNotifier {
 Future<void> extractZipToDir(File zipFile, Directory into) async {
   final bytes = await zipFile.readAsBytes();
   final archive = ZipDecoder().decodeBytes(bytes);
+  extractArchiveToDir(archive, into);
+}
+
+/// Extracts a decoded [archive] into [into] (see [extractZipToDir]).
+/// Recreates Unix symlinks as real links (macOS `ditto` zips).
+void extractArchiveToDir(Archive archive, Directory into) {
   for (final entry in archive) {
     final name = entry.name;
     if (name.isEmpty) continue;
@@ -846,7 +971,15 @@ Future<void> extractZipToDir(File zipFile, Directory into) async {
     if (parts.first == '__MACOSX') continue;
     if (p.basename(norm).startsWith('._')) continue;
     final outPath = p.join(into.path, norm);
-    if (entry.isFile) {
+    if (entry.isSymbolicLink) {
+      // macOS `ditto` zips (Frameworks/*.framework) rely on symlinks
+      // (`App` -> `Versions/Current/App`, `Versions/Current` -> `A`).
+      // Recreate them as real links; turning them into files breaks the
+      // framework resources and the app fails to launch after an update.
+      File(outPath).parent.createSync(recursive: true);
+      _deletePathBestEffort(outPath);
+      Link(outPath).createSync(entry.nameOfLinkedFile);
+    } else if (entry.isFile) {
       File(outPath).parent.createSync(recursive: true);
       File(outPath).writeAsBytesSync(entry.content as List<int>);
     } else {

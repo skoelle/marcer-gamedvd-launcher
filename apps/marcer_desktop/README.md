@@ -97,6 +97,17 @@ helper. If an update ever leaves no window, start the app once manually — the
 new version is already installed, and `*.old` leftovers are removed on the next
 start.
 
+The extractor preserves the bundle's **Unix symlinks** (the
+`Frameworks/*.framework` layout), verifies them after the swap, rolls back to
+the previous version if they are broken, and re-signs the swapped `.app`
+ad-hoc. On macOS a failed verification never leaves an unstartable app behind.
+
+> **Note (versions before the fix):** an early release could install a broken
+> bundle via self-update (the framework symlinks were written as files, so the
+> app crashed on launch before showing a window). Such a build cannot update
+> itself — download the current ZIP from GitHub, unpack it with Finder and copy
+> the `.app` over the broken install once; self-update works again afterwards.
+
 ## macOS
 
 The app is **not sandboxed** on macOS (`macos/Runner/*.entitlements`): it reads

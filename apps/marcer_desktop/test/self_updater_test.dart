@@ -195,6 +195,44 @@ void main() {
       expect(File(p.join(appDir.path, 'desktop.config.json')).existsSync(),
           isTrue);
     });
+
+    test('preserves symlinks inside installed directories', () {
+      final appDir = Directory(p.join(sandbox.path, 'app3'))..createSync();
+      final extract = Directory(p.join(sandbox.path, 'extract3'))..createSync();
+
+      // Staged release: Foo.app/Contents/Frameworks/X.framework with links.
+      final fwDir = Directory(p.join(extract.path, 'Foo.app', 'Contents',
+          'Frameworks', 'X.framework'))
+        ..createSync(recursive: true);
+      Directory(p.join(fwDir.path, 'Versions', 'A')).createSync(recursive: true);
+      File(p.join(fwDir.path, 'Versions', 'A', 'X')).writeAsStringSync('bin');
+      Link(p.join(fwDir.path, 'Versions', 'Current')).createSync('A');
+      Link(p.join(fwDir.path, 'X')).createSync('Versions/Current/X');
+
+      final installed = swapInstall(from: extract, into: appDir);
+      expect(installed, contains('Foo.app'));
+
+      final link = p.join(appDir.path, 'Foo.app', 'Contents', 'Frameworks',
+          'X.framework', 'X');
+      expect(FileSystemEntity.typeSync(link, followLinks: false),
+          FileSystemEntityType.link);
+      expect(Link(link).targetSync(), 'Versions/Current/X');
+      expect(File(link).readAsStringSync(), 'bin');
+    });
+
+    test('rollbackInstall restores previous entries from .old', () {
+      final appDir = Directory(p.join(sandbox.path, 'app4'))..createSync();
+      final extract = Directory(p.join(sandbox.path, 'extract4'))..createSync();
+
+      File(p.join(appDir.path, 'launcher')).writeAsStringSync('old');
+      File(p.join(extract.path, 'launcher')).writeAsStringSync('new');
+
+      final installed = swapInstall(from: extract, into: appDir);
+      expect(File(p.join(appDir.path, 'launcher')).readAsStringSync(), 'new');
+
+      rollbackInstall(into: appDir, installed: installed);
+      expect(File(p.join(appDir.path, 'launcher')).readAsStringSync(), 'old');
+    });
   });
 
   group('extractZipToDir', () {
@@ -236,6 +274,41 @@ void main() {
           Directory(p.join(out.path, '__MACOSX')).existsSync(), isFalse);
       expect(File(p.join(out.path, 'data', '._blob.bin')).existsSync(),
           isFalse);
+    });
+
+    test('recreates Unix symlinks instead of writing them as files', () {
+      final archive = Archive();
+      void addFile(String name, String content) {
+        archive.addFile(ArchiveFile(name, content.length, content.codeUnits));
+      }
+
+      addFile('App.framework/Versions/A/App', 'binary');
+      // Symlink entries as produced by macOS `ditto` (S_IFLNK, target string
+      // as content), decoded into isSymbolicLink/nameOfLinkedFile.
+      archive.addFile(
+        ArchiveFile('App.framework/App', 20, 'Versions/Current/App'.codeUnits)
+          ..isFile = false
+          ..isSymbolicLink = true
+          ..nameOfLinkedFile = 'Versions/Current/App',
+      );
+      archive.addFile(
+        ArchiveFile('App.framework/Versions/Current', 1, 'A'.codeUnits)
+          ..isFile = false
+          ..isSymbolicLink = true
+          ..nameOfLinkedFile = 'A',
+      );
+
+      final out = Directory(p.join(sandbox.path, 'links'))..createSync();
+      extractArchiveToDir(archive, out);
+
+      final link = p.join(out.path, 'App.framework', 'App');
+      expect(FileSystemEntity.typeSync(link, followLinks: false),
+          FileSystemEntityType.link);
+      expect(Link(link).targetSync(), 'Versions/Current/App');
+      final realFile = p.join(out.path, 'App.framework', 'Versions', 'A', 'App');
+      expect(File(realFile).readAsStringSync(), 'binary');
+      // The symlink resolves to the real file.
+      expect(File(link).readAsStringSync(), 'binary');
     });
   });
 
