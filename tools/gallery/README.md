@@ -79,7 +79,8 @@ Backend filter/card helpers use stdlib `unittest` only:
   (`&`/`+` = `and`, and a token fallback for typos/missing connectives like
   "Hotline & MCA" ↔ "Hotline MCA"); when no ZIP can be identified the card
   shows a hint plus up to four screenshots of the folder's other variants.
-- **Lightbox**: integer-upscaled screenshot, variant filmstrip (click or
+- **Lightbox**: integer-upscaled screenshot (downscaled proportionally when
+  it does not fit the available area), variant filmstrip (click or
   `↑`/`↓`; variants with a screenshot are listed first), candidate images,
   header badges (layer, status histogram, year), metadata with **This ZIP**
   (including the `Kind` row) before the release-variant table, the open ZIP

@@ -696,6 +696,15 @@ footer {
   gap: 8px;
   padding: 8px;
   align-content: start;
+  /* Each release card must take its content height. The item's min-content
+     height is 0 — the `.crew-thumb` aspect-ratio box and `overflow: hidden`
+     contribute no intrinsic height — so an `auto` row would size to ~0 and
+     the cards would either collapse to a ~2px strip (with `align-items`
+     stretch) or overlap massively (with `align-items: start`, since the
+     cards keep their height in ~0-height rows). Force content-sized rows.
+     SPEC 6.11. */
+  grid-auto-rows: min-content;
+  align-items: start;
   outline: none;
 }
 .crew-empty {

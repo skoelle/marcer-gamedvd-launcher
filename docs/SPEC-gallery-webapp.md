@@ -856,7 +856,11 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
 - Large original screenshot (first preview or selected candidate), letterbox
   on dark background, aspect ratio preserved. The main image is **upscaled
   only by integer factors** (1×, 2×, 3× … of the natural pixel size) so
-  pixel-art stays crisp — fractional browser scaling is avoided.
+  pixel-art stays crisp — fractional browser scaling is avoided. Integer
+  upscaling is applied only when the image fits or is smaller than the
+  available area; when it is larger than the area on either axis it is
+  **downscaled proportionally** to fit (`object-fit: contain`, aspect ratio
+  preserved) instead of being squashed or clipped.
 - **Variant filmstrip** (sole variant switcher): one thumbnail per ZIP of
   the folder (preview or empty placeholder), horizontal scroll, active
   variant highlighted; hover shows the full ZIP name (native `title`
@@ -1032,6 +1036,10 @@ browser for that crew:
 - Left: responsive release screenshot grid (up to four columns) with
   status/kind/layer/ambiguous badges, title, year and credits; missing
   screenshots show a placeholder. Images use `/img/` and `loading="lazy"`.
+  Grid rows are content-sized (`grid-auto-rows: min-content`): the release
+  card's min-content height is 0 because its `.crew-thumb` aspect-ratio box
+  and `overflow: hidden` contribute no intrinsic height, so `auto` rows would
+  size to ~0 and the cards would collapse (stretch) or overlap (`start`).
 - Right: compact release side panel with title/year/publisher/cracked by/
   crew/language/disks, RAW/PASTI/Boxscan/TOS flags, ZIP, status, kind,
   layer and ambiguity. A **Open game lightbox** button (not a launch/play

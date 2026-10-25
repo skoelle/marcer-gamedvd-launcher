@@ -794,7 +794,13 @@ function lbSelectGroup(value, kind) {
   writeURL(false);
 }
 
-// integer-only upscale of the lightbox main image (pixel-art safe)
+// Integer-only upscale of the lightbox main image (pixel-art safe). Only
+// applied when the image fits or can be upscaled (scale >= 1); when it is
+// larger than the available area on either axis we clear the explicit size
+// and let CSS (`max-width`/`max-height: 100%` + `object-fit: contain`)
+// downscale proportionally — writing an explicit width AND height there
+// would let the browser clamp each axis independently and squash the
+// screenshot to a thin strip (SPEC-gallery-webapp.md 6.5).
 function fitIntegerScale(img) {
   if (!img || !img.naturalWidth) return;
   const wrap = img.parentElement;
@@ -802,12 +808,17 @@ function fitIntegerScale(img) {
   const availW = wrap.clientWidth;
   const availH = wrap.clientHeight;
   if (!availW || !availH) return;
-  const scale = Math.max(1, Math.floor(Math.min(
+  const scale = Math.floor(Math.min(
     availW / img.naturalWidth,
     availH / img.naturalHeight
-  )));
-  img.style.width = (img.naturalWidth * scale) + "px";
-  img.style.height = (img.naturalHeight * scale) + "px";
+  ));
+  if (scale >= 1) {
+    img.style.width = (img.naturalWidth * scale) + "px";
+    img.style.height = (img.naturalHeight * scale) + "px";
+  } else {
+    img.style.width = "";
+    img.style.height = "";
+  }
 }
 
 function manualVariantLabel(variant) {

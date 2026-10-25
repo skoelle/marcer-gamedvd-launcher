@@ -1138,23 +1138,36 @@ class _IntegerScaledImageState extends State<_IntegerScaledImage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final scale = math.max(
-          1,
-          math.min(
-            (constraints.maxWidth / img.width).floor(),
-            (constraints.maxHeight / img.height).floor(),
-          ),
+        final scale = math.min(
+          (constraints.maxWidth / img.width).floor(),
+          (constraints.maxHeight / img.height).floor(),
         );
-        return Center(
-          child: SizedBox(
-            width: img.width * scale.toDouble(),
-            height: img.height * scale.toDouble(),
-            child: Image.file(
-              io.File(widget.path),
-              fit: BoxFit.fill,
-              filterQuality: FilterQuality.none,
-              gaplessPlayback: true,
+        // Integer-only upscale when the image fits or can be upscaled
+        // (pixel-art stays crisp). When it is larger than the available area
+        // on either axis, downscale proportionally with `BoxFit.contain` —
+        // an explicit smaller-than-1 scale or an oversized `SizedBox` would
+        // squash/clip the screenshot (gallery `fitIntegerScale`,
+        // SPEC-gallery-webapp.md 6.5).
+        if (scale >= 1) {
+          return Center(
+            child: SizedBox(
+              width: img.width * scale.toDouble(),
+              height: img.height * scale.toDouble(),
+              child: Image.file(
+                io.File(widget.path),
+                fit: BoxFit.fill,
+                filterQuality: FilterQuality.none,
+                gaplessPlayback: true,
+              ),
             ),
+          );
+        }
+        return Center(
+          child: Image.file(
+            io.File(widget.path),
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.none,
+            gaplessPlayback: true,
           ),
         );
       },
