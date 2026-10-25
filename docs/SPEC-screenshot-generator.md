@@ -486,7 +486,13 @@ desktop click retry (section 7.4) needs the real X pointer and focus, which
 one shared display cannot provide for two Hatari instances. Entry mutation
 and every index save are serialized under a single lock, so parallel
 workers can never overwrite each other's updates. The output-dir lock
-still allows only one tool process per `MARCER_OUT_DIR`.
+still allows only one tool process per `MARCER_OUT_DIR`. Before a run the
+tool creates `tmp_dir`, terminates orphaned `hatari`/`Xvfb` processes left
+behind by an earlier crash and removes `entry-*` staging dirs older than
+`resource_limits.stale_stage_hours`. `--jobs` is capped from
+`/proc/meminfo` `MemAvailable` using `resource_limits.per_job_mb` and
+`min_free_mb`; the run aborts when less than `min_disk_free_mb` (checked
+for both the output and staging filesystem) or `min_free_mb` is available.
 
 Besides `index`, `run` and `detect`, the tool has the `cleanup-drive-led`
 subcommand (section 8.7), a standalone offline pass that removes old
@@ -1269,9 +1275,13 @@ existing candidates into a proper preview:
 - **One run, one instance:** the tool refuses to start a second concurrent
   run (lock file in `MARCER_OUT_DIR`). Within a run, `run --jobs N`
   processes up to N entries in parallel (default: 1 = serial); every
-  worker runs its own Hatari process group and staging dir, sharing one
-  Xvfb display. All index mutations and saves are serialized under a
-  single lock.
+  worker runs its own Hatari process group, staging dir and Xvfb display.
+  All index mutations and saves are serialized under a single lock. The
+  staging root (`tmp_dir`, default `/tmp/marcer-shotgen`) is created on
+  demand; orphaned `hatari`/`Xvfb` helpers of a crashed run and stale
+  `entry-*` dirs are cleaned at start. Requested jobs are capped from
+  `MemAvailable` (`resource_limits`), and a run with insufficient RAM or
+  disk space exits with a clear error instead of being OOM-killed.
 - **Process groups:** Hatari and Xvfb are started with their own session
   (`setsid` semantics, in Python `start_new_session=True`). Timeouts kill the
   whole group (`killpg`). Never rely on terminating a single PID from a
@@ -1548,7 +1558,9 @@ triggers `--mono --tos-res high`, section 4.6), `screen_format_monitor`
 (per-scope gameinfo rules that win over the suffix, section 4.6),
 `tos_default` +
 `tos_images` (version label → environment variable of its ROM image,
-section 7.5; includes `4.04` for the Falcon scope), `exclude_dirs`
+section 7.5; includes `4.04` for the Falcon scope), `tmp_dir` +
+`resource_limits` (`per_job_mb`, `min_free_mb`, `min_disk_free_mb`,
+`stale_stage_hours`; section 9), `exclude_dirs`
 (sub-directory names never
 scanned, section 4.4), time points, timeouts, filter thresholds (the
 black/empty thresholds `black_mean_max`, `black_std_max`,

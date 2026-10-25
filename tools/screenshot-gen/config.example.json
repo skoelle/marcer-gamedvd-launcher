@@ -105,6 +105,12 @@
     "ttp_cancel_attempts": 2
   },
   "tmp_dir": "/tmp/marcer-shotgen",
+  "resource_limits": {
+    "per_job_mb": 500,
+    "min_free_mb": 1500,
+    "min_disk_free_mb": 2048,
+    "stale_stage_hours": 2
+  },
   "xvfb_screen": "1024x768x24",
   "profile": {
     "name": "st",

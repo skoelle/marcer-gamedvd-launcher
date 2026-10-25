@@ -196,6 +196,15 @@ DEFAULT_CONFIG = {
         "ttp_cancel_attempts": 2,
     },
     "tmp_dir": "/tmp/marcer-shotgen",
+    # Resource guards for run: per-worker RAM estimate and how much RAM/disk
+    # must remain free. jobs are capped from MemAvailable; staging dirs older
+    # than stale_stage_hours are treated as leftovers from a crashed run.
+    "resource_limits": {
+        "per_job_mb": 500,
+        "min_free_mb": 1500,
+        "min_disk_free_mb": 2048,
+        "stale_stage_hours": 2,
+    },
     "xvfb_screen": "1024x768x24",
     "profile": {
         "name": "st",
@@ -1181,6 +1190,155 @@ def kill_group(pid: int) -> None:
         except (ProcessLookupError, PermissionError):
             return
         time.sleep(1.0)
+
+
+def _proc_cmdline(pid: int) -> list:
+    try:
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+        return [part.decode(errors="replace")
+                for part in raw.split(b"\0") if part]
+    except OSError:
+        return []
+
+
+def _proc_ppid(pid: int):
+    try:
+        raw = Path(f"/proc/{pid}/stat").read_text(errors="replace")
+        tail = raw.rsplit(") ", 1)[1].split()
+        return int(tail[1])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def _terminate_orphan(pid: int) -> None:
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pid, sig)
+        except (ProcessLookupError, PermissionError):
+            return
+        except OSError:
+            try:
+                os.kill(pid, sig)
+            except (ProcessLookupError, PermissionError):
+                return
+        time.sleep(0.3)
+
+
+def _cleanup_orphaned_helpers(tmp_root: Path, display_base: str,
+                              screen: str = "") -> None:
+    try:
+        base_num = int(display_base.lstrip(":"))
+    except ValueError:
+        base_num = 99
+    tool_displays = {f":{base_num + i}" for i in range(32)}
+    killed_hatari = 0
+    killed_xvfb = 0
+    try:
+        proc_entries = list(Path("/proc").iterdir())
+    except OSError:
+        return
+    for entry in proc_entries:
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        if pid == os.getpid() or _proc_ppid(pid) != 1:
+            continue
+        args = _proc_cmdline(pid)
+        if not args:
+            continue
+        name = Path(args[0]).name.lower()
+        if name == "hatari" and str(tmp_root) in " ".join(args):
+            _terminate_orphan(pid)
+            killed_hatari += 1
+        elif (name == "xvfb" and len(args) >= 5 and args[1] in tool_displays
+              and args[2] == "-screen" and args[4] == screen):
+            _terminate_orphan(pid)
+            killed_xvfb += 1
+    if killed_hatari or killed_xvfb:
+        print(f"cleaned orphaned helpers: {killed_hatari} hatari, "
+              f"{killed_xvfb} Xvfb", flush=True)
+
+
+def _ensure_tmp_dir(cfg: dict) -> Path:
+    root = Path(str(cfg.get("tmp_dir") or "/tmp/marcer-shotgen"))
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+    except OSError as ex:
+        sys.exit(f"error: cannot create tmp_dir {root}: {ex}")
+    if not os.access(root, os.W_OK):
+        sys.exit(f"error: tmp_dir is not writable: {root}")
+    return root
+
+
+def _cleanup_stale_stages(tmp_root: Path, cfg: dict) -> None:
+    limits = cfg.get("resource_limits") or {}
+    try:
+        hours = float(limits.get("stale_stage_hours", 2))
+    except (TypeError, ValueError):
+        hours = 2.0
+    cutoff = time.time() - max(0.0, hours) * 3600
+    removed = 0
+    for child in tmp_root.iterdir():
+        if not child.is_dir() or not child.name.startswith("entry-"):
+            continue
+        try:
+            if child.stat().st_mtime >= cutoff:
+                continue
+            shutil.rmtree(child, ignore_errors=True)
+            if not child.exists():
+                removed += 1
+        except OSError:
+            continue
+    if removed:
+        print(f"removed {removed} stale staging dirs", flush=True)
+
+
+def _available_ram_mb() -> float:
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return float(line.split()[1]) / 1024.0
+    except OSError:
+        pass
+    try:
+        pages = os.sysconf("SC_AVPHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        return pages * page_size / (1024.0 * 1024.0)
+    except (ValueError, OSError):
+        return 0.0
+
+
+def _effective_jobs(requested: int, cfg: dict, out_dir: Path,
+                    tmp_root: Path) -> int:
+    limits = cfg.get("resource_limits") or {}
+    try:
+        per_job = float(limits.get("per_job_mb", 500))
+        min_free = float(limits.get("min_free_mb", 1500))
+        min_disk = float(limits.get("min_disk_free_mb", 2048))
+    except (TypeError, ValueError):
+        per_job, min_free, min_disk = 500.0, 1500.0, 2048.0
+    available = _available_ram_mb()
+    try:
+        disk_free = min(shutil.disk_usage(out_dir).free,
+                        shutil.disk_usage(tmp_root).free) / (1024.0 * 1024.0)
+    except OSError:
+        disk_free = 0.0
+    if disk_free < min_disk:
+        sys.exit(f"error: not enough disk space ({disk_free:.0f} MB free, "
+                 f"need {min_disk:.0f} MB)")
+    if available < min_free:
+        sys.exit(f"error: not enough free RAM ({available:.0f} MB available, "
+                 f"need {min_free:.0f} MB)")
+    if per_job <= 0:
+        return max(1, requested)
+    cap = max(1, int((available - min_free) // per_job))
+    jobs = min(max(1, requested), cap)
+    if jobs < requested:
+        print(f"jobs capped: requested {requested}, using {jobs} "
+              f"({available:.0f} MB RAM available, "
+              f"{per_job:.0f} MB per worker, {min_free:.0f} MB reserve)",
+              flush=True)
+    return jobs
 
 
 def sleep_until(t_target: float) -> bool:
@@ -2586,7 +2744,11 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     mirror_dir.mkdir(parents=True, exist_ok=True)
 
     tmp_root = Path(cfg["tmp_dir"])
-    stage = Path(tempfile.mkdtemp(prefix="entry-", dir=tmp_root))
+    try:
+        tmp_root.mkdir(parents=True, exist_ok=True)
+        stage = Path(tempfile.mkdtemp(prefix="entry-", dir=tmp_root))
+    except OSError as ex:
+        raise RuntimeError(f"cannot create staging dir below {tmp_root}: {ex}")
     outdir = stage / "out"
     outdir.mkdir()
     staged = stage / "disk.zip"
@@ -3158,7 +3320,11 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
     out.mkdir(parents=True, exist_ok=True)
     lock = acquire_lock(out)
 
-    jobs = max(1, args.jobs)
+    tmp_root = _ensure_tmp_dir(cfg)
+    _cleanup_orphaned_helpers(tmp_root, P["display"], cfg["xvfb_screen"])
+    _cleanup_stale_stages(tmp_root, cfg)
+
+    jobs = _effective_jobs(max(1, args.jobs), cfg, out, tmp_root)
     displays = _display_list(P["display"], jobs)
     xvfbs = []
     for disp in displays:

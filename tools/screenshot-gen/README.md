@@ -183,6 +183,24 @@ stops every worker after its current entry. Keep total CPU below ~90%,
 otherwise the wall-clock screenshot timepoints may drift. `--jobs 1` (the
 default) is the classic serial behavior.
 
+Before a run the tool creates `tmp_dir`, terminates orphaned `hatari`/`Xvfb`
+processes left behind by an earlier crash and removes `entry-*` staging dirs
+older than `resource_limits.stale_stage_hours`. `run` also checks free RAM
+and disk space and caps `--jobs` from `MemAvailable`:
+
+```json
+"resource_limits": {
+  "per_job_mb": 500,
+  "min_free_mb": 1500,
+  "min_disk_free_mb": 2048,
+  "stale_stage_hours": 2
+}
+```
+
+The run aborts with a clear error when less than `min_disk_free_mb` or
+`min_free_mb` is available, and prints a `jobs capped` line when the
+requested parallelism does not fit into the remaining RAM.
+
 ### Desktop auto retry (`run --retry-desktop-auto`)
 
 A click-free alternative to the GEM desktop click chain. It selects the
