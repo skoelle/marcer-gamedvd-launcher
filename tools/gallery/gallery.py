@@ -4,8 +4,9 @@
 """Marcer GameDVD gallery webapp — stdlib-only local server.
 
 Serves the screenshot archive (MARCER_OUT_DIR/index.json + PNG tree) joined
-with the game metadata (MARCER_DATA_DIR/games-*.json) as an interactive
-gallery. See SPEC-gallery-webapp.md for the behavioral specification.
+with the game metadata (MARCER_DATA_DIR/gameinfo/games-*.json) as an
+interactive gallery. See SPEC-gallery-webapp.md for the behavioral
+specification.
 """
 import argparse
 import json
@@ -20,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-TOOL_VERSION = "0.4.0"
+TOOL_VERSION = "0.4.1"
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
@@ -76,6 +77,7 @@ BOX_IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg"})
 MANUAL_IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".gif"})
 MANUAL_DOC_EXTS = frozenset({".pdf", ".doc", ".txt", ".msa"})
 MAX_ZIP_ENTRIES = 10000
+GAMEINFO_SUBDIR = "gameinfo"
 CREW_FILE = "crews.json"
 CREW_IMAGES_FILE = "crew-images.json"
 CREW_INITIAL_LIMIT = 128
@@ -912,8 +914,8 @@ class DataStore:
     def __init__(self, out_dir, data_dir, root_dir="", patch_dir="",
                  assets_cache_seconds=60):
         self.out = Path(out_dir)
-        self.data = Path(data_dir) if data_dir and os.path.isdir(data_dir) \
-            else None
+        sub = Path(data_dir) / GAMEINFO_SUBDIR if data_dir else None
+        self.data = sub if sub and sub.is_dir() else None
         self.lock = threading.Lock()
         self._mtimes = {}
         self.meta = {}
@@ -1775,6 +1777,11 @@ def main():
         log(f"[warn] MARCER_DATA_DIR not a directory ({data_dir!r}) — "
             f"screenshots-only mode")
         data_dir = ""
+    if data_dir:
+        gameinfo_dir = os.path.join(data_dir, GAMEINFO_SUBDIR)
+        if not os.path.isdir(gameinfo_dir):
+            log(f"[warn] {gameinfo_dir} not found under MARCER_DATA_DIR — "
+                f"screenshots-only mode")
     root_dir = os.environ.get("MARCER_ROOT_DIR", "").strip()
     if root_dir and not os.path.isdir(root_dir):
         log(f"[warn] MARCER_ROOT_DIR not a directory ({root_dir!r}) — "

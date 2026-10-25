@@ -17,8 +17,9 @@ full specification.
   `MARCER_ROOT_DIR`, `MARCER_PATCH_DIR`, `MARCER_OUT_DIR`, `MARCER_TOS_IMG`
   (default TOS 1.04), for the TOS-1.02 retry `MARCER_TOS102_IMG` and for the
   Falcon scope `MARCER_TOS404_IMG` (TOS 4.04).
-  Optional `MARCER_DATA_DIR` (the gameinfo directory with
-  `games-<scope>.json`) enables the `screen_format` monitor rules.
+  Optional `MARCER_DATA_DIR` (gameinfo files are read from
+  `MARCER_DATA_DIR/gameinfo/games-<scope>.json`) enables the `screen_format`
+  monitor rules.
 
 ## Usage
 
@@ -622,7 +623,7 @@ leftover logs and empty output directories.
 
 Monitor mode is resolved per entry, in this order:
 
-1. **Gameinfo `screen_format` rules** from `MARCER_DATA_DIR/games-<scope>.json`
+1. **Gameinfo `screen_format` rules** from `MARCER_DATA_DIR/gameinfo/games-<scope>.json`
    (read-only, optional). The game folder is matched below the scope tree,
    so ZIPs in `Original/` and other sub-directories still use their game
    folder's values.
@@ -644,7 +645,8 @@ Monitor mode is resolved per entry, in this order:
 Mono boots Hatari with `--mono --tos-res high` (monochrome, forced
 640x400); the decision and its source are logged per entry, and the
 resulting `monitor: mono`/`color` is recorded in the index entry and the
-metadata JSON. Missing `MARCER_DATA_DIR` or `games-<scope>.json` is not an
+metadata JSON. Missing `MARCER_DATA_DIR` or
+`MARCER_DATA_DIR/gameinfo/games-<scope>.json` is not an
 error: the suffix rule is used as fallback. The utils "missing folder"
 default only applies when the gameinfo file was loaded successfully; an
 entirely missing file does not force utils to mono.

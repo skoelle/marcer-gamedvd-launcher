@@ -394,7 +394,7 @@ performed. The section is index-only.
 Monitor mode is resolved per entry before Hatari starts. The precedence is:
 
 1. **Gameinfo `screen_format` rules** (optional, read-only) from
-   `MARCER_DATA_DIR/games-<scope>.json`. The entry is matched by its
+   `MARCER_DATA_DIR/gameinfo/games-<scope>.json`. The entry is matched by its
    `(letter, folder)` key below the selected scope tree (same grouping as
    the gallery/desktop join); sub-directories such as `Original/` therefore
    still use their game folder's values. Rules live in the config key
@@ -419,7 +419,8 @@ Monitor mode is resolved per entry before Hatari starts. The precedence is:
 3. Otherwise color.
 
 A gameinfo rule wins over a conflicting suffix. Missing `MARCER_DATA_DIR`
-or `games-<scope>.json` is not an error: the pass logs a warning and uses
+or `MARCER_DATA_DIR/gameinfo/games-<scope>.json` is not an error: the pass
+logs a warning and uses
 the suffix rule. The utils missing-folder default only applies when the
 gameinfo file was loaded successfully; a completely missing file does not
 force utils to mono. The per-entry log records
@@ -1520,7 +1521,7 @@ specs, logs or examples):
 | `MARCER_ROOT_DIR` | yes | game root layer, read-only |
 | `MARCER_PATCH_DIR` | yes | patch layer, read-only (empty disables patch layer) |
 | `MARCER_OUT_DIR` | yes | output root for screenshots, index, logs |
-| `MARCER_DATA_DIR` | no | gameinfo directory with `games-<scope>.json`, enables the `screen_format` monitor rules (section 4.6) |
+| `MARCER_DATA_DIR` | no | data directory; gameinfo files are read from `MARCER_DATA_DIR/gameinfo/games-<scope>.json`, enables the `screen_format` monitor rules (section 4.6) |
 | `MARCER_TOS_IMG` | yes | default TOS 1.04 ROM image for Hatari |
 | `MARCER_TOS102_IMG` | no | TOS 1.02 ROM image, required only by `run --tos 1.02` (section 7.5) |
 | `MARCER_HATARI_BIN` | no | Hatari executable, default `hatari` from PATH |
@@ -1535,7 +1536,7 @@ this spec):
 
 ```
 MARCER_OUT_DIR=...
-MARCER_DATA_DIR=...   # optional, gameinfo directory
+MARCER_DATA_DIR=...   # optional, data directory (gameinfo/ subfolder)
 MARCER_TOS_IMG=...
 MARCER_TOS102_IMG=...
 MARCER_HATARI_BIN=...

@@ -282,7 +282,8 @@ class CrewDataTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         out = os.path.join(self.tmp.name, "out")
-        data = os.path.join(self.tmp.name, "data")
+        data_root = os.path.join(self.tmp.name, "data")
+        data = os.path.join(data_root, "gameinfo")
         os.makedirs(out)
         os.makedirs(data)
         index = {
@@ -331,7 +332,7 @@ class CrewDataTest(unittest.TestCase):
                 },
             },
         })
-        return gallery.DataStore(out, data)
+        return gallery.DataStore(out, data_root)
 
     @staticmethod
     def _group(group_id, name, kind, zips, releases, excluded=False):
@@ -399,6 +400,35 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(len(store.crews), 128)
         self.assertEqual(store.meta["crews"]["groups"], 128)
         self.assertEqual(store.meta["crews"]["visible_groups"], 130)
+
+
+class DataDirPathTest(unittest.TestCase):
+    """Gameinfo data is read only from <MARCER_DATA_DIR>/gameinfo (no fallback)."""
+
+    def _store(self, layout):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = Path(tmp.name) / "out"
+        data_root = Path(tmp.name) / "data"
+        out.mkdir()
+        data_root.mkdir()
+        target = data_root / "gameinfo" if layout == "subdir" else data_root
+        target.mkdir(exist_ok=True)
+        (out / "index.json").write_text(
+            json.dumps({"version": 1, "entries": {}}), encoding="utf-8")
+        (target / "games-cracked.json").write_text(
+            json.dumps({"games": []}), encoding="utf-8")
+        return gallery.DataStore(str(out), str(data_root))
+
+    def test_reads_gameinfo_subdir(self):
+        store = self._store("subdir")
+        self.assertIsNotNone(store.data)
+        self.assertTrue(store.gameinfo_available)
+
+    def test_root_layout_is_ignored(self):
+        store = self._store("root")
+        self.assertIsNone(store.data)
+        self.assertFalse(store.gameinfo_available)
 
 
 if __name__ == "__main__":

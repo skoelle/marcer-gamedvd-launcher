@@ -5,7 +5,7 @@
 
 Implements ANALYSIS-game-data.md (M1):
   extract   parse the XLS workbooks, match on-disk folders, write JSON to
-            MARCER_DATA_DIR (games-cracked.json, games-pd.json,
+            MARCER_DATA_DIR/gameinfo (games-cracked.json, games-pd.json,
             games-utils.json, manifest.json, unmatched-report.txt)
   check     validate the generated output against the sources (exit 1 on
             missing or stale output)
@@ -27,10 +27,11 @@ from collections import Counter, OrderedDict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-TOOL_VERSION = "0.1.0"
+TOOL_VERSION = "0.1.1"
 SCHEMA_VERSION = 1
 
 KINDS = ("cracked", "pd", "utils")
+GAMEINFO_SUBDIR = "gameinfo"
 
 # BIFF5 record ids
 RID_LABEL = 0x0204
@@ -152,7 +153,8 @@ def paths() -> dict:
         sys.exit("error: environment variable MARCER_DATA_DIR is not set "
                  "(add it to local/paths.env)")
     root = os.environ.get("MARCER_ROOT_DIR", "").strip()
-    return {"patch": Path(patch), "data": Path(data),
+    return {"patch": Path(patch),
+            "data": Path(data) / GAMEINFO_SUBDIR,
             "root": Path(root) if root else None}
 
 

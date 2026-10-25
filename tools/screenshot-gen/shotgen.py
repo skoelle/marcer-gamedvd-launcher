@@ -42,7 +42,8 @@ import zipfile
 from collections import deque
 from pathlib import Path
 
-TOOL_VERSION = "0.1.0"
+TOOL_VERSION = "0.1.1"
+GAMEINFO_SUBDIR = "gameinfo"
 STOP_EVENT = None  # set in main
 PROGRESS_INTERVAL_S = 10.0
 
@@ -104,7 +105,7 @@ DEFAULT_CONFIG = {
     # with --mono --tos-res high (ST high res, 640x400). Empty = disabled.
     "mono_dir_suffix": "Mono",
     # Monitor selection from the gameinfo XLS export (MARCER_DATA_DIR/
-    # games-<scope>.json, read-only). Rules are per scope:
+    # gameinfo/games-<scope>.json, read-only). Rules are per scope:
     #   mono_if_all   - mono when every variant's screen_format equals one
     #                   of these values (pd: pure "High" folders)
     #   color_hints   - any variant value containing one of these substrings
@@ -294,12 +295,18 @@ def require_env(name: str) -> str:
     return v
 
 
+def gameinfo_dir() -> str:
+    """The gameinfo directory: ``<MARCER_DATA_DIR>/gameinfo``."""
+    data = os.environ.get("MARCER_DATA_DIR", "").strip()
+    return os.path.join(data, GAMEINFO_SUBDIR) if data else ""
+
+
 def paths() -> dict:
     return {
         "root": require_env("MARCER_ROOT_DIR"),
         "patch": os.environ.get("MARCER_PATCH_DIR", "").strip(),
         "out": require_env("MARCER_OUT_DIR"),
-        "data": os.environ.get("MARCER_DATA_DIR", "").strip(),
+        "data": gameinfo_dir(),
         "tos": require_env("MARCER_TOS_IMG"),
         "hatari": os.environ.get("MARCER_HATARI_BIN", "").strip() or "hatari",
         "display": os.environ.get("MARCER_DISPLAY", "").strip() or ":99",

@@ -20,7 +20,7 @@ the findings and measured results.
   - `MARCER_ROOT_DIR` (required for `--scan`, optional for `--index`)
   - `MARCER_PATCH_DIR` (optional overlay)
   - `MARCER_OUT_DIR` (contains `index.json`, default match input)
-  - `MARCER_DATA_DIR` (contains `games-cracked.json`)
+  - `MARCER_DATA_DIR` (gameinfo files are read from `MARCER_DATA_DIR/gameinfo/games-cracked.json`)
   - `MARCER_PIRATEFINDER_DIR` (optional output override)
 
 ## Usage

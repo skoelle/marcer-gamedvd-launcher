@@ -16,6 +16,9 @@ the current tab selection (currently 60 groups) and the data-quality caveats.
 | `<GameinfoDirectory>/games-cracked.json` | `crew` / `cracked_by` metadata per game folder |
 | `<ScreenshotDirectory>/index.json` | fast merged ZIP list (used by default; `--scan` reads the filesystem instead) |
 
+`<GameinfoDirectory>` is `MARCER_DATA_DIR/gameinfo` (the data directory's
+`gameinfo/` subfolder); the tool reads and writes the gameinfo files there.
+
 ## Build order / prerequisites
 
 `crew-analysis` reads the normal game metadata; it does not create it. Run the
@@ -62,7 +65,8 @@ Environment (via the repo `local/paths.env`):
 
 - `MARCER_ROOT_DIR` — required; contains `Crew Sorted/` and `Title Sorted/`
 - `MARCER_PATCH_DIR` — optional patch layer for the filesystem scan
-- `MARCER_DATA_DIR` — required; contains `games-cracked.json`
+- `MARCER_DATA_DIR` — required; gameinfo files are read/written under
+  `MARCER_DATA_DIR/gameinfo` (contains `games-cracked.json`)
 - `MARCER_OUT_DIR` — optional; contains `index.json` (default ZIP source)
 
 ## Output

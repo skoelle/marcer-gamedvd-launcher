@@ -9,13 +9,13 @@ and data model.
 
 - Python 3 with the repo `.venv` (`olefile`)
 - Environment in `local/paths.env` (git-ignored): `MARCER_PATCH_DIR` and
-  `MARCER_DATA_DIR` (required), `MARCER_ROOT_DIR` (optional, enables full
-  folder matching)
+  `MARCER_DATA_DIR` (required; gameinfo output goes to `MARCER_DATA_DIR/gameinfo`),
+  `MARCER_ROOT_DIR` (optional, enables full folder matching)
 
 ## Usage
 
 ```bash
-tools/gameinfo-gen/run.sh extract             # full run, writes to MARCER_DATA_DIR
+tools/gameinfo-gen/run.sh extract             # full run, writes to MARCER_DATA_DIR/gameinfo
 tools/gameinfo-gen/run.sh extract --dry-run   # summary only, no writes
 tools/gameinfo-gen/run.sh extract --kind cracked
 tools/gameinfo-gen/run.sh check               # validate output vs sources (exit 1 on stale)
@@ -25,7 +25,7 @@ tools/gameinfo-gen/run.sh report              # audit summary (TOS notes, dump f
 `extract` reads the three workbooks (`Games.xls`, `PD Games.xls`,
 `Utils_.xls`; PATCH copy preferred, ROOT as fallback), scans the
 title-sorted trees in ROOT and PATCH, matches folders to XLS titles
-(exact, prefix, fuzzy) and writes into `MARCER_DATA_DIR`:
+(exact, prefix, fuzzy) and writes into `MARCER_DATA_DIR/gameinfo`:
 
 - `games-cracked.json`, `games-pd.json`, `games-utils.json`
 - `manifest.json` (counts, source mtimes, match statistics)

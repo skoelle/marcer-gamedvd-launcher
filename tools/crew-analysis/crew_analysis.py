@@ -18,7 +18,8 @@ crackers (crew view):
 3. alias/fuzzy matching against canonical group aliases.
 
 Paths/environment (see ``run.sh`` and the repo ``local/paths.env``):
-``MARCER_ROOT_DIR``, ``MARCER_PATCH_DIR`` (optional), ``MARCER_DATA_DIR`` and
+``MARCER_ROOT_DIR``, ``MARCER_PATCH_DIR`` (optional), ``MARCER_DATA_DIR``
+(gameinfo files are read/written under ``<MARCER_DATA_DIR>/gameinfo``) and
 ``MARCER_OUT_DIR`` (optional screenshot index for the merged ZIP list).
 
 Outputs go to ``--out`` (default ``local/crew-analysis``) and contain the
@@ -38,10 +39,11 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-TOOL_VERSION = "0.1.0"
+TOOL_VERSION = "0.1.1"
 SCHEMA_VERSION = 1
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+GAMEINFO_SUBDIR = "gameinfo"
 DEFAULT_TREE = "Title Sorted/Cracked Games - Title Sorted"
 DEFAULT_CREW_TREE = "Crew Sorted/Cracked Games - Crew Sorted"
 INDEX_PREFIX = DEFAULT_TREE + "/"
@@ -64,6 +66,12 @@ ABBREV_RE = re.compile(r"[A-Z0-9&+\-]{2,7}")
 
 def env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
+
+
+def default_gameinfo_dir() -> str:
+    """The gameinfo directory: ``<MARCER_DATA_DIR>/gameinfo``."""
+    data = env("MARCER_DATA_DIR")
+    return str(Path(data) / GAMEINFO_SUBDIR) if data else ""
 
 
 def norm(value: str) -> str:
@@ -1068,7 +1076,7 @@ def main() -> int:
                         help="ranking (default) or images (suggest cracktro card images)")
     parser.add_argument("--root", default=env("MARCER_ROOT_DIR"), help="Root game directory (MARCER_ROOT_DIR)")
     parser.add_argument("--patch", default=env("MARCER_PATCH_DIR"), help="Patch directory (MARCER_PATCH_DIR)")
-    parser.add_argument("--gameinfo", default=env("MARCER_DATA_DIR"), help="Directory containing games-cracked.json")
+    parser.add_argument("--gameinfo", default=default_gameinfo_dir(), help="Gameinfo directory containing games-cracked.json (default: MARCER_DATA_DIR/gameinfo)")
     parser.add_argument("--index", default=env("MARCER_OUT_DIR"), help="Screenshot output directory or index.json path")
     parser.add_argument("--scan", action="store_true", help="Scan Title Sorted on disk instead of using index.json")
     parser.add_argument("--include-subdirs", action="store_true", help="Include STX/Original/Demo/... subfolders")

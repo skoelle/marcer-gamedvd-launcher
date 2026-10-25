@@ -48,10 +48,11 @@ from pathlib import Path, PurePosixPath
 
 import tomllib
 
-TOOL_VERSION = "0.1.0"
+TOOL_VERSION = "0.1.1"
 INDEX_SCHEMA = 1
 MATCH_SCHEMA = 1
 EXPECTED_CATALOGUE_SCHEMA = 3
+GAMEINFO_SUBDIR = "gameinfo"
 
 REPO = "peteclarke-del/PirateFinder"
 API_ROOT = "https://api.github.com/repos/" + REPO
@@ -1132,7 +1133,12 @@ def resolve_zip(rel: str, root: str, patch: str) -> Path | None:
 
 
 def load_gameinfo() -> dict[str, dict]:
-    path = Path(env("MARCER_DATA_DIR")) / "games-cracked.json"
+    data = env("MARCER_DATA_DIR")
+    if not data:
+        log("warning: MARCER_DATA_DIR not set; title fallback and gap reports "
+            "are limited")
+        return {}
+    path = Path(data) / GAMEINFO_SUBDIR / "games-cracked.json"
     if not path.is_file():
         log(f"warning: {path} not found; title fallback and gap reports are limited")
         return {}

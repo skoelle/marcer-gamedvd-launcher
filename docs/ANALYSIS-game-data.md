@@ -34,7 +34,7 @@ All absolute paths in this document are symbolic. Consumers resolve them via
 |---|---|
 | `MARCER_ROOT_DIR` | Game DVD root (main layer) |
 | `MARCER_PATCH_DIR` | Patch/update layer |
-| `MARCER_DATA_DIR` | Extracted game metadata output directory (games-*.json, manifest) |
+| `MARCER_DATA_DIR` | Data directory; extracted game metadata output goes to `MARCER_DATA_DIR/gameinfo/` (games-*.json, manifest) |
 | `MARCER_OUT_DIR` | Generated screenshot output directory |
 | `<PATCH>/Title Sorted/` | XLS metadata + title-sorted game trees inside the patch layer |
 | `<OUT>/` | Screenshot artifacts (`index.json`, PNG tree) |
@@ -282,9 +282,11 @@ Idea: a `tools/catalog-gen` step that **pre-joins** `games-*.json` +
 
 ### 5.1 Storage location (decision)
 
-**Decision:** extracted metadata is generated into **`MARCER_DATA_DIR`** —
-a dedicated top-level data directory next to the patch and screenshot
-directories (never inside the patch tree itself).
+**Decision:** extracted metadata is generated into
+**`MARCER_DATA_DIR/gameinfo/`** — `MARCER_DATA_DIR` is a dedicated top-level
+data directory next to the patch and screenshot directories (never inside the
+patch tree itself); the derived gameinfo files live in its `gameinfo/`
+subfolder.
 
 Rationale:
 - The data belongs to the DVD/patch content, not to the launcher code — it
@@ -308,7 +310,7 @@ Rules:
 - Data files are derived artifacts; they are not committed to git and not
   shipped inside the launcher release ZIP.
 
-### 5.2 File layout under `MARCER_DATA_DIR`
+### 5.2 File layout under `MARCER_DATA_DIR/gameinfo/`
 
 | File | Content |
 |---|---|
@@ -410,18 +412,19 @@ Mirrors the conventions of `tools/screenshot-gen`:
 | Wrapper | `run.sh` that sources `local/paths.env` and runs with the repo venv (like `tools/screenshot-gen/run.sh`) |
 | Inputs | The three XLS files under `<PATCH>/Title Sorted/` (paths via `paths.env`; PATCH copy preferred, ROOT as fallback) |
 | Matching | Section 3.3 strategy, against the three title-sorted trees in ROOT and PATCH (union) |
-| Outputs | Section 5.2 files into `MARCER_DATA_DIR` (atomic write: temp file + rename) |
+| Outputs | Section 5.2 files into `MARCER_DATA_DIR/gameinfo` (atomic write: temp file + rename) |
 | Runtime | Seconds, not hours (no emulator involved; read-only NAS access) |
 | Exit codes | 0 = success (even with unmatched entries), non-zero = source/IO error |
 
 Non-goals: writing anywhere under `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR`
-(generated output goes exclusively to `MARCER_DATA_DIR`); network access;
+(generated output goes exclusively to `MARCER_DATA_DIR/gameinfo`);
+network access;
 modifying the XLS sources.
 
 `extract` writes only the normal `games-*.json` metadata (+ manifest/report).
 The crew artifacts are derived data: run `tools/crew-analysis/run.sh`
 afterwards to add `crews.json`/`crew-images.json` to the same
-`MARCER_DATA_DIR`. See [`ANALYSIS-crews.md`](ANALYSIS-crews.md) for the build
+`MARCER_DATA_DIR/gameinfo` directory. See [`ANALYSIS-crews.md`](ANALYSIS-crews.md) for the build
 order and the optional image step.
 
 ---
@@ -431,7 +434,7 @@ order and the optional image step.
 | Milestone | Content | Depends on |
 |---|---|---|
 | **M0** | This analysis document | — |
-| **M1** | `tools/gameinfo-gen` extractor + `MARCER_DATA_DIR` output + unmatched report — **done 2026-10-11** (cracked: 3,108/3,289 folders matched = 94.5 %) | M0 |
+| **M1** | `tools/gameinfo-gen` extractor + `MARCER_DATA_DIR/gameinfo` output + unmatched report — **done 2026-10-11** (cracked: 3,108/3,289 folders matched = 94.5 %) | M0 |
 | **M2** | Launcher: optional `GameInfoDirectory` + info overlay (`i` key) | M1 |
 | **M3** | Launcher: search/sort over the catalog (SPEC + README + AGENTS updates) | M2 |
 | **M4** | Desktop app (Flutter): browse + infos + screenshot previews (join with `<OUT>/index.json` at runtime, see 4.5) | M1 (+ screenshot coverage from `tools/screenshot-gen`) |
@@ -452,13 +455,13 @@ Open questions (deferred to the respective milestones):
 
 - [x] Extractor reads all three XLS files via `local/paths.env` only; no
       hard-coded absolute paths.
-- [x] Extractor writes exclusively to `MARCER_DATA_DIR`; NAS sources remain
+- [x] Extractor writes exclusively to `MARCER_DATA_DIR/gameinfo`; NAS sources remain
       read-only.
 - [x] `manifest.json` matches the real output files (counts, timestamps)
       (`tools/gameinfo-gen/run.sh check` exits 0).
 - [ ] Launcher works unchanged when the game info data is absent (graceful
       fallback). *(M2, launcher not touched yet — default behavior unchanged.)*
-- [ ] Launcher never writes to `MARCER_DATA_DIR`. *(M2)*
+- [ ] Launcher never writes to `MARCER_DATA_DIR/gameinfo`. *(M2)*
 - [ ] `SPEC.md`, `AGENTS.md` and `README.md` updated with each behavioral
       change (M2, M3).
 - [ ] Manual test run via `apps/marcer_console/start.cmd` (Windows) or `apps/marcer_console/start.sh`

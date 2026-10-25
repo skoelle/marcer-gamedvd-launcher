@@ -14,7 +14,8 @@ specification.
   - `MARCER_OUT_DIR` (required): screenshot output with the section
     indices (`index.json`, `index-pd.json`, `index-utils.json`,
     `index-magazine.json`, `index-falcon.json`) + PNGs
-  - `MARCER_DATA_DIR` (optional): `games-*.json` from `tools/gameinfo-gen`
+  - `MARCER_DATA_DIR` (optional): data directory; gameinfo files are read from
+    `MARCER_DATA_DIR/gameinfo/`: `games-*.json` from `tools/gameinfo-gen`
     (adds metadata facets and hover info to the index-backed cards) plus the
     optional `crews.json`/`crew-images.json` from `tools/crew-analysis` for
     the Crews tab
@@ -116,14 +117,15 @@ Backend filter/card helpers use stdlib `unittest` only:
 
 - `MARCER_OUT_DIR missing` → set it in `local/paths.env`.
 - `index.json not found` → run the screenshot generator's `index` command.
-- `MARCER_DATA_DIR not a directory` → warning only; the app runs in
+- `MARCER_DATA_DIR not a directory` or
+  `MARCER_DATA_DIR/gameinfo not found` → warning only; the app runs in
   screenshots-only mode (no facets/hover metadata; the pd/utils/magazine/
   falcon tabs still appear when their own indices exist).
 - `MARCER_ROOT_DIR not a directory` → warning only; boxscan/manual metadata
   is disabled. An empty/missing `MARCER_PATCH_DIR` just disables the patch
   layer for that metadata.
 - `crews.json not found` → the Crews tab is hidden; run
-  `tools/crew-analysis/run.sh` to generate it in `MARCER_DATA_DIR`.
+  `tools/crew-analysis/run.sh` to generate it in `MARCER_DATA_DIR/gameinfo`.
 - Stale data → reload the page (mtime revalidation runs per request).
 
 ## Config

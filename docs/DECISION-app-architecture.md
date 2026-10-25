@@ -105,7 +105,7 @@ All apps are strictly **read-only consumers** of the same artifacts:
 |---|---|
 | `MARCER_ROOT_DIR` + `MARCER_PATCH_DIR` overlay trees | desktop app, web app, console launcher |
 | `<OUT>/index.json` + mirrored PNGs (`SPEC-screenshot-generator.md`) | desktop app, web app |
-| `MARCER_DATA_DIR`/`games-*.json` (`ANALYSIS-game-data.md`) | desktop app, console launcher (M2), gallery webapp (runtime join) |
+| `MARCER_DATA_DIR`/`gameinfo`/`games-*.json` (`ANALYSIS-game-data.md`) | desktop app, console launcher (M2), gallery webapp (runtime join) |
 
 Implementation strategy for the overlay merge and catalog joins:
 

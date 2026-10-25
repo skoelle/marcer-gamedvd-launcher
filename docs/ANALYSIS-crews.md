@@ -27,6 +27,9 @@ attributed through `games-cracked.json` and alias/fuzzy matching.
 ## Build the data
 
 The normal game metadata is a prerequisite; this tool does not create it.
+The gameinfo files live in `<MARCER_DATA_DIR>/gameinfo/` (`MARCER_DATA_DIR` is
+the data directory); `<GameinfoDirectory>` below refers to that gameinfo
+subfolder.
 
 ```sh
 # 1) normal gameinfo -> games-*.json + manifest + unmatched report

@@ -86,7 +86,7 @@ Read from `local/paths.env` (git-ignored), exactly like the other tools:
 | Variable | Required | Meaning |
 |---|---|---|
 | `MARCER_OUT_DIR` | **yes** | screenshot output root: section indices + mirrored PNG tree |
-| `MARCER_DATA_DIR` | no | game metadata: `games-cracked.json`, `games-pd.json`, `games-utils.json`, `manifest.json`, optional `crews.json`/`crew-images.json` |
+| `MARCER_DATA_DIR` | no | data directory; gameinfo metadata is read from `MARCER_DATA_DIR/gameinfo/`: `games-cracked.json`, `games-pd.json`, `games-utils.json`, `manifest.json`, optional `crews.json`/`crew-images.json` |
 | `MARCER_ROOT_DIR` | no | game root layer; used read-only for boxscan/manual metadata |
 | `MARCER_PATCH_DIR` | no | patch layer; merged read-only for boxscan/manual metadata |
 
@@ -94,8 +94,9 @@ Rules:
 
 - Missing or unreadable `MARCER_OUT_DIR` → the app refuses to start with a
   clear message (same policy as `shotgen`).
-- Missing or unreadable `MARCER_DATA_DIR` → app starts in **screenshots-only
-  mode**: gallery, status filters and screenshot features work; metadata
+- Missing or unreadable `MARCER_DATA_DIR`, or `MARCER_DATA_DIR/gameinfo/`
+  missing → app starts in **screenshots-only mode**: gallery, status filters
+  and screenshot features work; metadata
   facets and hover info are hidden and `/api/meta` reports
   `gameinfo: false` (section 4.6). The PD/Utils views remain available
   whenever their own indices exist (index-backed cards without metadata).
@@ -357,8 +358,8 @@ A game folder aggregates the statuses of its ZIPs:
 
 ### 4.6 Degradation (no game metadata)
 
-When `MARCER_DATA_DIR` is missing/unreadable or any `games-*.json` is
-absent/corrupt:
+When `MARCER_DATA_DIR` is missing/unreadable, `MARCER_DATA_DIR/gameinfo/` is
+missing or any `games-*.json` is absent/corrupt:
 
 - The cracked (screenshots) view works without hover metadata, metadata
   facets or sorting by metadata; the PD/Utils views still work when their
@@ -1174,8 +1175,8 @@ capped at 200.
   (delivered via `/api/meta`; a `status` URL parameter always wins).
 - `local_assets_cache_seconds`: TTL of the per-card boxscan/manual
   metadata discovery cache (default 60; `0` disables caching).
-- Crew data is read from `<MARCER_DATA_DIR>/crews.json` and
-  `<MARCER_DATA_DIR>/crew-images.json`; both are optional.
+- Crew data is read from `<MARCER_DATA_DIR>/gameinfo/crews.json` and
+  `<MARCER_DATA_DIR>/gameinfo/crew-images.json`; both are optional.
 - Data paths are **never** configured here — `local/paths.env` only
   (same rule as the sibling tools).
 
