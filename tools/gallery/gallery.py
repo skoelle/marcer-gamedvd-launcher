@@ -579,7 +579,10 @@ def _build_indexed_cards(entries, games, kind, union_gameinfo,
     seen = set()
     for (letter, folder), group in groups.items():
         items = group["items"]
-        items.sort(key=lambda t: t[0])
+        # ZIPs directly in the game folder before ZIPs from subfolders
+        # (`Original/`, `STX/`, …), then sorted rel — desktop parity
+        # (`compareVariantRel` in marcer_catalog/lib/src/card.dart).
+        items.sort(key=lambda t: (t[0].count("/"), t[0]))
         variants = []
         scounts = {}
         layers = set()
@@ -629,9 +632,16 @@ def _build_indexed_cards(entries, games, kind, union_gameinfo,
         parts = first_rel.split("/")
         tree = ("/".join(parts[:2]) if len(parts) >= 4
                 else (section_tree or CANONICAL_SECTION_TREES.get(kind, "")))
-        folder_rel = (_rel_dir(first_rel) if kind == "magazine"
-                      else (f"{tree}/{letter}/{folder}" if tree
-                            else _rel_dir(first_rel)))
+        if kind == "magazine":
+            # Magazine cards group one issue below
+            # `<tree>/<magazine>/<issue>`; a ZIP directly in the magazine
+            # folder sits at index 3, a nested one in the issue directory
+            # below it — never use the first ZIP's immediate parent (desktop
+            # `cardFolderRel`).
+            folder_rel = "/".join(parts[:4] if len(parts) >= 5 else parts[:3])
+        else:
+            folder_rel = (f"{tree}/{letter}/{folder}" if tree
+                          else _rel_dir(first_rel))
         card = {
             "id": f"{letter}/{folder}",
             "name": group["display"] or folder,

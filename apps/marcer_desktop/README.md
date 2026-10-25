@@ -382,7 +382,9 @@ Card previews follow the active status filter: `with screenshot`, `any` and
 concrete statuses show that status first. With ≥2 previews the 2×2 variant
 grid is used (no single-done exception under a concrete status filter), with
 the selected status as the first tile; a single-preview card shows the
-selected status image (falling back to the done/desktop preview).
+selected status image (falling back to the done/desktop preview). ZIPs
+directly in the game folder come before ZIPs from subfolders (`Original/`,
+`STX/`, …) in the variant table and lightbox filmstrip.
 
 The status bar reports every status as **games (ZIPs)** (see below), so the
 games number always equals the result count of the matching dropdown
@@ -503,7 +505,11 @@ Marcer FTP server without leaving the app: the detail sidebar shows a
 **Download folder** button next to the `MISSING` badge that downloads the
 card's whole folder recursively (all ZIP variants and subdirectories) into the
 patch layer — or the root directory when `PatchDirectory` is empty — and then
-re-checks the local layer so the `MISSING` badge disappears.
+re-checks the local layer so the `MISSING` badge disappears. The folder path
+is taken from the index rels (never from the first ZIP's parent), so a card
+whose first ZIP sits in `Original/`/`STX/` or an app started with an empty
+`RootDirectory` still downloads the complete game folder; magazine cards
+download their issue directory.
 
 Connection settings live in the same `desktop.config.json` under `Ftp` and are
 edited in the ⚙ settings editor:

@@ -376,6 +376,19 @@ String _minLower(Iterable<String> values) {
   return list.first.toLowerCase();
 }
 
+/// Path depth (segment count) of a variant rel. ZIPs directly in the card's
+/// folder have the smallest depth, nested ones (`Original/`, `STX/`, …) a
+/// larger one.
+int variantRelDepth(String rel) => rel.split('/').length;
+
+/// Display/aggregation order of one card's ZIP variants: ZIPs directly in the
+/// game folder always come first, then ZIPs from subfolders, each group sorted
+/// by rel (gallery parity: the filmstrip uses the same depth-first rule).
+int compareVariantRel(String a, String b) {
+  final byDepth = variantRelDepth(a).compareTo(variantRelDepth(b));
+  return byDepth != 0 ? byDepth : a.compareTo(b);
+}
+
 /// Builds a card from grouped index entries of one section (gallery
 /// `_build_cracked_cards` + `_finalize_card`). [kind] is the section
 /// (`cracked`/`pd`/`utils`/`magazine`); the aggregation / preview rules are
@@ -392,7 +405,7 @@ GameCard buildIndexedCard({
   String? displayName,
   String? yearOverride,
 }) {
-  items.sort((a, b) => a.$1.compareTo(b.$1));
+  items.sort((a, b) => compareVariantRel(a.$1, b.$1));
   final variants = <CardVariant>[];
   final scounts = <String, int>{};
   final layers = <String>{};
@@ -421,7 +434,7 @@ GameCard buildIndexedCard({
     }
   }
   // Among done variants prefer a `game` shot (e.g. over `textscreen`);
-  // within a tier the sorted-rel order decides.
+  // within a tier direct-folder ZIPs before subfolder ZIPs, then rel order.
   String? preview;
   for (final v in variants) {
     if (v.status == 'done' && v.kind == 'game' && v.previewPath != null) {

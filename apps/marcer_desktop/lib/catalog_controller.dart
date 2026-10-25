@@ -147,6 +147,7 @@ class CatalogController extends ChangeNotifier {
     _localAssetsCache.clear();
     _cardFolderLayersCache.clear();
     _pirateFinderTitleMatches.clear();
+    _indexTreeCache.clear();
     _releaseLookupCache = null;
     _crewCardsBase = null;
     notifyListeners();
@@ -1362,24 +1363,68 @@ class CatalogController extends ChangeNotifier {
     return variants[idx < 0 ? 0 : idx];
   }
 
-  /// Folder rel path of [card] (`<tree>/<letter>/<folder>`) from its section
-  /// tree, falling back to the parent of its first ZIP; null when neither is
-  /// known (no tree discovered and no variants).
+  /// Folder rel path of [card] (`<tree>/<letter>/<folder>`). Resolved from the
+  /// card's index rels first, so a first ZIP nested in a subfolder
+  /// (`Original/`, `STX/`, …) can never shorten the folder to that subfolder
+  /// (bug 2026-10-25: Download folder fetched only `…/Original` when the
+  /// section tree was not discovered, e.g. on an empty RootDirectory).
   String? cardFolderRel(GameCard card) {
-    // Magazine cards group several ZIPs of one magazine folder; the card's
-    // `<letter>/<folder>` is not a real directory path, so use the ZIP's
-    // parent directory instead.
-    if (card.kind == 'magazine' && card.variants.isNotEmpty) {
-      return normalizeRelSeparators(p.dirname(card.variants.first.rel));
+    final firstRel = card.variants.isEmpty
+        ? null
+        : normalizeRelSeparators(card.variants.first.rel);
+    final kind = card.kind;
+
+    if (kind == 'magazine' && firstRel != null) {
+      // Magazine cards group several ZIPs of one issue below
+      // `<tree>/<magazine>/<issue>`; the card's `<letter>/<folder>` is not a
+      // real directory path. A ZIP directly in the magazine folder sits at
+      // index 3, a nested one in the issue directory below it.
+      final parts = firstRel.split('/');
+      final depth = parts.length >= 5 ? 4 : 3;
+      if (parts.length > depth) return parts.take(depth).join('/');
     }
-    final tree = sectionTrees[card.kind];
+
+    // Locate the `<letter>/<folder>` pair inside an index rel: the index path
+    // keeps the section tree spelling and stays valid even when no tree could
+    // be discovered on disk. The pair starts below the two tree segments, so
+    // an earlier look-alike cannot win.
+    if (firstRel != null && card.letter.isNotEmpty && card.folder.isNotEmpty) {
+      final parts = firstRel.split('/');
+      final letter = card.letter.toLowerCase();
+      final folder = card.folder.toLowerCase();
+      for (var i = 2; i + 1 < parts.length; i++) {
+        if (parts[i].toLowerCase() == letter &&
+            parts[i + 1].toLowerCase() == folder) {
+          return parts.take(i + 2).join('/');
+        }
+      }
+    }
+
+    final tree = sectionTrees[kind] ?? _indexTreeFor(kind);
     if (tree != null && card.letter.isNotEmpty && card.folder.isNotEmpty) {
       return '$tree/${card.letter}/${card.folder}';
     }
-    if (card.variants.isNotEmpty) {
-      return normalizeRelSeparators(p.dirname(card.variants.first.rel));
-    }
+    if (firstRel != null) return p.posix.dirname(firstRel);
     return null;
+  }
+
+  final Map<String, String?> _indexTreeCache = {};
+
+  /// Section tree prefix (`<dir>/<dir>`) taken from the index rels of [kind],
+  /// used when [sectionTrees] has no entry (e.g. the RootDirectory is still
+  /// empty while the published index is browsed). Cached per section.
+  String? _indexTreeFor(String kind) {
+    if (_indexTreeCache.containsKey(kind)) return _indexTreeCache[kind];
+    String? tree;
+    for (final card in universe.cardsFor(kind)) {
+      if (card.variants.isEmpty) continue;
+      final parts = normalizeRelSeparators(card.variants.first.rel).split('/');
+      if (parts.length >= 4) {
+        tree = parts.take(2).join('/');
+        break;
+      }
+    }
+    return _indexTreeCache[kind] = tree;
   }
 
   /// Absolute path of [card]'s game folder in the ROOT (default) or PATCH
@@ -2215,6 +2260,7 @@ class CatalogController extends ChangeNotifier {
     );
     // New card objects — drop the lazy pd/utils variant cache (identity-keyed).
     _resolvedCardVariants.clear();
+    _indexTreeCache.clear();
     _statusLineCache.clear();
     _pirateFinderTitleMatches.clear();
   }

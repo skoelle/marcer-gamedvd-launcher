@@ -125,6 +125,40 @@ void main() {
       expect(card.statusCounts, {'done': 1, 'pending': 1});
     });
 
+    test('direct-folder ZIPs sort before ZIPs from subfolders', () {
+      const nested =
+          'Title Sorted/Cracked Games - Title Sorted/A/Alpha/Original/a.zip';
+      const nestedStx =
+          'Title Sorted/Cracked Games - Title Sorted/A/Alpha/STX/a_stx.zip';
+      const direct =
+          'Title Sorted/Cracked Games - Title Sorted/A/Alpha/z_direct.zip';
+      final u = buildUniverse({
+        nested: entryJson(nested, 'done', 'ROOT'),
+        nestedStx: entryJson(nestedStx, 'done', 'ROOT'),
+        direct: entryJson(direct, 'done', 'ROOT'),
+      });
+      expect(
+        u.cracked.single.variants.map((v) => v.name).toList(),
+        ['z_direct.zip', 'a.zip', 'a_stx.zip'],
+        reason: 'direct ZIP first, then subfolders by depth/rel',
+      );
+    });
+
+    test('compareVariantRel orders by depth then rel', () {
+      expect(
+          compareVariantRel(
+              'T/Tree/A/Alpha/Original/x.zip', 'T/Tree/A/Alpha/z.zip'),
+          greaterThan(0));
+      expect(
+          compareVariantRel(
+              'T/Tree/A/Alpha/Original/x.zip', 'T/Tree/A/Alpha/STX/x.zip'),
+          lessThan(0));
+      expect(
+          compareVariantRel(
+              'T/Tree/A/Alpha/Original/x.zip', 'T/Tree/A/Alpha/Original/x.zip'),
+          0);
+    });
+
     test('done preview prefers kind game over earlier textscreen', () {
       final u = buildUniverse({
         // 'Alpha v2.zip' sorts before 'a.zip' (ASCII) and must NOT win.
@@ -1078,7 +1112,8 @@ void main() {
             ]),
       });
       final card = u.falcon.single;
-      expect(card.variants.first.name, 'road_riot.zip');
+      expect(card.variants.first.name, 'Road Riot 4WD - Elite.zip',
+          reason: 'direct-folder ZIP before the nested Original/ Zip');
       expect(card.previewVariant?.name, 'Road Riot 4WD - Elite.zip');
       expect(card.previewVariant?.candidatePaths, [
         '$screenshotDir/Falcon 030/Title Sorted/0-9/4WD Road Riot/elite_c01.png',

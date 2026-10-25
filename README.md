@@ -126,7 +126,9 @@ Save, the manual screenshot curation described below.
   selected status preview when no 2×2 grid applies. The default preview
   prefers a `done` variant of kind `game` over e.g. `textscreen`, then other
   `done`/`desktop` variants, then any preview (a `no_usable_shots` entry that
-  kept its last capture still shows it). Same rules as the gallery webapp.
+  kept its last capture still shows it). ZIPs directly in the game folder
+  are listed before ZIPs from its subfolders (`Original/`, `STX/`, …) in the
+  variant table and lightbox filmstrip. Same rules as the gallery webapp.
 - **Local layer & missing ZIPs** — the card/variant layer badge
   (`ROOT`/`PATCH`/`BOTH`) and the "This ZIP" **Layer** row are resolved from
   the actual filesystem, not the published index: a ZIP moved from the patch
@@ -139,7 +141,10 @@ Save, the manual screenshot curation described below.
   **Download folder** button in the detail sidebar that pulls the card's whole
   folder (all ZIP variants + subdirectories) recursively from the Marcer FTP
   server into the patch layer (the root directory when no `PatchDirectory` is
-  set) and then clears the `MISSING`/layer badges in place. Plain FTP (port 21,
+  set) and then clears the `MISSING`/layer badges in place. The folder is
+  resolved from the index rels, so a first ZIP nested in a subfolder
+  (`Original/`, `STX/`, …) or an undiscovered section tree never downloads
+  only that subfolder. Plain FTP (port 21,
   or `host:port` for a non-standard port); the connection settings
   (`Ftp.Host`/`Ftp.User`/`Ftp.Password`, optional `Ftp.RemoteBase`, default
   `/GameDVD/`) are edited in the settings editor.

@@ -173,10 +173,19 @@ class _GameLightboxState extends State<GameLightbox> {
             missing: widget.controller.variantMissing(variants[i]),
           ),
       ];
-      // ZIPs without a screenshot sort to the very end (stable).
-      final withPreview = list.where((v) => v.preview != null).toList();
-      final without = list.where((v) => v.preview == null).toList();
-      return [...withPreview, ...without];
+      // ZIPs from the game folder itself always come before ZIPs from its
+      // subfolders; within the same depth ones with a screenshot sort first.
+      // `origIndex` keeps the sort stable (and maps back to the card order).
+      list.sort((a, b) {
+        final byDepth =
+            variantRelDepth(a.rel).compareTo(variantRelDepth(b.rel));
+        if (byDepth != 0) return byDepth;
+        final byPreview =
+            (a.preview == null ? 1 : 0).compareTo(b.preview == null ? 1 : 0);
+        if (byPreview != 0) return byPreview;
+        return a.origIndex.compareTo(b.origIndex);
+      });
+      return list;
     }
     if (item is Entry) {
       final c = widget.controller;

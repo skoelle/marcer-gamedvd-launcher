@@ -695,14 +695,22 @@ function lightboxImages(card) {
   return imgs;
 }
 
-// Filmstrip display order: variants with a screenshot first (stable), then
-// the preview-less ones — desktop `_variants` (game_lightbox.dart).
-// `lb.variant` keeps the ORIGINAL variant index (used for the URL and the
-// side panel); only the rendered order and ↑/↓ navigation follow this.
+// Filmstrip display order: ZIPs directly in the game folder always before
+// ZIPs from subfolders (`Original/`, `STX/`, …); within the same depth ones
+// with a screenshot first (stable) — desktop `_variants`
+// (game_lightbox.dart). `lb.variant` keeps the ORIGINAL variant index (used
+// for the URL and the side panel); only the rendered order and ↑/↓
+// navigation follow this.
 function filmOrder(card) {
-  const withP = [], withoutP = [];
-  card.variants.forEach((vv, vi) => (vv.preview ? withP : withoutP).push(vi));
-  return withP.concat(withoutP);
+  return card.variants
+    .map((vv, vi) => ({
+      vi,
+      depth: String(vv.rel || "").split("/").length,
+      noPreview: vv.preview ? 0 : 1,
+    }))
+    .sort((a, b) =>
+      a.depth - b.depth || a.noPreview - b.noPreview || a.vi - b.vi)
+    .map((x) => x.vi);
 }
 
 // ↑/↓: move to the previous/next variant in filmstrip display order

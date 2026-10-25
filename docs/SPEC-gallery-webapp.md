@@ -330,14 +330,19 @@ A game folder aggregates the statuses of its ZIPs:
   `SPEC-screenshot-generator.md`).
 - `count_done`, `count_pending` etc. are included in the card payload for
   the lightbox and statistics.
+- Variant order (`variants[]`, release table, filmstrip) is depth-first: ZIPs
+  directly in the game folder come before ZIPs from subfolders (`Original/`,
+  `STX/`, …), each group sorted by `rel`. The filmstrip additionally keeps
+  variants with a preview before preview-less ones within the same depth
+  (desktop-app parity: `compareVariantRel`/`_variants` in the desktop app).
 - The default primary preview (no concrete status filter) = the first (by
-  sorted `rel`) variant preview with `status` `done` **and `kind` `game`**,
-  else the first with `status` `done`, else the first with `status`
-  `desktop`, else the first variant with any preview (desktop-app parity: a
-  real game shot wins over e.g. a `textscreen`; a `no_usable_shots` preview
-  is shown when it is the only image; within a tier the sorted-`rel` order
-  decides). Under a concrete status filter the selected status preview is
-  used first.
+  variant order, i.e. depth then sorted `rel`) variant preview with `status`
+  `done` **and `kind` `game`**, else the first with `status` `done`, else the
+  first with `status` `desktop`, else the first variant with any preview
+  (desktop-app parity: a real game shot wins over e.g. a `textscreen`; a
+  `no_usable_shots` preview is shown when it is the only image; within a tier
+  the depth/`rel` order decides). Under a concrete status filter the selected
+  status preview is used first.
 - `layer` for a grouped card: the single layer value if all its ZIPs share
   one (`ROOT` or `PATCH`), otherwise `BOTH` (overlay semantics of
   SPEC.md section 7 — one logical game, present in one or both layers).

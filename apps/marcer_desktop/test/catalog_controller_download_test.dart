@@ -138,6 +138,47 @@ void main() {
     expect(c.downloadError, isNull);
   });
 
+  test('resolves the game folder from the index rel when the first ZIP is '
+      'nested (no section tree discovered)', () async {
+    // Empty RootDirectory / no tree on disk — exactly the Download-missing
+    // case. The first (only) ZIP lives in Original/, so the folder must not
+    // shrink to …/Nested/Original (bug 2026-10-25).
+    const nestedRel = '$tree/N/Nested/Original/n.zip';
+    File('${tmp.path}/out/index.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {nestedRel: entry(nestedRel)},
+    }));
+    await c.init();
+    final card = c.universe.cracked
+        .firstWhere((x) => x.letter == 'N' && x.folder == 'Nested');
+    expect(c.cardFolderRel(card), '$tree/N/Nested');
+
+    final fake = _FakeDownloader();
+    c.downloader = fake;
+    await c.downloadMissing(card);
+    expect(fake.remoteDir, '$tree/N/Nested');
+    expect(fake.localDir, p.join('${tmp.path}/patch', '$tree/N/Nested'));
+  });
+
+  test('nested magazine ZIPs download their issue folder', () async {
+    const magazineTree = 'Bonus/Magazine Cover Disks';
+    const rel = '$magazineTree/ST Computer/1990-01/Disk1/st.zip';
+    File('${tmp.path}/out/index-magazine.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {rel: entry(rel)},
+    }));
+    await c.init();
+    final card = c.universe.magazine.single;
+    const folder = '$magazineTree/ST Computer/1990-01';
+    expect(c.cardFolderRel(card), folder);
+
+    final fake = _FakeDownloader();
+    c.downloader = fake;
+    await c.downloadMissing(card);
+    expect(fake.remoteDir, folder);
+    expect(fake.localDir, p.join('${tmp.path}/patch', folder));
+  });
+
   test('uses a non-standard port given inline as host:port', () async {
     final fake = _FakeDownloader();
     c = CatalogController(cfg(ftpHost: 'ftp.example.com:2121'))

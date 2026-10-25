@@ -108,6 +108,21 @@ class VariantPayloadTest(unittest.TestCase):
         self.assertEqual(len(cards), 1)
         self.assertEqual(cards[0]["variants"][0]["kind"], "textscreen")
 
+    def test_direct_folder_zip_sorts_before_subfolder_zips(self):
+        tree = "Title Sorted/Cracked Games - Title Sorted"
+        direct = f"{tree}/A/Alpha/z_direct.zip"
+        nested = f"{tree}/A/Alpha/Original/a.zip"
+        stx = f"{tree}/A/Alpha/STX/a_stx.zip"
+        entries = {
+            direct: {"status": "done", "kind": "game"},
+            nested: {"status": "done", "kind": "game"},
+            stx: {"status": "done", "kind": "game"},
+        }
+        cards = gallery._build_indexed_cards(entries, [], "cracked", False)
+        self.assertEqual(
+            [v["name"] for v in cards[0]["variants"]],
+            ["z_direct.zip", "a.zip", "a_stx.zip"])
+
 
 class CardFolderTest(unittest.TestCase):
     def test_indexed_card_folder_rel(self):
@@ -126,6 +141,24 @@ class CardFolderTest(unittest.TestCase):
         self.assertEqual(
             card["_folder_rel"],
             "Title Sorted/PD Games - Title Sorted/A/Alpha")
+
+    def test_magazine_folder_rel_is_the_issue_dir_not_the_first_zip_dir(self):
+        rel = "Bonus/Magazine Cover Disks/ST Computer/1990-01/Disk1/st.zip"
+        entries = {rel: {"status": "done", "kind": "game"}}
+        cards = gallery._build_indexed_cards(
+            entries, [], "magazine", False)
+        self.assertEqual(
+            cards[0]["_folder_rel"],
+            "Bonus/Magazine Cover Disks/ST Computer/1990-01")
+
+    def test_flat_magazine_folder_rel_uses_the_magazine_folder(self):
+        rel = "Bonus/Magazine Cover Disks/ST Action/ST Action 17 - Disk 1.zip"
+        entries = {rel: {"status": "done", "kind": "game"}}
+        cards = gallery._build_indexed_cards(
+            entries, [], "magazine", False)
+        self.assertEqual(
+            cards[0]["_folder_rel"],
+            "Bonus/Magazine Cover Disks/ST Action")
 
 
 class LocalAssetsTest(unittest.TestCase):
