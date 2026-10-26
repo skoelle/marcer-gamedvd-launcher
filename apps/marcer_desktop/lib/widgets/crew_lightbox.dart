@@ -10,10 +10,12 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
+import 'crew_overview.dart';
 import 'game_info_panel.dart';
 import 'game_lightbox.dart';
 import 'local_assets_chips.dart';
 import 'piratefinder_dialog.dart';
+import 'select_menu.dart';
 
 /// Crew release browser: all releases of a crew as a vertical screenshot list
 /// on the left, the normal lightbox info sidebar for the selected ZIP on the
@@ -58,13 +60,13 @@ class _CrewLightboxState extends State<CrewLightbox> {
   late List<CrewRelease> _releases;
   int _selected = 0;
   String _query = '';
-  String _sort = 'year_asc';
+  String _sort = 'name:asc';
 
   @override
   void initState() {
     super.initState();
     _releases = _applyFilter();
-    _selected = _initialIndex();
+    _selected = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _focus.requestFocus();
@@ -103,45 +105,40 @@ class _CrewLightboxState extends State<CrewLightbox> {
       ].join(' ').toLowerCase();
       return haystack.contains(query);
     }).toList();
-    switch (_sort) {
-      case 'year_desc':
-        list.sort((a, b) {
-          final ay = int.tryParse(a.year);
-          final by = int.tryParse(b.year);
-          if (ay == null && by != null) return 1;
-          if (ay != null && by == null) return -1;
-          if (ay != null && by != null && ay != by) return by.compareTo(ay);
-          return _titleCompare(a, b);
-        });
-      case 'title_asc':
-        list.sort(_titleCompare);
-      default:
-        // `crews.json` already contains year asc / unknown last / title / ZIP.
-        break;
-    }
+    list.sort(_compareReleases);
     return list;
+  }
+
+  int _compareReleases(CrewRelease a, CrewRelease b) {
+    switch (_sort) {
+      case 'year:asc':
+        final byYear = _yearCompare(a, b, desc: false);
+        return byYear != 0 ? byYear : _titleCompare(a, b);
+      case 'year:desc':
+        final byYear = _yearCompare(a, b, desc: true);
+        return byYear != 0 ? byYear : _titleCompare(a, b);
+      case 'name:desc':
+        return -_titleCompare(a, b);
+      default:
+        return _titleCompare(a, b);
+    }
+  }
+
+  static int _yearCompare(CrewRelease a, CrewRelease b, {required bool desc}) {
+    final ay = int.tryParse(a.year);
+    final by = int.tryParse(b.year);
+    if (ay == null && by != null) return 1;
+    if (ay != null && by == null) return -1;
+    if (ay != null && by != null && ay != by) {
+      return desc ? by.compareTo(ay) : ay.compareTo(by);
+    }
+    return 0;
   }
 
   static int _titleCompare(CrewRelease a, CrewRelease b) {
     final byTitle = a.title.toLowerCase().compareTo(b.title.toLowerCase());
     if (byTitle != 0) return byTitle;
     return a.zip.toLowerCase().compareTo(b.zip.toLowerCase());
-  }
-
-  int _initialIndex() {
-    if (_releases.isEmpty) return 0;
-    final curated = widget.controller.crewImages.imageFor(widget.crew);
-    if (curated != null) {
-      final index = _releases.indexWhere(
-        (release) => release.rel == curated.rel,
-      );
-      if (index >= 0) return index;
-    }
-    final withPreview = _releases.indexWhere((release) {
-      final entry = widget.controller.screenshots[release.rel];
-      return entry != null && (entry.preview?.isNotEmpty ?? false);
-    });
-    return withPreview >= 0 ? withPreview : 0;
   }
 
   void _rebuild({bool keepSelection = true}) {
@@ -336,10 +333,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
                     children: [
                       Expanded(child: _releaseGrid(context)),
                       const VerticalDivider(width: 1),
-                      SizedBox(
-                        width: _sidebarWidth,
-                        child: _sidePanel(context),
-                      ),
+                      SizedBox(width: _sidebarWidth, child: _sidebar(context)),
                     ],
                   ),
                 ),
@@ -352,113 +346,111 @@ class _CrewLightboxState extends State<CrewLightbox> {
   }
 
   Widget _header(BuildContext context) {
-    final aliases = widget.crew.aliases
-        .where((alias) => alias != widget.crew.name)
-        .toList();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Material(
+      key: const ValueKey('crew-lightbox-header'),
+      color: const Color(0xFF1B1B1B),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            const leftWidth = 174.0 + 8 + 120.0;
+            final nameWidth = math.max(
+              0.0,
+              constraints.maxWidth - 2 * (leftWidth + 8),
+            );
+            return Stack(
+              alignment: Alignment.center,
               children: [
-                Text(
-                  widget.crew.name,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 174,
+                      height: 28,
+                      child: Focus(
+                        onKeyEvent: (node, event) {
+                          if (event is KeyDownEvent &&
+                              event.logicalKey == LogicalKeyboardKey.escape) {
+                            if (_search.text.isNotEmpty) {
+                              _search.clear();
+                              _query = '';
+                              _rebuild(keepSelection: false);
+                            } else {
+                              _focus.requestFocus();
+                            }
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        },
+                        child: TextField(
+                          focusNode: _searchFocus,
+                          controller: _search,
+                          onChanged: (value) {
+                            _query = value;
+                            _rebuild();
+                          },
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: 'Search  ( / )',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
+                          ),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SelectMenu(
+                      value: _sort,
+                      items: const [
+                        'name:asc',
+                        'name:desc',
+                        'year:asc',
+                        'year:desc',
+                      ],
+                      labelOf: (v) => v.replaceFirst(':', ' '),
+                      onChanged: (value) {
+                        setState(() => _sort = value);
+                        _rebuild();
+                      },
+                      width: 120,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Close (Esc)',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+                IgnorePointer(
+                  child: SizedBox(
+                    width: nameWidth,
+                    child: Text(
+                      widget.crew.name,
+                      key: const ValueKey('crew-lightbox-header-name'),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '${widget.crew.kind == 'cracker' ? 'Individual cracker' : 'Crew'}'
-                  ' · ${widget.crew.zips} ZIPs · ${widget.crew.releases.length} releases',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-                if (aliases.isNotEmpty)
-                  Text(
-                    'Also known as: ${aliases.join(', ')}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 10, color: Colors.grey),
-                  ),
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 210,
-            height: 30,
-            child: Focus(
-              onKeyEvent: (node, event) {
-                if (event is KeyDownEvent &&
-                    event.logicalKey == LogicalKeyboardKey.escape) {
-                  if (_search.text.isNotEmpty) {
-                    _search.clear();
-                    _query = '';
-                    _rebuild(keepSelection: false);
-                  } else {
-                    _focus.requestFocus();
-                  }
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: TextField(
-                focusNode: _searchFocus,
-                controller: _search,
-                onChanged: (value) {
-                  _query = value;
-                  _rebuild();
-                },
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: 'Filter releases',
-                  prefixIcon: const Icon(Icons.search, size: 15),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 7,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _sort,
-              dropdownColor: const Color(0xFF1B1B1B),
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
-              items: const [
-                DropdownMenuItem(value: 'year_asc', child: Text('Jahr ↑')),
-                DropdownMenuItem(value: 'year_desc', child: Text('Jahr ↓')),
-                DropdownMenuItem(value: 'title_asc', child: Text('Titel A–Z')),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() => _sort = value);
-                _rebuild();
-              },
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            _releases.isEmpty
-                ? '0 / 0'
-                : '${_selected + 1} / ${_releases.length}',
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
-          ),
-          IconButton(
-            tooltip: 'Close (Esc)',
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close, size: 18, color: Colors.grey),
-          ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -510,6 +502,8 @@ class _CrewLightboxState extends State<CrewLightbox> {
     final entry = widget.controller.screenshots[release.rel];
     final layer = widget.controller.zipLayer(release.rel);
     final preview = _previewPath(release);
+    final status = entry?.status ?? '';
+    final showStatus = status.isNotEmpty && status != 'skipped_disk_n';
     final credits = {
       if (release.crackedBy.isNotEmpty) release.crackedBy,
       if (release.crew.isNotEmpty) release.crew,
@@ -560,8 +554,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
                       child: Wrap(
                         spacing: 4,
                         children: [
-                          if (entry?.status.isNotEmpty ?? false)
-                            _badge(entry!.status, Colors.blueGrey),
+                          if (showStatus) _badge(status, Colors.blueGrey),
                           if (entry?.kind != null && entry!.kind!.isNotEmpty)
                             _badge(entry.kind!, Colors.teal),
                         ],
@@ -636,6 +629,27 @@ class _CrewLightboxState extends State<CrewLightbox> {
     );
   }
 
+  Widget _sidebar(BuildContext context) {
+    final pirateFinderCrew = widget.controller.pirateFinderCrewForGroup(
+      widget.crew,
+    );
+    return Container(
+      color: const Color(0xFF161616),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CrewOverview(
+            key: const ValueKey('crew-lightbox-overview'),
+            crew: widget.crew,
+            pirateFinderCrew: pirateFinderCrew,
+          ),
+          const Divider(height: 1),
+          Expanded(child: _sidePanel(context)),
+        ],
+      ),
+    );
+  }
+
   Widget _sidePanel(BuildContext context) {
     final release = _current;
     if (release == null) {
@@ -661,6 +675,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
         size: variant.size,
         missing: widget.controller.variantMissing(variant),
         tos: variant.tos,
+        hideStatus: variant.status == 'skipped_disk_n',
       ),
       filter: widget.controller.filter,
       variants: card.kind == 'falcon' ? kFalconVariants : kHatariVariants,
@@ -702,6 +717,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
   Widget _fallbackInfo(CrewRelease release) {
     final entry = widget.controller.screenshots[release.rel];
     final layer = widget.controller.zipLayer(release.rel);
+    final status = entry?.status ?? '';
     final rows = <(String, String)>[
       if (release.title.isNotEmpty) ('Title', release.title),
       if (release.year.isNotEmpty) ('Release', release.year),
@@ -714,7 +730,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
       if (release.specialFlag.isNotEmpty) ('Special', release.specialFlag),
       if (release.specialNote.isNotEmpty) ('Note', release.specialNote),
       ('ZIP', release.zip),
-      if (entry?.status.isNotEmpty ?? false) ('Status', entry!.status),
+      if (status.isNotEmpty && status != 'skipped_disk_n') ('Status', status),
       if (entry?.kind != null && entry!.kind!.isNotEmpty) ('Kind', entry.kind!),
       if (layer.isNotEmpty) ('Layer', layer) else ('Layer', 'MISSING'),
     ];

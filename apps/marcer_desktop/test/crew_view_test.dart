@@ -336,8 +336,25 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Alpha Crew'), findsWidgets);
+    expect(find.text('Crew · 2 releases'), findsOneWidget);
+    expect(find.text('Search  ( / )'), findsOneWidget);
     expect(find.text('Alpha v2'), findsOneWidget);
     expect(find.text('a_v2.zip'), findsNothing);
+    final search = tester.getTopLeft(find.text('Search  ( / )'));
+    final sort = tester.getTopLeft(find.text('name asc'));
+    expect(search.dx, lessThan(sort.dx));
+
+    final header = tester.getRect(
+      find.byKey(const ValueKey('crew-lightbox-header')),
+    );
+    final headerName = tester.getRect(
+      find.byKey(const ValueKey('crew-lightbox-header-name')),
+    );
+    final overview = tester.getRect(
+      find.byKey(const ValueKey('crew-lightbox-overview')),
+    );
+    expect((headerName.center.dx - header.center.dx).abs(), lessThan(2));
+    expect(overview.top, greaterThanOrEqualTo(header.bottom));
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump();
@@ -347,6 +364,120 @@ void main() {
     await tester.pump();
     expect(find.text('Alpha v2'), findsOneWidget);
     expect(find.text('a_v2.zip'), findsOneWidget);
+
+    expect(find.text('name asc'), findsOneWidget);
+    expect(find.text('1 / 2'), findsNothing);
+  });
+
+  testWidgets('crew lightbox starts on the first sorted release', (
+    tester,
+  ) async {
+    File('${tmp.path}/data/crew-images.json').writeAsStringSync(
+      jsonEncode({
+        'schema': 1,
+        'images': {
+          'Alpha Crew': {
+            'rel': relA2,
+            'name': 'curated.png',
+            'source': 'manual',
+          },
+        },
+      }),
+    );
+    await tester.runAsync(() async {
+      await c.init();
+    });
+    final crew = c.crews.groups.firstWhere(
+      (group) => group.name == 'Alpha Crew',
+    );
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CrewLightbox(controller: c, crew: crew),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('a.zip'), findsOneWidget);
+    expect(find.text('a_v2.zip'), findsNothing);
+  });
+
+  testWidgets('crew lightbox sorts by name (default) and year', (tester) async {
+    await tester.runAsync(() async {
+      await c.init();
+    });
+    final crew = c.crews.groups.firstWhere(
+      (group) => group.name == 'Alpha Crew',
+    );
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CrewLightbox(controller: c, crew: crew),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('name asc'), findsOneWidget);
+    expect(find.text('a.zip'), findsOneWidget);
+    final alphaV2Before = tester.getTopLeft(find.text('Alpha v2'));
+
+    await tester.tap(find.text('name asc'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('year asc'), findsOneWidget);
+    expect(find.text('year desc'), findsOneWidget);
+    expect(find.text('name desc'), findsOneWidget);
+
+    await tester.tap(find.text('year desc'));
+    await tester.pumpAndSettle();
+    expect(find.text('year desc'), findsOneWidget);
+
+    final alphaV2After = tester.getTopLeft(find.text('Alpha v2'));
+    expect(alphaV2After.dx, lessThan(alphaV2Before.dx));
+  });
+
+  testWidgets('crew lightbox hides skipped_disk_n status', (tester) async {
+    final index = jsonDecode(
+      File('${tmp.path}/out/index.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
+    final entries = index['entries'] as Map<String, dynamic>;
+    entries[relA]['status'] = 'skipped_disk_n';
+    File('${tmp.path}/out/index.json').writeAsStringSync(jsonEncode(index));
+
+    await tester.runAsync(() async {
+      await c.init();
+    });
+    final crew = c.crews.groups.firstWhere(
+      (group) => group.name == 'Alpha Crew',
+    );
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CrewLightbox(controller: c, crew: crew),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('skipped_disk_n'), findsNothing);
+    expect(find.text('done'), findsWidgets);
   });
 
   testWidgets('crew lightbox side panel shows the PirateFinder section', (

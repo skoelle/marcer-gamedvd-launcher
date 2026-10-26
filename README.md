@@ -49,9 +49,13 @@ Save, the manual screenshot curation described below.
   detail panel lists all releases of the selected crew and a release click
   opens the existing lightbox pinned to that ZIP. Double-clicking a crew card
   opens a release browser: all releases as a responsive screenshot grid
-  (up to 4 columns) on the left, the normal lightbox sidebar for the selected
-  ZIP on the right; arrow keys navigate, Enter opens the normal lightbox and
-  P/Play launches.
+  (up to 4 columns) on the left, a sidebar on the right with the shared crew
+  overview above the selected ZIP info; the header spans both and shows the
+  main filter bar's search field (`Search  ( / )`) with the sort menu directly
+  behind it on the left, the crew name centred and the close button at the
+  right (name/year ascending/descending, default name asc; the
+  `skipped_disk_n` status is hidden for crew releases); arrow keys navigate,
+  Enter opens the normal lightbox and P/Play launches.
 - **Type-to-filter dropdowns** — every filter dropdown (publisher, crew,
   cracker, language, year, genre/developers, status, sort, raw/pasti/boxscan,
   TOS/Bad) opens a searchable, virtualized menu (only the visible rows are

@@ -20,10 +20,15 @@ class ZipVariantView {
     this.size,
     this.missing = false,
     this.tos,
+    this.hideStatus = false,
   });
 
   final String name;
   final String status;
+
+  /// Hide the "Status" row in the "This ZIP" table (used by the crew release
+  /// browser to suppress `skipped_disk_n`).
+  final bool hideStatus;
 
   /// Preview classification (`game`/`desktop`/`textscreen`/`darkscreen`),
   /// shown as the "Kind" row directly under Status; null/empty → em dash.
@@ -595,7 +600,7 @@ class GameInfoPanel extends StatelessWidget {
     final kind = (v.kind == null || v.kind!.isEmpty) ? '—' : v.kind!;
     return [
       _kv('File', v.name),
-      _kv('Status', v.status),
+      if (!v.hideStatus) _kv('Status', v.status),
       _kv('Kind', kind),
       if (v.tos != null && v.tos!.isNotEmpty) _kv('TOS', v.tos!),
       if (v.missing) _kv('Missing', 'yes — not present locally'),
