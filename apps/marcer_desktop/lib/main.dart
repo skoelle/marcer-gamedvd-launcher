@@ -35,6 +35,7 @@ import 'widgets/asset_update_dialog.dart';
 import 'widgets/hatari_install_dialog.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/setup_page.dart';
+import 'widgets/status_bar.dart';
 import 'widgets/tos_rom_dialog.dart';
 
 Future<void> main() async {
@@ -1086,103 +1087,8 @@ class _HomePageState extends State<HomePage> {
           ListenableBuilder(
             listenable: c,
             builder: (context, _) =>
-                _StatusBar(controller: c, version: _appVersion),
+                StatusBar(controller: c, version: _appVersion),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusBar extends StatelessWidget {
-  const _StatusBar({required this.controller, this.version});
-
-  final CatalogController controller;
-
-  /// Running app version, right-aligned in the bar (`null` while the
-  /// async `PackageInfo` read has not finished / failed).
-  final String? version;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = controller;
-    final messages = <String>[
-      if (!c.catalogMode) c.displayPath,
-      c.countText,
-      ...c.statusLine,
-    ];
-    final notices = [...c.notices];
-    final favErr = c.favorites?.lastSaveError;
-    if (favErr != null) notices.add('favorites save failed: $favErr');
-    return Container(
-      color: const Color(0xFF1B1B1B),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      child: Row(
-        children: [
-          if (c.launching) ...[
-            const SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(strokeWidth: 1.5),
-            ),
-            const SizedBox(width: 6),
-            const Text(
-              'Hatari is running…',
-              style: TextStyle(fontSize: 11, color: Colors.lightGreen),
-            ),
-            const SizedBox(width: 16),
-          ],
-          if (c.downloading) ...[
-            const SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(strokeWidth: 1.5),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Downloading… ${c.downloadProgress}',
-              style: const TextStyle(fontSize: 11, color: Colors.orangeAccent),
-            ),
-            const SizedBox(width: 16),
-          ],
-          if (c.cosmosExSending) ...[
-            const SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(strokeWidth: 1.5),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Sending to CosmosEx… ${c.cosmosExProgress}',
-              style: const TextStyle(fontSize: 11, color: Colors.lightBlue),
-            ),
-            const SizedBox(width: 16),
-          ],
-          Text(
-            messages.join('  ·  '),
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
-          ),
-          if (notices.isNotEmpty) ...[
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                notices.join('  |  '),
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: Colors.orange),
-              ),
-            ),
-          ] else
-            const Spacer(),
-          if (version != null) ...[
-            const SizedBox(width: 16),
-            Text(
-              'v$version',
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
         ],
       ),
     );

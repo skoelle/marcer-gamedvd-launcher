@@ -442,6 +442,9 @@ The gray bar at the bottom shows the current view path (folder browser),
 result/entry counts, the gallery-style status info and — right aligned —
 the **running app version** (`v…`; release builds: stamped from the
 `desktop-v*` git tag via `--build-name`, dev builds: the pubspec version).
+The version is pinned to the bottom-right and stays visible on narrow
+windows: the status/warning text truncates before it, and the full text is
+available as a tooltip.
 
 Status info in catalog mode is **section-aware** (same `games (ZIPs)` format
 as the gallery's statistics bar, plus the folder total; the gallery labels
