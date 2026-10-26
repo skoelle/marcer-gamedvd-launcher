@@ -11,6 +11,12 @@ per-app/per-tool READMEs stay next to their code.
 | [`GETTING-STARTED.md`](GETTING-STARTED.md) | Quick start plus detailed release setup guide for users: first start, macOS (Gatekeeper/translocation/TCC), game and patch directories, `ftp-sync`, FTP settings, catalog-data downloads and troubleshooting. |
 | [`IDEAS.md`](IDEAS.md) | Living backlog: planned, deferred and explicitly rejected ideas for the desktop app (Surface B, Hatari stage 2, local index, filters, persistence). |
 
+## Plans
+
+| File | What it covers |
+|---|---|
+| [`PLAN-docker-pipeline.md`](PLAN-docker-pipeline.md) | Server automation plan: Docker container for archive sync, change detection, gameinfo/crews/index, asset packaging/upload and the `latest.json` pointer, with checkable implementation steps. |
+
 ## Specs
 
 | File | What it describes |
