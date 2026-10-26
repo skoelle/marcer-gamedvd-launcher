@@ -64,6 +64,9 @@ class _HangingAtariLegendFetcher implements AtariLegendFetcher {
     lastTargetDir = targetDir;
     return completer.future;
   }
+
+  @override
+  Future<String?> latestDump() async => null;
 }
 
 class _FakePirateFinderDownloader implements PirateFinderDownloader {
@@ -424,6 +427,35 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(busy, isFalse);
+  });
+
+  testWidgets('AtariLegend row shows the applied dump date', (tester) async {
+    tester.view.physicalSize = const Size(1400, 2800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final dir = Directory.systemTemp.createTempSync('settings_form_al_date');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    Directory(p.join(dir.path, 'atarilegend')).createSync();
+    File(p.join(dir.path, 'atarilegend', kAtariLegendFileName))
+        .writeAsStringSync(
+          AtariLegendCache(
+            generatedAt: '2026-10-19T10:00:00Z',
+            sourceFile: '2026-10-18.sql.gz',
+            dumpDate: '2026-10-18',
+            games: const [],
+          ).toJsonString(),
+        );
+
+    await _pumpForm(
+      tester,
+      DesktopConfig(rootDirectory: dir.path, gameinfoDirectory: dir.path),
+      (_, _) {},
+    );
+
+    expect(find.text('installed · dump 2026-10-18'), findsOneWidget);
   });
 
   testWidgets(

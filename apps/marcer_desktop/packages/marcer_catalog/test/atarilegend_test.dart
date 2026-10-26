@@ -399,6 +399,59 @@ void main() {
     });
   });
 
+  group('AtariLegendCacheInfo', () {
+    test('reads the applied dump date from the cache header', () {
+      final tmp = Directory.systemTemp.createTempSync('al_info');
+      addTearDown(() {
+        if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+      });
+      final cache = AtariLegendCache(
+        generatedAt: '2026-10-20T10:00:00Z',
+        sourceFile: '2026-10-18.sql.gz',
+        dumpDate: '2026-10-18',
+        games: const [
+          AtariLegendGame(
+              id: 22, name: 'Buggy Boy', slug: 'buggy-boy', year: 1987),
+        ],
+      );
+      File('${tmp.path}/atarilegend.json')
+          .writeAsStringSync(cache.toJsonString());
+
+      final info = AtariLegendCacheInfo.load(tmp.path);
+      expect(info, isNotNull);
+      expect(info!.dumpDate, '2026-10-18');
+      expect(info.sourceFile, '2026-10-18.sql.gz');
+      expect(info.gameCount, 1);
+      expect(info.assetDate, '2026-10-18');
+      expect(info.label, '2026-10-18');
+    });
+
+    test('falls back to the source file name and then generated_at', () {
+      final fromFile = AtariLegendCacheInfo.fromJson({
+        'schema_version': 5,
+        'generated_at': '2026-10-20T10:00:00Z',
+        'source': {'file': '2026-10-18.sql.gz'},
+        'games': const [],
+      });
+      expect(fromFile.assetDate, '2026-10-18');
+
+      final fromGenerated = AtariLegendCacheInfo.fromJson({
+        'schema_version': 5,
+        'generated_at': '2026-10-20T10:00:00Z',
+        'games': const [],
+      });
+      expect(fromGenerated.assetDate, '2026-10-20');
+    });
+
+    test('missing cache returns null', () {
+      final tmp = Directory.systemTemp.createTempSync('al_info_missing');
+      addTearDown(() {
+        if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+      });
+      expect(AtariLegendCacheInfo.load(tmp.path), isNull);
+    });
+  });
+
   group('parseAtariLegendTexts', () {
     const sql = r'''
 CREATE TABLE `reviews` (

@@ -165,6 +165,9 @@ class _SettingsFormState extends State<SettingsForm> {
   bool _cancelRequested = false;
 
   bool _fetchingAtariLegend = false;
+  AtariLegendCacheInfo? _atariLegendInfoCache;
+  String? _atariLegendInfoPath;
+  int? _atariLegendInfoStamp;
   late final PirateFinderDataController _pirateFinder;
   late final bool _ownsPirateFinder;
   bool _pirateFinderCancel = false;
@@ -744,11 +747,33 @@ class _SettingsFormState extends State<SettingsForm> {
     style: const TextStyle(fontSize: 11, color: Colors.grey, height: 1.35),
   );
 
+  /// Reads the cache header, cached by path + mtime so typing in the form does
+  /// not parse the ~4.4 MB JSON on every rebuild.
+  AtariLegendCacheInfo? _atariLegendInfo(String dir) {
+    if (dir.isEmpty) return null;
+    final file = File('$dir/$kAtariLegendFileName');
+    if (!file.existsSync()) return null;
+    final stamp = file.lastModifiedSync().millisecondsSinceEpoch;
+    if (_atariLegendInfoPath != dir || _atariLegendInfoStamp != stamp) {
+      _atariLegendInfoPath = dir;
+      _atariLegendInfoStamp = stamp;
+      _atariLegendInfoCache = AtariLegendCacheInfo.load(dir);
+    }
+    return _atariLegendInfoCache;
+  }
+
   /// AtariLegend cache row (no path field; target is `<DataDir>/atarilegend`).
   Widget _atariLegendRow() {
     final target = currentConfig.resolveAtariLegendDirectory();
-    final installed =
-        target.isNotEmpty && File('$target/$kAtariLegendFileName').existsSync();
+    final installed = target.isNotEmpty &&
+        File('$target/$kAtariLegendFileName').existsSync();
+    final info = installed ? _atariLegendInfo(target) : null;
+    final date = info?.assetDate ?? '';
+    final status = !installed
+        ? 'not installed'
+        : date.isNotEmpty
+        ? 'installed · dump $date'
+        : 'installed · date unknown';
     final busy =
         _downloading != null || _fetchingAtariLegend || _pirateFinder.busy;
     return Row(
@@ -778,10 +803,7 @@ class _SettingsFormState extends State<SettingsForm> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            installed ? 'installed' : 'not installed',
-                            style: const TextStyle(fontSize: 11),
-                          ),
+                          Text(status, style: const TextStyle(fontSize: 11)),
                           Text(
                             target.isEmpty
                                 ? 'set a data directory first'

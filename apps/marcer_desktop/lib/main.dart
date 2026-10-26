@@ -18,6 +18,7 @@ import 'data_layout_migration.dart';
 import 'hatari_installer.dart';
 import 'self_updater.dart';
 import 'asset_updater.dart';
+import 'atarilegend_data.dart';
 import 'piratefinder_data.dart';
 import 'theme.dart';
 import 'tos_rom.dart';
@@ -423,6 +424,8 @@ class _HomePageState extends State<HomePage> {
   final FocusNode _centerFocus = FocusNode(debugLabel: 'center');
   final SelfUpdateController _updater = SelfUpdateController();
   final AssetUpdateController _assetUpdater = AssetUpdateController();
+  final AtariLegendUpdateController _atariLegendData =
+      AtariLegendUpdateController();
   final PirateFinderDataController _pirateFinderData =
       PirateFinderDataController();
   bool _showHelp = false;
@@ -468,6 +471,8 @@ class _HomePageState extends State<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _controller.init());
     _updater.addListener(_onUpdateChanged);
     _assetUpdater.config = _config;
+    _atariLegendData.config = _config;
+    _atariLegendData.refreshLocal();
     _pirateFinderData.config = _config;
     _pirateFinderData.refreshLocal();
     _lastPirateFinderVersion = _pirateFinderData.local?.sha256;
@@ -529,6 +534,7 @@ class _HomePageState extends State<HomePage> {
     _centerFocus.dispose();
     _updater.dispose();
     _assetUpdater.dispose();
+    _atariLegendData.dispose();
     _pirateFinderData.removeListener(_onPirateFinderChanged);
     _pirateFinderData.dispose();
     _controller.dispose();
@@ -768,6 +774,8 @@ class _HomePageState extends State<HomePage> {
     _controller.init();
     _assetUpdater.config = config;
     _assetUpdater.check();
+    _atariLegendData.config = config;
+    _atariLegendData.refreshLocal();
     _pirateFinderData.config = config;
     _pirateFinderData.refreshLocal();
     _pirateFinderData.invalidateIndex();
@@ -783,6 +791,7 @@ class _HomePageState extends State<HomePage> {
     await showAssetUpdateDialog(
       context,
       controller: _assetUpdater,
+      atariLegend: _atariLegendData,
       pirateFinder: _pirateFinderData,
       onApplied: () => _applyConfig(_config),
     );

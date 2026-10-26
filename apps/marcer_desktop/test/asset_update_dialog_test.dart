@@ -8,9 +8,36 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/asset_updater.dart';
+import 'package:marcer_desktop/atarilegend_data.dart';
+import 'package:marcer_desktop/atarilegend_fetcher.dart';
 import 'package:marcer_desktop/catalog_assets.dart';
 import 'package:marcer_desktop/piratefinder_data.dart';
 import 'package:marcer_desktop/widgets/asset_update_dialog.dart';
+
+class _FakeAtariLegendFetcher implements AtariLegendFetcher {
+  int latestCalls = 0;
+  int fetchCalls = 0;
+
+  @override
+  Future<String?> latestDump() async {
+    latestCalls++;
+    return '2026-10-25.sql.gz';
+  }
+
+  @override
+  Future<AtariLegendFetchResult> fetch({
+    required String targetDir,
+    AtariLegendProgress? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    fetchCalls++;
+    return AtariLegendFetchResult(
+      games: 6200,
+      dumpFile: '2026-10-25.sql.gz',
+      cachePath: '$targetDir/$kAtariLegendFileName',
+    );
+  }
+}
 
 void main() {
   testWidgets('shows gameinfo before screenshots with update/skip/close', (
@@ -213,4 +240,83 @@ void main() {
       );
     },
   );
+
+  testWidgets('AtariLegend only checks on demand, then offers an update', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tmp = Directory.systemTemp.createTempSync('asset_dialog_al');
+    addTearDown(() {
+      if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+    });
+    Directory('${tmp.path}/root').createSync();
+    Directory('${tmp.path}/data/atarilegend').createSync(recursive: true);
+    File('${tmp.path}/data/atarilegend/$kAtariLegendFileName')
+        .writeAsStringSync(
+          AtariLegendCache(
+            generatedAt: '2026-10-19T10:00:00Z',
+            sourceFile: '2026-10-18.sql.gz',
+            dumpDate: '2026-10-18',
+            games: const [],
+          ).toJsonString(),
+        );
+
+    final assets = AssetUpdateController(fetcher: (_) async => '{}');
+    assets.config = DesktopConfig(rootDirectory: '${tmp.path}/root');
+    await assets.check(force: true);
+
+    final fetcher = _FakeAtariLegendFetcher();
+    final al = AtariLegendUpdateController(fetcher: fetcher)
+      ..config = DesktopConfig(
+        rootDirectory: '${tmp.path}/root',
+        gameinfoDirectory: '${tmp.path}/data',
+      );
+    var applied = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => showAssetUpdateDialog(
+                  context,
+                  controller: assets,
+                  atariLegend: al,
+                  onApplied: () => applied++,
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('AtariLegend'), findsOneWidget);
+    expect(find.text('local:  dump 2026-10-18'), findsOneWidget);
+    expect(find.text('remote: unknown — press Check'), findsOneWidget);
+    expect(fetcher.latestCalls, 0, reason: 'no automatic check');
+    expect(find.text('Check'), findsOneWidget);
+    expect(find.text('Update'), findsNothing);
+
+    await tester.tap(find.text('Check'));
+    await tester.pumpAndSettle();
+
+    expect(fetcher.latestCalls, 1);
+    expect(find.text('remote: dump 2026-10-25'), findsOneWidget);
+    expect(find.text('Update'), findsOneWidget);
+
+    await tester.tap(find.text('Update'));
+    await tester.pumpAndSettle();
+
+    expect(fetcher.fetchCalls, 1);
+    expect(applied, 1);
+    expect(find.text('up to date'), findsOneWidget);
+  });
 }

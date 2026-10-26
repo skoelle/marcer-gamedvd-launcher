@@ -625,7 +625,9 @@ CC BY-NC-SA 4.0); it is fetched on demand:
 
 - the setup/settings form has an **AtariLegend data** row below
   *GameinfoDirectory* with a **Download AtariLegend data** button (no path
-  field); the cache is written to `<GameinfoDirectory>/atarilegend/`.
+  field); the cache is written to `<GameinfoDirectory>/atarilegend/`. The row
+  shows the applied dump date (`installed · dump 2026-10-18`), read from the
+  cache header (`source.dump_date`/`source.file`, fallback `generated_at`).
 - the button resolves the newest `YYYY-MM-DD.sql.gz` from the AtariLegend
   dump directory, downloads it, decompresses it (gzip) and parses only the
   needed tables in a **background isolate**, then writes the compact cache
@@ -634,6 +636,11 @@ CC BY-NC-SA 4.0); it is fetched on demand:
   **screenshot/boxscan references**) and the separate **`atarilegend-texts.json`**
   (reviews, comments, magazine references, ~1.2 MB). The downloaded `.sql.gz`
   is **deleted** afterwards.
+- the **Catalog data** dialog has an **AtariLegend** row with the local dump
+  date and a **Check** button. The remote dump directory is contacted **only**
+  when the user presses **Check** (never at startup and never when the dialog
+  opens); a newer remote dump then offers **Install**/**Update** right in the
+  dialog, with progress, **Cancel** and a catalog reload after success.
 - the target directory is created when missing; progress and **Cancel** show
   inline, failures as a SnackBar.
 - while the fetch runs, **Save**, **Cancel** and **Exit** are disabled (and the
@@ -695,7 +702,7 @@ link points to the
 - Startup check (release builds only): fetches the small `latest.json` pointer
   and compares the remote asset SHA-256 / `generated_at` with the local marker
   `.piratefinder-catalog.json`.
-- The same **Catalog data** dialog gains a third row, **PirateFinder-Catalog**,
+- The same **Catalog data** dialog gains an additional row, **PirateFinder-Catalog**,
   with
   local/remote catalogue tag + generation date and **Install**/**Update** (or
   **up to date**). If the data is not installed yet, the row shows the install
@@ -734,8 +741,9 @@ the top bar (always available, right of the version badge) and shows a small
 green count badge when updates are pending.
 
 Clicking it opens the **Catalog data** dialog, listing **game info first, then
-screenshots**, then the optional **PirateFinder-Catalog** data with the local and
-remote catalogue date/asset and per asset:
+screenshots**, the **AtariLegend** dump (local date + manual **Check**), then the
+optional **PirateFinder-Catalog** data with the local and remote catalogue
+date/asset and per asset:
 
 - **Update** (or **Install** when nothing is applied yet) — downloads the newest
   archive from the FTP (Marcer assets) or GitHub (PirateFinder-Catalog data) and
@@ -746,6 +754,10 @@ remote catalogue date/asset and per asset:
 - **Skip this version** — the remote archive is recorded in
   `<targetDir>/.marcer-assets.json` under `skipped`, so you are only notified
   again when a newer archive appears (cleared automatically once applied).
+- **Check** (AtariLegend only) — fetches just the remote dump listing and shows
+  the newest dump date. There is **no automatic AtariLegend check** and no
+  update badge for it; press Check explicitly. A newer dump offers
+  **Install**/**Update** in the same row.
 - **Close** at the bottom.
 
 An asset counts as up to date only when the recorded archive matches the remote

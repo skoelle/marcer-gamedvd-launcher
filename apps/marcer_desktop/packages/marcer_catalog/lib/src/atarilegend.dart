@@ -559,6 +559,68 @@ class AtariLegendCache {
       '${const JsonEncoder.withIndent(' ').convert(toJson())}\n';
 }
 
+/// Header information of the AtariLegend cache, used to show the applied dump
+/// date without building the (large) in-memory match index.
+class AtariLegendCacheInfo {
+  const AtariLegendCacheInfo({
+    this.schemaVersion = kAtariLegendSchemaVersion,
+    this.generatedAt = '',
+    this.sourceFile = '',
+    this.dumpDate = '',
+    this.gameCount = 0,
+  });
+
+  factory AtariLegendCacheInfo.fromJson(Map<String, dynamic> json) {
+    final source = (json['source'] as Map<String, dynamic>?) ?? const {};
+    return AtariLegendCacheInfo(
+      schemaVersion: (json['schema_version'] as num?)?.toInt() ??
+          kAtariLegendSchemaVersion,
+      generatedAt: (json['generated_at'] ?? '').toString(),
+      sourceFile: (source['file'] ?? '').toString(),
+      dumpDate: (source['dump_date'] ?? '').toString(),
+      gameCount: (json['games'] as List<dynamic>?)?.length ?? 0,
+    );
+  }
+
+  /// Reads `<dir>/atarilegend.json`; `null` when missing or unreadable.
+  static AtariLegendCacheInfo? load(String dir, {List<String>? warnings}) {
+    final d = dir.trim();
+    if (d.isEmpty) return null;
+    final file = File('$d/$kAtariLegendFileName');
+    if (!file.existsSync()) return null;
+    try {
+      final map = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      return AtariLegendCacheInfo.fromJson(map);
+    } catch (e) {
+      warnings?.add('AtariLegend data: could not read ${file.path}: $e');
+      return null;
+    }
+  }
+
+  final int schemaVersion;
+  final String generatedAt;
+  final String sourceFile;
+  final String dumpDate;
+  final int gameCount;
+
+  /// The applied dump date (`YYYY-MM-DD`): explicit `dump_date`, else derived
+  /// from the source file name, else the generation date. Empty when unknown.
+  String get assetDate {
+    for (final value in [dumpDate, sourceFile, generatedAt]) {
+      final match = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(value.trim());
+      if (match != null) return match.group(1)!;
+    }
+    return '';
+  }
+
+  /// Human label for the applied dump (date when known, else the source name).
+  String get label {
+    final date = assetDate;
+    if (date.isNotEmpty) return date;
+    return sourceFile.trim();
+  }
+}
+
 // --------------------------------------------------------------------------
 // SQL dump parsing (stdlib-free, pure Dart)
 // --------------------------------------------------------------------------

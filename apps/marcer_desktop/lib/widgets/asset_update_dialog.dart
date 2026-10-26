@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../asset_updater.dart';
+import '../atarilegend_data.dart';
 import '../catalog_assets.dart';
 import '../piratefinder_data.dart';
 import '../piratefinder_names.dart';
@@ -15,16 +16,20 @@ import 'piratefinder_link.dart';
 Future<void> showAssetUpdateDialog(
   BuildContext context, {
   required AssetUpdateController controller,
+  AtariLegendUpdateController? atariLegend,
   PirateFinderDataController? pirateFinder,
   required void Function() onApplied,
 }) {
-  // Refresh both remote stands whenever the dialog opens.
+  // Refresh the remote stands whenever the dialog opens. AtariLegend is
+  // deliberately excluded: its remote dump is only checked on demand.
   controller.check(force: true);
   pirateFinder?.check(force: true);
+  atariLegend?.refreshLocal();
   return showDialog<void>(
     context: context,
     builder: (_) => AssetUpdateDialog(
       controller: controller,
+      atariLegend: atariLegend,
       pirateFinder: pirateFinder,
       onApplied: onApplied,
     ),
@@ -37,11 +42,13 @@ class AssetUpdateDialog extends StatefulWidget {
   const AssetUpdateDialog({
     super.key,
     required this.controller,
+    this.atariLegend,
     this.pirateFinder,
     required this.onApplied,
   });
 
   final AssetUpdateController controller;
+  final AtariLegendUpdateController? atariLegend;
   final PirateFinderDataController? pirateFinder;
   final void Function() onApplied;
 
@@ -58,10 +65,14 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
   @override
   void initState() {
     super.initState();
-    final pf = widget.pirateFinder;
-    _listenable = pf == null
-        ? widget.controller
-        : Listenable.merge([widget.controller, pf]);
+    final listenables = <Listenable>[
+      widget.controller,
+      if (widget.atariLegend != null) widget.atariLegend!,
+      if (widget.pirateFinder != null) widget.pirateFinder!,
+    ];
+    _listenable = listenables.length == 1
+        ? listenables.first
+        : Listenable.merge(listenables);
   }
 
   Future<void> _update(CatalogAsset asset) async {
@@ -79,6 +90,15 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
     if (pf == null || pf.busy) return;
     _cancelRequested = false;
     await pf.update(isCancelled: () => _cancelRequested);
+  }
+
+  Future<void> _updateAtariLegend() async {
+    final al = widget.atariLegend;
+    if (al == null || al.busy) return;
+    _cancelRequested = false;
+    final ok = await al.update(isCancelled: () => _cancelRequested);
+    if (!mounted) return;
+    if (ok) widget.onApplied();
   }
 
   @override
@@ -119,6 +139,10 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                     _row(c, asset),
                     const SizedBox(height: 8),
                   ],
+                  if (widget.atariLegend != null) ...[
+                    _atariLegendRow(widget.atariLegend!),
+                    const SizedBox(height: 8),
+                  ],
                   if (widget.pirateFinder != null) ...[
                     const Divider(),
                     const SizedBox(height: 4),
@@ -147,6 +171,139 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
           ],
         );
       },
+    );
+  }
+
+  Widget _atariLegendRow(AtariLegendUpdateController al) {
+    final busy =
+        al.busy ||
+        widget.controller.busy ||
+        (widget.pirateFinder?.busy ?? false);
+    final remoteDate = al.remoteDate;
+    final remoteLabel = al.dataDir.isEmpty
+        ? 'set a data directory first'
+        : al.checking
+        ? 'checking…'
+        : al.remoteDumpFile == null
+        ? 'unknown — press Check'
+        : 'dump ${remoteDate ?? al.remoteDumpFile}';
+    final pending = al.hasPending;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                width: 90,
+                child: Text(
+                  'AtariLegend',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'local:  ${al.localLabel}',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    Text(
+                      'remote: $remoteLabel',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'CC BY-NC-SA 4.0 · not part of the Marcer catalog',
+            style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
+          ),
+          const SizedBox(height: 6),
+          if (al.downloading)
+            Row(
+              children: [
+                Expanded(
+                  child: al.total > 0
+                      ? LinearProgressIndicator(
+                          value: al.done / al.total,
+                          minHeight: 6,
+                        )
+                      : const LinearProgressIndicator(minHeight: 6),
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    al.message,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                TextButton(
+                  onPressed: () => setState(() => _cancelRequested = true),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            )
+          else if (al.checking)
+            Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  al.message,
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                if (al.remoteDumpFile != null && !pending)
+                  const Expanded(
+                    child: Text(
+                      'up to date',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
+                    ),
+                  ),
+                OutlinedButton(
+                  onPressed: busy || al.dataDir.isEmpty ? null : al.check,
+                  child: const Text('Check'),
+                ),
+                if (pending) ...[
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: busy ? null : _updateAtariLegend,
+                    child: Text(al.local == null ? 'Install' : 'Update'),
+                  ),
+                ],
+              ],
+            ),
+          if (al.error != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              al.error!,
+              style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

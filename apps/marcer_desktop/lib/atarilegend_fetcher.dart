@@ -52,6 +52,10 @@ abstract class AtariLegendFetcher {
     AtariLegendProgress? onProgress,
     bool Function()? isCancelled,
   });
+
+  /// Resolves the newest remote dump file name (`YYYY-MM-DD.sql.gz`) without
+  /// downloading it. Used by the **manual** Catalog-data check.
+  Future<String?> latestDump();
 }
 
 /// HTTP implementation: directory listing → latest `.sql.gz` → download →
@@ -60,6 +64,18 @@ class HttpAtariLegendFetcher implements AtariLegendFetcher {
   const HttpAtariLegendFetcher({this.dumpsUrl = kAtariLegendDumpsUrl});
 
   final String dumpsUrl;
+
+  @override
+  Future<String?> latestDump() async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 20);
+    try {
+      final listing = await _getText(client, Uri.parse(dumpsUrl), noCache: true);
+      return newestDumpName(listing);
+    } finally {
+      client.close(force: true);
+    }
+  }
 
   @override
   Future<AtariLegendFetchResult> fetch({
@@ -167,9 +183,13 @@ class HttpAtariLegendFetcher implements AtariLegendFetcher {
     await tmp.rename(path);
   }
 
-  Future<String> _getText(HttpClient client, Uri url) async {
+  Future<String> _getText(HttpClient client, Uri url,
+      {bool noCache = false}) async {
     final req = await client.getUrl(url);
     req.headers.add(HttpHeaders.userAgentHeader, 'MarcerGameDVDLauncher');
+    if (noCache) {
+      req.headers.add(HttpHeaders.cacheControlHeader, 'no-cache');
+    }
     final resp = await req.close();
     if (resp.statusCode != 200) {
       throw AtariLegendFetchException('HTTP ${resp.statusCode} for $url');
