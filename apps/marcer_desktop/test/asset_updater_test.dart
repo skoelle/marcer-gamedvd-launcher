@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -203,5 +204,33 @@ void main() {
     final ok = await c.update(CatalogAsset.screenshots);
     expect(ok, isFalse);
     expect(c.error, contains('FTP not configured'));
+  });
+
+  test('manual check reports failures while the automatic check stays silent',
+      () async {
+    final c = AssetUpdateController(
+        fetcher: (_) async => throw Exception('offline'));
+    c.config = config();
+
+    await c.check(force: true);
+    expect(c.checkError, isNull);
+
+    await c.check(force: true, manual: true);
+    expect(c.checkError, contains('offline'));
+    expect(c.checking, isFalse);
+  });
+
+  test('check exposes the checking state while fetching', () async {
+    final body = Completer<String>();
+    final c = AssetUpdateController(fetcher: (_) => body.future);
+    c.config = config();
+
+    final future = c.check(force: true, manual: true);
+    expect(c.checking, isTrue);
+    body.complete('{}');
+    await future;
+
+    expect(c.checking, isFalse);
+    expect(c.checkError, isNull);
   });
 }

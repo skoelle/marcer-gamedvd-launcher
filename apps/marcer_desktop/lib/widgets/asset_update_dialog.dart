@@ -128,6 +128,37 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                     style: TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                   const SizedBox(height: 12),
+                  if (c.checking)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'checking…',
+                            style:
+                                TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (c.checkError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        c.checkError!,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                    ),
                   if (c.latest == null)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
@@ -223,6 +254,13 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                       'remote: $remoteLabel',
                       style: const TextStyle(fontSize: 11),
                     ),
+                    const Text(
+                      'manual check only — no auto-check',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF7A7A7A),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -262,6 +300,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
             )
           else if (al.checking)
             Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 const SizedBox(
                   width: 16,
@@ -276,26 +315,26 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
               ],
             )
           else
-            Row(
+            Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 if (al.remoteDumpFile != null && !pending)
-                  const Expanded(
-                    child: Text(
-                      'up to date',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
-                    ),
+                  const Text(
+                    'up to date',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
                   ),
                 OutlinedButton(
                   onPressed: busy || al.dataDir.isEmpty ? null : al.check,
                   child: const Text('Check'),
                 ),
-                if (pending) ...[
-                  const SizedBox(width: 8),
+                if (pending)
                   FilledButton(
                     onPressed: busy ? null : _updateAtariLegend,
                     child: Text(al.local == null ? 'Install' : 'Update'),
                   ),
-                ],
               ],
             ),
           if (al.error != null) ...[
@@ -400,35 +439,30 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 ),
               ],
             )
-          else if (remote == null)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+          else
+            Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
               children: [
+                if (remote != null && !pending)
+                  const Text(
+                    'up to date',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
+                  ),
                 OutlinedButton(
                   onPressed: busy || !hasDataDir
                       ? null
                       : () => pf.check(force: true),
                   child: const Text('Check'),
                 ),
+                if (pending)
+                  FilledButton(
+                    onPressed: busy || !hasDataDir ? null : _updatePirateFinder,
+                    child: Text(local == null ? 'Install' : 'Update'),
+                  ),
               ],
-            )
-          else if (pending)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                FilledButton(
-                  onPressed: busy || !hasDataDir ? null : _updatePirateFinder,
-                  child: Text(local == null ? 'Install' : 'Update'),
-                ),
-              ],
-            )
-          else
-            const Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                'up to date',
-                style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
-              ),
             ),
           if (pf.error != null && remote == null) ...[
             const SizedBox(height: 4),
@@ -451,7 +485,8 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
         (dataPresent ? 'version unknown (data present)' : 'not installed');
     final pending = c.isPending(asset);
     final updating = c.updatingAsset == asset;
-    final busy = c.busy || (widget.pirateFinder?.busy ?? false);
+    final busy =
+        c.busy || c.checking || (widget.pirateFinder?.busy ?? false);
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -519,32 +554,38 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 ),
               ],
             )
-          else if (pending)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                OutlinedButton(
-                  onPressed: busy ? null : () => c.skip(asset),
-                  child: const Text('Skip this version'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: busy ? null : () => _update(asset),
-                  child: Text(
-                    local == null
-                        ? (dataPresent ? 'Overwrite' : 'Install')
-                        : 'Update',
-                  ),
-                ),
-              ],
-            )
           else
-            const Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                'up to date',
-                style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
-              ),
+            Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                if (!pending)
+                  const Text(
+                    'up to date',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
+                  ),
+                OutlinedButton(
+                  onPressed:
+                      busy ? null : () => c.check(force: true, manual: true),
+                  child: const Text('Check'),
+                ),
+                if (pending) ...[
+                  OutlinedButton(
+                    onPressed: busy ? null : () => c.skip(asset),
+                    child: const Text('Skip this version'),
+                  ),
+                  FilledButton(
+                    onPressed: busy ? null : () => _update(asset),
+                    child: Text(
+                      local == null
+                          ? (dataPresent ? 'Overwrite' : 'Install')
+                          : 'Update',
+                    ),
+                  ),
+                ],
+              ],
             ),
         ],
       ),

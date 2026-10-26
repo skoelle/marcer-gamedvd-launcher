@@ -55,8 +55,10 @@ void main() {
     Directory('${tmp.path}/screens').createSync();
     Directory('${tmp.path}/data').createSync();
 
+    var fetches = 0;
     final controller = AssetUpdateController(
       fetcher: (_) async {
+        fetches++;
         return jsonEncode({
           'screenshots': {'archive': 'screenshots-2.zip'},
           'gameinfo': {'archive': 'gameinfo-2.zip'},
@@ -101,6 +103,13 @@ void main() {
       tester.getTopLeft(find.text('GameInfo')).dy,
       lessThan(tester.getTopLeft(find.text('Screenshots')).dy),
     );
+    // Both rows have a manual Check; the dialog auto-checked once on open.
+    expect(find.text('Check'), findsNWidgets(2));
+    expect(fetches, 2);
+    await tester.tap(find.text('Check').first);
+    await tester.pumpAndSettle();
+    expect(fetches, 3);
+
     // Both are pending (nothing applied) → Install buttons + skip + close.
     expect(find.text('Install'), findsNWidgets(2));
     expect(find.text('Skip this version'), findsNWidgets(2));
@@ -235,6 +244,7 @@ void main() {
       expect(find.text('PirateFinder-Catalog'), findsOneWidget);
       expect(find.text('local:  not installed'), findsOneWidget);
       expect(find.text('Install'), findsOneWidget);
+      expect(find.text('Check'), findsOneWidget);
       expect(find.text('PirateFinder-Catalog on GitHub'), findsOneWidget);
       expect(
         find.text(' · CC BY-NC-SA 4.0 · not part of the Marcer catalog'),
@@ -302,6 +312,7 @@ void main() {
 
     expect(find.text('AtariLegend'), findsOneWidget);
     expect(find.byType(Divider), findsOneWidget);
+    expect(find.text('manual check only — no auto-check'), findsOneWidget);
     expect(find.text('local:  dump 2026-10-18'), findsOneWidget);
     expect(find.text('remote: unknown — press Check'), findsOneWidget);
     expect(fetcher.latestCalls, 0, reason: 'no automatic check');
@@ -321,5 +332,6 @@ void main() {
     expect(fetcher.fetchCalls, 1);
     expect(applied, 1);
     expect(find.text('up to date'), findsOneWidget);
+    expect(find.text('Check'), findsOneWidget);
   });
 }

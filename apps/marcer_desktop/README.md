@@ -639,8 +639,9 @@ CC BY-NC-SA 4.0); it is fetched on demand:
 - the **Catalog data** dialog has an **AtariLegend** row with the local dump
   date and a **Check** button. The remote dump directory is contacted **only**
   when the user presses **Check** (never at startup and never when the dialog
-  opens); a newer remote dump then offers **Install**/**Update** right in the
-  dialog, with progress, **Cancel** and a catalog reload after success.
+  opens; the row says `manual check only — no auto-check`); a newer remote dump
+  then offers **Install**/**Update** right in the dialog, with progress,
+  **Cancel** and a catalog reload after success.
 - the target directory is created when missing; progress and **Cancel** show
   inline, failures as a SnackBar.
 - while the fetch runs, **Save**, **Cancel** and **Exit** are disabled (and the
@@ -741,9 +742,11 @@ the top bar (always available, right of the version badge) and shows a small
 green count badge when updates are pending.
 
 Clicking it opens the **Catalog data** dialog, listing **GameInfo first, then
-Screenshots**, the **AtariLegend** dump (local date + manual **Check**), then the
-optional **PirateFinder-Catalog** data with the local and remote catalogue
-date/asset and per asset:
+Screenshots**, the **AtariLegend** dump, then the optional
+**PirateFinder-Catalog** data with the local and remote catalogue date/asset.
+Every row has the same right-aligned action area with a **Check** button;
+AtariLegend is the only source without an automatic check and carries the
+`manual check only — no auto-check` note. Per asset:
 
 - **Update** (or **Install** when nothing is applied yet) — downloads the newest
   archive from the FTP (Marcer assets) or GitHub (PirateFinder-Catalog data) and
@@ -754,9 +757,10 @@ date/asset and per asset:
 - **Skip this version** — the remote archive is recorded in
   `<targetDir>/.marcer-assets.json` under `skipped`, so you are only notified
   again when a newer archive appears (cleared automatically once applied).
-- **Check** (AtariLegend only) — fetches just the remote dump listing and shows
-  the newest dump date. There is **no automatic AtariLegend check** and no
-  update badge for it; press Check explicitly. A newer dump offers
+- **Check** — manually refreshes the remote version of that row. GameInfo,
+  Screenshots and PirateFinder-Catalog also refresh automatically when the
+  dialog opens; AtariLegend does **not** (no automatic check, no update badge)
+  and says `manual check only — no auto-check`. A newer AtariLegend dump offers
   **Install**/**Update** in the same row.
 - **Close** at the bottom.
 

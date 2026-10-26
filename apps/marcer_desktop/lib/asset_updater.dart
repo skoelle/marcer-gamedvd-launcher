@@ -120,6 +120,12 @@ class AssetUpdateController extends ChangeNotifier {
   /// Last update error (shown in the dialog).
   String? error;
 
+  /// True while a (manual or automatic) remote check runs.
+  bool checking = false;
+
+  /// Last error of a **manual** check (`null` for the silent startup check).
+  String? checkError;
+
   /// Currently updating asset + progress (`null` when idle).
   CatalogAsset? updatingAsset;
   String updateMessage = '';
@@ -167,17 +173,28 @@ class AssetUpdateController extends ChangeNotifier {
 
   bool get hasPending => pendingAssets().isNotEmpty;
 
-  /// Silent startup check (release builds only; [force] for tests/manual).
-  Future<void> check({bool force = false}) async {
+  /// Checks the remote pointer. The automatic startup/dialog check is silent;
+  /// [manual] reports failures through [checkError].
+  Future<void> check({bool force = false, bool manual = false}) async {
     if (!enabled && !force) return;
+    if (checking) return;
+    checking = true;
+    if (manual) checkError = null;
+    notifyListeners();
     try {
       final parsed =
           parseCatalogLatest(await _fetch(Uri.parse(catalogLatestUrl())));
-      if (parsed != null) latest = parsed;
-    } catch (_) {
-      // offline / 404 / malformed — stay silent
+      if (parsed != null) {
+        latest = parsed;
+      } else if (manual) {
+        checkError = 'Could not read the catalog-data pointer.';
+      }
+    } catch (e) {
+      if (manual) checkError = 'Could not check catalog data: $e';
+    } finally {
+      checking = false;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Suppresses the current remote version for [asset] until a newer one
@@ -213,6 +230,7 @@ class AssetUpdateController extends ChangeNotifier {
     updateDone = 0;
     updateTotal = 0;
     error = null;
+    checkError = null;
     notifyListeners();
     try {
       await _downloader.download(
