@@ -109,7 +109,9 @@ class HatariCommand {
 /// Substitutes `{cfg}` / `{zip}` in [template] and splits it into arguments
 /// (double/single quotes group a token; SPEC.md §12.1, E12).
 List<String> hatariArguments(String template, String cfgPath, String zipPath) {
-  final expanded = template.replaceAll('{cfg}', cfgPath).replaceAll('{zip}', zipPath);
+  final expanded = template
+      .replaceAll('{cfg}', cfgPath)
+      .replaceAll('{zip}', zipPath);
   return splitCommandLine(expanded);
 }
 
@@ -150,7 +152,9 @@ List<String> splitCommandLine(String line) {
 /// Returns a clear error message, or null when every requirement holds.
 ///
 /// - `Hatari.Executable` must be set and exist.
-/// - `Hatari.ConfigFile`, if non-empty, must exist.
+/// - The resolved Hatari config file must exist. This also covers the implicit
+///   bundled fallback: Hatari itself aborts argument parsing (`-c` needs an
+///   existing file) with exit code 1, which is otherwise hard to diagnose.
 /// - `Hatari.ArgsTemplate` must contain `{zip}` and `{cfg}`.
 String? validateHatariConfig(DesktopConfig config) {
   final exe = config.resolveHatariExecutable();
@@ -160,10 +164,11 @@ String? validateHatariConfig(DesktopConfig config) {
   if (!File(exe).existsSync()) {
     return 'Hatari executable not found: $exe';
   }
-  if (config.hatariConfigFile.trim().isNotEmpty &&
-      !File(config.resolveHatariConfigFile()).existsSync()) {
-    return 'Hatari configuration file not found: '
-        '${config.resolveHatariConfigFile()}';
+  final cfg = config.resolveHatariConfigFile();
+  if (cfg.trim().isEmpty || !File(cfg).existsSync()) {
+    return 'Hatari configuration file not found: $cfg\n'
+        'Copy $kBundledHatariConfig next to the app or set '
+        'Hatari.ConfigFile in desktop.config.json.';
   }
   final tpl = config.hatariArgsTemplate;
   if (!tpl.contains('{zip}')) {
@@ -181,15 +186,20 @@ String? validateHatariConfig(DesktopConfig config) {
 /// [variant] appends its extra arguments and, when it requires a TOS ROM,
 /// `--tos <appDir/file>` (error when that file is missing).
 ({HatariCommand? command, String? error}) buildHatariCommand(
-    DesktopConfig config, String zipPath,
-    {HatariVariant? variant}) {
+  DesktopConfig config,
+  String zipPath, {
+  HatariVariant? variant,
+}) {
   final validation = validateHatariConfig(config);
   if (validation != null) return (command: null, error: validation);
   if (zipPath.trim().isEmpty || !File(zipPath).existsSync()) {
     return (command: null, error: 'ZIP file not found: $zipPath');
   }
   final args = hatariArguments(
-      config.hatariArgsTemplate, config.resolveHatariConfigFile(), zipPath);
+    config.hatariArgsTemplate,
+    config.resolveHatariConfigFile(),
+    zipPath,
+  );
   if (variant != null) {
     args.addAll(variant.extraArgs);
     final tosFile = variant.tosFileName;
@@ -201,8 +211,9 @@ String? validateHatariConfig(DesktopConfig config) {
       if (!File(tosPath).existsSync()) {
         return (
           command: null,
-          error: '${variant.name} needs the TOS ROM $tosFile '
-              '(not found next to the app).'
+          error:
+              '${variant.name} needs the TOS ROM $tosFile '
+              '(not found next to the app).',
         );
       }
       args
@@ -215,7 +226,10 @@ String? validateHatariConfig(DesktopConfig config) {
       : (config.appDir.isEmpty ? Directory.current.path : config.appDir);
   return (
     command: HatariCommand(
-        config.resolveHatariExecutable(), args, workingDirectory),
+      config.resolveHatariExecutable(),
+      args,
+      workingDirectory,
+    ),
     error: null,
   );
 }

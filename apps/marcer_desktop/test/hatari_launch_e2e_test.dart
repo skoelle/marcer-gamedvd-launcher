@@ -10,7 +10,8 @@ void main() {
     addTearDown(() => tmp.deleteSync(recursive: true));
     final fake = File('${tmp.path}/hatari')
       ..writeAsStringSync(
-          '#!/bin/sh\nprintf "%s\\n" "\$@" > "${tmp.path}/args.txt"\n');
+        '#!/bin/sh\nprintf "%s\\n" "\$@" > "${tmp.path}/args.txt"\n',
+      );
     Process.runSync('chmod', ['+x', fake.path]);
     final zip = File('${tmp.path}/Game.zip')..writeAsStringSync('z');
     File('${tmp.path}/MarcerGameDvd-Hatari.cfg').writeAsStringSync('cfg');
@@ -29,5 +30,32 @@ void main() {
     expect(args, contains('${tmp.path}/MarcerGameDvd-Hatari.cfg'));
     expect(args, contains('--disk-a'));
     expect(args, contains(zip.path));
+  });
+
+  test('captures the stderr/stdout tail of a failing executable', () async {
+    final tmp = Directory.systemTemp.createTempSync('launch_e2e_fail');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final fake = File('${tmp.path}/hatari')
+      ..writeAsStringSync(
+        '#!/bin/sh\n'
+        'echo "ERROR: cannot load config" >&2\n'
+        'echo "stdout line"\n'
+        'exit 1\n',
+      );
+    Process.runSync('chmod', ['+x', fake.path]);
+    final zip = File('${tmp.path}/Game.zip')..writeAsStringSync('z');
+    File('${tmp.path}/MarcerGameDvd-Hatari.cfg').writeAsStringSync('cfg');
+
+    final cfg = DesktopConfig(
+      rootDirectory: tmp.path,
+      appDir: tmp.path,
+      hatariExecutable: 'hatari',
+    );
+    final res = await launchHatari(cfg, zip.path);
+    expect(res.error, isNull, reason: res.error);
+    final code = await res.process!.exitCode;
+    expect(code, 1);
+    expect(res.process!.output, contains('ERROR: cannot load config'));
+    expect(res.process!.output, contains('stdout line'));
   });
 }

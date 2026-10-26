@@ -1583,9 +1583,15 @@ class CatalogController extends ChangeNotifier {
     launchError = null;
     launching = true;
     notifyListeners();
-    final code = await result.process!.exitCode;
+    final process = result.process!;
+    final code = await process.exitCode;
     launching = false;
-    if (code != 0) launchError = 'Hatari exited with code $code.';
+    if (code != 0) {
+      final detail = process.output;
+      launchError = detail.isEmpty
+          ? 'Hatari exited with code $code.'
+          : 'Hatari exited with code $code.\n\n$detail';
+    }
     notifyListeners();
   }
 

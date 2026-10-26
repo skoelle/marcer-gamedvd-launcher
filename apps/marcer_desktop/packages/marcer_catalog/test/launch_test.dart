@@ -17,6 +17,7 @@ void main() {
     zipPath = '${tmp.path}/Game.zip';
     File(zipPath).writeAsStringSync('zip');
     File('${tmp.path}/hatari').writeAsStringSync('bin');
+    File('${tmp.path}/$kBundledHatariConfig').writeAsStringSync('cfg');
   });
 
   tearDown(() {
@@ -25,8 +26,12 @@ void main() {
 
   group('splitCommandLine', () {
     test('splits on whitespace and honours double quotes', () {
-      expect(splitCommandLine('-c "{cfg}" --disk-a "{zip}"'),
-          ['-c', '{cfg}', '--disk-a', '{zip}']);
+      expect(splitCommandLine('-c "{cfg}" --disk-a "{zip}"'), [
+        '-c',
+        '{cfg}',
+        '--disk-a',
+        '{zip}',
+      ]);
     });
 
     test('handles single quotes and unquoted tokens', () {
@@ -40,8 +45,11 @@ void main() {
 
   group('hatariArguments', () {
     test('substitutes {cfg} and {zip}', () {
-      final args = hatariArguments('-c "{cfg}" --disk-a "{zip}"',
-          '/cfg/hatari.cfg', '/games/Game.zip');
+      final args = hatariArguments(
+        '-c "{cfg}" --disk-a "{zip}"',
+        '/cfg/hatari.cfg',
+        '/games/Game.zip',
+      );
       expect(args, ['-c', '/cfg/hatari.cfg', '--disk-a', '/games/Game.zip']);
     });
   });
@@ -49,30 +57,35 @@ void main() {
   group('DesktopConfig Hatari resolution', () {
     test('bundled config fallback next to the executable', () {
       final c = DesktopConfig(rootDirectory: '/r', appDir: appDir);
-      expect(c.resolveHatariConfigFile(),
-          '$appDir/$kBundledHatariConfig');
+      expect(c.resolveHatariConfigFile(), '$appDir/$kBundledHatariConfig');
     });
 
     test('bundled config found in the first search dir that contains it', () {
       final other = Directory('${tmp.path}/other')..createSync();
       final c = DesktopConfig(
-          rootDirectory: '/r', appDir: appDir, searchDirs: [
-        other.path,
-        appDir,
-      ]);
+        rootDirectory: '/r',
+        appDir: appDir,
+        searchDirs: [other.path, appDir],
+      );
       File('$appDir/$kBundledHatariConfig').writeAsStringSync('cfg');
       expect(c.resolveHatariConfigFile(), '$appDir/$kBundledHatariConfig');
     });
 
     test('explicit ConfigFile wins; relative resolves against appDir', () {
       final c = DesktopConfig(
-          rootDirectory: '/r', appDir: appDir, hatariConfigFile: 'my.cfg');
+        rootDirectory: '/r',
+        appDir: appDir,
+        hatariConfigFile: 'my.cfg',
+      );
       expect(c.resolveHatariConfigFile(), '$appDir/my.cfg');
     });
 
     test('relative executable resolves against appDir', () {
-      final c =
-          DesktopConfig(rootDirectory: '/r', appDir: appDir, hatariExecutable: 'hatari');
+      final c = DesktopConfig(
+        rootDirectory: '/r',
+        appDir: appDir,
+        hatariExecutable: 'hatari',
+      );
       expect(c.resolveHatariExecutable(), '$appDir/hatari');
     });
   });
@@ -94,24 +107,55 @@ void main() {
 
     test('non-existent executable', () {
       final c = DesktopConfig(
-          rootDirectory: '/r', appDir: appDir, hatariExecutable: 'nope');
+        rootDirectory: '/r',
+        appDir: appDir,
+        hatariExecutable: 'nope',
+      );
       expect(validateHatariConfig(c), contains('not found'));
     });
 
     test('template must contain {zip} and {cfg}', () {
       final c = DesktopConfig(
-          rootDirectory: '/r',
-          appDir: appDir,
-          hatariExecutable: 'hatari',
-          hatariArgsTemplate: '--disk-a "{zip}"');
+        rootDirectory: '/r',
+        appDir: appDir,
+        hatariExecutable: 'hatari',
+        hatariArgsTemplate: '--disk-a "{zip}"',
+      );
       expect(validateHatariConfig(c), contains('{cfg}'));
+    });
+
+    test('missing implicit bundled config is reported clearly', () {
+      File('$appDir/$kBundledHatariConfig').deleteSync();
+      final c = DesktopConfig(
+        rootDirectory: '/r',
+        appDir: appDir,
+        hatariExecutable: 'hatari',
+      );
+      final error = validateHatariConfig(c);
+      expect(error, contains('configuration file not found'));
+      // Hatari aborts argument parsing (exit code 1) on a missing `-c` file,
+      // so the error must point at the fix instead of the bare exit code.
+      expect(error, contains(kBundledHatariConfig));
+    });
+
+    test('missing explicit config is reported clearly', () {
+      final c = DesktopConfig(
+        rootDirectory: '/r',
+        appDir: appDir,
+        hatariExecutable: 'hatari',
+        hatariConfigFile: 'gone.cfg',
+      );
+      expect(validateHatariConfig(c), contains('configuration file not found'));
     });
   });
 
   group('buildHatariCommand', () {
     test('builds command with substituted args and appDir working dir', () {
       final c = DesktopConfig(
-          rootDirectory: '/r', appDir: appDir, hatariExecutable: 'hatari');
+        rootDirectory: '/r',
+        appDir: appDir,
+        hatariExecutable: 'hatari',
+      );
       final result = buildHatariCommand(c, zipPath);
       expect(result.error, isNull);
       expect(result.command!.executable, '$appDir/hatari');
@@ -126,7 +170,10 @@ void main() {
 
     test('vanished ZIP yields an error (SPEC E7)', () {
       final c = DesktopConfig(
-          rootDirectory: '/r', appDir: appDir, hatariExecutable: 'hatari');
+        rootDirectory: '/r',
+        appDir: appDir,
+        hatariExecutable: 'hatari',
+      );
       final result = buildHatariCommand(c, '${tmp.path}/gone.zip');
       expect(result.command, isNull);
       expect(result.error, contains('ZIP file not found'));

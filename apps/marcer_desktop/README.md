@@ -208,10 +208,15 @@ Press `P` (list/grid), `Space`/`P` (lightbox) or the **(P)lay** button in the
 detail sidebar to start the selected ZIP in Hatari. Arguments are built from
 `Hatari.ArgsTemplate` with literal `{cfg}`/`{zip}` substitution (no shell);
 `{cfg}` falls back to the bundled `MarcerGameDvd-Hatari.cfg` (searched in the
-same locations as the config) when `Hatari.ConfigFile` is empty. Launching is
-**non-blocking** — the status bar shows a "Hatari is running…" indicator and
-errors appear as a modal (missing executable, vanished ZIP, …). The bundled
-config expects a TOS ROM (`TOS.IMG`) next to the app (in the executable
+same locations as the config) when `Hatari.ConfigFile` is empty. The resolved
+config file must exist before a launch: Hatari would otherwise abort argument
+parsing with exit code 1, so the app reports "Hatari configuration file not
+found" up front (on macOS keep the cfg next to the `.app`; moving only the
+`.app` leaves it behind). Launch errors include Hatari's own stderr/stdout
+tail, so a non-zero exit shows the actual message instead of just the code.
+Launching is **non-blocking** — the status bar shows a "Hatari is running…"
+indicator and errors appear as a modal (missing executable, vanished ZIP, …).
+The bundled config expects a TOS ROM (`TOS.IMG`) next to the app (in the executable
 directory, which is Hatari's working directory), matching the console launcher.
 Hatari always starts **windowed** (`bFullScreen = FALSE`); `F11` switches to a
 centered, aspect-preserved fullscreen mode. The bundled config enables the SDL

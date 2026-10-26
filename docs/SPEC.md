@@ -237,7 +237,7 @@ must not start with an invalid configuration.
 1. Configuration file exists and parses; not empty/malformed.
 2. `RootDirectory` set **and** the directory exists.
 3. `Hatari` section present; `Executable` set and the file exists.
-4. `Hatari.ConfigFile`, if non-empty, exists.
+4. The resolved `Hatari.ConfigFile` (explicit, or the bundled fallback) exists.
 5. `Hatari.ArgsTemplate` contains `{cfg}` **and** `{zip}`.
 
 ---
@@ -532,6 +532,10 @@ start process: executable = Hatari.Executable, arguments = args,
   is the fallback whenever `Hatari.ConfigFile` is empty; it is resolved relative to
   the launcher's current working directory. The bundled file expects the TOS ROM
   (`TOS.IMG`) to be present in that directory (see README).
+- The resolved config file (explicit or bundled fallback) must exist **before** the
+  emulator is started: Hatari aborts argument parsing (`-c` requires an existing
+  file) with exit code 1, so a missing config is reported as a configuration error
+  naming the file and the fix instead of surfacing a bare emulator exit code (E15).
 - **Desktop extension (optional):** a desktop implementation may offer additional
   launch *variants* that append extra emulator arguments after the template (e.g.
   `--monitor mono`, `--machine ste`) and select a different TOS image
@@ -572,6 +576,7 @@ start process: executable = Hatari.Executable, arguments = args,
 | E12 | Paths with spaces / special chars | Must work (paths are passed as data, not shell-interpreted). |
 | E13 | Very deep / large trees | Navigation stays correct and responsive; no per-tick file system access. |
 | E14 | Relative path input containing `..` or absolute | Sanitized to root (7.1, R16). |
+| E15 | Emulator config file missing at launch (explicit or bundled fallback) | Message naming the file + fix hint; the emulator is not started. |
 
 ---
 
