@@ -740,8 +740,8 @@ contacted only when you actually update). A gray **dataset** icon button sits in
 the top bar (always available, right of the version badge) and shows a small
 green count badge when updates are pending.
 
-Clicking it opens the **Catalog data** dialog, listing **game info first, then
-screenshots**, the **AtariLegend** dump (local date + manual **Check**), then the
+Clicking it opens the **Catalog data** dialog, listing **GameInfo first, then
+Screenshots**, the **AtariLegend** dump (local date + manual **Check**), then the
 optional **PirateFinder-Catalog** data with the local and remote catalogue
 date/asset and per asset:
 

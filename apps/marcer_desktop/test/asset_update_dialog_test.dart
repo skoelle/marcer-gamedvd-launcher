@@ -40,7 +40,7 @@ class _FakeAtariLegendFetcher implements AtariLegendFetcher {
 }
 
 void main() {
-  testWidgets('shows gameinfo before screenshots with update/skip/close', (
+  testWidgets('shows GameInfo before Screenshots with update/skip/close', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 1000);
@@ -92,12 +92,14 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('game info'), findsOneWidget);
-    expect(find.text('screenshots'), findsOneWidget);
-    // gameinfo row is rendered above the screenshots row.
+    expect(find.text('GameInfo'), findsOneWidget);
+    expect(find.text('Screenshots'), findsOneWidget);
+    expect(find.textContaining('Newer catalog data'), findsNothing);
+    expect(find.textContaining('AtariLegend is external data'), findsOneWidget);
+    // GameInfo row is rendered above the Screenshots row.
     expect(
-      tester.getTopLeft(find.text('game info')).dy,
-      lessThan(tester.getTopLeft(find.text('screenshots')).dy),
+      tester.getTopLeft(find.text('GameInfo')).dy,
+      lessThan(tester.getTopLeft(find.text('Screenshots')).dy),
     );
     // Both are pending (nothing applied) → Install buttons + skip + close.
     expect(find.text('Install'), findsNWidgets(2));
@@ -299,6 +301,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('AtariLegend'), findsOneWidget);
+    expect(find.byType(Divider), findsOneWidget);
     expect(find.text('local:  dump 2026-10-18'), findsOneWidget);
     expect(find.text('remote: unknown — press Check'), findsOneWidget);
     expect(fetcher.latestCalls, 0, reason: 'no automatic check');

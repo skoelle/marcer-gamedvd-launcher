@@ -10,7 +10,7 @@ import '../piratefinder_data.dart';
 import '../piratefinder_names.dart';
 import 'piratefinder_link.dart';
 
-/// Shows the catalog-data update dialog (gameinfo first, then screenshots).
+/// Shows the catalog-data update dialog (GameInfo first, then Screenshots).
 /// [onApplied] is called after a successful update so the caller can reload the
 /// catalog.
 Future<void> showAssetUpdateDialog(
@@ -120,10 +120,11 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Newer catalog data is available. Marcer screenshots/game '
-                    'info come from the FTP; the $kPirateFinderCatalogName '
-                    'comes from GitHub (CC BY-NC-SA 4.0, not part of the '
-                    'Marcer catalog).',
+                    'Catalog data sources: GameInfo and Screenshots come from '
+                    'the Marcer FTP; AtariLegend is external data '
+                    '(CC BY-NC-SA 4.0) and is only checked manually; the '
+                    '$kPirateFinderCatalogName comes from GitHub '
+                    '(CC BY-NC-SA 4.0, not part of the Marcer catalog).',
                     style: TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                   const SizedBox(height: 12),
@@ -140,6 +141,8 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                     const SizedBox(height: 8),
                   ],
                   if (widget.atariLegend != null) ...[
+                    const Divider(),
+                    const SizedBox(height: 4),
                     _atariLegendRow(widget.atariLegend!),
                     const SizedBox(height: 8),
                   ],
@@ -465,7 +468,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
               SizedBox(
                 width: 90,
                 child: Text(
-                  asset == CatalogAsset.gameinfo ? 'game info' : 'screenshots',
+                  asset == CatalogAsset.gameinfo ? 'GameInfo' : 'Screenshots',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
