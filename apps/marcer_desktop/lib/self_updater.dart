@@ -10,6 +10,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import 'app_paths.dart';
 import 'index_editor.dart';
 
 /// GitHub repo hosting both apps; desktop releases use the `desktop-v*`
@@ -195,9 +196,18 @@ class UpdateLog {
 
   final String path;
   final List<String> _writeErrors = [];
+  String? _effectivePath;
 
-  /// Paths the log could not be written to (surfaced in the error dialog).
+  /// Paths the log could not be written to (surfaced in the error dialog when
+  /// no candidate worked).
   List<String> get writeErrors => List.unmodifiable(_writeErrors);
+
+  /// Path that actually received the log lines (the temp fallback when the
+  /// preferred path is not writable); [path] when nothing was written yet.
+  String get effectivePath => _effectivePath ?? path;
+
+  /// True when at least one line was written successfully.
+  bool get wroteAny => _effectivePath != null;
 
   void line(String message) {
     final stamp = DateTime.now().toIso8601String();
@@ -205,6 +215,7 @@ class UpdateLog {
     for (final candidate in _candidates()) {
       try {
         File(candidate).writeAsStringSync(entry, mode: FileMode.append);
+        _effectivePath = candidate;
         return;
       } catch (e) {
         final note = '$candidate: $e';
@@ -666,9 +677,13 @@ enum UpdatePhase { none, checking, downloading, installing, restarting, failed }
 /// Only active in release builds (workflow passes `--dart-define=
 /// RELEASE_BUILD=true`); dev runs via `run.sh` never check.
 class SelfUpdateController extends ChangeNotifier {
-  SelfUpdateController({ReleaseListFetcher? fetcher, bool? enabled})
-      : _fetch = fetcher ?? httpReleaseListFetcher,
-        isEnabled = enabled ?? SelfUpdateController.enabled;
+  SelfUpdateController({
+    ReleaseListFetcher? fetcher,
+    bool? enabled,
+    bool? translocated,
+  })  : _fetch = fetcher ?? httpReleaseListFetcher,
+        isEnabled = enabled ?? SelfUpdateController.enabled,
+        isTranslocated = translocated ?? isAppTranslocated();
 
   static const bool enabled = bool.fromEnvironment('RELEASE_BUILD');
 
@@ -677,6 +692,11 @@ class SelfUpdateController extends ChangeNotifier {
   /// Whether this controller may check for updates (release builds; tests can
   /// override it through the constructor).
   final bool isEnabled;
+
+  /// macOS runs the app from a read-only App-Translocation copy: updating is
+  /// impossible, so check/install abort with actionable guidance. Tests can
+  /// override it through the constructor.
+  final bool isTranslocated;
 
   String currentVersion = '0.0.0';
   UpdateInfo? available;
@@ -694,8 +714,9 @@ class SelfUpdateController extends ChangeNotifier {
           isMacOS: Platform.isMacOS),
       kUpdateLogName));
 
-  /// Where the update log lives (shown in the error dialog).
-  String get logPath => _log.path;
+  /// Where the update log lives (shown in the error dialog): the fallback
+  /// path when the preferred one next to the app was not writable.
+  String get logPath => _log.effectivePath;
 
   /// Checks the GitHub releases. The automatic startup check stays silent;
   /// [manual] reports failures through [checkError].
@@ -705,6 +726,15 @@ class SelfUpdateController extends ChangeNotifier {
         checkError = 'Update checks are only available in release builds.';
         notifyListeners();
       }
+      return;
+    }
+    if (isTranslocated) {
+      // The translocated bundle is read-only; do not offer a badge that can
+      // never be installed.
+      available = null;
+      if (manual) checkError = kAppTranslocatedUpdateError;
+      _log.line('check skipped: app runs from App Translocation (read-only)');
+      notifyListeners();
       return;
     }
     if (phase == UpdatePhase.downloading ||
@@ -739,7 +769,16 @@ class SelfUpdateController extends ChangeNotifier {
   /// and relaunches; errors surface via [error] and phase [failed].
   Future<void> install() async {
     final info = available;
-    if (!enabled || info == null) return;
+    if (!isEnabled || info == null) return;
+    if (isTranslocated) {
+      // Defense in depth (e.g. a badge found before the guard was added):
+      // never download or copy into the read-only translocation directory.
+      _log.line('install aborted: app runs from App Translocation (read-only)');
+      phase = UpdatePhase.failed;
+      error = kAppTranslocatedUpdateError;
+      notifyListeners();
+      return;
+    }
     final installDir = installTargetDir(
         resolvedExecutable: Platform.resolvedExecutable,
         isMacOS: Platform.isMacOS);
@@ -814,11 +853,14 @@ class SelfUpdateController extends ChangeNotifier {
     } catch (e) {
       log.line('ERROR: $e');
       phase = UpdatePhase.failed;
-      final writeNote = log.writeErrors.isEmpty
+      // The dialog shows the effective log path. Only complain when no
+      // candidate could be written at all (e.g. the read-only translocated
+      // bundle plus an unwritable temp dir).
+      final writeNote = log.wroteAny
           ? ''
           : '\n\n(Update log could not be written: '
               '${log.writeErrors.join('; ')})';
-      error = '$e\n\nUpdate log: ${log.path}$writeNote';
+      error = '$e$writeNote';
       notifyListeners();
       if (tmp != null) {
         try {

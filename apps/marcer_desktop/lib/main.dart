@@ -504,13 +504,7 @@ class _HomePageState extends State<HomePage> {
     if (!mounted || !isAppTranslocated()) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text(
-          'macOS runs this app from a temporary read-only copy. Quit it, then '
-          'drag the .app individually in Finder out of the unzipped folder into '
-          'a normal folder (e.g. ~/Applications) and reopen it — not '
-          'Downloads/Documents. Otherwise updates and favorites cannot be '
-          'saved.',
-        ),
+        content: Text(kAppTranslocatedHint),
         duration: Duration(seconds: 20),
       ),
     );

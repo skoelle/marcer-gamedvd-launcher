@@ -499,6 +499,8 @@ void main() {
       expect(body, contains('[app] second'));
       expect(log.writeErrors, isEmpty);
       expect(log.path, target);
+      expect(log.effectivePath, target);
+      expect(log.wroteAny, isTrue);
     });
 
     test('falls back to the temp dir when the preferred path is not writable',
@@ -514,6 +516,8 @@ void main() {
       final fallback = p.join(Directory.systemTemp.path, 'MarcerUpdater.log');
       expect(File(fallback).existsSync(), isTrue);
       expect(File(fallback).readAsStringSync(), contains('[app] goes to fallback'));
+      expect(log.effectivePath, fallback);
+      expect(log.wroteAny, isTrue);
       try {
         File(fallback).deleteSync();
       } catch (_) {}
@@ -522,6 +526,8 @@ void main() {
     test('null preferred path logs straight to the temp dir', () {
       final log = UpdateLog(null);
       expect(log.path, p.join(Directory.systemTemp.path, 'MarcerUpdater.log'));
+      expect(log.effectivePath, log.path);
+      expect(log.wroteAny, isFalse);
     });
   });
 
@@ -612,6 +618,46 @@ void main() {
 
       expect(calls, 0);
       expect(c.checkError, contains('release builds'));
+    });
+
+    test('translocated controller skips checks and explains the fix', () async {
+      var calls = 0;
+      final c = SelfUpdateController(
+        enabled: true,
+        translocated: true,
+        fetcher: () async {
+          calls++;
+          return [];
+        },
+      )..currentVersion = '0.1.0';
+
+      // Automatic startup check stays silent and does not hit the network.
+      await c.check();
+      expect(calls, 0);
+      expect(c.checkError, isNull);
+      expect(c.available, isNull);
+
+      await c.check(manual: true);
+      expect(calls, 0);
+      expect(c.checkError, contains('App Translocation'));
+      expect(c.checkError, contains('INDIVIDUALLY'));
+      expect(c.available, isNull);
+      expect(c.phase, UpdatePhase.none);
+    });
+
+    test('translocated install is refused without downloading', () async {
+      final c = SelfUpdateController(enabled: true, translocated: true)
+        ..available = const UpdateInfo(
+          version: '0.2.0',
+          assetName: 'MarcerDesktop-v0.2.0-osx-arm64.zip',
+          assetUrl: 'https://example.invalid/update.zip',
+        );
+
+      await c.install();
+
+      expect(c.phase, UpdatePhase.failed);
+      expect(c.error, contains('Self-update is not possible'));
+      expect(c.error, contains('App Translocation'));
     });
   });
 }

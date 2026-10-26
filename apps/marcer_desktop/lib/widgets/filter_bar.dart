@@ -562,7 +562,8 @@ class _FilterBarState extends State<FilterBar> {
                       '(v${u.currentVersion}).'
                   : 'Update v${info.version} available.'),
         ),
-        duration: const Duration(seconds: 4),
+        // The App-Translocation guidance is several lines long.
+        duration: Duration(seconds: error == null ? 4 : 10),
       ),
     );
   }

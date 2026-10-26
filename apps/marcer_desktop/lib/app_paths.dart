@@ -45,3 +45,23 @@ String downloadedDataDir(DesktopConfig config) {
 bool isAppTranslocated() =>
     Platform.isMacOS &&
     Platform.resolvedExecutable.contains('/AppTranslocation/');
+
+/// User-facing recovery steps for App Translocation (used by the startup hint
+/// and the blocked self-update).
+///
+/// The decisive part is the **individual Finder move of the `.app`**: moving
+/// the enclosing folder or `mv` in Terminal does not end translocation.
+const String kAppTranslocatedHint =
+    'macOS runs this app from a temporary read-only copy (App Translocation). '
+    'Quit it, create ~/MarcerGameDVDLauncher, move MarcerGameDVDLauncher.app '
+    'into it INDIVIDUALLY in Finder (not the whole folder, not `mv` in '
+    'Terminal), then move MarcerGameDvd-Hatari.cfg and '
+    'desktop.config.example.json next to it, and reopen the app from there. '
+    'If the app is already in that folder, move it individually out (e.g. to '
+    'Downloads) and individually back. Alternatively remove the quarantine: '
+    'xattr -dr com.apple.quarantine <path to .app>.';
+
+/// Self-update error shown while the app runs translocated (read-only).
+const String kAppTranslocatedUpdateError =
+    'Self-update is not possible while macOS runs the app from a temporary '
+    'read-only copy (App Translocation).\n\n$kAppTranslocatedHint';

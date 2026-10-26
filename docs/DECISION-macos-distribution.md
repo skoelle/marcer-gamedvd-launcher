@@ -87,31 +87,44 @@ Both work: the native picker returns a path, and a hand-typed path in the config
 is reachable as long as TCC allows the location.
 
 ### 3.3 App Translocation
-**Recommended portable layout:** extract the whole release ZIP into a normal
-folder under the user's home directory (e.g. `~/MarcerGameDVDLauncher/`) and
-keep the `.app`, `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg`
-together. This is the tested distribution layout: the config/cfg stay next to
-the app and self-update can replace the bundle in the writable folder.
+**Recommended portable layout:**
 
-A quarantined, not-notarized app launched straight from its unzipped/download
-location is run by macOS from a randomized, read-only **App Translocation** path
+1. Extract the release ZIP anywhere (e.g. Downloads).
+2. Create the target folder `~/MarcerGameDVDLauncher`.
+3. **Move `MarcerGameDVDLauncher.app` individually in Finder into that folder —
+   not the whole extracted folder, not `mv` in Terminal. Only the individual
+   Finder move of the `.app` ends App Translocation; this step is essential.**
+4. Move `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` (and a
+   portable `desktop.config.json`, if present) next to the app.
+5. Start the app from there.
+
+This is the tested distribution layout: the config/cfg stay next to the app and
+self-update can replace the bundle in the writable folder.
+
+A quarantined, not-notarized app that was not individually moved in Finder is
+run by macOS from a randomized, read-only **App Translocation** path
 (`/private/var/folders/…/AppTranslocation/…`). Writing inside the `.app` bundle
 there is blocked or lands in a location that disappears, and the bundle path
 changes on every launch. Because of that the app keeps downloaded artifacts **and
 a fallback config** outside the bundle (§2) — so browsing, launching and
 downloads work even while translocated. Two things still need a real move:
 
-- **Self-update** cannot replace a read-only translocated bundle.
+- **Self-update** cannot replace a read-only translocated bundle. The controller
+  detects translocation (`isAppTranslocated`) and refuses both the check and the
+  install with actionable guidance instead of attempting a copy into the
+  read-only path. The update log falls back to the system temp dir and the
+  dialog shows the path that actually received the log.
 - **Favorites without a `PatchDirectory`** are written next to the executable
   (`favorites-<section>.txt`) and fail silently there.
 
 Ending translocation requires moving the `.app` **individually in Finder** to a
-different folder (`mv` in Terminal or moving the whole folder does **not**
-count), re-extracting the whole ZIP into a different normal folder, or removing
-`com.apple.quarantine`. When moving only the `.app`, copy
-`desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` next to it to keep
-the portable layout. The app shows a non-blocking hint when it detects
-translocation.
+different folder (`mv` in Terminal or moving the enclosing folder does **not**
+count), or removing the quarantine. If the app already sits in the target folder
+and is still translocated, move it individually out (e.g. to Downloads) and
+individually back, or run
+`xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app`. The app
+shows a non-blocking snackbar hint on startup and uses the same instructions for
+the refused self-update.
 
 ### 3.4 Gatekeeper / notarization (open)
 The release build is **ad-hoc signed and not notarized** (`CODE_SIGN_IDENTITY =

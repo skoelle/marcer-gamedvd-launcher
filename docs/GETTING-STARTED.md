@@ -10,12 +10,13 @@ source.
 
 1. Download the release ZIP for your platform, extract it and start the app
    ([Download and start](#1-download-and-start)).
-2. **macOS only:** extract the **whole ZIP** into a normal folder under your
-   home directory, e.g. `~/MarcerGameDVDLauncher/`, so the `.app`,
-   `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` stay together.
-   Right-click the app → **Open** (or run
-   `xattr -dr com.apple.quarantine …`) and start it from that folder. Do not
-   run it from Downloads/Documents/Desktop or directly from the ZIP
+2. **macOS only:** extract the ZIP anywhere (e.g. Downloads), create
+   `~/MarcerGameDVDLauncher`, then **move `MarcerGameDVDLauncher.app` individually
+   in Finder into it — not the whole extracted folder, not `mv` in Terminal. This
+   is essential: only the individual Finder move of the `.app` ends App
+   Translocation.** Then move `desktop.config.example.json` and
+   `MarcerGameDvd-Hatari.cfg` next to it, right-click the app → **Open** (or run
+   `xattr -dr com.apple.quarantine …`) and start it from that folder
    ([macOS](#7-macos)).
 3. In the setup page, set **RootDirectory** to your local game archive. If you
    use `ftp-sync`, also set **PatchDirectory** to its `patchDir`; otherwise
@@ -83,9 +84,11 @@ chmod +x MarcerGameDVDLauncher
 ./MarcerGameDVDLauncher
 ```
 
-On macOS extract the **whole ZIP** into a normal folder under your home
-directory (e.g. `~/MarcerGameDVDLauncher/`) and start the `.app` there; do not
-run it from Downloads/Documents/Desktop or directly from the ZIP. Read
+On macOS extract the ZIP anywhere (e.g. Downloads), create
+`~/MarcerGameDVDLauncher` and **move the `.app` individually in Finder into it**
+(not the whole extracted folder, not `mv` in Terminal); then move
+`desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` next to it and start
+the app there. This individual move is required to end App Translocation. Read
 [macOS](#7-macos) first.
 
 ---
@@ -332,23 +335,30 @@ xattr -dr com.apple.quarantine /path/to/MarcerGameDVDLauncher.app
 
 ### 7.2 App Translocation
 
-**Recommended:** extract the **whole ZIP** into a normal folder under your home
-directory, e.g. `~/MarcerGameDVDLauncher/`, and start the `.app` from there.
-Keep the `.app`, `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg`
-together — this is the portable layout, so the config/cfg are next to the app
-and self-update can replace the bundle in the writable folder.
+A quarantined app launched from the folder it was extracted into runs from a
+randomized, read-only copy (**App Translocation**): self-update, favorites and
+relative paths fail there. Install it like this:
 
-Do not run the app from Downloads/Documents/Desktop or directly from the ZIP or
-a mounted archive. If macOS still runs it from a randomized, read-only copy
-(**App Translocation**, the app shows a hint), quit it and:
+1. Extract the ZIP anywhere (e.g. Downloads).
+2. Create the target folder `~/MarcerGameDVDLauncher`.
+3. **Move `MarcerGameDVDLauncher.app` individually in Finder into that folder —
+   not the whole extracted folder, not `mv` in Terminal. This step is essential:
+   only the individual Finder move of the `.app` ends App Translocation.**
+4. Move `desktop.config.example.json` and `MarcerGameDvd-Hatari.cfg` (and a
+   portable `desktop.config.json`, if present) next to the app.
+5. Start the app from there.
 
-- clear the quarantine (`xattr -dr com.apple.quarantine /path/to/…app`), or
-- re-extract the whole ZIP into a **different** normal folder, or
-- move the `.app` individually in Finder to a normal folder and copy
-  `desktop.config.example.json` + `MarcerGameDvd-Hatari.cfg` next to it.
+This is the portable layout: the config/cfg are next to the app and self-update
+can replace the bundle in the writable folder.
 
-A Finder move to a different folder (or removing the quarantine) ends
-translocation; `mv` in Terminal does not. The per-user data directory
+If the app already sits in the target folder and is still translocated (it was
+launched in place before), quit it and either move the `.app` individually out
+(e.g. to Downloads) and individually back, or clear the quarantine
+(`xattr -dr com.apple.quarantine /path/to/…app`). Do not run the app from
+Downloads/Documents/Desktop or directly from the ZIP or a mounted archive.
+Moving the enclosing folder or `mv` in Terminal does **not** end translocation.
+While translocated the app shows a startup hint and refuses self-updates with
+the same instructions. The per-user data directory
 (`~/Library/Application Support/…`) remains the fallback for the config and
 downloaded Hatari/TOS files.
 
@@ -371,8 +381,8 @@ to:
 The config is searched in the current working directory, next to the
 executable/`.app`, and finally in the per-user directory (section 2). This keeps
 browsing, launching and downloads working even when the `.app` is read-only.
-Self-update and favorites without a patch directory still need the app to live
-in a writable folder.
+Self-update is refused with an actionable hint while translocated; favorites
+without a patch directory still need the app to live in a writable folder.
 
 ---
 
@@ -381,7 +391,7 @@ in a writable folder.
 | Problem | What to do |
 |---|---|
 | macOS: “app is damaged” / “unidentified developer” | Right-click → Open, or run `xattr -dr com.apple.quarantine …` (section 7.1). |
-| macOS: settings/favorites/self-update do not stick | Quit, clear the quarantine and/or re-extract the whole ZIP into a different normal folder (section 7.2). |
+| macOS: settings/favorites/self-update do not stick | Quit, move the `.app` individually in Finder into `~/MarcerGameDVDLauncher` (or clear the quarantine); self-update is refused with that hint while translocated (section 7.2). |
 | `Operation not permitted` on a configured path | Grant the macOS permission prompt, or use a folder outside Downloads/Documents/Desktop (section 7.3). |
 | Catalog is empty | Set `ScreenshotDirectory`/`GameinfoDirectory` and use **Download from FTP**; then select status **any**. |
 | Crews tab is empty | The gameinfo archive contains no `crews.json`; use a newer `gameinfo-*.zip` or generate it with `tools/crew-analysis/run.sh` (after `tools/gameinfo-gen/run.sh extract`). |
