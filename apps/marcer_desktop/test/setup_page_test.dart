@@ -14,8 +14,9 @@ FilledButton _saveButton(WidgetTester tester) =>
     tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'));
 
 void main() {
-  testWidgets('first-run setup writes the config and reports the path',
-      (tester) async {
+  testWidgets('first-run setup writes the config and reports the path', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -29,15 +30,17 @@ void main() {
 
     DesktopConfig? configured;
     String? configuredPath;
-    await tester.pumpWidget(MaterialApp(
-      home: SetupPage(
-        saveDirs: [saveDir.path],
-        onConfigured: (config, path) {
-          configured = config;
-          configuredPath = path;
-        },
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SetupPage(
+          saveDirs: [saveDir.path],
+          onConfigured: (config, path) {
+            configured = config;
+            configuredPath = path;
+          },
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     // No config yet: Save blocked until the mandatory root is valid.
@@ -47,6 +50,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(_saveButton(tester).onPressed, isNotNull);
 
+    await tester.ensureVisible(find.text('Save'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -56,8 +61,9 @@ void main() {
     expect(DesktopConfig.load(configuredPath!).rootDirectory, root.path);
   });
 
-  testWidgets('setup overwrites a known config path (error recovery)',
-      (tester) async {
+  testWidgets('setup overwrites a known config path (error recovery)', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -71,16 +77,20 @@ void main() {
     File(target).writeAsStringSync('{ not json');
 
     String? configuredPath;
-    await tester.pumpWidget(MaterialApp(
-      home: SetupPage(
-        saveDirs: [tmp.path],
-        configPath: target,
-        onConfigured: (config, path) => configuredPath = path,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SetupPage(
+          saveDirs: [tmp.path],
+          configPath: target,
+          onConfigured: (config, path) => configuredPath = path,
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, root.path);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Save'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
@@ -99,13 +109,15 @@ void main() {
       if (tmp.existsSync()) tmp.deleteSync(recursive: true);
     });
 
-    await tester.pumpWidget(MaterialApp(
-      home: SetupPage(
-        saveDirs: [tmp.path],
-        searchDirs: ['/search/one', '/search/two'],
-        onConfigured: (_, _) {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SetupPage(
+          saveDirs: [tmp.path],
+          searchDirs: ['/search/one', '/search/two'],
+          onConfigured: (_, _) {},
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('/search/one'), findsOneWidget);

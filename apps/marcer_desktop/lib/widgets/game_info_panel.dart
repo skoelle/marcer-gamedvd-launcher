@@ -6,6 +6,9 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../theme.dart';
 
+/// Extra action in the split Play button's dropdown.
+enum _PlayMenuAction { sendToCosmosEx }
+
 /// One ZIP as shown in the gallery-style info panel ("This ZIP" table).
 class ZipVariantView {
   const ZipVariantView({
@@ -51,6 +54,7 @@ class GameInfoPanel extends StatelessWidget {
     this.filter,
     this.onPlay,
     this.onPlayVariant,
+    this.onSendToCosmosEx,
     this.variants = const [],
     this.onSelectGroup,
     this.atariLegend,
@@ -77,6 +81,10 @@ class GameInfoPanel extends StatelessWidget {
   /// Launches the shown ZIP with a specific [HatariVariant] (the split
   /// button's dropdown).
   final void Function(HatariVariant variant)? onPlayVariant;
+
+  /// Sends the shown ZIP to CosmosEx (dropdown action); hidden when null
+  /// (CosmosEx not configured).
+  final VoidCallback? onSendToCosmosEx;
 
   /// Variants offered by the Play dropdown (hidden when empty).
   final List<HatariVariant> variants;
@@ -264,7 +272,9 @@ class GameInfoPanel extends StatelessWidget {
   }
 
   Widget _playButton() {
-    final showDropdown = onPlayVariant != null && variants.isNotEmpty;
+    final showVariants = onPlayVariant != null && variants.isNotEmpty;
+    final showCosmosEx = onSendToCosmosEx != null;
+    final showDropdown = showVariants || showCosmosEx;
     return Material(
       color: Colors.transparent,
       child: Ink(
@@ -308,16 +318,37 @@ class GameInfoPanel extends StatelessWidget {
                 height: 18,
                 color: Colors.white.withValues(alpha: 0.3),
               ),
-              PopupMenuButton<HatariVariant>(
-                tooltip: 'Play as…',
-                onSelected: (v) => onPlayVariant!(v),
+              PopupMenuButton<Object>(
+                tooltip: 'Play as… / send to CosmosEx',
+                onSelected: (value) {
+                  if (value is HatariVariant) {
+                    onPlayVariant?.call(value);
+                  } else if (value == _PlayMenuAction.sendToCosmosEx) {
+                    onSendToCosmosEx?.call();
+                  }
+                },
                 itemBuilder: (context) => [
-                  for (final v in variants)
-                    PopupMenuItem<HatariVariant>(
-                      value: v,
-                      child: Tooltip(
-                        message: v.description,
-                        child: Text(v.name),
+                  if (showVariants) ...[
+                    for (final v in variants)
+                      PopupMenuItem<Object>(
+                        value: v,
+                        child: Tooltip(
+                          message: v.description,
+                          child: Text(v.name),
+                        ),
+                      ),
+                  ],
+                  if (showVariants && showCosmosEx) const PopupMenuDivider(),
+                  if (showCosmosEx)
+                    const PopupMenuItem<Object>(
+                      value: _PlayMenuAction.sendToCosmosEx,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.send, size: 16),
+                          SizedBox(width: 8),
+                          Text('Send to CosmosEx'),
+                        ],
                       ),
                     ),
                 ],

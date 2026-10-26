@@ -59,9 +59,21 @@ void main() {
     await _openDialog(tester, original, (r) => result = r);
 
     expect(find.text('Settings'), findsOneWidget);
-    // root+patch, 5 FTP fields, screenshot+gameinfo, hatari exec+cfg
-    // → 11 text fields.
-    expect(find.byType(TextField), findsNWidgets(11));
+    // Default tab Library: root+patch, 5 FTP fields, screenshot+gameinfo
+    // → 9 text fields.
+    expect(find.byType(TextField), findsNWidgets(9));
+
+    await tester.tap(find.byKey(const Key('settings-tab-hatari')));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNWidgets(2));
+
+    await tester.tap(find.byKey(const Key('settings-tab-cosmosex')));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNWidgets(4));
+
+    await tester.tap(find.byKey(const Key('settings-tab-library')));
+    await tester.pumpAndSettle();
+
     // Invalid mandatory root + optional fields empty: Save is disabled.
     expect(_saveButton(tester).onPressed, isNull);
 

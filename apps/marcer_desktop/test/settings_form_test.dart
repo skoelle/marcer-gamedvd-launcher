@@ -206,6 +206,78 @@ void main() {
     expect(latest!.ftpAssetsRemote, '/upload/assets');
   });
 
+  testWidgets('CosmosEx fields round-trip and validate the share directory', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final dir = Directory.systemTemp.createTempSync('settings_form_cosmosex');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    final share = Directory(p.join(dir.path, 'floppyImages'))..createSync();
+
+    DesktopConfig? latest;
+    bool? valid;
+    await _pumpForm(tester, DesktopConfig(rootDirectory: dir.path), (c, v) {
+      latest = c;
+      valid = v;
+    });
+
+    await tester.tap(find.byKey(const Key('settings-tab-cosmosex')));
+    await tester.pumpAndSettle();
+
+    // On the CosmosEx tab: host/password/MAC/share are fields 0..3.
+    await tester.enterText(find.byType(TextField).at(0), 'cosmosex.local');
+    await tester.enterText(find.byType(TextField).at(1), 'secret');
+    await tester.enterText(find.byType(TextField).at(2), 'AA:BB:CC:DD:EE:FF');
+    await tester.enterText(find.byType(TextField).at(3), share.path);
+    await tester.pump();
+
+    expect(valid, isTrue);
+    expect(latest!.cosmosExHost, 'cosmosex.local');
+    expect(latest!.cosmosExPassword, 'secret');
+    expect(latest!.cosmosExMac, 'AA:BB:CC:DD:EE:FF');
+    expect(latest!.cosmosExShareDirectory, share.path);
+    expect(latest!.cosmosExMode, 'auto');
+
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('legacy — ce-atari ZIP upload').last);
+    await tester.pumpAndSettle();
+    expect(latest!.cosmosExMode, 'legacy');
+
+    // A filled but missing share blocks saving (optional when empty) and
+    // marks the CosmosEx tab with a red dot.
+    await tester.enterText(find.byType(TextField).at(3), '/missing/share');
+    await tester.pump();
+    expect(valid, isFalse);
+    expect(
+      find.byKey(const Key('settings-tab-error-cosmosex')),
+      findsOneWidget,
+    );
+    await tester.enterText(find.byType(TextField).at(3), '');
+    await tester.pump();
+    expect(valid, isTrue);
+    expect(find.byKey(const Key('settings-tab-error-cosmosex')), findsNothing);
+
+    // Values survive a tab switch; Library still holds the valid root.
+    await tester.tap(find.byKey(const Key('settings-tab-library')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller?.text,
+      dir.path,
+    );
+    await tester.tap(find.byKey(const Key('settings-tab-cosmosex')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(find.byType(TextField).at(0)).controller?.text,
+      'cosmosex.local',
+    );
+  });
+
   testWidgets('reports busy while a download/extraction runs', (tester) async {
     tester.view.physicalSize = const Size(1200, 1600);
     tester.view.devicePixelRatio = 1.0;
@@ -285,6 +357,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const Key('settings-tab-hatari')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Install Hatari…'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Install Hatari'));

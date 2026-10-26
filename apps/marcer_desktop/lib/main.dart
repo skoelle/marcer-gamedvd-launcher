@@ -428,6 +428,8 @@ class _HomePageState extends State<HomePage> {
   bool _showHelp = false;
   bool _showingLaunchError = false;
   bool _showingDownloadError = false;
+  bool _showingCosmosExError = false;
+  bool _showingCosmosExNotice = false;
   bool _showingUpdateError = false;
   String? _lastPirateFinderVersion;
 
@@ -660,6 +662,44 @@ class _HomePageState extends State<HomePage> {
         );
         _controller.clearDownloadError();
         _showingDownloadError = false;
+      });
+    }
+    final cerr = _controller.cosmosExError;
+    if (cerr != null && !_showingCosmosExError) {
+      _showingCosmosExError = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Cannot send to CosmosEx'),
+            content: Text(cerr),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        _controller.clearCosmosExError();
+        _showingCosmosExError = false;
+      });
+    }
+    final notice = _controller.cosmosExNotice;
+    if (notice != null && !_showingCosmosExNotice) {
+      _showingCosmosExNotice = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(notice),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        _controller.clearCosmosExNotice();
+        _showingCosmosExNotice = false;
       });
     }
 
@@ -1093,6 +1133,19 @@ class _StatusBar extends StatelessWidget {
             Text(
               'Downloading… ${c.downloadProgress}',
               style: const TextStyle(fontSize: 11, color: Colors.orangeAccent),
+            ),
+            const SizedBox(width: 16),
+          ],
+          if (c.cosmosExSending) ...[
+            const SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(strokeWidth: 1.5),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Sending to CosmosEx… ${c.cosmosExProgress}',
+              style: const TextStyle(fontSize: 11, color: Colors.lightBlue),
             ),
             const SizedBox(width: 16),
           ],

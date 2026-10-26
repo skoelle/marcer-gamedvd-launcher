@@ -10,6 +10,7 @@ import 'package:flutter/painting.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:path/path.dart' as p;
 
+import 'cosmos_ex.dart';
 import 'falcon_launcher.dart';
 import 'favorites_paths.dart';
 import 'favorites_service.dart';
@@ -1617,38 +1618,117 @@ class CatalogController extends ChangeNotifier {
     );
   }
 
+  /// Absolute ZIP path of the current selection (catalog card or browse
+  /// entry): the single favorited variant, otherwise the primary/launch
+  /// variant; null when nothing launchable is selected.
+  String? _selectedZipPath() {
+    if (catalogMode) {
+      final card = selectedCard;
+      if (card == null) return null;
+      final favoriteKeys = favoriteKeysOfCard(card);
+      if (favoriteKeys.length == 1) return favoriteKeys.first;
+      final v = launchVariantForCard(card);
+      return v == null ? null : zipPathForVariant(v);
+    }
+    final e = selectedEntry;
+    if (e == null || e.kind != EntryKind.zip) return null;
+    return e.effectivePath;
+  }
+
   /// Launches the current selection: a ZIP in browse mode, the card's ZIP in
   /// catalog mode. A card with exactly one favorited variant launches that
   /// favorited ZIP (user decision 2026-10-15), otherwise [launchVariantForCard].
   Future<void> launchSelected({HatariVariant? variant}) async {
-    if (catalogMode) {
-      final card = selectedCard;
-      if (card == null) return;
-      final effective = variant ?? defaultVariantForCard(card);
-      final favoriteKeys = favoriteKeysOfCard(card);
-      if (favoriteKeys.length == 1) {
-        await launchZip(favoriteKeys.first, variant: effective);
-        return;
-      }
-      final v = launchVariantForCard(card);
-      if (v == null) {
+    final card = catalogMode ? selectedCard : null;
+    final effective = card == null
+        ? variant
+        : (variant ?? defaultVariantForCard(card));
+    final path = _selectedZipPath();
+    if (path == null) {
+      if (card != null) {
         launchError = 'No ZIP to launch.';
         notifyListeners();
-        return;
       }
-      await launchZip(zipPathForVariant(v), variant: effective);
       return;
     }
-    final e = selectedEntry;
-    if (e == null || e.kind != EntryKind.zip) return;
-    final path = e.effectivePath;
-    if (path == null) return;
-    await launchZip(path, variant: variant);
+    await launchZip(path, variant: effective);
   }
 
   void clearLaunchError() {
     if (launchError == null) return;
     launchError = null;
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------- CosmosEx (send)
+
+  /// Pluggable sender (HTTP in production, a fake in tests).
+  CosmosExUploader cosmosExUploader = const HttpCosmosExUploader();
+
+  /// True while a "Send to CosmosEx" run is active.
+  bool cosmosExSending = false;
+
+  /// Human-readable progress of the running send.
+  String cosmosExProgress = '';
+
+  /// Last send error, surfaced as a modal and cleared on acknowledgement.
+  String? cosmosExError;
+
+  /// Last send success message, surfaced as a snackbar and cleared after.
+  String? cosmosExNotice;
+
+  /// True when the CosmosEx host is configured (enables the Play-dropdown
+  /// action).
+  bool get cosmosExConfigured => config.cosmosExConfigured;
+
+  /// Sends the current selection (card ZIP / browse entry) to CosmosEx.
+  Future<void> sendSelectedToCosmosEx() async {
+    final path = _selectedZipPath();
+    if (path == null) {
+      cosmosExError = 'No ZIP to send to CosmosEx.';
+      notifyListeners();
+      return;
+    }
+    await sendZipToCosmosEx(path);
+  }
+
+  /// Sends [zipPath] to CosmosEx (classic upload or cosmo2ex path insert,
+  /// depending on the configured mode).
+  Future<void> sendZipToCosmosEx(String zipPath) async {
+    if (cosmosExSending) return;
+    cosmosExSending = true;
+    cosmosExProgress = 'Preparing…';
+    cosmosExError = null;
+    cosmosExNotice = null;
+    notifyListeners();
+    try {
+      final result = await cosmosExUploader.send(
+        config: config,
+        zipPath: zipPath,
+        onProgress: (message) {
+          cosmosExProgress = message;
+          if (!_disposed) notifyListeners();
+        },
+      );
+      cosmosExNotice = result.message;
+    } catch (e) {
+      cosmosExError = e is CosmosExException ? e.message : '$e';
+    } finally {
+      cosmosExSending = false;
+      cosmosExProgress = '';
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  void clearCosmosExError() {
+    if (cosmosExError == null) return;
+    cosmosExError = null;
+    notifyListeners();
+  }
+
+  void clearCosmosExNotice() {
+    if (cosmosExNotice == null) return;
+    cosmosExNotice = null;
     notifyListeners();
   }
 

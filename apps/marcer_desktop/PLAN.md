@@ -227,6 +227,19 @@ git-ignored (same policy as `launcher.config.json`).
   `configSaveDirs` (exe dir / macOS `.app` parent, then CWD) via
   `writeFirstWritable`; `_AppRoot` then swaps the setup page for the catalog
   in place.
+- **Send to CosmosEx (2026-10-26):** optional `CosmosEx` config block (mode
+  `auto`/`legacy`/`cosmo2ex`, host, password, MAC, share directory) and a
+  **Send to CosmosEx** entry in the PLAY dropdown. Legacy ce-atari receives the
+  complete ZIP on slot 0 (multipart upload + activation); cosmo2ex has no
+  upload API, so the app extracts the first `.st/.msa`, copies it into the
+  mounted `FLOPPY_IMAGES_DIR` share, logs in to the HTTPS web UI and inserts the
+  device-side path (`lib/cosmos_ex.dart`). Slot 0 is fixed; failures surface as
+  a modal, success as a snackbar.
+- **Settings tabs (2026-10-26):** the shared `SettingsForm` is tabbed
+  **Library / Hatari / CosmosEx** (CosmosEx after Hatari) in both the settings
+  dialog and the first-run setup. Only the active tab is built; values and the
+  global Save validation persist across tab switches. A red dot on a tab marks
+  an invalid field there.
 - **Window (2026-10-15):** the app starts **maximized** via `window_manager`
   (`Window.maximized`, default `true`); `false` applies `Window.width/height`
   as the startup and restore size, centered. Before that the size fields were

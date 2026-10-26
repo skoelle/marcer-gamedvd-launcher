@@ -32,6 +32,10 @@ enum FieldStatus {
 
 enum _PickerKind { directory, executable, configFile, text }
 
+/// Settings tabs (user decision 2026-10-26): CosmosEx is its own tab after
+/// Hatari, so the shared form no longer renders everything at once.
+enum _SettingsTab { library, hatari, cosmosEx }
+
 enum _Field {
   root,
   patch,
@@ -40,6 +44,10 @@ enum _Field {
   ftpPass,
   ftpBase,
   ftpAssets,
+  cosmosHost,
+  cosmosPass,
+  cosmosMac,
+  cosmosShare,
   screenshot,
   gameinfo,
   hatariExec,
@@ -146,6 +154,10 @@ class SettingsForm extends StatefulWidget {
 class _SettingsFormState extends State<SettingsForm> {
   late final List<_PathField> _fields;
 
+  _SettingsTab _tab = _SettingsTab.library;
+
+  late String _cosmosExMode;
+
   CatalogAsset? _downloading;
   String _downloadMessage = '';
   int _downloadDone = 0;
@@ -165,12 +177,14 @@ class _SettingsFormState extends State<SettingsForm> {
   void initState() {
     super.initState();
     final c = widget.initial;
+    _cosmosExMode = c.cosmosExModeNormalized;
     _fields = [
       _PathField(
         _Field.root,
         'RootDirectory',
         _PickerKind.directory,
         required: true,
+        sectionHeader: 'Paths',
       )..controller.text = c.rootDirectory,
       _PathField(
         _Field.patch,
@@ -208,6 +222,32 @@ class _SettingsFormState extends State<SettingsForm> {
         optionalHint: kDefaultFtpAssetsRemote,
       )..controller.text = c.ftpAssetsRemote,
       _PathField(
+        _Field.cosmosHost,
+        'CosmosEx host',
+        _PickerKind.text,
+        optionalHint: 'host, host:port or http(s)://host:port',
+      )..controller.text = c.cosmosExHost,
+      _PathField(
+        _Field.cosmosPass,
+        'CosmosEx web password',
+        _PickerKind.text,
+        obscure: true,
+        optionalHint: 'cosmo2ex only (legacy: empty)',
+      )..controller.text = c.cosmosExPassword,
+      _PathField(
+        _Field.cosmosMac,
+        'CosmosEx device MAC',
+        _PickerKind.text,
+        optionalHint: 'cosmo2ex only · empty → single device',
+      )..controller.text = c.cosmosExMac,
+      _PathField(
+        _Field.cosmosShare,
+        'CosmosEx share directory',
+        _PickerKind.directory,
+        optionalHint:
+            'cosmo2ex only · mounted FLOPPY_IMAGES_DIR (SMB/NFS/local)',
+      )..controller.text = c.cosmosExShareDirectory,
+      _PathField(
         _Field.screenshot,
         'ScreenshotDirectory',
         _PickerKind.directory,
@@ -222,12 +262,8 @@ class _SettingsFormState extends State<SettingsForm> {
         optionalHint: 'gameinfo/, atarilegend/, piratefinder/',
         download: CatalogAsset.gameinfo,
       )..controller.text = c.gameinfoDirectory,
-      _PathField(
-        _Field.hatariExec,
-        'Hatari executable',
-        _PickerKind.executable,
-        sectionHeader: 'Hatari',
-      )..controller.text = c.hatariExecutable,
+      _PathField(_Field.hatariExec, 'Hatari executable', _PickerKind.executable)
+        ..controller.text = c.hatariExecutable,
       _PathField(
         _Field.hatariCfg,
         'Hatari config file',
@@ -290,6 +326,11 @@ class _SettingsFormState extends State<SettingsForm> {
     ftpPassword: _textOf(_Field.ftpPass),
     ftpRemoteBase: _textOf(_Field.ftpBase),
     ftpAssetsRemote: _textOf(_Field.ftpAssets),
+    cosmosExMode: _cosmosExMode,
+    cosmosExHost: _textOf(_Field.cosmosHost),
+    cosmosExPassword: _textOf(_Field.cosmosPass),
+    cosmosExMac: _textOf(_Field.cosmosMac),
+    cosmosExShareDirectory: _textOf(_Field.cosmosShare),
   );
 
   /// True when no field is invalid (required filled + valid, optional either
@@ -527,21 +568,181 @@ class _SettingsFormState extends State<SettingsForm> {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final field in _fields) ...[
-          if (field.sectionHeader != null) _sectionHeader(field.sectionHeader!),
-          _fieldRow(field),
-          if (field.field == _Field.gameinfo) ...[
-            _atariLegendRow(),
-            if (widget.pirateFinderData != null) _pirateFinderRow(),
-          ],
-          const SizedBox(height: 8),
-        ],
-        _hatariRow(),
-        _tosRow(),
-      ],
+      children: [_tabBar(), const SizedBox(height: 14), ..._tabContent()],
     );
   }
+
+  List<Widget> _tabContent() {
+    switch (_tab) {
+      case _SettingsTab.library:
+        return [
+          for (final field in _fields)
+            if (_tabOf(field.field) == _SettingsTab.library) ...[
+              if (field.sectionHeader != null)
+                _sectionHeader(field.sectionHeader!),
+              _fieldRow(field),
+              if (field.field == _Field.gameinfo) ...[
+                _atariLegendRow(),
+                if (widget.pirateFinderData != null) _pirateFinderRow(),
+              ],
+              const SizedBox(height: 8),
+            ],
+        ];
+      case _SettingsTab.hatari:
+        return [
+          for (final field in _fields)
+            if (_tabOf(field.field) == _SettingsTab.hatari) ...[
+              _fieldRow(field),
+              const SizedBox(height: 8),
+            ],
+          _hatariRow(),
+          _tosRow(),
+        ];
+      case _SettingsTab.cosmosEx:
+        return [
+          _tabIntro(
+            'Send the shown ZIP to a real Atari: legacy ce-atari uploads the '
+            'whole ZIP; cosmo2ex copies the first .st/.msa into the mounted '
+            'FLOPPY_IMAGES_DIR share and inserts that path.',
+          ),
+          const SizedBox(height: 10),
+          _cosmosExModeRow(),
+          const SizedBox(height: 8),
+          for (final field in _fields)
+            if (_tabOf(field.field) == _SettingsTab.cosmosEx) ...[
+              _fieldRow(field),
+              const SizedBox(height: 8),
+            ],
+        ];
+    }
+  }
+
+  _SettingsTab _tabOf(_Field field) {
+    switch (field) {
+      case _Field.hatariExec:
+      case _Field.hatariCfg:
+        return _SettingsTab.hatari;
+      case _Field.cosmosHost:
+      case _Field.cosmosPass:
+      case _Field.cosmosMac:
+      case _Field.cosmosShare:
+        return _SettingsTab.cosmosEx;
+      default:
+        return _SettingsTab.library;
+    }
+  }
+
+  Widget _tabBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFF2A2A2A))),
+      ),
+      child: Row(
+        children: [for (final tab in _SettingsTab.values) _tabButton(tab)],
+      ),
+    );
+  }
+
+  Widget _tabButton(_SettingsTab tab) {
+    final selected = _tab == tab;
+    final invalid = _tabInvalid(tab);
+    return Expanded(
+      child: InkWell(
+        key: Key('settings-tab-${_tabKey(tab)}'),
+        onTap: () => setState(() => _tab = tab),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _tabIcon(tab),
+                size: 16,
+                color: selected ? Colors.white : Colors.grey,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _tabLabel(tab),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                  color: selected ? Colors.white : Colors.grey,
+                ),
+              ),
+              if (invalid) ...[
+                const SizedBox(width: 6),
+                Tooltip(
+                  message: 'Contains invalid fields',
+                  child: Container(
+                    key: Key('settings-tab-error-${_tabKey(tab)}'),
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _tabInvalid(_SettingsTab tab) => _fields.any(
+    (field) =>
+        _tabOf(field.field) == tab && _statusOf(field) == FieldStatus.invalid,
+  );
+
+  String _tabKey(_SettingsTab tab) {
+    switch (tab) {
+      case _SettingsTab.library:
+        return 'library';
+      case _SettingsTab.hatari:
+        return 'hatari';
+      case _SettingsTab.cosmosEx:
+        return 'cosmosex';
+    }
+  }
+
+  String _tabLabel(_SettingsTab tab) {
+    switch (tab) {
+      case _SettingsTab.library:
+        return 'Library';
+      case _SettingsTab.hatari:
+        return 'Hatari';
+      case _SettingsTab.cosmosEx:
+        return 'CosmosEx';
+    }
+  }
+
+  IconData _tabIcon(_SettingsTab tab) {
+    switch (tab) {
+      case _SettingsTab.library:
+        return Icons.folder_open;
+      case _SettingsTab.hatari:
+        return Icons.videogame_asset;
+      case _SettingsTab.cosmosEx:
+        return Icons.send;
+    }
+  }
+
+  Widget _tabIntro(String text) => Text(
+    text,
+    style: const TextStyle(fontSize: 11, color: Colors.grey, height: 1.35),
+  );
 
   /// AtariLegend cache row (no path field; target is `<DataDir>/atarilegend`).
   Widget _atariLegendRow() {
@@ -789,6 +990,76 @@ class _SettingsFormState extends State<SettingsForm> {
 
   /// Width of the left label column.
   static const double _labelWidth = 260;
+
+  /// CosmosEx protocol selector (`auto` / `legacy` / `cosmo2ex`).
+  Widget _cosmosExModeRow() => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(
+        width: _labelWidth,
+        child: const Padding(
+          padding: EdgeInsets.only(top: 11, right: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'CosmosEx mode',
+                style: TextStyle(color: Colors.white, fontSize: 12),
+              ),
+              Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Text(
+                  'auto → legacy first, then cosmo2ex',
+                  style: TextStyle(color: Colors.grey, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: InputDecorator(
+          decoration: InputDecoration(
+            isDense: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 2,
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _cosmosExMode,
+              isExpanded: true,
+              isDense: true,
+              dropdownColor: const Color(0xFF1B1B1B),
+              style: const TextStyle(fontSize: 12, color: Colors.white),
+              items: const [
+                DropdownMenuItem(
+                  value: 'auto',
+                  child: Text('auto — detect the firmware'),
+                ),
+                DropdownMenuItem(
+                  value: 'legacy',
+                  child: Text('legacy — ce-atari ZIP upload'),
+                ),
+                DropdownMenuItem(
+                  value: 'cosmo2ex',
+                  child: Text('cosmo2ex — copy to share + insert path'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _cosmosExMode = value);
+                _emit();
+              },
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
 
   Widget _fieldRow(_PathField field) {
     final isText = field.kind == _PickerKind.text;

@@ -240,6 +240,9 @@ class DetailPanel extends StatelessWidget {
             ),
             onPlay: () => c.launchSelected(),
             onPlayVariant: (variant) => c.launchSelected(variant: variant),
+            onSendToCosmosEx: c.cosmosExConfigured
+                ? () => c.sendSelectedToCosmosEx()
+                : null,
             // Group click: open the lightbox on that crew's/cracker's ZIP;
             // no matching ZIP ("not found") opens variant 0, which shows the
             // "… ZIP not found —" prefix in the lightbox header.

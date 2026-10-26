@@ -51,6 +51,73 @@ void main() {
     await tester.pumpAndSettle();
     expect(selected?.name, 'Mono');
   });
+  testWidgets('play dropdown offers Send to CosmosEx', (tester) async {
+    tester.view.physicalSize = const Size(800, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    var sent = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            child: GameInfoPanel(
+              info: null,
+              variant: const ZipVariantView(
+                name: 'a.zip',
+                status: 'done',
+                layer: 'ROOT',
+                rel: 'x/a.zip',
+              ),
+              variants: kHatariVariants,
+              onPlay: () {},
+              onPlayVariant: (_) {},
+              onSendToCosmosEx: () => sent++,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.arrow_drop_down));
+    await tester.pumpAndSettle();
+    expect(find.text('Send to CosmosEx'), findsOneWidget);
+    await tester.tap(find.text('Send to CosmosEx'));
+    await tester.pumpAndSettle();
+    expect(sent, 1);
+  });
+
+  testWidgets('no CosmosEx action without a configured host', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            child: GameInfoPanel(
+              info: null,
+              variant: const ZipVariantView(
+                name: 'a.zip',
+                status: 'done',
+                layer: 'ROOT',
+                rel: 'x/a.zip',
+              ),
+              variants: kHatariVariants,
+              onPlay: () {},
+              onPlayVariant: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.arrow_drop_down));
+    await tester.pumpAndSettle();
+    expect(find.text('Send to CosmosEx'), findsNothing);
+  });
+
   testWidgets('shows This ZIP before Release variants', (tester) async {
     final info = InfoSummary.fromGame(
       GameInfo(

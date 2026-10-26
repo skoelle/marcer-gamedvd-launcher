@@ -24,6 +24,13 @@
     "RemoteBase": "/GameDVD/",
     "AssetsRemote": "/Uploads/MarcerGameDVDLauncher-assets/"
   },
+  "CosmosEx": {
+    "Mode": "auto",
+    "Host": "",
+    "Password": "",
+    "Mac": "",
+    "ShareDirectory": ""
+  },
   "ShowCandidates": true,
   "DefaultStatus": "with_screenshot",
   "Window": {

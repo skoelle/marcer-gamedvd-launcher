@@ -690,6 +690,11 @@ class _CrewLightboxState extends State<CrewLightbox> {
         hit.index,
         variant: variant,
       ),
+      onSendToCosmosEx: widget.controller.cosmosExConfigured
+          ? () => widget.controller.sendZipToCosmosEx(
+              widget.controller.zipPathForRel(release.rel),
+            )
+          : null,
       onSelectGroup: (value, kind) => _selectGroup(value, kind, card),
     );
   }

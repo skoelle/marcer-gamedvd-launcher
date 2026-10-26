@@ -177,11 +177,12 @@ class _GameLightboxState extends State<GameLightbox> {
       // subfolders; within the same depth ones with a screenshot sort first.
       // `origIndex` keeps the sort stable (and maps back to the card order).
       list.sort((a, b) {
-        final byDepth =
-            variantRelDepth(a.rel).compareTo(variantRelDepth(b.rel));
+        final byDepth = variantRelDepth(a.rel)
+            .compareTo(variantRelDepth(b.rel));
         if (byDepth != 0) return byDepth;
-        final byPreview =
-            (a.preview == null ? 1 : 0).compareTo(b.preview == null ? 1 : 0);
+        final byPreview = (a.preview == null ? 1 : 0).compareTo(
+          b.preview == null ? 1 : 0,
+        );
         if (byPreview != 0) return byPreview;
         return a.origIndex.compareTo(b.origIndex);
       });
@@ -1032,6 +1033,9 @@ class _GameLightboxState extends State<GameLightbox> {
           onPlayVariant: v == null
               ? null
               : (variant) => _launchCurrent(variant: variant),
+          onSendToCosmosEx: v == null || !widget.controller.cosmosExConfigured
+              ? null
+              : _sendCurrentToCosmosEx,
           // Group click: switch to that crew's/cracker's variant; no matching
           // ZIP ("not found") jumps to variant 0 (the header shows the
           // "… ZIP not found —" prefix when a focus filter missed).
@@ -1060,6 +1064,21 @@ class _GameLightboxState extends State<GameLightbox> {
     } else if (item is Entry) {
       final path = item.effectivePath;
       if (path != null) widget.controller.launchZip(path, variant: variant);
+    }
+  }
+
+  /// Sends the currently shown ZIP (selected card variant or browse entry)
+  /// to CosmosEx.
+  void _sendCurrentToCosmosEx() {
+    final item = _item;
+    if (item is GameCard) {
+      final vs = _variants;
+      final orig = _variantIdx < vs.length ? vs[_variantIdx].origIndex : 0;
+      final path = widget.controller.zipPathForCardVariant(item, orig);
+      if (path != null) widget.controller.sendZipToCosmosEx(path);
+    } else if (item is Entry) {
+      final path = item.effectivePath;
+      if (path != null) widget.controller.sendZipToCosmosEx(path);
     }
   }
 }

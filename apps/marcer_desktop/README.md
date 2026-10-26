@@ -161,15 +161,21 @@ The release ZIPs ship `desktop.config.example.json` — copy it next to the
 executable (or the `.app`), rename it to `desktop.config.json`, and set your
 absolute paths. Without a config the app opens the first-run setup page.
 
-The setup/settings form lays the fields out as: **RootDirectory**,
-**PatchDirectory**, the **FTP** server (used both for game-folder downloads
-and for the catalog-data downloads), then **ScreenshotDirectory** and
-**GameinfoDirectory** — the data directory, with **Download from FTP** next to
-*Browse…* — then the **AtariLegend data** row (**Download AtariLegend data**)
-and the **PirateFinder-Catalog** row (**PirateFinder-Catalog**, no path
-field), and finally the Hatari settings plus the **Hatari installation** and
-**TOS ROM** rows
-(download/install on demand, see below).
+The setup/settings form is **tabbed**:
+
+- **Library** — **RootDirectory**, **PatchDirectory**, the **FTP** server
+  (used both for game-folder downloads and for the catalog-data downloads),
+  **ScreenshotDirectory** and **GameinfoDirectory** — the data directory, with
+  **Download from FTP** next to *Browse…* — plus the **AtariLegend data** row
+  (**Download AtariLegend data**) and the **PirateFinder-Catalog** row
+  (**PirateFinder-Catalog**, no path field).
+- **Hatari** — the Hatari settings plus the **Hatari installation** and
+  **TOS ROM** rows (download/install on demand, see below).
+- **CosmosEx** — its own tab after Hatari: mode dropdown, host, password, MAC
+  and share directory (see *Send to CosmosEx* below).
+
+A red dot on a tab marks an invalid field in that tab (the active tab can look
+fine while another one still blocks **Save**).
 
 | Field | Required | Notes |
 |---|---|---|
@@ -186,6 +192,11 @@ field), and finally the Hatari settings plus the **Hatari installation** and
 | `Ftp.User` / `Ftp.Password` | no | FTP credentials (empty user ⇒ `anonymous`; password stored in plaintext) |
 | `Ftp.RemoteBase` | no | remote prefix of the game folders (default `/GameDVD/`; empty ⇒ FTP login root) |
 | `Ftp.AssetsRemote` | no | remote dir of the catalog asset archives, `screenshots-*.zip` / `gameinfo-*.zip` (default `/Uploads/MarcerGameDVDLauncher-assets/`) |
+| `CosmosEx.Mode` | no | `auto` (default; legacy first, then cosmo2ex), `legacy` (ce-atari ZIP upload) or `cosmo2ex` (path insert) |
+| `CosmosEx.Host` | for send | `host`, `host:port` or full `http(s)://…` URL; empty ⇒ the Play-dropdown action is hidden |
+| `CosmosEx.Password` | for cosmo2ex | cosmo2ex web-interface password (plaintext; legacy ignores it) |
+| `CosmosEx.Mac` | no | cosmo2ex device MAC (`aa:bb:…` or 12 hex chars); empty selects the only device |
+| `CosmosEx.ShareDirectory` | for cosmo2ex | local/mounted view of the device's `FLOPPY_IMAGES_DIR` (SMB/NFS/local); images are copied there before the path insert |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset for **all** sections (default `with_screenshot`) |
 | `Window.width/height` | no | initial/restore window size (default 1280×800) |
@@ -222,6 +233,36 @@ variant, the arrow opens a menu of variants (detail sidebar and lightbox; `P` /
 
 The extra args are appended after `Hatari.ArgsTemplate` (Hatari CLI overrides
 the config file). Variants with a TOS file download it on demand (see below).
+
+### Send to CosmosEx
+
+When `CosmosEx.Host` is set (Settings → **CosmosEx** tab), the PLAY dropdown
+gains **Send to CosmosEx** (the main PLAY button still starts Hatari). The action sends the ZIP currently shown
+in the detail sidebar / lightbox (a card's selected variant, the single
+favorited variant, or the browse-mode entry) to a real Atari behind a
+CosmosEx. `CosmosEx.Mode` selects the protocol:
+
+- **legacy** (classic `ce-atari` web UI): the complete ZIP is uploaded as
+  multipart field `file` to `POST /api/v1/floppy/0`, then slot 0 is activated
+  with `PUT /api/v1/floppy/0`. The device extracts the first `.st/.msa`
+  itself. No extra share is needed; `CosmosEx.Mac`/`Password` are ignored.
+- **cosmo2ex** (the newer HTTPS web UI): it has **no upload endpoint** and only
+  inserts a path. The app therefore extracts the first `.st/.msa` from the ZIP,
+  copies it into `CosmosEx.ShareDirectory` — a local or mounted (SMB/NFS) view
+  of the device's `FLOPPY_IMAGES_DIR` — logs in with `CosmosEx.Password`
+  (`POST /auth/login`), resolves the device MAC (`CosmosEx.Mac`; empty picks
+  the only device reported by `/devices`), reads the device-side directory from
+  `GET /fdd/{mac}/image` (`defaultDir`) and calls `PUT /fdd/{mac}/image` with
+  `{"image": "<defaultDir>/<file>"}`. The self-signed HTTPS certificate is
+  accepted for the configured host only. `FLOPPY_IMAGES_DIR` must be set on the
+  device; the web-UI password must already have been set there.
+- **auto** (default): probes the legacy API first (`GET /api/v1/floppy`), then
+  cosmo2ex (`GET /ping`).
+
+Sent cosmo2ex images are kept in the share under
+`marcer-<zip-name>-<content-hash>.<st|msa>` so repeated sends do not overwrite
+unrelated files. Progress appears in the status bar, success as a snackbar and
+failures as a "Cannot send to CosmosEx" modal.
 
 A card whose index variant carries a non-default `tos` (e.g. `1.02`, written by
 the screenshot generator's TOS retry for old titles that hang on TOS 1.04)

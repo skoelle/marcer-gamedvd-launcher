@@ -36,6 +36,11 @@ class DesktopConfig {
     this.ftpPassword = '',
     this.ftpRemoteBase = '/GameDVD/',
     this.ftpAssetsRemote = kDefaultFtpAssetsRemote,
+    this.cosmosExMode = 'auto',
+    this.cosmosExHost = '',
+    this.cosmosExPassword = '',
+    this.cosmosExMac = '',
+    this.cosmosExShareDirectory = '',
     this.showCandidates = true,
     this.defaultStatus = 'with_screenshot',
     this.appDir = '',
@@ -96,6 +101,26 @@ class DesktopConfig {
   /// [gameinfoDirectory].
   final String ftpAssetsRemote;
 
+  /// "Send to CosmosEx" target (the `CosmosEx` config block). The classic
+  /// ce-atari firmware accepts a real ZIP upload on slot 0; cosmo2ex only
+  /// inserts a path that already exists on the device, so [cosmosExShareDirectory]
+  /// must be a local/mounted view of the device's `FLOPPY_IMAGES_DIR`.
+  /// [cosmosExMode] is `auto`, `legacy` or `cosmo2ex` (see
+  /// [cosmosExModeNormalized]); an empty [cosmosExHost] disables the feature.
+  final String cosmosExMode;
+  final String cosmosExHost;
+
+  /// Web-UI password for cosmo2ex (plaintext, like the FTP password).
+  final String cosmosExPassword;
+
+  /// Optional cosmo2ex device MAC (`aa:bb:...` or 12 hex chars); empty
+  /// selects the only device reported by the web UI.
+  final String cosmosExMac;
+
+  /// Local or mounted directory that maps to the cosmo2ex
+  /// `FLOPPY_IMAGES_DIR` (required for cosmo2ex, unused by legacy).
+  final String cosmosExShareDirectory;
+
   /// Application directory (the executable's directory): base for resolving
   /// relative Hatari paths and the bundled config (SPEC.md R10).
   final String appDir;
@@ -135,14 +160,18 @@ class DesktopConfig {
   ///
   /// Throws [FormatException] / [FileSystemException] on unreadable or invalid
   /// files; callers decide how to surface the error (PLAN.md: clear message).
-  static DesktopConfig load(String configPath,
-      {String appDir = '', List<String> searchDirs = const []}) {
+  static DesktopConfig load(
+    String configPath, {
+    String appDir = '',
+    List<String> searchDirs = const [],
+  }) {
     final raw = File(configPath).readAsStringSync();
     final map = jsonDecode(raw) as Map<String, dynamic>;
     final hatari = (map['Hatari'] as Map<String, dynamic>?) ?? const {};
     final falcon = (map['Falcon'] as Map<String, dynamic>?) ?? const {};
     final window = (map['Window'] as Map<String, dynamic>?) ?? const {};
     final ftp = (map['Ftp'] as Map<String, dynamic>?) ?? const {};
+    final cosmosEx = (map['CosmosEx'] as Map<String, dynamic>?) ?? const {};
     final resolvedAppDir = appDir.isNotEmpty
         ? appDir
         : File(configPath).parent.path;
@@ -169,6 +198,11 @@ class DesktopConfig {
       ftpRemoteBase: (ftp['RemoteBase'] ?? '/GameDVD/') as String,
       ftpAssetsRemote:
           (ftp['AssetsRemote'] ?? kDefaultFtpAssetsRemote) as String,
+      cosmosExMode: (cosmosEx['Mode'] ?? 'auto') as String,
+      cosmosExHost: (cosmosEx['Host'] ?? '') as String,
+      cosmosExPassword: (cosmosEx['Password'] ?? '') as String,
+      cosmosExMac: (cosmosEx['Mac'] ?? '') as String,
+      cosmosExShareDirectory: (cosmosEx['ShareDirectory'] ?? '') as String,
       showCandidates: (map['ShowCandidates'] ?? true) as bool,
       defaultStatus: (map['DefaultStatus'] ?? 'with_screenshot') as String,
       appDir: resolvedAppDir,
@@ -203,6 +237,11 @@ class DesktopConfig {
     String? ftpPassword,
     String? ftpRemoteBase,
     String? ftpAssetsRemote,
+    String? cosmosExMode,
+    String? cosmosExHost,
+    String? cosmosExPassword,
+    String? cosmosExMac,
+    String? cosmosExShareDirectory,
     bool? showCandidates,
     String? defaultStatus,
     String? appDir,
@@ -217,8 +256,7 @@ class DesktopConfig {
       patchDirectory: patchDirectory ?? this.patchDirectory,
       screenshotDirectory: screenshotDirectory ?? this.screenshotDirectory,
       gameinfoDirectory: gameinfoDirectory ?? this.gameinfoDirectory,
-      atariLegendDirectory:
-          atariLegendDirectory ?? this.atariLegendDirectory,
+      atariLegendDirectory: atariLegendDirectory ?? this.atariLegendDirectory,
       hatariExecutable: hatariExecutable ?? this.hatariExecutable,
       hatariConfigFile: hatariConfigFile ?? this.hatariConfigFile,
       hatariArgsTemplate: hatariArgsTemplate ?? this.hatariArgsTemplate,
@@ -234,6 +272,12 @@ class DesktopConfig {
       ftpPassword: ftpPassword ?? this.ftpPassword,
       ftpRemoteBase: ftpRemoteBase ?? this.ftpRemoteBase,
       ftpAssetsRemote: ftpAssetsRemote ?? this.ftpAssetsRemote,
+      cosmosExMode: cosmosExMode ?? this.cosmosExMode,
+      cosmosExHost: cosmosExHost ?? this.cosmosExHost,
+      cosmosExPassword: cosmosExPassword ?? this.cosmosExPassword,
+      cosmosExMac: cosmosExMac ?? this.cosmosExMac,
+      cosmosExShareDirectory:
+          cosmosExShareDirectory ?? this.cosmosExShareDirectory,
       showCandidates: showCandidates ?? this.showCandidates,
       defaultStatus: defaultStatus ?? this.defaultStatus,
       appDir: appDir ?? this.appDir,
@@ -249,40 +293,47 @@ class DesktopConfig {
   /// Serializes the persisted schema of `desktop.config.json` (PLAN.md §3).
   /// Runtime-only fields ([appDir], [searchDirs]) are not written.
   Map<String, dynamic> toJson() => {
-        'RootDirectory': rootDirectory,
-        'PatchDirectory': patchDirectory,
-        'ScreenshotDirectory': screenshotDirectory,
-        'GameinfoDirectory': gameinfoDirectory,
-        'AtariLegendDirectory': atariLegendDirectory,
-        'Hatari': {
-          'Executable': hatariExecutable,
-          'ConfigFile': hatariConfigFile,
-          'ArgsTemplate': hatariArgsTemplate,
-        },
-        'Falcon': {
-          'TosFile': falconTosFile,
-          'Memsize': falconMemsize,
-          'Monitor': falconMonitor,
-          'Dsp': falconDsp,
-          'CpuClock': falconCpuClock,
-          'Fpu': falconFpu,
-          'ExtraArgs': falconExtraArgs,
-        },
-        'Ftp': {
-          'Host': ftpHost,
-          'User': ftpUser,
-          'Password': ftpPassword,
-          'RemoteBase': ftpRemoteBase,
-          'AssetsRemote': ftpAssetsRemote,
-        },
-        'ShowCandidates': showCandidates,
-        'DefaultStatus': defaultStatus,
-        'Window': {
-          'width': windowWidth,
-          'height': windowHeight,
-          'maximized': windowMaximized,
-        },
-      };
+    'RootDirectory': rootDirectory,
+    'PatchDirectory': patchDirectory,
+    'ScreenshotDirectory': screenshotDirectory,
+    'GameinfoDirectory': gameinfoDirectory,
+    'AtariLegendDirectory': atariLegendDirectory,
+    'Hatari': {
+      'Executable': hatariExecutable,
+      'ConfigFile': hatariConfigFile,
+      'ArgsTemplate': hatariArgsTemplate,
+    },
+    'Falcon': {
+      'TosFile': falconTosFile,
+      'Memsize': falconMemsize,
+      'Monitor': falconMonitor,
+      'Dsp': falconDsp,
+      'CpuClock': falconCpuClock,
+      'Fpu': falconFpu,
+      'ExtraArgs': falconExtraArgs,
+    },
+    'Ftp': {
+      'Host': ftpHost,
+      'User': ftpUser,
+      'Password': ftpPassword,
+      'RemoteBase': ftpRemoteBase,
+      'AssetsRemote': ftpAssetsRemote,
+    },
+    'CosmosEx': {
+      'Mode': cosmosExMode,
+      'Host': cosmosExHost,
+      'Password': cosmosExPassword,
+      'Mac': cosmosExMac,
+      'ShareDirectory': cosmosExShareDirectory,
+    },
+    'ShowCandidates': showCandidates,
+    'DefaultStatus': defaultStatus,
+    'Window': {
+      'width': windowWidth,
+      'height': windowHeight,
+      'maximized': windowMaximized,
+    },
+  };
 
   /// Writes this config as pretty-printed JSON (with a trailing newline) to
   /// [path]. Used by the in-app settings editor (see `settings_dialog.dart`).
@@ -295,6 +346,22 @@ class DesktopConfig {
   /// the host is required; user/password may be empty for anonymous-ish
   /// setups).
   bool get ftpConfigured => ftpHostName.isNotEmpty;
+
+  /// True when a CosmosEx host is configured (enables the Play-dropdown
+  /// "Send to CosmosEx" action).
+  bool get cosmosExConfigured => cosmosExHost.trim().isNotEmpty;
+
+  /// Normalized CosmosEx protocol: `auto`, `legacy` or `cosmo2ex`; unknown
+  /// values fall back to `auto`.
+  String get cosmosExModeNormalized {
+    final mode = cosmosExMode.trim().toLowerCase();
+    return mode == 'legacy' || mode == 'cosmo2ex' ? mode : 'auto';
+  }
+
+  /// Device MAC without separators, lower-case (`aabbccddeeff`); empty when
+  /// not configured.
+  String get cosmosExMacNormalized =>
+      cosmosExMac.replaceAll(RegExp(r'[^0-9a-fA-F]'), '').toLowerCase();
 
   /// FTP host without the optional `:port` suffix. Supports a bracketed IPv6
   /// literal (`[::1]` / `[::1]:2121`, brackets stripped for the socket) and a
@@ -384,8 +451,7 @@ class DesktopConfig {
 
   /// Absolute Hatari executable (`Hatari.Executable`), resolved against
   /// [appDir] when relative (SPEC.md R10); empty when not configured.
-  String resolveHatariExecutable() =>
-      _resolveAgainstAppDir(hatariExecutable);
+  String resolveHatariExecutable() => _resolveAgainstAppDir(hatariExecutable);
 
   /// Absolute Hatari config file: `Hatari.ConfigFile` when set, otherwise the
   /// bundled [kBundledHatariConfig] found in [searchDirs] (falling back to
@@ -405,8 +471,9 @@ class DesktopConfig {
   /// Absolute path of the Falcon TOS image (`Falcon.TosFile`, default
   /// `TOS404.IMG`) in the Hatari working directory (or [appDir]).
   String resolveFalconTosPath() {
-    final base =
-        hatariWorkingDirectory.isNotEmpty ? hatariWorkingDirectory : appDir;
+    final base = hatariWorkingDirectory.isNotEmpty
+        ? hatariWorkingDirectory
+        : appDir;
     return base.isEmpty ? falconTosFile : '$base/$falconTosFile';
   }
 

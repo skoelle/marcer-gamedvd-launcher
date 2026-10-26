@@ -37,6 +37,13 @@ if [ -f "$REPO_ROOT/local/paths.env" ]; then
     "RemoteBase": "${MARCER_FTP_REMOTE_BASE:-/GameDVD/}",
     "AssetsRemote": "${MARCER_FTP_ASSETS_REMOTE:-/Uploads/MarcerGameDVDLauncher-assets/}"
   },
+  "CosmosEx": {
+    "Mode": "${MARCER_COSMOSEX_MODE:-auto}",
+    "Host": "${MARCER_COSMOSEX_HOST:-}",
+    "Password": "${MARCER_COSMOSEX_PASSWORD:-}",
+    "Mac": "${MARCER_COSMOSEX_MAC:-}",
+    "ShareDirectory": "${MARCER_COSMOSEX_SHARE:-}"
+  },
   "ShowCandidates": true,
   "DefaultStatus": "with_screenshot",
   "Window": { "width": 1280, "height": 800, "maximized": true }

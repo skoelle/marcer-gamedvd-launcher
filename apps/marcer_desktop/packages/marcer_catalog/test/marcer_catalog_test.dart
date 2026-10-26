@@ -60,7 +60,10 @@ void main() {
       File('$root/Games/Alpha.zip').createSync();
       final b = OverlayBrowser(rootDir: root);
       final entries = b.list('Games');
-      expect(entries.where((e) => e.name.toLowerCase() == 'alpha.zip').length, 1);
+      expect(
+        entries.where((e) => e.name.toLowerCase() == 'alpha.zip').length,
+        1,
+      );
     });
 
     test('traversal rel path resets to root listing (R16)', () {
@@ -77,8 +80,10 @@ void main() {
     });
 
     test('missing patch dir disables patch layer (R13)', () {
-      final b =
-          OverlayBrowser(rootDir: root, patchDir: '${tmp.path}/does-not-exist');
+      final b = OverlayBrowser(
+        rootDir: root,
+        patchDir: '${tmp.path}/does-not-exist',
+      );
       expect(b.hasPatchLayer, false);
       final entries = b.list('');
       expect(entries.every((e) => e.layerStatus == LayerStatus.root), true);
@@ -126,7 +131,8 @@ void main() {
         ]}''');
       final idx = GameInfoIndex.load(data);
       final info = idx.lookupByRel(
-          'Title Sorted/Cracked Games - Title Sorted/A/Alpha Game/Alpha.zip');
+        'Title Sorted/Cracked Games - Title Sorted/A/Alpha Game/Alpha.zip',
+      );
       expect(info, isNotNull);
       expect(info!.folder, 'Alpha Game');
       expect(idx.lookupByRel('too/short.zip'), isNull);
@@ -136,7 +142,8 @@ void main() {
       final data = '${tmp.path}/data-broken';
       Directory(data).createSync();
       // Truncated JSON must not abort the whole catalog load.
-      File('$data/games-cracked.json').writeAsStringSync('{"games": [ {"folder"');
+      File('$data/games-cracked.json')
+          .writeAsStringSync('{"games": [ {"folder"');
       File('$data/games-pd.json').writeAsStringSync('''
         {"games": [
           {"folder": "PacMan", "letter": "P", "layers": ["ROOT"],
@@ -198,33 +205,74 @@ void main() {
       expect(c.ftpConfigured, isTrue);
     });
 
-    test('FTP is unconfigured by default; download target falls back to root',
-        () {
+    test('parses the CosmosEx section and normalizes mode/MAC', () {
+      final f = File('${tmp.path}/desktop.config.json')
+        ..writeAsStringSync('''
+        {"RootDirectory": "/r",
+         "CosmosEx": {"Mode": "Cosmo2Ex", "Host": "cosmosex.local",
+                      "Password": "pw", "Mac": "aa-bb-cc-dd-ee-ff",
+                      "ShareDirectory": "/mnt/ce"}}''');
+      final c = DesktopConfig.load(f.path);
+      expect(c.cosmosExConfigured, isTrue);
+      expect(c.cosmosExModeNormalized, 'cosmo2ex');
+      expect(c.cosmosExHost, 'cosmosex.local');
+      expect(c.cosmosExPassword, 'pw');
+      expect(c.cosmosExMacNormalized, 'aabbccddeeff');
+      expect(c.cosmosExShareDirectory, '/mnt/ce');
+    });
+
+    test('CosmosEx is auto/unconfigured by default', () {
       final f = File('${tmp.path}/desktop.config.json')
         ..writeAsStringSync('{"RootDirectory": "/r"}');
       final c = DesktopConfig.load(f.path);
-      expect(c.ftpConfigured, isFalse);
-      expect(c.ftpHost, '');
-      expect(c.ftpUser, '');
-      expect(c.ftpPassword, '');
-      expect(c.ftpRemoteBase, '/GameDVD/',
-          reason: 'default remote base directory');
-      expect(c.ftpAssetsRemote, '/Uploads/MarcerGameDVDLauncher-assets/',
-          reason: 'default catalog asset directory');
-      expect(c.downloadTargetDirectory, '/r',
-          reason: 'no PatchDirectory → root layer');
-      expect(c.copyWith(patchDirectory: '/p').downloadTargetDirectory, '/p');
+      expect(c.cosmosExConfigured, isFalse);
+      expect(c.cosmosExModeNormalized, 'auto');
+      expect(c.cosmosExHost, '');
+      expect(c.cosmosExShareDirectory, '');
     });
+
+    test(
+      'FTP is unconfigured by default; download target falls back to root',
+      () {
+        final f = File('${tmp.path}/desktop.config.json')
+          ..writeAsStringSync('{"RootDirectory": "/r"}');
+        final c = DesktopConfig.load(f.path);
+        expect(c.ftpConfigured, isFalse);
+        expect(c.ftpHost, '');
+        expect(c.ftpUser, '');
+        expect(c.ftpPassword, '');
+        expect(
+          c.ftpRemoteBase,
+          '/GameDVD/',
+          reason: 'default remote base directory',
+        );
+        expect(
+          c.ftpAssetsRemote,
+          '/Uploads/MarcerGameDVDLauncher-assets/',
+          reason: 'default catalog asset directory',
+        );
+        expect(
+          c.downloadTargetDirectory,
+          '/r',
+          reason: 'no PatchDirectory → root layer',
+        );
+        expect(c.copyWith(patchDirectory: '/p').downloadTargetDirectory, '/p');
+      },
+    );
 
     test('resolveGameinfoDirectory uses DataDir/gameinfo (no fallback)', () {
       final f = File('${tmp.path}/desktop.config.json')
-        ..writeAsStringSync(
-            '{"RootDirectory": "/r", "PatchDirectory": "/p"}');
+        ..writeAsStringSync('{"RootDirectory": "/r", "PatchDirectory": "/p"}');
       final c = DesktopConfig.load(f.path);
-      expect(c.resolveGameinfoDirectory(), '',
-          reason: 'no <Patch>/../Data fallback anymore');
-      expect(c.copyWith(gameinfoDirectory: '/data').resolveGameinfoDirectory(),
-          '/data/gameinfo');
+      expect(
+        c.resolveGameinfoDirectory(),
+        '',
+        reason: 'no <Patch>/../Data fallback anymore',
+      );
+      expect(
+        c.copyWith(gameinfoDirectory: '/data').resolveGameinfoDirectory(),
+        '/data/gameinfo',
+      );
     });
 
     test('resolveAtariLegendDirectory has no implicit fallback', () {
@@ -233,9 +281,9 @@ void main() {
       final c = DesktopConfig.load(f.path);
       expect(c.resolveAtariLegendDirectory(), '');
       expect(
-          c.copyWith(atariLegendDirectory: '/al')
-              .resolveAtariLegendDirectory(),
-          '/al');
+        c.copyWith(atariLegendDirectory: '/al').resolveAtariLegendDirectory(),
+        '/al',
+      );
     });
 
     test('Ftp.Host parses an optional :port (default 21)', () {
@@ -247,15 +295,21 @@ void main() {
       expect(host('ftp.example.com:2121').ftpPort, 2121);
       expect(host('ftp.example.com:').ftpHostName, 'ftp.example.com');
       expect(host('ftp.example.com:').ftpPort, 21);
-      expect(host('host:abc').ftpHostName, 'host:abc',
-          reason: 'a non-numeric suffix is kept as part of the host');
+      expect(
+        host('host:abc').ftpHostName,
+        'host:abc',
+        reason: 'a non-numeric suffix is kept as part of the host',
+      );
       expect(host('host:abc').ftpPort, 21);
       expect(host('[::1]').ftpHostName, '::1');
       expect(host('[::1]').ftpPort, 21);
       expect(host('[::1]:2121').ftpHostName, '::1');
       expect(host('[::1]:2121').ftpPort, 2121);
-      expect(host(':2121').ftpConfigured, isFalse,
-          reason: 'empty host part → not configured');
+      expect(
+        host(':2121').ftpConfigured,
+        isFalse,
+        reason: 'empty host part → not configured',
+      );
     });
 
     test('gallery config defaults when fields are absent', () {
@@ -267,18 +321,23 @@ void main() {
       expect(c.windowMaximized, isTrue, reason: 'start maximized by default');
       expect(c.windowWidth, 1280);
       expect(c.windowHeight, 800);
-      expect(c.falconExtraArgs, '--vdi off',
-          reason: 'Falcon starts without extended VDI by default');
+      expect(
+        c.falconExtraArgs,
+        '--vdi off',
+        reason: 'Falcon starts without extended VDI by default',
+      );
     });
 
     test('Falcon.ExtraArgs overrides the default (empty disables it)', () {
       final f = File('${tmp.path}/desktop.config.json')
         ..writeAsStringSync(
-            '{"RootDirectory": "/r", "Falcon": {"ExtraArgs": "--monitor vga"}}');
+          '{"RootDirectory": "/r", "Falcon": {"ExtraArgs": "--monitor vga"}}',
+        );
       expect(DesktopConfig.load(f.path).falconExtraArgs, '--monitor vga');
 
       f.writeAsStringSync(
-          '{"RootDirectory": "/r", "Falcon": {"ExtraArgs": ""}}');
+        '{"RootDirectory": "/r", "Falcon": {"ExtraArgs": ""}}',
+      );
       expect(DesktopConfig.load(f.path).falconExtraArgs, '');
     });
 
@@ -329,6 +388,11 @@ void main() {
         ftpPassword: 'secret',
         ftpRemoteBase: '/dvd',
         ftpAssetsRemote: '/upload/assets',
+        cosmosExMode: 'cosmo2ex',
+        cosmosExHost: 'cosmosex.local:8080',
+        cosmosExPassword: 'ce-secret',
+        cosmosExMac: 'AA:BB:CC:DD:EE:FF',
+        cosmosExShareDirectory: '/mnt/cosmosex/floppyImages',
         showCandidates: false,
         defaultStatus: 'done',
         windowWidth: 1600,
@@ -350,6 +414,13 @@ void main() {
       expect(reloaded.ftpPassword, 'secret');
       expect(reloaded.ftpRemoteBase, '/dvd');
       expect(reloaded.ftpAssetsRemote, '/upload/assets');
+      expect(reloaded.cosmosExMode, 'cosmo2ex');
+      expect(reloaded.cosmosExHost, 'cosmosex.local:8080');
+      expect(reloaded.cosmosExPassword, 'ce-secret');
+      expect(reloaded.cosmosExMac, 'AA:BB:CC:DD:EE:FF');
+      expect(reloaded.cosmosExShareDirectory, '/mnt/cosmosex/floppyImages');
+      expect(reloaded.cosmosExConfigured, isTrue);
+      expect(reloaded.cosmosExMacNormalized, 'aabbccddeeff');
       expect(reloaded.showCandidates, isFalse);
       expect(reloaded.defaultStatus, 'done');
       expect(reloaded.windowWidth, 1600);
@@ -375,16 +446,23 @@ void main() {
 
   group('magazineGroup (filename-derived cards)', () {
     test('ST Action issue numbers group disks and copies', () {
-      expect(magazineGroup('ST Action - 2 missings', 'ST Action 41 - Disk 22 - maddo'),
-          isA<MagazineGroup>()
-              .having((g) => g.folder, 'folder', '41')
-              .having((g) => g.display, 'display', 'ST Action 41')
-              .having((g) => g.year, 'year', ''));
+      expect(
+        magazineGroup(
+          'ST Action - 2 missings',
+          'ST Action 41 - Disk 22 - maddo',
+        ),
+        isA<MagazineGroup>()
+            .having((g) => g.folder, 'folder', '41')
+            .having((g) => g.display, 'display', 'ST Action 41')
+            .having((g) => g.year, 'year', ''),
+      );
     });
 
     test('Start Micro parses issue and date', () {
       final g = magazineGroup(
-          'Start Micro', 'start micro 19 (1994-07)(j.d. press)(fr)');
+        'Start Micro',
+        'start micro 19 (1994-07)(j.d. press)(fr)',
+      );
       expect(g.folder, '19');
       expect(g.display, 'Start Micro 19');
       expect(g.year, '1994');
@@ -398,10 +476,20 @@ void main() {
     });
 
     test('The One / Zero use the issue number', () {
-      expect(magazineGroup('Zero - Complete', 'Zero Issue 01 - Nov 89 - Recoil').display,
-          'Zero Issue 01');
-      expect(magazineGroup('The One - 4 missings', 'The One ST Games Issue 32 - Disk 2').folder,
-          '32');
+      expect(
+        magazineGroup(
+          'Zero - Complete',
+          'Zero Issue 01 - Nov 89 - Recoil',
+        ).display,
+        'Zero Issue 01',
+      );
+      expect(
+        magazineGroup(
+          'The One - 4 missings',
+          'The One ST Games Issue 32 - Disk 2',
+        ).folder,
+        '32',
+      );
     });
 
     test('unknown names fall back to the file stem', () {

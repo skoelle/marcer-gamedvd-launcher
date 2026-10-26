@@ -195,6 +195,18 @@ Save, the manual screenshot curation described below.
   **STE** (`--machine ste`, TOS 1.62 → `TOS162.IMG`), **Low Res TOS
   1.02** (`TOS102.IMG`) and **Low Res TOS 1.00** (`TOS100.IMG`); a missing
   variant TOS is downloaded on demand.
+- **Send to CosmosEx** — when `CosmosEx.Host` is set (Settings →
+  **CosmosEx** tab), the PLAY dropdown gains **Send to CosmosEx**. `CosmosEx.Mode` is `auto` (default), `legacy` or
+  `cosmo2ex`: `auto` tries the classic ce-atari upload first, then cosmo2ex.
+  **Legacy** uploads the selected ZIP to slot 0 (`POST /api/v1/floppy/0`,
+  multipart, then `PUT` to activate; the device extracts the first
+  `.st/.msa`). **cosmo2ex** has no upload API: the app extracts the first
+  `.st/.msa`, copies it into the mounted `CosmosEx.ShareDirectory` (the
+  device's `FLOPPY_IMAGES_DIR`), logs in with `CosmosEx.Password`, reads the
+  device-side path from `GET /fdd/{mac}/image` (`defaultDir`) and inserts it
+  with `PUT /fdd/{mac}/image` (device picked automatically when there is only
+  one, otherwise set `CosmosEx.Mac`). Progress shows in the status bar,
+  success as a snackbar and failures as a modal.
 - **Download & install Hatari** — when no emulator is configured, the app offers
   to download prebuilt Hatari **2.6.1** (Windows x64 / macOS universal from
   [hatari-emu.org](https://www.hatari-emu.org/)) before launch or from the
@@ -377,10 +389,14 @@ path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
 directory/file pickers, plus the **FTP**
 fields for the downloads
 (`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase`,
-`Ftp.AssetsRemote` — free text, never block saving). The form is ordered
-**RootDirectory → PatchDirectory → FTP → ScreenshotDirectory /
-GameinfoDirectory (data directory) → PirateFinder-Catalog → Hatari** (with the
-**Hatari installation** and **TOS ROM** rows); the two catalog-data fields each carry a
+`Ftp.AssetsRemote` — free text, never block saving) and the **CosmosEx**
+settings (`CosmosEx.Mode` dropdown, `Host`, `Password`, `Mac`,
+`ShareDirectory`). The form is **tabbed**: **Library** (RootDirectory,
+PatchDirectory, FTP, ScreenshotDirectory / GameinfoDirectory + the
+AtariLegend/PirateFinder rows), **Hatari** (executable/config,
+**Hatari installation** and **TOS ROM** rows) and **CosmosEx** (its own tab
+after Hatari). A red dot on a tab marks an invalid field there, so Save can be
+disabled even when the active tab looks fine. The two catalog-data fields each carry a
 **Download from FTP** button next to *Browse…* that pulls the newest
 `screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
 into the target directory (the gameinfo directory has **no** implicit
@@ -411,6 +427,11 @@ optional (needed to launch, not to browse).
 | `Ftp.User` / `Ftp.Password` | no | FTP credentials (empty user ⇒ `anonymous`; password stored in plaintext) |
 | `Ftp.RemoteBase` | no | remote directory prefix of the game folders (default `/GameDVD/`; empty ⇒ FTP login root) |
 | `Ftp.AssetsRemote` | no | remote dir of the catalog asset archives `screenshots-*.zip` / `gameinfo-*.zip` (default `/Uploads/MarcerGameDVDLauncher-assets/`) |
+| `CosmosEx.Mode` | no | `auto` (default; legacy first, then cosmo2ex), `legacy` (ce-atari ZIP upload) or `cosmo2ex` (path insert) |
+| `CosmosEx.Host` | for send | `host`, `host:port` or full `http(s)://…` URL; empty ⇒ the Send to CosmosEx action is hidden |
+| `CosmosEx.Password` | for cosmo2ex | cosmo2ex web-interface password (plaintext; legacy ignores it) |
+| `CosmosEx.Mac` | no | cosmo2ex device MAC (`aa:bb:…` or 12 hex chars); empty selects the only device |
+| `CosmosEx.ShareDirectory` | for cosmo2ex | local/mounted view of the device's `FLOPPY_IMAGES_DIR` (SMB/NFS/local); images are copied there before the path insert |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
 | `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
 | `Window.width/height` | no | initial window size and restore size (default 1280×800) |
