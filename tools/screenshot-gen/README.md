@@ -185,22 +185,55 @@ otherwise the wall-clock screenshot timepoints may drift. `--jobs 1` (the
 default) is the classic serial behavior.
 
 Before a run the tool creates `tmp_dir`, terminates orphaned `hatari`/`Xvfb`
-processes left behind by an earlier crash and removes `entry-*` staging dirs
-older than `resource_limits.stale_stage_hours`. `run` also checks free RAM
-and disk space and caps `--jobs` from `MemAvailable`:
+processes left behind by an earlier crash (matched by the tool's `tmp_dir`
+path / display range, regardless of their parent process) and removes
+`entry-*` staging dirs older than `resource_limits.stale_stage_hours`.
+`run` also checks free RAM and disk space and caps `--jobs` from
+`MemAvailable` **plus** `SwapFree`:
 
 ```json
 "resource_limits": {
-  "per_job_mb": 500,
-  "min_free_mb": 1500,
+  "per_job_mb": 800,
+  "min_free_mb": 2000,
   "min_disk_free_mb": 2048,
-  "stale_stage_hours": 2
+  "stale_stage_hours": 1,
+  "mem_guard_fraction": 1.5
 }
 ```
 
 The run aborts with a clear error when less than `min_disk_free_mb` or
 `min_free_mb` is available, and prints a `jobs capped` line when the
-requested parallelism does not fit into the remaining RAM.
+requested parallelism does not fit into the remaining RAM. A worker
+(thread + Hatari child) settles at 0.6-0.8 GB during the click retry, so
+`per_job_mb` defaults to 800: a lower estimate let `--jobs N` overcommit a
+small machine and the kernel OOM-killer reaped the whole process (a
+"killed thread" is actually the whole process being killed). As a second
+line of defence a per-process RSS ceiling
+(`resource_limits.mem_guard_fraction` × `per_job_mb`) aborts a stalled FFT
+template match with a memory-guard error, and each worker releases the
+matching working set after every entry.
+
+**Long-run memory growth.** Two separate things caused long runs to be
+OOM-killed, and both are fixed:
+1. **glibc malloc arenas** — a long `--jobs N` run let the per-thread
+   mmap'd arenas ratchet up (tracemalloc showed flat tracked memory and a
+   flat gc-object count while RSS grew). `run.sh` exports
+   `MALLOC_ARENA_MAX=2` (must be set before the interpreter starts) and
+   each worker calls `malloc_trim(0)` after every entry.
+2. **Cyclic FAT12 chain (the real leak)** — the floppy scan's `chain()`
+   followed the FAT cluster chain without a cycle guard. A damaged disk
+   whose chain looped back onto itself (e.g. the STX "Fleetstreet
+   Publisher Fonts" disk: `WES60.FNT`, cluster 22 → cycle at 44) made
+   `chain()`/`parse()` loop forever appending clusters, ignore `STOP_EVENT`
+   and grow the process until the OOM killer reaped it. `chain()` now stops
+   at the first repeated cluster (and a hard cap), and directory recursion
+   has a depth limit plus a visited-set; the decoders also honour
+   `STOP_EVENT`. This is what made the run grow only after certain entries.
+
+`SHOTGEN_TRACEMALLOC=1` logs the top allocation sites every
+`SHOTGEN_TRACEMALLOC_EVERY` entries; `SHOTGEN_DIAG=1` writes periodic
+all-thread stack dumps and threshold snapshots to `SHOTGEN_DIAG_LOG` and
+stops cleanly at `SHOTGEN_DIAG_TRIPWIRE_MB` (leak-hunt tooling).
 
 ### Desktop auto retry (`run --retry-desktop-auto`)
 

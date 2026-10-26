@@ -489,11 +489,32 @@ and every index save are serialized under a single lock, so parallel
 workers can never overwrite each other's updates. The output-dir lock
 still allows only one tool process per `MARCER_OUT_DIR`. Before a run the
 tool creates `tmp_dir`, terminates orphaned `hatari`/`Xvfb` processes left
-behind by an earlier crash and removes `entry-*` staging dirs older than
+behind by an earlier crash (matched by the tool's `tmp_dir` path in the
+Hatari command line and by the tool's display range for Xvfb, independent
+of their parent process, since a crashed/OOM-killed run leaves helpers
+re-parented to a subreaper) and removes `entry-*` staging dirs older than
 `resource_limits.stale_stage_hours`. `--jobs` is capped from
-`/proc/meminfo` `MemAvailable` using `resource_limits.per_job_mb` and
-`min_free_mb`; the run aborts when less than `min_disk_free_mb` (checked
-for both the output and staging filesystem) or `min_free_mb` is available.
+`/proc/meminfo` `MemAvailable` **plus** `SwapFree` using
+`resource_limits.per_job_mb` and `min_free_mb`; the run aborts when less
+than `min_disk_free_mb` (checked for both the output and staging
+filesystem) or `min_free_mb` of RAM is available. Because a worker
+(thread + its Hatari child) settles at 0.6-0.8 GB during the click retry,
+`per_job_mb` defaults to 800: a too-low estimate let `--jobs 8` overcommit
+a small machine and the kernel OOM-killer reaped the whole process (not a
+single thread). The FFT-based template matching additionally keeps its
+peak memory flat (float32 image cache, one reused image FFT, prefix-sum
+window statistics) and a per-process RSS ceiling
+(`resource_limits.mem_guard_fraction` × `per_job_mb`, via
+`configure_mem_guard`) aborts a stalled match with a `MemoryGuardTripped`
+error instead of growing until the kernel kills the run; the worker
+releases the FFT working set with a `gc.collect()` after every entry.
+A long parallel run also used to grow without bound in **glibc malloc
+arenas** (one mmap'd arena per thread) even though the Python heap stayed
+flat — tracemalloc reported flat tracked memory and a flat gc-object count
+while RSS climbed until the OOM killer reaped the process. `run.sh` caps
+that with `MALLOC_ARENA_MAX=2` (exported before the interpreter starts)
+and each worker thread calls `malloc_trim(0)` after every entry to return
+the released blocks to the OS.
 
 Besides `index`, `run` and `detect`, the tool has the `cleanup-drive-led`
 subcommand (section 8.7), a standalone offline pass that removes old
@@ -650,7 +671,12 @@ the image/archive is scanned before boot:
   `.PRG`/`.TOS`/`.TTP`/`.APP`; Hatari gets
   `--disk-a <image> --auto "A:\<path>"` (drive B included for a second
   image). Self-extracting archives (LZH/STZip SFX, which only unpack onto the
-  write-protected disk) are skipped.
+  write-protected disk) are skipped. The cluster-chain walk stops at the
+  first repeated cluster (hard cap 4096) and directory recursion is bounded
+  (depth 32 plus a visited-set), because damaged disks can contain a cyclic
+  FAT chain or a sub-directory pointing back to an ancestor; without these
+  guards the scan looped forever and grew the process until the OOM killer
+  reaped it (observed with the STX "Fleetstreet Publisher Fonts" disk).
 - `.ipf`/non-DOS/empty images, copy-protected `.stx` without a usable boot
   sector/FAT and SFX-only disks yield no candidate: the entry is marked
   `auto_retried` / `auto_result: no_program` and stays `desktop` (the click
@@ -1281,8 +1307,17 @@ existing candidates into a proper preview:
   staging root (`tmp_dir`, default `/tmp/marcer-shotgen`) is created on
   demand; orphaned `hatari`/`Xvfb` helpers of a crashed run and stale
   `entry-*` dirs are cleaned at start. Requested jobs are capped from
-  `MemAvailable` (`resource_limits`), and a run with insufficient RAM or
-  disk space exits with a clear error instead of being OOM-killed.
+  `MemAvailable` + `SwapFree` (`resource_limits`) and a per-process RSS
+  guard aborts a stalled template match; a run with insufficient RAM or
+  disk space exits with a clear error instead of being OOM-killed. The
+  process also caps glibc malloc arenas (`MALLOC_ARENA_MAX=2`, set by
+  `run.sh`) and calls `malloc_trim(0)` per entry so a long parallel run
+  does not grow its arenas until the OOM killer reaps it. The FAT12 scan
+  guards against cyclic cluster chains and directory recursion (section
+  7.x): a damaged disk that loops used to grow the process until the OOM
+  killer reaped it; the chain walk stops at the first repeat, directory
+  recursion is depth- and visited-bounded, and the decoders honour
+  `STOP_EVENT`.
 - **Process groups:** Hatari and Xvfb are started with their own session
   (`setsid` semantics, in Python `start_new_session=True`). Timeouts kill the
   whole group (`killpg`). Never rely on terminating a single PID from a
@@ -1561,7 +1596,7 @@ triggers `--mono --tos-res high`, section 4.6), `screen_format_monitor`
 `tos_images` (version label → environment variable of its ROM image,
 section 7.5; includes `4.04` for the Falcon scope), `tmp_dir` +
 `resource_limits` (`per_job_mb`, `min_free_mb`, `min_disk_free_mb`,
-`stale_stage_hours`; section 9), `exclude_dirs`
+`stale_stage_hours`, `mem_guard_fraction`; section 9), `exclude_dirs`
 (sub-directory names never
 scanned, section 4.4), time points, timeouts, filter thresholds (the
 black/empty thresholds `black_mean_max`, `black_std_max`,

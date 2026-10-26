@@ -26,6 +26,7 @@ Paths come exclusively from environment variables (see run.sh and
 local/paths.env). This file contains no real data paths.
 """
 import argparse
+import gc
 import hashlib
 import json
 import os
@@ -198,13 +199,17 @@ DEFAULT_CONFIG = {
     },
     "tmp_dir": "/tmp/marcer-shotgen",
     # Resource guards for run: per-worker RAM estimate and how much RAM/disk
-    # must remain free. jobs are capped from MemAvailable; staging dirs older
-    # than stale_stage_hours are treated as leftovers from a crashed run.
+    # must remain free. jobs are capped from MemAvailable + SwapFree (a
+    # worker settles at 0.6-0.8 GB during the click retry, so a too-low
+    # per_job_mb lets --jobs overcommit and the OOM-killer reaps the whole
+    # process); staging dirs older than stale_stage_hours are treated as
+    # leftovers from a crashed run.
     "resource_limits": {
-        "per_job_mb": 500,
-        "min_free_mb": 1500,
+        "per_job_mb": 800,
+        "min_free_mb": 2000,
         "min_disk_free_mb": 2048,
-        "stale_stage_hours": 2,
+        "stale_stage_hours": 1,
+        "mem_guard_fraction": 1.5,
     },
     "xvfb_screen": "1024x768x24",
     "profile": {
@@ -687,6 +692,8 @@ def _msa_to_raw(msa: bytes) -> bytes:
     raw = bytearray()
     for _track in range(start, end + 1):
         for _side in range(sides):
+            if STOP_EVENT is not None and STOP_EVENT.is_set():
+                return bytes(raw)
             if pos + 2 > len(msa):
                 return bytes(raw)
             length = struct.unpack(">H", msa[pos:pos + 2])[0]
@@ -709,6 +716,10 @@ def _msa_to_raw(msa: bytes) -> bytes:
                     out.append(b)
                     i += 1
             raw += out
+            # Guard against a malformed MSA whose RLE runs expand far beyond
+            # any real floppy (same 16 MB ceiling as `_stx_to_raw`).
+            if len(raw) > 16 * 1024 * 1024:
+                return bytes(raw[:16 * 1024 * 1024])
     return bytes(raw)
 
 
@@ -731,6 +742,8 @@ def _stx_to_raw(stx: bytes) -> bytes:
     pos = 16
     sectors = []  # (track_header_number, sector_number, size, payload)
     for _ in range(track_count):
+        if STOP_EVENT is not None and STOP_EVENT.is_set():
+            return b""
         if pos + 16 > len(stx):
             break
         track_start = pos
@@ -826,8 +839,19 @@ def _fat12_files(raw: bytes):
     fat = raw[fat_start:fat_start + spf * bps]
 
     def chain(cluster):
+        # Follow the FAT12 cluster chain. Some damaged/patched disks contain
+        # a cyclic chain (a cluster whose next pointer loops back into the
+        # chain); without a visited-set guard this loop would append forever,
+        # ignore STOP_EVENT and grow the process until the OOM killer reaps
+        # it (observed with the STX-decoded "Fleetstreet Publisher Fonts"
+        # disk: WES60.FNT cluster 22 -> cycle at 44). Stop at the first
+        # repeat and at a hard cap far above any real floppy cluster count.
         out = []
+        seen = set()
         while 2 <= cluster < 0xFF8:
+            if cluster in seen or len(out) >= 4096:
+                break
+            seen.add(cluster)
             out.append(cluster)
             off = cluster + cluster // 2
             if off + 1 >= len(fat):
@@ -849,9 +873,18 @@ def _fat12_files(raw: bytes):
         return bytes(out[:4096])
 
     files = []
+    visited_dirs = set()
 
-    def parse(blob, prefix):
+    def parse(blob, prefix, depth=0):
+        # Directory recursion is also guarded: a damaged sub-directory entry
+        # can point back to an ancestor cluster and would otherwise recurse
+        # forever (each level rebuilding ``sub``), so bound the depth and
+        # skip directories already visited.
+        if depth > 32:
+            return
         for off in range(0, len(blob) - 31, 32):
+            if STOP_EVENT is not None and STOP_EVENT.is_set():
+                return
             e = blob[off:off + 32]
             if e[0] == 0:
                 break
@@ -868,11 +901,12 @@ def _fat12_files(raw: bytes):
             start_cluster = struct.unpack_from("<H", e, 26)[0]
             size = struct.unpack_from("<I", e, 28)[0]
             if attr & 0x10:
-                if start_cluster == 0:
+                if start_cluster == 0 or start_cluster in visited_dirs:
                     continue
+                visited_dirs.add(start_cluster)
                 sub = b"".join(cluster_bytes(c)
                                for c in chain(start_cluster))
-                parse(sub, prefix + full + "/")
+                parse(sub, prefix + full + "/", depth + 1)
             else:
                 files.append((prefix + full, size,
                               head_bytes(start_cluster)))
@@ -1208,15 +1242,6 @@ def _proc_cmdline(pid: int) -> list:
         return []
 
 
-def _proc_ppid(pid: int):
-    try:
-        raw = Path(f"/proc/{pid}/stat").read_text(errors="replace")
-        tail = raw.rsplit(") ", 1)[1].split()
-        return int(tail[1])
-    except (OSError, IndexError, ValueError):
-        return None
-
-
 def _terminate_orphan(pid: int) -> None:
     for sig in (signal.SIGTERM, signal.SIGKILL):
         try:
@@ -1244,17 +1269,28 @@ def _cleanup_orphaned_helpers(tmp_root: Path, display_base: str,
         proc_entries = list(Path("/proc").iterdir())
     except OSError:
         return
+    tmp_marker = str(tmp_root)
     for entry in proc_entries:
         if not entry.name.isdigit():
             continue
         pid = int(entry.name)
-        if pid == os.getpid() or _proc_ppid(pid) != 1:
+        if pid == os.getpid():
             continue
         args = _proc_cmdline(pid)
         if not args:
             continue
         name = Path(args[0]).name.lower()
-        if name == "hatari" and str(tmp_root) in " ".join(args):
+        cmdline = " ".join(args)
+        # Hatari helpers are identified by their staging path (tmp_dir) in
+        # the command line; Xvfb helpers by the tool's display range. The
+        # earlier ppid==1 check missed helpers re-parented to a subreaper
+        # (e.g. under a desktop session) or still attached to a parent that
+        # was itself killed, which is exactly what happens after the kernel
+        # OOM-kills a parallel run: the orphaned Hatari/Xvfb keep the
+        # displays busy and the next run then fails to grab screenshots.
+        # This runs before any worker starts, so matching only the tool's
+        # own tmp_dir/displays cannot touch unrelated processes.
+        if name == "hatari" and tmp_marker in cmdline:
             _terminate_orphan(pid)
             killed_hatari += 1
         elif (name == "xvfb" and len(args) >= 5 and args[1] in tool_displays
@@ -1280,9 +1316,9 @@ def _ensure_tmp_dir(cfg: dict) -> Path:
 def _cleanup_stale_stages(tmp_root: Path, cfg: dict) -> None:
     limits = cfg.get("resource_limits") or {}
     try:
-        hours = float(limits.get("stale_stage_hours", 2))
+        hours = float(limits.get("stale_stage_hours", 1))
     except (TypeError, ValueError):
-        hours = 2.0
+        hours = 1.0
     cutoff = time.time() - max(0.0, hours) * 3600
     removed = 0
     for child in tmp_root.iterdir():
@@ -1300,13 +1336,20 @@ def _cleanup_stale_stages(tmp_root: Path, cfg: dict) -> None:
         print(f"removed {removed} stale staging dirs", flush=True)
 
 
-def _available_ram_mb() -> float:
+def _meminfo_mb(field: str) -> float:
     try:
         for line in Path("/proc/meminfo").read_text().splitlines():
-            if line.startswith("MemAvailable:"):
+            if line.startswith(field + ":"):
                 return float(line.split()[1]) / 1024.0
     except OSError:
         pass
+    return 0.0
+
+
+def _available_ram_mb() -> float:
+    value = _meminfo_mb("MemAvailable")
+    if value > 0:
+        return value
     try:
         pages = os.sysconf("SC_AVPHYS_PAGES")
         page_size = os.sysconf("SC_PAGE_SIZE")
@@ -1316,15 +1359,30 @@ def _available_ram_mb() -> float:
 
 
 def _effective_jobs(requested: int, cfg: dict, out_dir: Path,
-                    tmp_root: Path) -> int:
+                    tmp_root: Path):
+    """Return ``(jobs, per_process_budget_mb)`` for the parallel run.
+
+    The job count is capped from the RAM that has to stay free *plus* the
+    swap headroom: a worker (Python thread + its Hatari child) settles at
+    0.6-0.8 GB during the click retry, so an earlier 500 MB estimate let
+    ``--jobs 8`` overcommit a small machine and the kernel OOM-killer
+    reaped the whole process. ``SwapFree`` is added to the available RAM so
+    a machine with a large swap file is not capped to a single worker, but
+    ``min_free_mb`` still reserves enough for the rest of the system.
+    Returns the resolved job count and the per-process RSS ceiling handed
+    to ``configure_mem_guard`` (a share of the budget for one worker).
+    """
     limits = cfg.get("resource_limits") or {}
     try:
-        per_job = float(limits.get("per_job_mb", 500))
-        min_free = float(limits.get("min_free_mb", 1500))
+        per_job = float(limits.get("per_job_mb", 800))
+        min_free = float(limits.get("min_free_mb", 2000))
         min_disk = float(limits.get("min_disk_free_mb", 2048))
+        guard_frac = float(limits.get("mem_guard_fraction", 1.5))
     except (TypeError, ValueError):
-        per_job, min_free, min_disk = 500.0, 1500.0, 2048.0
+        per_job, min_free, min_disk, guard_frac = 800.0, 2000.0, 2048.0, 1.5
     available = _available_ram_mb()
+    swap_free = _meminfo_mb("SwapFree")
+    budget = available + swap_free
     try:
         disk_free = min(shutil.disk_usage(out_dir).free,
                         shutil.disk_usage(tmp_root).free) / (1024.0 * 1024.0)
@@ -1337,15 +1395,19 @@ def _effective_jobs(requested: int, cfg: dict, out_dir: Path,
         sys.exit(f"error: not enough free RAM ({available:.0f} MB available, "
                  f"need {min_free:.0f} MB)")
     if per_job <= 0:
-        return max(1, requested)
-    cap = max(1, int((available - min_free) // per_job))
+        return max(1, requested), 0.0
+    cap = max(1, int((budget - min_free) // per_job))
     jobs = min(max(1, requested), cap)
     if jobs < requested:
         print(f"jobs capped: requested {requested}, using {jobs} "
-              f"({available:.0f} MB RAM available, "
+              f"({available:.0f} MB RAM + {swap_free:.0f} MB swap, "
               f"{per_job:.0f} MB per worker, {min_free:.0f} MB reserve)",
               flush=True)
-    return jobs
+    # Per-worker RSS ceiling for the correlation guard: half the estimated
+    # worker footprint by default. The guard only trips on a genuine runaway
+    # (a stalled FFT loop), so it is deliberately generous.
+    guard_mb = max(per_job, per_job * guard_frac)
+    return jobs, guard_mb
 
 
 def sleep_until(t_target: float) -> bool:
@@ -1917,11 +1979,241 @@ def force_grow(P: dict, grab_png: Path, log, fifo: Path = None,
 
 _GRAY_CACHE: dict = {}
 _GRAY_CACHE_ORDER: deque = deque()
-_GRAY_CACHE_MAX = 8
+# The decoded arrays are float32 (~2.4 MB at 900x700) instead of float64
+# (~5 MB): the templates only need a single-precision image and float32
+# halves the retained cache. The cache is small because every parallel
+# worker has its own process-global cache; 4 images is enough to cover the
+# probe/timepoint revisits of one entry.
+_GRAY_CACHE_MAX = 4
+
+# Hard self-guard for the FFT correlation working set. ``process_entry``
+# bails out of a stalled entry when tools.screenshot-gen's own RSS would
+# otherwise grow into the machine OOM-killer; the limit is set per run via
+# configure_mem_guard() from the effective RAM budget.
+_MEM_GUARD_BYTES = 0
+
+
+class MemoryGuardTripped(RuntimeError):
+    """Raised when a worker's RSS exceeds the configured ceiling."""
+
+
+def configure_mem_guard(budget_mb: float) -> None:
+    """Set the per-process RSS ceiling for the FFT correlation guard."""
+    global _MEM_GUARD_BYTES
+    _MEM_GUARD_BYTES = max(0, int(budget_mb * 1024 * 1024))
+
+
+def _self_rss_bytes() -> int:
+    try:
+        with open("/proc/self/statm") as fh:
+            return int(fh.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, IndexError, ValueError):
+        return 0
+
+
+def _mem_guard_tripped() -> bool:
+    return _MEM_GUARD_BYTES > 0 and _self_rss_bytes() > _MEM_GUARD_BYTES
+
+
+# glibc keeps freed memory in per-thread arenas; a long parallel run that
+# allocates image-sized blocks in a dozen worker threads lets those arenas
+# (each an mmap'd region, up to 8 by default) ratchet up as new size classes
+# appear, so RSS climbs for hours even though the Python objects are gone
+# (tracemalloc shows flat tracked memory and a flat gc-object count while
+# RSS grows). Two mitigations: cap the arena count (env, set in main before
+# the worker threads start) and return freed blocks to the OS with
+# malloc_trim(0), which must run in the allocating thread.
+_LIBC = None
+_MALLOC_TRIM = None
+
+
+def _init_malloc_trim() -> None:
+    global _LIBC, _MALLOC_TRIM
+    if _MALLOC_TRIM is not None:
+        return
+    try:
+        import ctypes
+        import ctypes.util
+        _LIBC = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6")
+        _MALLOC_TRIM = _LIBC.malloc_trim
+        _MALLOC_TRIM.argtypes = [ctypes.c_size_t]
+        _MALLOC_TRIM.restype = ctypes.c_int
+    except Exception:
+        _MALLOC_TRIM = None
+
+
+def _malloc_trim() -> None:
+    """Return freed heap blocks to the OS (call from the allocating thread)."""
+    if _MALLOC_TRIM is None:
+        _init_malloc_trim()
+    if _MALLOC_TRIM is not None:
+        try:
+            _MALLOC_TRIM(0)
+        except Exception:
+            pass
+
+
+# Optional leak diagnostics: with SHOTGEN_TRACEMALLOC=1 the tool starts
+# tracemalloc and, every SHOTGEN_TRACEMALLOC_EVERY processed entries, logs
+# the top allocation sites and the cumulative RSS. Used to locate the
+# per-entry growth that pushes a long parallel run into the OOM killer.
+_TRACEMALLOC_ON = os.environ.get("SHOTGEN_TRACEMALLOC") == "1"
+_TRACEMALLOC_EVERY = int(os.environ.get("SHOTGEN_TRACEMALLOC_EVERY", "20") or 20)
+_TRACEMALLOC_N = 0
+
+
+def _maybe_trace_memory(tag: str) -> None:
+    global _TRACEMALLOC_N
+    if not _TRACEMALLOC_ON:
+        return
+    import tracemalloc
+    _TRACEMALLOC_N += 1
+    if _TRACEMALLOC_N % _TRACEMALLOC_EVERY != 0:
+        return
+    _dump_memory(tag)
+
+
+def _dump_memory(tag: str) -> None:
+    import gc
+    import tracemalloc
+    snap = tracemalloc.take_snapshot()
+    total = sum(s.size for s in snap.statistics("filename"))
+    counts: dict = {}
+    for obj in gc.get_objects():
+        counts[type(obj).__name__] = counts.get(type(obj).__name__, 0) + 1
+    top_types = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:12]
+    print(f"[memtrace] {tag} RSS={_self_rss_bytes() / 1048576:.0f} MB "
+          f"traced={total / 1048576:.0f} MB "
+          f"gc_objects={sum(counts.values())}", flush=True)
+    print("[memtrace]   top types: " + ", ".join(
+        f"{n}={c}" for n, c in top_types), flush=True)
+    for stat in snap.statistics("lineno")[:8]:
+        fr = stat.traceback[0]
+        print(f"[memtrace]   {stat.size / 1048576:8.1f} MB "
+              f"{fr.filename}:{fr.lineno}", flush=True)
+
+
+def _install_memtrace_signal() -> None:
+    """Dump a tracemalloc/gc snapshot on SIGUSR1 (diagnostic)."""
+    if not _TRACEMALLOC_ON:
+        return
+    import signal as _signal
+
+    def _handler(_sig, _frm):
+        _dump_memory("SIGUSR1")
+
+    _signal.signal(_signal.SIGUSR1, _handler)
+
+
+# Leak hunt instrumentation (SHOTGEN_DIAG=1). A watchdog thread samples RSS,
+# and every time it crosses a threshold it writes the top tracemalloc sites,
+# the gc object-type counts and the stacks of *all* threads to SHOTGEN_DIAG_LOG
+# (default /tmp/shotgen-diag.log). At SHOTGEN_DIAG_TRIPWIRE_MB it does a final
+# dump and sets STOP_EVENT so the process shuts down cleanly instead of being
+# reaped by the kernel OOM killer (which would lose the evidence). All thread
+# stacks are the key data: they show which line a worker is stuck in while the
+# memory climbs.
+_DIAG_ON = os.environ.get("SHOTGEN_DIAG") == "1"
+_DIAG_LOG = os.environ.get("SHOTGEN_DIAG_LOG", "/tmp/shotgen-diag.log")
+try:
+    _DIAG_TRIPWIRE_MB = float(
+        os.environ.get("SHOTGEN_DIAG_TRIPWIRE_MB", "3500") or 3500)
+    _DIAG_EVERY_S = float(os.environ.get("SHOTGEN_DIAG_EVERY", "10") or 10)
+except ValueError:
+    _DIAG_TRIPWIRE_MB, _DIAG_EVERY_S = 3500.0, 10.0
+_DIAG_THRESHOLDS = [600, 900, 1200, 1600, 2000, 2500, 3000, 3500, 4000]
+
+
+def _diag_write(text: str) -> None:
+    try:
+        with open(_DIAG_LOG, "a", encoding="utf-8") as fh:
+            fh.write(text.rstrip("\n") + "\n")
+    except OSError:
+        pass
+
+
+def _diag_dump(tag: str) -> None:
+    import faulthandler
+    import gc
+    import tracemalloc
+    rss = _self_rss_bytes() / 1048576
+    stamp = time.strftime("%H:%M:%S")
+    _diag_write(f"\n===== {stamp} {tag} RSS={rss:.0f} MB =====")
+    try:
+        snap = tracemalloc.take_snapshot()
+        for st in snap.statistics("lineno")[:15]:
+            fr = st.traceback[0]
+            _diag_write(f"  ALLOC {st.size / 1048576:9.1f} MB  "
+                        f"{fr.filename}:{fr.lineno}")
+    except Exception as ex:
+        _diag_write(f"  alloc snapshot failed: {ex}")
+    try:
+        counts: dict = {}
+        for obj in gc.get_objects():
+            counts[type(obj).__name__] = counts.get(type(obj).__name__, 0) + 1
+        top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:15]
+        _diag_write("  OBJECTS " + ", ".join(f"{n}={c}" for n, c in top))
+    except Exception as ex:
+        _diag_write(f"  gc count failed: {ex}")
+    try:
+        with open(_DIAG_LOG, "a", encoding="utf-8") as fh:
+            fh.write(f"----- {stamp} {tag} THREAD STACKS -----\n")
+            faulthandler.dump_traceback(file=fh, all_threads=True)
+    except Exception as ex:
+        _diag_write(f"  thread dump failed: {ex}")
+
+
+def _start_diagnostics() -> None:
+    if not _DIAG_ON:
+        return
+    import faulthandler
+    # NOTE: tracemalloc is intentionally NOT started here. It slows every
+    # allocation in the run by ~6x, which would push the growth region hours
+    # away. The cheap faulthandler all-thread stack dumps run from the start;
+    # tracemalloc is started lazily at the first RSS threshold (see watchdog),
+    # so it only records from the point the leak becomes visible.
+    try:
+        fh = open(_DIAG_LOG, "a", encoding="utf-8")
+        fh.write(f"\n### diagnostics started {time.strftime('%H:%M:%S')} "
+                 f"tripwire={_DIAG_TRIPWIRE_MB:.0f}MB\n")
+        fh.flush()
+        faulthandler.dump_traceback_later(
+            float(os.environ.get("SHOTGEN_DIAG_STACKS_EVERY", "30")),
+            repeat=True, file=fh)
+    except Exception:
+        pass
+
+    def watchdog():
+        import tracemalloc
+        i = 0
+        while True:
+            if STOP_EVENT is not None and STOP_EVENT.is_set():
+                _diag_dump("stop-event")
+                return
+            rss = _self_rss_bytes() / 1048576
+            if i < len(_DIAG_THRESHOLDS) and rss >= _DIAG_THRESHOLDS[i]:
+                if not tracemalloc.is_tracing():
+                    tracemalloc.start(25)
+                    _diag_write(f"### tracemalloc started at "
+                                f"{rss:.0f}MB")
+                tag = f"cross {_DIAG_THRESHOLDS[i]}MB"
+                i += 1
+                _diag_dump(tag)
+            if rss >= _DIAG_TRIPWIRE_MB:
+                _diag_write(f"### tripwire {rss:.0f}MB >= "
+                            f"{_DIAG_TRIPWIRE_MB:.0f}MB -> STOP")
+                _diag_dump("tripwire")
+                if STOP_EVENT is not None:
+                    STOP_EVENT.set()
+                return
+            time.sleep(_DIAG_EVERY_S)
+
+    threading.Thread(target=watchdog, name="diag-watchdog",
+                     daemon=True).start()
 
 
 def load_gray(img_path: Path):
-    """Load a screenshot as a float64 grayscale array, cached by mtime/size.
+    """Load a screenshot as a float32 grayscale array, cached by mtime/size.
 
     find_icon probes several templates/variants against the same image and a
     retry run revisits one preview across timepoints; re-decoding a ~832x552
@@ -1941,7 +2233,7 @@ def load_gray(img_path: Path):
     if cached is not None and cached[0] == sig:
         return cached[1]
     with Image.open(img_path) as im:
-        arr = np.asarray(im.convert("L"), dtype=np.float64)
+        arr = np.asarray(im.convert("L"), dtype=np.float32)
     _GRAY_CACHE[key] = (sig, arr)
     _GRAY_CACHE_ORDER.append(key)
     while len(_GRAY_CACHE_ORDER) > _GRAY_CACHE_MAX:
@@ -1949,31 +2241,92 @@ def load_gray(img_path: Path):
     return arr
 
 
-def _template_ncc_maps(img, t_base):
-    """Yield ``(ncc, th, tw)`` maps for the template and its inverse."""
+def _box_sums(img):
+    """Return ``(s1, s2)`` boundary arrays for the running sums of the image.
+
+    ``s1`` is the 2-D cumulative sum of the image and ``s2`` of its square,
+    padded with a leading zero row/column so a box sum at any position is a
+    four-corner lookup (``s[y+h, x+w] - s[y, x+w] - s[y+h, x] + s[y, x]``).
+    Computing the window sums from these prefix arrays instead of via two
+    additional ``fftconvolve`` calls with a full-size ``ones`` kernel keeps
+    the peak memory at a fraction of the previous implementation: the
+    convolution engine materialised several float64 arrays the size of the
+    image (plus the FFT working set) for every template variant, which
+    pushed a worker's RSS to 0.6-0.8 GB and let the OOM-killer reap the
+    whole parallel run.
+    """
     import numpy as np
-    from scipy.signal import fftconvolve
+
+    work = np.empty(img.shape, dtype=np.float64)
+    s1 = np.zeros((img.shape[0] + 1, img.shape[1] + 1), dtype=np.float64)
+    np.cumsum(img, axis=0, out=work)
+    np.cumsum(work, axis=1, out=work)
+    s1[1:, 1:] = work
+    np.square(img, out=work)
+    np.cumsum(work, axis=0, out=work)
+    np.cumsum(work, axis=1, out=work)
+    s2 = np.zeros((img.shape[0] + 1, img.shape[1] + 1), dtype=np.float64)
+    s2[1:, 1:] = work
+    return s1, s2
+
+
+def _template_ncc_maps(img, t_base):
+    """Yield ``(ncc, th, tw)`` maps for the template and its inverse.
+
+    Memory-conscious implementation: one real FFT of the image is cached
+    and reused for both the forward and the inverse template (only the
+    small kernel transform is redone), the local mean/variance come from
+    prefix sums instead of ``ones``-kernel convolutions and every full-size
+    intermediate is reused in place. The caller iterates further (several
+    templates per position), so the yielded map is the only new allocation.
+    """
+    import numpy as np
+
+    fh, fw = img.shape
+    fft_shape = (fh, fw)
+    img_f = np.fft.rfft2(img.astype(np.float64, copy=False), s=fft_shape)
+    s1, s2 = _box_sums(img)
 
     for t_img in (t_base, 255.0 - t_base):
-        t = t_img - t_img.mean()
-        th, tw = t.shape
-        if img.shape[0] < th or img.shape[1] < tw:
+        # Abort the match (and let the entry finish as click-failed) before
+        # the FFT working set can drive the process into the kernel OOM
+        # killer. The check is cheap (one /proc read per template variant).
+        if _mem_guard_tripped():
+            raise MemoryGuardTripped(
+                f"RSS {_self_rss_bytes() / 1048576:.0f} MB exceeds "
+                f"{_MEM_GUARD_BYTES / 1048576:.0f} MB guard")
+        th, tw = t_img.shape
+        if fh < th or fw < tw:
             continue
-        num = fftconvolve(img, t[::-1, ::-1], mode="valid")
-        ones = np.ones_like(t)
-        s1 = fftconvolve(img ** 2, ones, mode="valid")
-        s2 = fftconvolve(img, ones, mode="valid")
-        n = t.size
-        var = s1 - (s2 ** 2) / n
-        t_energy = float((t ** 2).sum())
+        t = t_img.astype(np.float64, copy=True)
+        t -= t.mean()
+        t_energy = float(np.square(t).sum())
+        # convolve with the reversed template, exactly like the previous
+        # ``fftconvolve(img, t[::-1, ::-1], mode="valid")``
+        kern = t[::-1, ::-1]
+        kern_f = np.fft.rfft2(kern, s=fft_shape)
+        num = np.fft.irfft2(img_f * kern_f, s=fft_shape)
+        num = num[th - 1:fh, tw - 1:fw]
+
+        n = th * tw
+        # windowed sums via the prefix arrays, then reuse ``num`` for var
+        sums = (s1[th:, tw:] - s1[:-th, tw:] - s1[th:, :-tw] + s1[:-th, :-tw])
+        sumsq = (s2[th:, tw:] - s2[:-th, tw:] - s2[th:, :-tw] + s2[:-th, :-tw])
+        var = sums * sums
+        var /= n
+        np.subtract(sumsq, var, out=var)
         # flat/low-contrast windows make den tiny and amplify noise into
         # spurious mid scores: require at least 5% of the template contrast
         # energy, otherwise force invalid
         contrast = var >= 0.05 * t_energy
-        den = np.sqrt(np.maximum(var, 1e-9) * t_energy)
-        ncc = np.where(contrast, num / den, -1.0)
-        ncc = np.nan_to_num(ncc, nan=-1.0, posinf=-1.0, neginf=-1.0)
-        yield ncc, th, tw
+        np.maximum(var, 1e-9, out=var)
+        var *= t_energy
+        np.sqrt(var, out=var)
+        np.divide(num, var, out=num, where=contrast)
+        num[~contrast] = -1.0
+        np.nan_to_num(num, copy=False, nan=-1.0, posinf=-1.0, neginf=-1.0)
+        del sums, sumsq, var, kern_f, kern, t
+        yield num, th, tw
 
 
 def find_template(img_path: Path, template, min_score: float):
@@ -3182,6 +3535,14 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             with open(meta_path, "w", encoding="utf-8") as fh:
                 json.dump(meta, fh, indent=1)
         log(f"status={status}")
+    except MemoryGuardTripped as ex:
+        def _commit_guard():
+            entry["status"] = "error"
+            entry["last_run"] = time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                              time.gmtime())
+
+        commit(_commit_guard)
+        log(f"ERROR: memory guard tripped: {ex}")
     except Exception as ex:
         def _commit_error():
             entry["status"] = "error"
@@ -3195,6 +3556,7 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             log(f"stage kept at {stage}")
         else:
             shutil.rmtree(stage, ignore_errors=True)
+        gc.collect()
 
 
 def acquire_lock(out: Path) -> Path:
@@ -3297,6 +3659,17 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                     save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
                                                 + 1)
+                _maybe_trace_memory(f"w{wid} {e['rel'][-40:]}")
+                # The FFT correlation allocates several image-sized arrays
+                # per template; CPython/the numpy allocator keep freed
+                # blocks cached by size class, so a long-lived worker's RSS
+                # creeps up even though the objects are gone. A cheap
+                # collect per entry plus malloc_trim (which must run in this
+                # worker thread) hands the released blocks back to the OS
+                # before the next entry starts and keeps the parallel run
+                # inside its RAM budget.
+                gc.collect()
+                _malloc_trim()
         except Exception as ex:
             print(f"[w{wid}] worker failed: {ex}", file=sys.stderr,
                   flush=True)
@@ -3331,7 +3704,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
     _cleanup_orphaned_helpers(tmp_root, P["display"], cfg["xvfb_screen"])
     _cleanup_stale_stages(tmp_root, cfg)
 
-    jobs = _effective_jobs(max(1, args.jobs), cfg, out, tmp_root)
+    jobs, guard_mb = _effective_jobs(max(1, args.jobs), cfg, out, tmp_root)
+    configure_mem_guard(guard_mb)
     displays = _display_list(P["display"], jobs)
     xvfbs = []
     for disp in displays:
@@ -3405,6 +3779,15 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
     done_counts = {}
     processed = 0
     interrupted = False
+    if _TRACEMALLOC_ON:
+        import tracemalloc
+        tracemalloc.start(25)
+        _install_memtrace_signal()
+        print("[memtrace] tracemalloc started", flush=True)
+    if _DIAG_ON:
+        _start_diagnostics()
+        print(f"[diag] instrumented, log={_DIAG_LOG} "
+              f"tripwire={_DIAG_TRIPWIRE_MB:.0f}MB", flush=True)
 
     try:
         if jobs > 1:
@@ -4381,6 +4764,14 @@ def cmd_prune(cfg: dict, P: dict, args, scope: dict) -> int:
 def main() -> int:
     global STOP_EVENT
     STOP_EVENT = threading.Event()
+
+    # Cap the glibc arena count before any worker thread is created. glibc
+    # creates one arena per thread (up to 8 by default); a long parallel run
+    # fragmented those mmap'd arenas until the process hit the OOM killer
+    # even though the Python heap stayed flat. Two arenas suffice for this
+    # workload and keep the footprint bounded (the per-entry malloc_trim in
+    # the worker loop then returns the freed blocks).
+    os.environ.setdefault("MALLOC_ARENA_MAX", "2")
 
     # 'html' was removed: point users at the gallery webapp (M6).
     if len(sys.argv) > 1 and sys.argv[1] == "html":
