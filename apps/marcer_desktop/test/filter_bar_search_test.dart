@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_controller.dart';
+import 'package:marcer_desktop/self_updater.dart';
 import 'package:marcer_desktop/widgets/filter_bar.dart';
 
 /// A reset of the global filters (`clear`, Backspace in catalog mode, a
@@ -32,7 +33,10 @@ void main() {
 
   final searchField = find.byKey(const ValueKey('catalog-search'));
 
-  Future<CatalogController> pumpFilterBar(WidgetTester tester) async {
+  Future<CatalogController> pumpFilterBar(
+    WidgetTester tester, {
+    SelfUpdateController? updater,
+  }) async {
     tester.view.physicalSize = const Size(1600, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -52,7 +56,7 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: FilterBar(controller: c, searchFocus: focus),
+        body: FilterBar(controller: c, searchFocus: focus, updater: updater),
       ),
     ));
     await tester.pumpAndSettle();
@@ -172,5 +176,53 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(c.filter.status, 'skipped_disk_n');
+  });
+
+  testWidgets('manual update check reports the latest version', (tester) async {
+    final updater = SelfUpdateController(
+      enabled: true,
+      fetcher: () async => [],
+    )..currentVersion = '1.0.0';
+    addTearDown(updater.dispose);
+
+    await pumpFilterBar(tester, updater: updater);
+    expect(find.byIcon(Icons.system_update_alt), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.system_update_alt));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('You are running the latest version (v1.0.0).'),
+      findsOneWidget,
+    );
+    expect(find.text('⬆ 1.0.0'), findsNothing);
+  });
+
+  testWidgets('manual update check offers a newer release', (tester) async {
+    final tag = platformAssetTag()!;
+    final updater = SelfUpdateController(
+      enabled: true,
+      fetcher: () async => [
+        {
+          'tag_name': 'desktop-v1.1.0',
+          'draft': false,
+          'prerelease': false,
+          'assets': [
+            {
+              'name': 'MarcerDesktop-v1.1.0-$tag.zip',
+              'browser_download_url': 'https://example.com/v1.1.0.zip',
+            },
+          ],
+        },
+      ],
+    )..currentVersion = '1.0.0';
+    addTearDown(updater.dispose);
+
+    await pumpFilterBar(tester, updater: updater);
+    await tester.tap(find.byIcon(Icons.system_update_alt));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Update v1.1.0 available.'), findsOneWidget);
+    expect(find.text('⬆ 1.1.0'), findsOneWidget);
   });
 }

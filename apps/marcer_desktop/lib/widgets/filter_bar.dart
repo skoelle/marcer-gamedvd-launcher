@@ -547,20 +547,76 @@ class _FilterBarState extends State<FilterBar> {
     );
   }
 
-  /// Amber update badge left of the Folders button: shows the newer
-  /// version and, on click, downloads + installs it and relaunches the
-  /// app. Hidden when no newer release was found (or in dev builds).
+  /// Runs a manual self-update check and reports the outcome in a snackbar.
+  Future<void> _checkForUpdates(SelfUpdateController u) async {
+    await u.check(manual: true);
+    if (!mounted) return;
+    final error = u.checkError;
+    final info = u.available;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error ??
+              (info == null
+                  ? 'You are running the latest version '
+                      '(v${u.currentVersion}).'
+                  : 'Update v${info.version} available.'),
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  /// Self-update control left of the Folders button: a gray check icon while
+  /// no update is known, a spinner while checking, and the amber update badge
+  /// (install on click) once a newer release was found. Hidden in dev builds.
   Widget _updateBadge(SelfUpdateController u) {
     return ListenableBuilder(
       listenable: u,
       builder: (context, _) {
+        if (!u.isEnabled) return const SizedBox.shrink();
         final info = u.available;
         final phase = u.phase;
         final busy =
             phase == UpdatePhase.downloading ||
             phase == UpdatePhase.installing ||
             phase == UpdatePhase.restarting;
-        if (info == null && !busy) return const SizedBox.shrink();
+        if (phase == UpdatePhase.checking) {
+          return const SizedBox(
+            width: 32,
+            height: 28,
+            child: Tooltip(
+              message: 'Checking for updates…',
+              child: Center(
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          );
+        }
+        if (info == null && !busy) {
+          return SizedBox(
+            width: 32,
+            height: 28,
+            child: Tooltip(
+              message: 'Check for updates (v${u.currentVersion})',
+              child: TextButton(
+                onPressed: () => _checkForUpdates(u),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(32, 28),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  alignment: Alignment.center,
+                ),
+                child: const Icon(Icons.system_update_alt, size: 16),
+              ),
+            ),
+          );
+        }
         final String label;
         if (phase == UpdatePhase.downloading) {
           final pct = u.progress == null
@@ -589,12 +645,14 @@ class _FilterBarState extends State<FilterBar> {
                     .withValues(alpha: 0.6),
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 minimumSize: const Size(0, 28),
-                textStyle: const TextStyle(
+              ),
+              child: Text(
+                label,
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              child: Text(label),
             ),
           ),
         );

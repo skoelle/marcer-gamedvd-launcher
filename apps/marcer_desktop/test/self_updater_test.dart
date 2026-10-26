@@ -558,4 +558,60 @@ void main() {
       );
     }, skip: !Platform.isLinux && !Platform.isMacOS);
   });
+
+  group('SelfUpdateController', () {
+    test('manual check finds a newer release', () async {
+      final tag = platformAssetTag()!;
+      var calls = 0;
+      final c = SelfUpdateController(
+        enabled: true,
+        fetcher: () async {
+          calls++;
+          return [
+            _release('desktop-v0.2.0',
+                assets: [_desktopAsset('0.2.0', tag)]),
+          ];
+        },
+      )..currentVersion = '0.1.0';
+
+      await c.check(manual: true);
+
+      expect(calls, 1);
+      expect(c.available?.version, '0.2.0');
+      expect(c.checkError, isNull);
+      expect(c.phase, UpdatePhase.none);
+    });
+
+    test('manual check reports errors; the automatic check stays silent',
+        () async {
+      final c = SelfUpdateController(
+        enabled: true,
+        fetcher: () async => throw Exception('offline'),
+      )..currentVersion = '0.1.0';
+
+      await c.check();
+      expect(c.checkError, isNull);
+
+      await c.check(manual: true);
+      expect(c.checkError, contains('offline'));
+      expect(c.available, isNull);
+      expect(c.phase, UpdatePhase.none);
+    });
+
+    test('disabled controller rejects manual checks', () async {
+      var calls = 0;
+      final c = SelfUpdateController(
+        enabled: false,
+        fetcher: () async {
+          calls++;
+          return [];
+        },
+      );
+
+      await c.check(manual: true);
+
+      expect(calls, 0);
+      expect(c.checkError, contains('release builds'));
+    });
+  });
 }

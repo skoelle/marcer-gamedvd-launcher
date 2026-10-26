@@ -91,6 +91,12 @@ an amber `⬆ <version>` badge when a newer version exists. Clicking it download
 the platform ZIP, swaps the bundle in place (user config, favorites and
 `TOS.IMG` are untouched) and relaunches the app.
 
+The update slot in the top bar is always available in release builds: while no
+update is known it shows a gray **Check for updates** icon. Clicking it checks
+GitHub again and reports the result in a snackbar (`You are running the latest
+version…`, `Update v… available.` or the error), so a new release can also be
+found while the app is already running. Dev builds keep the slot hidden.
+
 On Linux/macOS the new binary is started detached and the app waits until the
 OS has spawned it before exiting; Windows uses the two-phase Task Scheduler
 helper. If an update ever leaves no window, start the app once manually — the

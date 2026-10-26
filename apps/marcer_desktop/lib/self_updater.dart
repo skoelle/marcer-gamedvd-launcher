@@ -55,6 +55,30 @@ class UpdateInfo {
   final String assetUrl;
 }
 
+/// Fetches the GitHub `/releases` payload (injectable for tests).
+typedef ReleaseListFetcher = Future<List<Map<String, dynamic>>> Function();
+
+/// Default fetcher for the GitHub releases API.
+Future<List<Map<String, dynamic>>> httpReleaseListFetcher() async {
+  final client = HttpClient();
+  client.connectionTimeout = const Duration(seconds: 15);
+  try {
+    final req = await client.getUrl(Uri.parse(
+        'https://api.github.com/repos/$kSelfUpdateRepo/releases?per_page=30'));
+    req.headers
+      ..add(HttpHeaders.acceptHeader, 'application/vnd.github+json')
+      ..add(HttpHeaders.userAgentHeader, 'MarcerGameDVDLauncher');
+    final resp = await req.close();
+    if (resp.statusCode != 200) {
+      throw HttpException('HTTP ${resp.statusCode}');
+    }
+    final body = await resp.transform(utf8.decoder).join();
+    return (jsonDecode(body) as List).cast<Map<String, dynamic>>();
+  } finally {
+    client.close(force: true);
+  }
+}
+
 /// Pure selection from the GitHub `/releases` JSON payload (newest first):
 /// the newest non-draft/non-prerelease `desktop-v*` release that is newer
 /// than [current] and carries a `MarcerDesktop-v{version}-{assetTag}.zip`
@@ -642,13 +666,26 @@ enum UpdatePhase { none, checking, downloading, installing, restarting, failed }
 /// Only active in release builds (workflow passes `--dart-define=
 /// RELEASE_BUILD=true`); dev runs via `run.sh` never check.
 class SelfUpdateController extends ChangeNotifier {
+  SelfUpdateController({ReleaseListFetcher? fetcher, bool? enabled})
+      : _fetch = fetcher ?? httpReleaseListFetcher,
+        isEnabled = enabled ?? SelfUpdateController.enabled;
+
   static const bool enabled = bool.fromEnvironment('RELEASE_BUILD');
+
+  final ReleaseListFetcher _fetch;
+
+  /// Whether this controller may check for updates (release builds; tests can
+  /// override it through the constructor).
+  final bool isEnabled;
 
   String currentVersion = '0.0.0';
   UpdateInfo? available;
   UpdatePhase phase = UpdatePhase.none;
   double? progress; // 0..1 while downloading
   String? error;
+
+  /// Error of a **manual** check (`null` for the silent startup check).
+  String? checkError;
 
   /// App-side log next to the installed app (see [UpdateLog]).
   late final UpdateLog _log = UpdateLog(p.join(
@@ -660,9 +697,16 @@ class SelfUpdateController extends ChangeNotifier {
   /// Where the update log lives (shown in the error dialog).
   String get logPath => _log.path;
 
-  /// Silent startup check; network failures stay silent.
-  Future<void> check() async {
-    if (!enabled) return;
+  /// Checks the GitHub releases. The automatic startup check stays silent;
+  /// [manual] reports failures through [checkError].
+  Future<void> check({bool manual = false}) async {
+    if (!isEnabled) {
+      if (manual) {
+        checkError = 'Update checks are only available in release builds.';
+        notifyListeners();
+      }
+      return;
+    }
     if (phase == UpdatePhase.downloading ||
         phase == UpdatePhase.installing ||
         phase == UpdatePhase.restarting) {
@@ -670,38 +714,25 @@ class SelfUpdateController extends ChangeNotifier {
     }
     phase = UpdatePhase.checking;
     error = null;
+    if (manual) checkError = null;
     notifyListeners();
     try {
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 15);
-      try {
-        final req = await client.getUrl(Uri.parse(
-            'https://api.github.com/repos/$kSelfUpdateRepo/releases?per_page=30'));
-        req.headers
-          ..add(HttpHeaders.acceptHeader, 'application/vnd.github+json')
-          ..add(HttpHeaders.userAgentHeader, 'MarcerGameDVDLauncher');
-        final resp = await req.close();
-        if (resp.statusCode != 200) {
-          throw HttpException('HTTP ${resp.statusCode}');
-        }
-        final body = await resp.transform(utf8.decoder).join();
-        final list = (jsonDecode(body) as List).cast<Map<String, dynamic>>();
-        final tag = platformAssetTag();
-        available =
-            tag == null ? null : pickRelease(list, current: currentVersion, assetTag: tag);
-        _log.line('check: current=$currentVersion '
-            'latest=${available?.version ?? 'none'} (asset tag $tag)');
-      } finally {
-        client.close(force: true);
-      }
-      phase = UpdatePhase.none;
+      final list = await _fetch();
+      final tag = platformAssetTag();
+      available =
+          tag == null ? null : pickRelease(list, current: currentVersion, assetTag: tag);
+      checkError = null;
+      _log.line('check: current=$currentVersion '
+          'latest=${available?.version ?? 'none'} (asset tag $tag)');
     } catch (e) {
-      // offline / rate-limited / API down — stay silent, keep old state
-      _log.line('check failed (ignored): $e');
+      // offline / rate-limited / API down
+      _log.line(manual ? 'check failed: $e' : 'check failed (ignored): $e');
       available = null;
+      if (manual) checkError = 'Update check failed: $e';
+    } finally {
       phase = UpdatePhase.none;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Downloads the available release, installs it over the app directory
