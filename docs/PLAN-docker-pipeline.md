@@ -79,18 +79,26 @@ Eigenes Python-Sync-Tool als ftp-sync-Ersatz.
 - Remote: `MARCER_FTP_REMOTE` (neu; Default `/GameDVD/`).
 - Lokal: Union aus `MARCER_ROOT_DIR` und `MARCER_PATCH_DIR`, Patch gewinnt.
 - Ziel: immer `MARCER_PATCH_DIR`.
+- Verzeichnislisten laufen parallel über mehrere FTP-Verbindungen
+  (`MARCER_SYNC_WORKERS`, Default 4); der Marcer-Server ist pro Verzeichnis
+  langsam (~3-4 Verzeichnisse/s pro Verbindung).
 - Änderungserkennung im MVP: **Größenvergleich**.
   - fehlt lokal oder Größe weicht ab → Download
   - Remote-mtime wird gespeichert und berichtet, aber nicht als Trigger benutzt
   - keine 60-Sekunden-„Safety“-Re-Downloads wie bei ftp-sync
 - Download atomar: `<rel>.part` → Größenprüfung → `os.replace` → mtime setzen.
 - Retry/Reconnect, passive Verbindung, binärer Modus.
-- Keine lokalen Löschungen; Remote-Löschungen nur im Report.
+- Keine lokalen Löschungen; lokale Dateien ohne Remote-Gegenstück nur als
+  `local_only` im Report.
 - Schutz gegen Path-Traversal und Case-Kollisionen.
-- State: `/state/archive-sync/state.json`.
-- Report: `changes.json` + `changes.txt` mit
-  `added`, `updated`, `remote_deleted`, `unchanged`, `downloaded`.
-- Optionen: `--dry-run`, `--force`, `--only`, `--exclude`.
+- Reports: `changes.json` + `changes.txt` mit `new`, `changed`, `in_sync`,
+  `local_only`, `downloads`.
+- Kein `state.json`; jeder Lauf vergleicht direkt Remote gegen den lokalen
+  Union-Baum.
+- Optionen: `--dry-run`, `--force`, `--only`, `--exclude`, `--workers`.
+- Kann ein Verzeichnis nicht gelistet werden, werden lokale Dateien dieses
+  Teilbaums nicht als `local_only` gemeldet (keine falsche Remote-Löschung);
+  der Lauf endet mit Exit-Code 1 und meldet die unvollständigen Verzeichnisse.
 
 ### 3.2 `tools/asset-publish/`
 
@@ -216,12 +224,12 @@ curl -X POST http://<server>:8080/hook/screenshots
 - **XLS:** `Title Sorted/Games.xls`, `PD Games.xls`, `Utils_.xls`.
 - **Scopes:** `cracked`, `pd`, `utils`, `magazine`, `falcon` (aus der
   `shotgen`-Config).
-- **gameinfo:** XLS-Änderung, neue/entfernte Ordner in den Title-Sorted-Bäumen,
+- **gameinfo:** XLS-Änderung, neue Ordner (als `new` im Sync-Report),
   fehlendes/inkonsistentes `manifest.json` oder Erstlauf.
 - **crews:** `gameinfo` lief oder Cracked-Bereich geändert.
-- **index:** mindestens ein Pfad im jeweiligen Scope-Baum geändert oder
+- **index:** mindestens ein `new`/`changed`-Pfad im jeweiligen Scope-Baum oder
   Indexdatei fehlt.
-- **No-Op:** keine relevanten Änderungen und alle Indexdateien vorhanden →
+- **No-Op:** keine `new`/`changed`-Pfade und alle Indexdateien vorhanden →
   Lauf endet erfolgreich mit „nothing changed“.
 
 ### 4.4 Paketierungs- und Upload-Regeln
@@ -298,22 +306,24 @@ curl -X POST http://<server>:8080/hook/screenshots
 
 ### Phase 1 – `archive-sync`
 
-- [ ] `tools/archive-sync/` anlegen (MIT-Header, `run.sh`, README).
-- [ ] Env-/Pfad-Loader inkl. `MARCER_FTP_REMOTE` implementieren.
-- [ ] FTP-Client: Connect, passive Mode, MLSD mit LIST/SIZE-Fallback,
+- [x] `tools/archive-sync/` anlegen (MIT-Header, `run.sh`, README).
+- [x] Env-/Pfad-Loader inkl. `MARCER_FTP_REMOTE` implementieren.
+- [x] FTP-Client: Connect, passive Mode, MLSD mit LIST/SIZE-Fallback,
       Retry/Reconnect.
-- [ ] Remote-Baum rekursiv lesen, Excludes und Path-Traversal-Schutz.
-- [ ] Lokalen Union-Baum (Root/Patch, Patch gewinnt) und Case-Behandlung
+- [x] Remote-Baum rekursiv lesen, Excludes und Path-Traversal-Schutz.
+- [x] Lokalen Union-Baum (Root/Patch, Patch gewinnt) und Case-Behandlung
       implementieren.
-- [ ] `plan`/`sync`: `added`, `updated`, `unchanged`, `remote_deleted` auf
-      Basis des Größenvergleichs.
-- [ ] Atomaren Download (`.part`, Größenprüfung, `os.replace`, mtime setzen)
+- [x] `plan`/`sync`: `new`, `changed`, `in_sync`, `local_only`, `downloads`
+      auf Basis des Größenvergleichs.
+- [x] Atomaren Download (`.part`, Größenprüfung, `os.replace`, mtime setzen)
       implementieren.
-- [ ] State `state.json` und Reports `changes.json`/`changes.txt` schreiben.
-- [ ] CLI `plan|sync|status`, `--dry-run`, `--force`, `--only`, `--exclude`.
-- [ ] Unit-Tests (Vergleich, Patch-Vorrang, kein Löschen, Traversal, Report).
-- [ ] README mit Beispielen und Sicherheitsregeln.
-- [ ] Read-only-Test gegen echten FTP (`plan`).
+- [x] Reports `changes.json`/`changes.txt` schreiben (kein `state.json`).
+- [x] CLI `plan|sync|status`, `--dry-run`, `--force`, `--only`, `--exclude`.
+- [x] Parallele FTP-Listing-Worker (`--workers`, `MARCER_SYNC_WORKERS`).
+- [x] Unvollständige Verzeichnisse im Report sicher behandeln.
+- [x] Unit-Tests (Vergleich, Patch-Vorrang, kein Löschen, Traversal, Report).
+- [x] README mit Beispielen und Sicherheitsregeln.
+- [x] Read-only-Test gegen echten FTP (`plan`, Scope `pd` und `A`).
 
 ### Phase 2 – `asset-publish`
 
@@ -416,7 +426,7 @@ curl -X POST http://<server>:8080/hook/screenshots
 
 | Bereich | Fälle |
 |---|---|
-| Sync | neu, geändert, unverändert, remote gelöscht, Patch-Vorrang, Case-Kollision, Path-Traversal, Abbruch/Resume |
+| Sync | neu, geändert, in sync, local only, Patch-Vorrang, Case-Kollision, Path-Traversal, parallele Listing-Worker, unvollständige Verzeichnisse, Abbruch/Neustart (kein Resume) |
 | Publish | gleiche Signatur, geänderte Signatur, `--force`, Excludes, deterministisches ZIP, Upload-Fehler |
 | Pipeline | XLS-Änderung, neue ZIPs, neuer Ordner, Scope-Mapping, No-Op, parallele Requests, Scheduler, Pointer-Retry |
 | GitHub | Release vorhanden/fehlt, Asset vorhanden/fehlt, identischer Pointer, API-Fehler |

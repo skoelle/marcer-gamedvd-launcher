@@ -163,6 +163,12 @@ The tool and its workflow were introduced by its author in this
 [Facebook group post](https://www.facebook.com/groups/360493904888475/posts/1338164240454765)
 (group membership / Facebook login required).
 
+For headless/server automation the repo now includes the Python
+[`tools/archive-sync`](../tools/archive-sync/README.md) tool (`plan` / `sync` /
+`status`, change report, no interactive key presses). It downloads into
+`PatchDirectory` just like `ftp-sync`; see its README for the environment
+variables and the report files.
+
 ### 3.1 Install and configure `ftp-sync`
 
 Requirements: Node.js and npm.

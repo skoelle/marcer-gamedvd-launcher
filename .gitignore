@@ -39,6 +39,8 @@ desktop.config.json
 /tools/gameinfo-gen/__pycache__/
 /tools/atarilegend-gen/__pycache__/
 /tools/asset-manifest/__pycache__/
+/tools/archive-sync/__pycache__/
+/tools/archive-sync/tests/__pycache__/
 /tools/crew-analysis/__pycache__/
 /tools/gallery/__pycache__
 
