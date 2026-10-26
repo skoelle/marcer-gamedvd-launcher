@@ -159,6 +159,9 @@ changed files from Marcer's FTP server. This is optional but recommended for
 keeping a large archive up to date.
 
 `ftp-sync` is a separate Node.js tool and is not bundled with the launcher.
+The tool and its workflow were introduced by its author in this
+[Facebook group post](https://www.facebook.com/groups/360493904888475/posts/1338164240454765)
+(group membership / Facebook login required).
 
 ### 3.1 Install and configure `ftp-sync`
 
