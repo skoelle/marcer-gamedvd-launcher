@@ -1,7 +1,7 @@
 # Crew Analysis — Top Crews in the Cracked Section
 
-Analysis of the `Crew Sorted` and `Title Sorted` trees joined with the gameinfo
-metadata (`games-cracked.json`). The goal is a **crew view** for the cracked
+Analysis of the `Crew Sorted` tree and the screenshot index joined with the
+gameinfo metadata (`games-cracked.json`). The goal is a **crew view** for the cracked
 section: which crews and scene groups have the most release ZIPs, analogous to
 the catalog sections `games`, `pd`, `utils`, `magazines` and `falcon`.
 
@@ -15,12 +15,12 @@ into `local/crew-analysis/`.
 | Source | Role |
 |---|---|
 | `Crew Sorted/Cracked Games - Crew Sorted` | canonical group names, exact ZIP basename → crew mapping |
-| `Title Sorted/Cracked Games - Title Sorted` | ZIP universe (root + patch overlay) |
+| `index.json` (screenshot archive) | ZIP universe (required; direct Disk-1 release layer, `skipped_disk_n` excluded) |
 | `games-cracked.json` | `crew` / `cracked_by` per game folder and variant |
-| `index.json` (screenshot archive) | fast merged list of the cracked Title Sorted ZIPs |
 
-`Crew Sorted` alone is **not complete**: it contains 9,963 ZIPs, while the
-cracked Title Sorted tree has 10,722 direct release ZIPs. Only 5,796 direct
+`Crew Sorted` alone is **not complete**: it contains 9,963 ZIPs. The
+screenshot index contributes **8,938 direct Disk-1 release ZIPs** (10,722 raw
+direct entries minus 1,784 `skipped_disk_n` disk-2+ entries). Only 4,856 direct
 ZIPs match a Crew Sorted ZIP by exact basename. The remaining releases are
 attributed through `games-cracked.json` and alias/fuzzy matching.
 
@@ -45,9 +45,9 @@ tools/crew-analysis/run.sh
 tools/crew-analysis/run.sh images --top 128 --write-images --force
 ```
 
-- Step 2 can be skipped for the ranking with `crew-analysis/run.sh --scan`
-  (it reads `Title Sorted` directly); `images` requires the screenshot
-  index/sidecars.
+- Step 2 is required for both `ranking` and `images`: the screenshot index is
+  the only ZIP source. A missing `index.json` is an error (no filesystem
+  fallback).
 - `crew-analysis` reads `games-cracked.json`; it never modifies the
   `games-*.json` files.
 - Generate screenshots and crew data from the same snapshot. `crews.json`
@@ -60,10 +60,11 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
 
 ## Method
 
-1. **ZIP universe:** direct release ZIPs only — `Title Sorted/Cracked Games -
-   Title Sorted/<letter>/<folder>/<zip>`. Subfolders such as `STX`,
-   `Original`, `Demo Version`, `RAW` and `IPF` are preservation/extra variants
-   and are excluded by default.
+1. **ZIP universe:** direct Disk-1 release ZIPs only, read from
+   `index.json` (`Title Sorted/Cracked Games - Title Sorted/<letter>/<folder>/
+   <zip>`). Entries with `status: skipped_disk_n` (disk 2+) are excluded;
+   subfolders such as `STX`, `Original`, `Demo Version`, `RAW` and `IPF` are
+   preservation/extra variants and are excluded by default.
 2. **Group registry:** all Crew Sorted folder names are canonical groups. Every
    `crew` and `cracked_by` label from `games-cracked.json` is added; labels not
    already known become their own group (e.g. individual crackers). Placeholders
@@ -101,7 +102,7 @@ by prefixing the discovered cracked tree.
 The desktop app loads it as part of the catalog bundle:
 
 - a new **`crews`** section/tab (last tab) shows the curated selection
-  (currently 60 groups; `kCrewInitialLimit` caps it at 128), searchable by
+  (currently 62 groups; `kCrewInitialLimit` caps it at 128), searchable by
   crew name, aliases and release titles;
 - a crew card prefers a curated image from `crew-images.json`, then the best
   available release screenshot, then a group icon;
@@ -193,53 +194,54 @@ visible. `exclude` always wins. The tool writes the result as
 
 ## Current result
 
-Generated from the local game tree (2026-10-24):
+Generated from the local screenshot index (2026-10-26):
 
-- Direct release ZIPs: **10,722**
-- Assigned: **10,222**
-- Unmatched: **500**
+- Direct release ZIPs: **8,938**
+- Disk 2+ excluded (`skipped_disk_n`): **1,784**
+- Assigned: **8,479**
+- Unmatched: **459**
 - Ambiguous exact matches: **4**
 - Groups with at least one ZIP: **888**
-- Match sources: exact 5,796 · gameinfo crew 2,900 · gameinfo cracker 658 ·
-  alias/fuzzy 868
+- Match sources: exact 4,856 · gameinfo crew 2,352 · gameinfo cracker 586 ·
+  alias/fuzzy 685
 
 ### Top 24 (curated core)
 
 | # | Group | ZIPs |
 |---:|---|---:|
-| 1 | Replicants | 1129 |
-| 2 | Elite | 1075 |
-| 3 | Atari Legend | 822 |
-| 4 | Empire | 426 |
-| 5 | D-Bug | 366 |
-| 6 | Blade Runners | 320 |
-| 7 | International Cracking Service - ICS | 280 |
-| 8 | Cynix | 276 |
-| 9 | Medway Boys - TMB | 268 |
-| 10 | Menacing Cracking Alliance - MCA | 230 |
-| 11 | Bust | 187 |
-| 12 | Klapauzius | 140 |
-| 13 | Delight | 129 |
-| 14 | Vmax | 126 |
-| 15 | Pompey Pirates | 117 |
-| 16 | Corporation - TCR | 111 |
-| 17 | Hotline | 98 |
-| 18 | Atariforce | 96 |
-| 19 | Hotline and MCA | 90 |
-| 20 | Automation | 86 |
-| 21 | Vectronix | 82 |
-| 22 | Boss | 80 |
-| 23 | Superior | 80 |
-| 24 | Revolution | 64 |
+| 1 | Replicants | 876 |
+| 2 | Elite | 820 |
+| 3 | Atari Legend | 693 |
+| 4 | D-Bug | 365 |
+| 5 | Empire | 345 |
+| 6 | Blade Runners | 295 |
+| 7 | Medway Boys - TMB | 227 |
+| 8 | Menacing Cracking Alliance - MCA | 203 |
+| 9 | Cynix | 177 |
+| 10 | Bust | 165 |
+| 11 | International Cracking Service - ICS | 139 |
+| 12 | Klapauzius | 131 |
+| 13 | Delight | 112 |
+| 14 | Atariforce | 96 |
+| 15 | Vmax | 94 |
+| 16 | Hotline | 93 |
+| 17 | Automation | 85 |
+| 18 | Pompey Pirates | 79 |
+| 19 | Boss | 78 |
+| 20 | Hotline and MCA | 76 |
+| 21 | Corporation - TCR | 74 |
+| 22 | Superior | 68 |
+| 23 | TEX - The Exceptions | 60 |
+| 24 | Was Not Was | 57 |
 
-The Crews tab currently shows 60 curated groups; the complete ranking is in
+The Crews tab currently shows 62 curated groups; the complete ranking is in
 `local/crew-analysis/crew-ranking.csv`, and groups outside the selection are
 marked `"excluded": true` in `crews.json`.
 
 `Bust`, `Klapauzius` and `Boss` are individual crackers in the gameinfo data;
 they appear because their releases have no separate crew label (the crew view
-falls back to `cracked_by`). The next ranks are `Bad Brew Crew - BBC` (63),
-`TEX - The Exceptions` (60), `Was Not Was` (57) and `42 Crew` (54).
+falls back to `cracked_by`). The next ranks are `Revolution` (55), `42 Crew`
+(54), `Bad Brew Crew - BBC` (53) and `Vectronix` (48).
 
 Because this is a **crew view**, individual crackers whose releases are
 credited to a crew (for example `Snake`, `CB`, `Cameo` or `Lethal`) do not
@@ -249,14 +251,13 @@ matching crew label.
 
 ## Caveats
 
-- **Counts are ZIP files, not distinct games.** Multi-disk sets and file
-  versions count individually.
-- **Index vs. filesystem:** by default the tool uses the merged
-  `index.json` ZIP list (root + patch). `--scan` reads the `Title Sorted` tree
-  directly; both should agree, but a stale index can lag behind new ZIPs.
+- **Counts are Disk-1 ZIP files, not distinct games.** File versions count
+  individually; disk-2+ ZIPs (`skipped_disk_n`) are excluded.
+- **Index only:** the tool reads the merged `index.json` ZIP list (root +
+  patch) and never scans the filesystem. A stale index can lag behind new ZIPs.
 - **Crew Sorted is a hint, not the source of truth.** It supplies canonical
-  names and exact matches; the actual release count comes from the full Title
-  Sorted tree and gameinfo.
+  names and exact matches; the actual release count comes from the screenshot
+  index and gameinfo.
 - **Alias curation is ongoing.** Labels such as `Empire - USA`, `The Empire`,
   `MCA & Hotline` and `STCS` are normalized automatically or explicitly; new
   gameinfo data can add new labels. Check `groups-review.csv` and extend
@@ -271,7 +272,7 @@ matching crew label.
 
 ```sh
 tools/crew-analysis/run.sh
-tools/crew-analysis/run.sh --scan --top 50
+tools/crew-analysis/run.sh --top 50
 ```
 
 Outputs:

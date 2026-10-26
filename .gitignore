@@ -42,6 +42,7 @@ desktop.config.json
 /tools/archive-sync/__pycache__/
 /tools/archive-sync/tests/__pycache__/
 /tools/crew-analysis/__pycache__/
+/tools/crew-analysis/tests/__pycache__/
 /tools/gallery/__pycache__
 
 # Local tool data (paths.env, PirateFinder catalogue, analysis outputs)

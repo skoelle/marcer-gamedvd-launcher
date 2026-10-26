@@ -3,12 +3,13 @@
 # Licensed under the MIT License. See LICENSE file in project root for details.
 """Crew ranking for the cracked-games section.
 
-Counts direct release ZIPs per scene group (crews and individual crackers) and
-prints a "crew view" ranking. The canonical group names come from the
-``Crew Sorted/Cracked Games - Crew Sorted`` tree; additional groups are taken
-from the ``crew``/``cracked_by`` fields of ``games-cracked.json``. The ZIP
-universe is the direct (non-subfolder) release layer of
-``Title Sorted/Cracked Games - Title Sorted``.
+Counts direct Disk-1 release ZIPs per scene group (crews and individual
+crackers) and prints a "crew view" ranking. The canonical group names come from
+the ``Crew Sorted/Cracked Games - Crew Sorted`` tree; additional groups are
+taken from the ``crew``/``cracked_by`` fields of ``games-cracked.json``. The
+ZIP universe is the direct (non-subfolder) release layer of
+``Title Sorted/Cracked Games - Title Sorted`` as published in the screenshot
+index; entries with ``status == "skipped_disk_n"`` (disk 2+) are excluded.
 
 Attribution is intentionally conservative and prefers crews over individual
 crackers (crew view):
@@ -18,9 +19,10 @@ crackers (crew view):
 3. alias/fuzzy matching against canonical group aliases.
 
 Paths/environment (see ``run.sh`` and the repo ``local/paths.env``):
-``MARCER_ROOT_DIR``, ``MARCER_PATCH_DIR`` (optional), ``MARCER_DATA_DIR``
-(gameinfo files are read/written under ``<MARCER_DATA_DIR>/gameinfo``) and
-``MARCER_OUT_DIR`` (optional screenshot index for the merged ZIP list).
+``MARCER_ROOT_DIR``, ``MARCER_DATA_DIR`` (gameinfo files are read/written
+under ``<MARCER_DATA_DIR>/gameinfo``) and ``MARCER_OUT_DIR`` (screenshot
+output directory containing the required ``index.json``; override with
+``--index``).
 
 Outputs go to ``--out`` (default ``local/crew-analysis``) and contain the
 ranking plus audit files for alias curation. No game data is modified.
@@ -39,7 +41,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-TOOL_VERSION = "0.1.1"
+TOOL_VERSION = "0.1.2"
 SCHEMA_VERSION = 1
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -831,15 +833,27 @@ def write_image_suggestions(
         "\n".join(html_lines) + "\n", encoding="utf-8")
 
 
-def load_zips_from_index(path: Path, include_subdirs: bool) -> list[tuple[str, str, str, str, int | None, bool]]:
+def load_zips_from_index(
+    path: Path,
+    include_subdirs: bool,
+) -> tuple[list[tuple[str, str, str, str, int | None, bool]], int]:
+    """Load the direct release ZIP universe from the screenshot index.
+
+    Returns ``(zips, skipped_disks)``. ``skipped_disks`` counts the disk-2+
+    entries excluded via ``status == "skipped_disk_n"`` within the selected
+    scope (direct layer, or all entries with ``include_subdirs``).
+    """
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         sys.exit(f"error: cannot read screenshot index {path}: {exc}")
     entries = data.get("entries", data)
     out = []
+    skipped_disks = 0
     for key, value in entries.items():
         if not isinstance(key, str) or not key.startswith(INDEX_PREFIX):
+            continue
+        if not isinstance(value, dict):
             continue
         rel = key[len(INDEX_PREFIX):]
         parts = rel.split("/")
@@ -848,51 +862,13 @@ def load_zips_from_index(path: Path, include_subdirs: bool) -> list[tuple[str, s
             continue
         if len(parts) < 3:
             continue
+        if value.get("status") == "skipped_disk_n":
+            skipped_disks += 1
+            continue
         name = str(value.get("name") or parts[-1])
         size = value.get("size")
         out.append((rel, parts[0], parts[1], name, size, direct))
-    return out
-
-
-def scan_tree(base: Path) -> dict[str, int]:
-    found: dict[str, int] = {}
-    if not base.is_dir():
-        return found
-    for dirpath, dirnames, filenames in os.walk(base):
-        dirnames[:] = [d for d in dirnames if d != "@eaDir" and not d.startswith(".")]
-        for filename in filenames:
-            if not filename.lower().endswith(".zip"):
-                continue
-            path = Path(dirpath) / filename
-            rel = os.path.relpath(path, base).replace(os.sep, "/")
-            try:
-                found[rel] = path.stat().st_size
-            except OSError:
-                found[rel] = -1
-    return found
-
-
-def load_zips_from_fs(
-    root: Path,
-    patch: Path | None,
-    include_subdirs: bool,
-) -> list[tuple[str, str, str, str, int | None, bool]]:
-    merged: dict[str, tuple[str, int]] = {}
-    for rel, size in scan_tree(root).items():
-        merged[rel.casefold()] = (rel, size)
-    if patch and patch.is_dir():
-        for rel, size in scan_tree(patch).items():
-            merged[rel.casefold()] = (rel, size)
-    out = []
-    for rel, size in merged.values():
-        parts = rel.split("/")
-        direct = len(parts) == 3
-        if not direct and not include_subdirs:
-            continue
-        if len(parts) < 3:
-            continue
-        out.append((rel, parts[0], parts[1], parts[-1], size, direct))
-    return out
+    return out, skipped_disks
 
 
 # --------------------------------------------------------------------------
@@ -1071,14 +1047,13 @@ def run_images(args) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Rank cracked-game crews by direct release ZIPs.")
+    parser = argparse.ArgumentParser(
+        description="Rank cracked-game crews by direct Disk-1 release ZIPs.")
     parser.add_argument("command", nargs="?", default="ranking", choices=["ranking", "images"],
                         help="ranking (default) or images (suggest cracktro card images)")
     parser.add_argument("--root", default=env("MARCER_ROOT_DIR"), help="Root game directory (MARCER_ROOT_DIR)")
-    parser.add_argument("--patch", default=env("MARCER_PATCH_DIR"), help="Patch directory (MARCER_PATCH_DIR)")
     parser.add_argument("--gameinfo", default=default_gameinfo_dir(), help="Gameinfo directory containing games-cracked.json (default: MARCER_DATA_DIR/gameinfo)")
-    parser.add_argument("--index", default=env("MARCER_OUT_DIR"), help="Screenshot output directory or index.json path")
-    parser.add_argument("--scan", action="store_true", help="Scan Title Sorted on disk instead of using index.json")
+    parser.add_argument("--index", default=env("MARCER_OUT_DIR"), help="Screenshot output directory or index.json path (MARCER_OUT_DIR; required)")
     parser.add_argument("--include-subdirs", action="store_true", help="Include STX/Original/Demo/... subfolders")
     parser.add_argument("--top", type=int, default=24, help="Rows printed to the console (default: 24)")
     parser.add_argument("--out", default=str(REPO_ROOT / "local" / "crew-analysis"), help="Output directory")
@@ -1119,24 +1094,16 @@ def main() -> int:
         raw_crew_groups, gameinfo_labels, explicit, exclude
     )
 
-    if args.scan:
-        title_root = root / DEFAULT_TREE
-        patch_root = Path(args.patch).expanduser() / DEFAULT_TREE if args.patch else None
-        zips = load_zips_from_fs(title_root, patch_root, args.include_subdirs)
-        zip_source = "filesystem"
-    else:
-        index_path: Path | None = None
-        if args.index:
-            candidate = Path(args.index).expanduser()
-            index_path = candidate if candidate.is_file() else candidate / "index.json"
-        if index_path and index_path.is_file():
-            zips = load_zips_from_index(index_path, args.include_subdirs)
-            zip_source = str(index_path)
-        else:
-            title_root = root / DEFAULT_TREE
-            patch_root = Path(args.patch).expanduser() / DEFAULT_TREE if args.patch else None
-            zips = load_zips_from_fs(title_root, patch_root, args.include_subdirs)
-            zip_source = "filesystem (index.json not found)"
+    index_path: Path | None = None
+    if args.index:
+        candidate = Path(args.index).expanduser()
+        index_path = candidate if candidate.is_file() else candidate / "index.json"
+    if not index_path or not index_path.is_file():
+        target = str(index_path) if index_path else "MARCER_OUT_DIR is not set"
+        sys.exit(f"error: screenshot index not found: {target} "
+                 "(set MARCER_OUT_DIR or --index)")
+    zips, skipped_disks = load_zips_from_index(index_path, args.include_subdirs)
+    zip_source = str(index_path)
 
     primary: Counter[str] = Counter()
     source_counts: Counter[str] = Counter()
@@ -1261,6 +1228,7 @@ def main() -> int:
         },
         "counts": {
             "direct_zips": len(zips),
+            "skipped_disks": skipped_disks,
             "assigned": sum(primary.values()),
             "unmatched": len(unmatched),
             "ambiguous": len(ambiguous),
@@ -1338,6 +1306,7 @@ def main() -> int:
             "groups": len(crew_groups),
             "releases": sum(len(g["releases"]) for g in crew_groups),
             "direct_zips": len(zips),
+            "skipped_disks": skipped_disks,
             "unmatched": len(unmatched),
             "ambiguous": len(ambiguous),
         },
@@ -1399,6 +1368,7 @@ def main() -> int:
         f"# Cracked-game crew ranking ({generated})",
         "",
         f"- Direct release ZIPs: **{len(zips)}**",
+        f"- Disk 2+ excluded (`skipped_disk_n`): **{skipped_disks}**",
         f"- Assigned: **{sum(primary.values())}** ({', '.join(f'{k} {v}' for k, v in sorted(source_counts.items()))})",
         f"- Unmatched: **{len(unmatched)}**; ambiguous exact matches: **{len(ambiguous)}**",
         f"- Groups with at least one ZIP: **{len(primary)}**",
@@ -1413,7 +1383,7 @@ def main() -> int:
         lines.append(f"| {row['rank']} | {row['group']} | {row['zips']} |")
     (outdir / "crew-ranking.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    print(f"direct release ZIPs: {len(zips)}")
+    print(f"direct release ZIPs: {len(zips)}  (disk 2+ excluded: {skipped_disks})")
     print(f"assigned: {sum(primary.values())}  unmatched: {len(unmatched)}  groups: {len(primary)}")
     print(f"output: {outdir}")
     print(f"crews:  {crews_path}")

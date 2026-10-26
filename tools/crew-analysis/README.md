@@ -1,20 +1,23 @@
 # Crew Analysis
 
-Ranks the cracked-game crews and scene groups by the number of direct release
-ZIPs. The result is the "crew view" used when looking at the cracked section the
-same way the catalog exposes `games`, `pd`, `utils`, `magazines` and `falcon`.
+Ranks the cracked-game crews and scene groups by the number of direct Disk-1
+release ZIPs. Disk-2+ ZIPs (`status: skipped_disk_n`) are excluded. The result
+is the "crew view" used when looking at the cracked section the same way the
+catalog exposes `games`, `pd`, `utils`, `magazines` and `falcon`.
 
 See [`ANALYSIS-crews.md`](../../docs/ANALYSIS-crews.md) for the methodology,
-the current tab selection (currently 60 groups) and the data-quality caveats.
+the current tab selection (currently 62 groups) and the data-quality caveats.
 
 ## Data sources
 
 | Source | Purpose |
 |---|---|
 | `<RootDirectory>/Crew Sorted/Cracked Games - Crew Sorted` | canonical group names and exact ZIP basename matches |
-| `<RootDirectory>/Title Sorted/Cracked Games - Title Sorted` (+ `PatchDirectory` overlay) | ZIP universe (direct release layer only by default) |
+| `<ScreenshotDirectory>/index.json` | ZIP universe (required; direct release layer only by default, `skipped_disk_n` excluded) |
 | `<GameinfoDirectory>/games-cracked.json` | `crew` / `cracked_by` metadata per game folder |
-| `<ScreenshotDirectory>/index.json` | fast merged ZIP list (used by default; `--scan` reads the filesystem instead) |
+
+The index entries are used as-is, so no game tree is scanned. `PatchDirectory`
+content is already part of the merged screenshot index.
 
 `<GameinfoDirectory>` is `MARCER_DATA_DIR/gameinfo` (the data directory's
 `gameinfo/` subfolder); the tool reads and writes the gameinfo files there.
@@ -38,8 +41,9 @@ tools/crew-analysis/run.sh
 tools/crew-analysis/run.sh images --top 128 --write-images --force
 ```
 
-- Step 2 can be skipped for the ranking by using `--scan` (reads
-  `Title Sorted` directly); `images` needs the screenshot index/sidecars.
+- Step 2 is required for both `ranking` and `images`: the screenshot index is
+  the only ZIP source. A missing `index.json` is an error (no filesystem
+  fallback).
 - `crew-analysis` never writes or modifies `games-*.json`. It only adds
   `crews.json` and `crew-images.json` to `GameinfoDirectory`.
 - Generate screenshots and crew data from the same data snapshot:
@@ -51,7 +55,6 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
 ```sh
 tools/crew-analysis/run.sh                    # ranking, top 24
 tools/crew-analysis/run.sh --top 50
-tools/crew-analysis/run.sh --scan             # ignore index.json, scan Title Sorted on disk
 tools/crew-analysis/run.sh --include-subdirs  # include STX/Original/Demo/RAW/... subfolders
 tools/crew-analysis/run.sh --out /tmp/crews
 
@@ -63,11 +66,10 @@ tools/crew-analysis/run.sh images --top 128 --write-images   # starter crew-imag
 
 Environment (via the repo `local/paths.env`):
 
-- `MARCER_ROOT_DIR` — required; contains `Crew Sorted/` and `Title Sorted/`
-- `MARCER_PATCH_DIR` — optional patch layer for the filesystem scan
+- `MARCER_ROOT_DIR` — required; contains the `Crew Sorted/` tree
 - `MARCER_DATA_DIR` — required; gameinfo files are read/written under
   `MARCER_DATA_DIR/gameinfo` (contains `games-cracked.json`)
-- `MARCER_OUT_DIR` — optional; contains `index.json` (default ZIP source)
+- `MARCER_OUT_DIR` — required; contains the screenshot `index.json` (ZIP source)
 
 ## Output
 
@@ -106,7 +108,7 @@ The per-crew release list consumed by the desktop app's and gallery webapp's
 }
 ```
 
-It contains **all** groups; the UI shows the curated selection (currently 60, cap 128). The
+It contains **all** groups; the UI shows the curated selection (currently 62, cap 128). The
 `image` field is reserved for the later cracktro/logo curation phase.
 `--crews-out` overrides the path (default `<GameinfoDirectory>/crews.json`).
 
@@ -177,8 +179,10 @@ menu) and ranked lower; the plain-desktop hash is filtered outright.
 
 ## Rules
 
-- Only **direct release ZIPs** are counted by default; `STX`, `Original`,
+- Only **direct Disk-1 release ZIPs** are counted by default; `STX`, `Original`,
   `Demo`, `RAW`, `IPF`, … subfolders are preservation/extra variants.
+- ZIPs with index `status == "skipped_disk_n"` are disk 2+ and always excluded;
+  `counts.skipped_disks` reports how many were filtered out.
 - The **crew view prefers `crew` over `cracked_by`**. An individual cracker is
   only the primary group when the release has no matching crew label. Crackers
   whose releases are credited to a crew (e.g. `Snake`, `CB`, `Cameo`) therefore

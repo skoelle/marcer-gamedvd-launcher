@@ -69,9 +69,11 @@ tools/piratefinder-gen/run.sh report    # regenerate the reports
 
 ### Matching
 
-The universe is the same as `tools/crew-analysis`: direct release ZIPs under
-`Title Sorted/Cracked Games - Title Sorted` (10,722 in the current tree), read
-from `index.json` by default or from disk with `--scan`.
+The universe follows the same direct-release rule as `tools/crew-analysis`:
+direct release ZIPs under `Title Sorted/Cracked Games - Title Sorted` (10,722
+in the current tree, including disk-2+ ZIPs; `crew-analysis` additionally
+excludes `skipped_disk_n`). It is read from `index.json` by default or from disk
+with `--scan`.
 
 1. **Hash (exact).** Every `.msa`/`.st`/`.stx` member of a ZIP is decoded and
    hashed. MSA is unpacked to raw sectors with the same rules as
