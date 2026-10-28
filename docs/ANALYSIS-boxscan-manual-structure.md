@@ -285,7 +285,9 @@ cabal_hq_front.png
 
 Lowercase, underscores, optional publisher (`rainbird`, `hq`) and optional
 language/region token (`ger`, `de`, `e-fr`, `fr`, `fre`). Sides seen:
-`front`, `back`, `f`, `b`, `fr` (front!), `ba` (back), `fro`.
+`front`, `back`, `f`, `b`, `fr` (front in old names, but also a language
+token), `ba` (back), `fro`. Automatic ordering treats `fr` as ambiguous and
+does not use it as a side marker.
 
 ### 4.3 `<game>_<publisher>_d7.jpg` / `_d7_2.jpg` — disc-style JPG pair
 
@@ -478,18 +480,21 @@ loose non-ZIP files (PDFs, PNGs) are invisible, which is why
 
 ## 8. Requirements For A Consumer (Flutter Desktop App)
 
-> **Desktop app status (2026-10-21): implemented lazily per selected card.**
-> `lib/local_assets.dart` discovers both layers (case-insensitive `Boxscan`/
-> `Manual`/`Manuals`), lists loose files and ZIP central directories in a
-> background isolate and materializes media on demand into a session temp cache
-> under `<system temp>/marcer_local_assets_<pid>/` (no automatic cleanup;
-> nothing persisted across runs); `GameInfoPanel` shows
-> `Box scans (N)`/`Manuals (N)` chips
+> **Desktop app status (2026-10-21, ordering/case update 2026-10-28):
+> implemented lazily per selected card.** `lib/local_assets.dart` discovers
+> both layers (case-insensitive `Boxscan`/`Manual`/`Manuals`), lists loose
+> files and ZIP central directories in a background isolate and materializes
+> media on demand into a session temp cache under
+> `<system temp>/marcer_local_assets_<pid>/` (no automatic cleanup; nothing
+> persisted across runs). Case-only distinct paths are preserved inside one
+> layer; patch still wins for the same case-insensitive relative path between
+> layers. `GameInfoPanel` shows `Box scans (N)`/`Manuals (N)` chips
 > (`lib/widgets/local_assets_chips.dart`, `local_assets_dialog.dart`). Box
-> scans open an edition gallery + viewer; manuals group scan/text pairs, open
-> PDFs/DOC/TXT in the OS default app, show image-page manuals in the viewer and
-> `.msa` as info-only; RAR/unknown formats are skipped silently. See the
-> desktop README "Box scans & manuals".
+> scans open an edition gallery + viewer and order clear front/back pairs
+> front-first; manuals group scan/text pairs, open PDFs/DOC/TXT in the OS
+> default app, show image-page manuals in the viewer and `.msa` as info-only;
+> RAR/unknown formats are skipped silently. See the desktop README
+> "Box scans & manuals".
 
 Derived directly from sections 2–6:
 
@@ -507,19 +512,26 @@ Derived directly from sections 2–6:
    the ZIP stem (the edition label, section 4.6), regardless of an optional
    container folder inside the ZIP.
 4. **Display** — thumbnails with bounded decode, aspect-preserving fit,
-   no fixed aspect assumption (section 5); an ordered gallery per edition
-   (front-first where inferable, otherwise name order). The same image
-   path must also serve the image-based manuals of section 3.7.
+   no fixed aspect assumption (section 5); an ordered gallery per edition.
+   Front-first only when the edition contains at least one clear front and
+   one clear back marker: the last non-numeric name token must be `front`/
+   `f`/`fro` or `back`/`b`/`ba` (case-insensitive; `fr` is excluded as
+   ambiguous). Fronts sort first, unlabelled images in the middle, backs
+   last, each group by name; without such a pair the whole edition stays in
+   name order. The same image path must also serve the image-based manuals
+   of section 3.7.
 5. **Manuals** — for `Manual/`: pair `<stem>.zip` with `<stem>_text.zip`
    by stem (3.5) and expose both variants to the user (scan = visual,
    `_text` = selectable text); inside each ZIP take the PDF (or the JPGs,
    3.7). Loose PDFs count too. `.msa`/`.MSA` entries are **disk images**,
    not documents (6.4) — never show them in a PDF viewer. RAR and unknown
    formats are skipped silently (no UI note is shown).
-6. **Robustness** — case-insensitive matching everywhere; paths with spaces,
-   `&`, commas, parentheses; tolerate folders vanishing mid-scan (6.3);
-   tolerate half-broken scan/text pairs (6.3); skip hidden entries
-   (`@eaDir`); never assume names carry front/back semantics.
+6. **Robustness** — case-insensitive matching everywhere; preserve paths
+   that differ only in case inside one layer; paths with spaces, `&`, commas,
+   parentheses; tolerate folders vanishing mid-scan (6.3); tolerate
+   half-broken scan/text pairs (6.3); skip hidden entries (`@eaDir`); never
+   assume names carry front/back semantics beyond the explicit ordering
+   markers above.
 7. **Scope control** — the assets are large (10s of MB per game). Index
    paths lazily; do not pre-extract or pre-decode archives at startup.
 8. **Independence from the XLS flag** — the XLS facet stays "XLS says yes"
@@ -531,8 +543,8 @@ Derived directly from sections 2–6:
 
 ## 9. Open Questions
 
-The desktop implementation (2026-10-21) answered the consumer questions below;
-the product/data questions that remain are listed separately.
+The desktop implementation (2026-10-21) and the product decisions from
+2026-10-28 answered the consumer questions below; no open questions remain.
 
 **Answered by the implementation:**
 - [x] Box scans are read-only and extracted on demand into a session temp
@@ -543,13 +555,12 @@ the product/data questions that remain are listed separately.
 - [x] The five `.msa` manual disks are shown as info-only disk images and are
       never opened as documents.
 
-**Still open (product/data decisions):**
-- [ ] Should the edition grouping surface as a UI facet (publisher/region of
-      the *scan*) or stay a gallery tab per game? (currently: gallery per game)
-- [ ] `Manuals` plural (1 case) — fix the data, or keep supporting both
-      spellings forever? (the app already supports both)
-- [ ] The ~7 % ZIP-only and ~1 % mixed Boxscan folders in the patch layer:
-      are more ZIPs planned, or is loose-image the long-term convention?
+**Answered by product decisions (2026-10-28):**
+- [x] Edition grouping stays a gallery section per game; no separate
+      publisher/region facet.
+- [x] Both `Manual` and `Manuals` spellings are supported permanently.
+- [x] Loose images are the long-term convention (matching the newer patch
+      layer); ZIP-only and mixed folders remain fully supported.
 
 ---
 
@@ -575,7 +586,7 @@ Re-verification: re-run the same listings; counts are expected to grow, the
 
 ## Conformance Checklist (verified against the desktop implementation)
 
-Checked against `apps/marcer_desktop/lib/local_assets.dart` on 2026-10-21.
+Checked against `apps/marcer_desktop/lib/local_assets.dart` on 2026-10-28.
 
 - [x] Finds `Boxscan`/`boxscan`/`Box Scan` and `Manual`/`Manuals`
       case-insensitively in both layers
@@ -585,6 +596,10 @@ Checked against `apps/marcer_desktop/lib/local_assets.dart` on 2026-10-21.
 - [x] Handles one optional edition-directory level with label inheritance
       (loose subfolders: first directory segment; ZIP contents: ZIP stem)
 - [x] Shows images aspect-preserving with bounded decode; no fixed aspect ratio
+- [x] Sorts box-scan images front-first only with clear front/back markers;
+      otherwise keeps name order
+- [x] Preserves case-only distinct paths inside one layer; patch still wins
+      for the same case-insensitive path across layers
 - [x] Pairs manual `<stem>.zip` with `<stem>_text.zip`; tolerates missing halves
 - [x] Renders manual PDFs **and** image-page manuals (JPG-in-ZIP, 3.7)
 - [x] Never treats `.msa`/`.MSA` as documents or launchable archives (6.4)

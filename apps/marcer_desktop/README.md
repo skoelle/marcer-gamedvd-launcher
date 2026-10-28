@@ -542,13 +542,17 @@ something.
   panel (detail sidebar **and** lightbox) appear when assets exist.
 - **Box scans:** gallery grouped by edition (ZIP stem / edition folder) with
   bounded thumbnails; a thumbnail opens the full-screen viewer (`←/→`, `Esc`,
-  zoom). Recursive in-ZIP images are supported; PDFs/disk images inside
-  `Boxscan/` are ignored.
+  zoom). Clear front/back pairs (`front`/`f`/`fro`, `back`/`b`/`ba`, last
+  non-numeric token) are ordered front-first, with unlabelled images in the
+  middle; editions without such a pair stay in name order (`fr` is treated as
+  a language token, not a side marker). Recursive in-ZIP images are supported;
+  PDFs/disk images inside `Boxscan/` are ignored.
 - **Manuals:** grouped by stem; scan/text pairs (`<stem>.zip` /
   `<stem>_text.zip`) are both offered. PDFs and `.doc`/`.txt` open in the OS
   default application, image-page manuals open in the image viewer, `.msa` files
   are shown as info-only disk images (never opened as documents).
-- Both layers are merged (patch wins for the same path); hidden entries
+- Both layers are merged (patch wins for the same case-insensitive path);
+  paths that differ only in case inside one layer are preserved. Hidden entries
   (`@eaDir`, dotfiles) are skipped and vanished/unreadable folders are treated
   as empty. The XLS `boxscan` filter flag stays independent metadata.
 - ZIP media is extracted on demand into a session temp cache under

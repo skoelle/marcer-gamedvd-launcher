@@ -19,6 +19,16 @@ List<int> _zipWith(Map<String, List<int>> entries) {
   return ZipEncoder().encode(archive)!;
 }
 
+bool _supportsCaseOnlyFiles(Directory dir) {
+  final upper = File(p.join(dir.path, 'CaseProbe.tmp'))
+    ..writeAsStringSync('upper');
+  final lower = File(p.join(dir.path, 'caseprobe.tmp'))
+    ..writeAsStringSync('lower');
+  return !FileSystemEntity.identicalSync(upper.path, lower.path) &&
+      upper.readAsStringSync() == 'upper' &&
+      lower.readAsStringSync() == 'lower';
+}
+
 void main() {
   late Directory tmp;
   late String root;
@@ -108,6 +118,67 @@ void main() {
     expect(all, isNot(contains('readme.txt')));
     expect(all, isNot(contains('ignored.png')));
     expect(assets.boxscanImageCount, 7);
+  });
+
+  test('orders clear front/back pairs, otherwise by name', () {
+    write('root', 'Boxscan/Sides/z_front.png', [70]);
+    write('root', 'Boxscan/Sides/m_misc.png', [71]);
+    write('root', 'Boxscan/Sides/a_back.png', [72]);
+    write('root', 'Boxscan/Letters/z_f.png', [73]);
+    write('root', 'Boxscan/Letters/a_b.png', [74]);
+    write('root', 'Boxscan/Ambiguous/a_back.png', [75]);
+    write('root', 'Boxscan/Ambiguous/z_fr.png', [76]);
+
+    final assets = discoverSync(root, patch, gameRel);
+    final byLabel = {
+      for (final edition in assets.boxscans) edition.label: edition,
+    };
+
+    expect(byLabel['Sides']!.images.map((image) => image.name),
+        ['z_front.png', 'm_misc.png', 'a_back.png']);
+    expect(byLabel['Letters']!.images.map((image) => image.name),
+        ['z_f.png', 'a_b.png']);
+    expect(byLabel['Ambiguous']!.images.map((image) => image.name),
+        ['a_back.png', 'z_fr.png']);
+  });
+
+  test('patch wins for the same case-insensitive manual path', () {
+    write('root', 'Manual/OverlayOnly.pdf', [77]);
+    write('patch', 'manual/overlayonly.pdf', [78]);
+
+    final assets = discoverSync(root, patch, gameRel);
+    final overlays = assets.manuals
+        .where((doc) => doc.stem.toLowerCase() == 'overlayonly')
+        .toList();
+
+    expect(overlays, hasLength(1));
+    expect(overlays.single.loosePath, contains('patch'));
+  });
+
+  test('keeps case-only files inside one layer and patch variants', () {
+    if (!_supportsCaseOnlyFiles(tmp)) {
+      markTestSkipped('case-sensitive filesystem required');
+      return;
+    }
+    write('root', 'Boxscan/Case.png', [79]);
+    write('root', 'Boxscan/case.png', [80]);
+    write('patch', 'Boxscan/Case.png', [81]);
+    write('patch', 'Boxscan/case.png', [82]);
+
+    final assets = discoverSync(root, patch, gameRel);
+    final box =
+        assets.boxscans.firstWhere((edition) => edition.label == 'Boxscan');
+    final names = box.images.map((image) => image.name).toList();
+
+    expect(names, contains('Case.png'));
+    expect(names, contains('case.png'));
+    expect(
+      box.images
+          .where((image) =>
+              image.name == 'Case.png' || image.name == 'case.png')
+          .every((image) => image.loosePath!.contains('patch')),
+      isTrue,
+    );
   });
 
   test('discovers manuals: scan/text pair, pages, disk image, documents', () {

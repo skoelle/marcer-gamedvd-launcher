@@ -310,15 +310,92 @@ class LocalAssetsService {
 const Set<String> _boxImageExts = {'.png', '.jpg', '.jpeg'};
 const Set<String> _manualImageExts = {'.png', '.jpg', '.jpeg', '.gif'};
 
+class _OverlayEntries<T> {
+  final Map<String, T> _values = {};
+  final Map<String, Set<String>> _keysByLower = {};
+  final Map<String, int> _layerOf = {};
+
+  Iterable<T> get values => _values.values;
+
+  void add(int layer, String key, T value) {
+    final lower = key.toLowerCase();
+    final keys = _keysByLower.putIfAbsent(lower, () => <String>{});
+    keys.removeWhere((other) {
+      final otherLayer = _layerOf[other];
+      if (otherLayer == null) return true;
+      if (otherLayer < layer) {
+        _values.remove(other);
+        _layerOf.remove(other);
+        return true;
+      }
+      return false;
+    });
+    if (_layerOf.containsKey(key)) {
+      _values[key] = value;
+      return;
+    }
+    _values[key] = value;
+    _layerOf[key] = layer;
+    keys.add(key);
+  }
+}
+
+const Set<String> _frontSideTokens = {'front', 'f', 'fro'};
+const Set<String> _backSideTokens = {'back', 'b', 'ba'};
+
+_BoxImageSide? _boxImageSide(String name) {
+  final stem = p.basenameWithoutExtension(name).toLowerCase();
+  final tokens = stem
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((token) => token.isNotEmpty)
+      .toList();
+  for (var i = tokens.length - 1; i >= 0; i--) {
+    final token = tokens[i];
+    if (int.tryParse(token) != null) continue;
+    if (_frontSideTokens.contains(token)) return _BoxImageSide.front;
+    if (_backSideTokens.contains(token)) return _BoxImageSide.back;
+    return null;
+  }
+  return null;
+}
+
+enum _BoxImageSide { front, back }
+
+void _sortBoxImages(List<LocalImageRef> images) {
+  final hasFront =
+      images.any((image) => _boxImageSide(image.name) == _BoxImageSide.front);
+  final hasBack =
+      images.any((image) => _boxImageSide(image.name) == _BoxImageSide.back);
+
+  int rank(LocalImageRef image) {
+    if (!hasFront || !hasBack) return 0;
+    return switch (_boxImageSide(image.name)) {
+      _BoxImageSide.front => 0,
+      _BoxImageSide.back => 2,
+      null => 1,
+    };
+  }
+
+  images.sort((a, b) {
+    final byRank = rank(a).compareTo(rank(b));
+    if (byRank != 0) return byRank;
+    final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    if (byName != 0) return byName;
+    return a.name.compareTo(b.name);
+  });
+}
+
 /// Synchronous discovery (runs inside an isolate).
 LocalGameAssets discoverSync(
     String rootDirectory, String patchDirectory, String gameRel) {
-  final looseBox = <String, LocalImageRef>{};
-  final boxZips = <String, String>{};
-  final looseManuals = <String, LocalManualDoc>{};
-  final manualZips = <String, String>{};
+  final looseBox = _OverlayEntries<LocalImageRef>();
+  final boxZips = _OverlayEntries<String>();
+  final looseManuals = _OverlayEntries<LocalManualDoc>();
+  final manualZips = _OverlayEntries<String>();
 
-  for (final layer in [rootDirectory, patchDirectory]) {
+  final layers = [rootDirectory, patchDirectory];
+  for (var layerIndex = 0; layerIndex < layers.length; layerIndex++) {
+    final layer = layers[layerIndex];
     if (layer.trim().isEmpty) continue;
     final gameBase = p.join(layer, gameRel);
     final gameDir = Directory(gameBase);
@@ -339,25 +416,29 @@ LocalGameAssets discoverSync(
       if (!isBox && !isManual) continue;
 
       _walk(child, (file, relDir) {
-        final relKey = p.relative(file.path, from: gameBase).toLowerCase();
+        final relKey = p.relative(file.path, from: gameBase);
         final ext = p.extension(file.path).toLowerCase();
         final base = p.basename(file.path);
         if (isBox) {
           if (_boxImageExts.contains(ext)) {
-            looseBox[relKey] = LocalImageRef(
-              name: base,
-              edition: relDir.isEmpty ? 'Boxscan' : relDir.split('/').first,
-              loosePath: file.path,
+            looseBox.add(
+              layerIndex,
+              relKey,
+              LocalImageRef(
+                name: base,
+                edition: relDir.isEmpty ? 'Boxscan' : relDir.split('/').first,
+                loosePath: file.path,
+              ),
             );
           } else if (ext == '.zip') {
-            boxZips[relKey] = file.path;
+            boxZips.add(layerIndex, relKey, file.path);
           }
           // PDFs etc. misplaced in Boxscan/ are ignored (analysis §3.3/6.2).
         } else if (ext == '.zip') {
-          manualZips[relKey] = file.path;
+          manualZips.add(layerIndex, relKey, file.path);
         } else {
           final doc = _looseManualDoc(file.path);
-          if (doc != null) looseManuals[relKey] = doc;
+          if (doc != null) looseManuals.add(layerIndex, relKey, doc);
         }
       });
     }
@@ -394,10 +475,10 @@ LocalGameAssets discoverSync(
     final seen = <String>{};
     final images = <LocalImageRef>[];
     for (final image in e.value) {
-      if (!seen.add(image.name.toLowerCase())) continue;
+      if (!seen.add(image.name)) continue;
       images.add(image);
     }
-    images.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _sortBoxImages(images);
     editionList.add(LocalBoxscanEdition(e.key, images));
   }
   editionList

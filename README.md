@@ -306,14 +306,16 @@ feature:
 
 - **Box scans:** grouped by edition (ZIP stem / edition folder) with bounded
   thumbnails and a full-screen viewer (`←/→`, `Esc`, zoom); recursive in-ZIP
-  images are supported, PDFs/disk images inside `Boxscan/` are ignored.
+  images are supported, PDFs/disk images inside `Boxscan/` are ignored. Clear
+  front/back pairs are ordered front-first; otherwise name order applies.
 - **Manuals:** grouped by stem; scan/text pairs (`<stem>.zip` /
   `<stem>_text.zip`) are both offered. Image-page manuals open in the viewer,
   PDFs and `.doc`/`.txt` open in the OS default application, and `.msa` files
   are shown as info-only disk images (never opened as documents).
 - **Lazy & read-only:** discovered only for the selected card (both layers
-  merged, patch wins), no index and no pre-extraction; the app never modifies
-  these curated files and nothing is bundled. Details:
+  merged, patch wins, case-only distinct paths preserved), no index and no
+  pre-extraction; the app never modifies these curated files and nothing is
+  bundled. Details:
   [`docs/ANALYSIS-boxscan-manual-structure.md`](docs/ANALYSIS-boxscan-manual-structure.md).
 
 ### 🚀 Quick start
