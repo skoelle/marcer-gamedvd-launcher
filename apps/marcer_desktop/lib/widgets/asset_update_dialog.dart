@@ -115,7 +115,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
         return AlertDialog(
           title: const Text('Catalog data'),
           content: SizedBox(
-            width: 560,
+            width: 760,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -237,7 +237,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(
-                width: 90,
+                width: 150,
                 child: Text(
                   'AtariLegend',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -376,7 +376,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(
-                width: 90,
+                width: 150,
                 child: Text(
                   kPirateFinderCatalogShortName,
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -498,7 +498,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
-                width: 90,
+                width: 150,
                 child: Text(
                   asset == CatalogAsset.gameinfo ? 'GameInfo' : 'Screenshots',
                   style: const TextStyle(

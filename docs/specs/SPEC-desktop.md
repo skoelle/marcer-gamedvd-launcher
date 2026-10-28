@@ -13,8 +13,10 @@ from `crew-images.json`, then the best release screenshot. The detail panel
 lists all releases and opens one in the existing lightbox. Double-clicking a
 crew card opens the release browser (main-style search field and sort at the
 top left, crew name centred in the header, close at the right, sidebar below
-the header with the crew overview above the selected ZIP info, name/year sort
-with `name asc` as default, `skipped_disk_n` hidden). The crew overview's
+the header with the crew overview above the selected release's game header
+(title, ROOT/PATCH folder buttons and the same badges as the lightbox header),
+followed by the selected ZIP info, name/year sort with `name asc` as default,
+`skipped_disk_n` hidden). The crew overview's
 PirateFinder-Catalog block has a **More** button opening a crew-only PF
 lightbox (`Overview`, `Releases`, `Menus`, `Trivia`, `Sources`). There is an
 optional overlay folder browser (`T` / Folders button) per
@@ -125,8 +127,8 @@ The setup/settings form is **tabbed**:
   **ScreenshotDirectory** and **GameinfoDirectory** — the data directory, with
   **Download from FTP** next to *Browse…* — plus the **AtariLegend data** row
   (**Download AtariLegend data**) and the **Pete Clarke PirateFinder-Catalog**
-  row (**PirateFinder-Catalog** button, no path field). Both the settings dialog
-  and the first-run setup show this row.
+  row (**Download PirateFinder-Catalog** button, no path field). Both the
+  settings dialog and the first-run setup show this row.
 - **Hatari** — the Hatari settings plus the **Hatari installation** and
   **TOS ROM** rows (download/install on demand, see below).
 - **CosmosEx** — its own tab after Hatari: mode dropdown, host, password, MAC
@@ -671,9 +673,9 @@ CC BY-NC-SA 4.0); it is fetched on demand:
 ## Pete Clarke Greaseweazle PirateFinder Catalog (optional)
 
 The optional **Pete Clarke PirateFinder-Catalog** row (below AtariLegend data,
-no path field, **PirateFinder-Catalog** button) is shown in the settings dialog
-and the first-run setup and downloads the generic Pete Clarke Greaseweazle
-PirateFinder Catalog
+no path field, **Download PirateFinder-Catalog** button) is shown in the
+settings dialog and the first-run setup and downloads the generic Pete Clarke
+Greaseweazle PirateFinder Catalog
 JSON from
 [`skoelle/piratefinder-catalog-json`](https://github.com/skoelle/piratefinder-catalog-json).
 The app stores it under `<GameinfoDirectory>/piratefinder/`, never in the
@@ -695,8 +697,8 @@ link points to the
   the detail sidebar and lightbox when a title/crew match exists. It lists the
   matching crews and has a right-aligned red-gradient `Crews` button.
 - The settings row mirrors the AtariLegend row: local status/path, an index
-  status (`loaded`/`loading`/error), a single **PirateFinder-Catalog** button
-  (it refreshes `latest.json` and then downloads), and a
+  status (`loaded`/`loading`/error), a single **Download PirateFinder-Catalog**
+  button (it refreshes `latest.json` and then downloads), and a
   **PirateFinder-Catalog on GitHub** link; while a download runs, Save/Cancel
   are blocked and the transfer can be cancelled inline.
 - Data license: **CC BY-NC-SA 4.0** (non-commercial, attribution, share-alike).

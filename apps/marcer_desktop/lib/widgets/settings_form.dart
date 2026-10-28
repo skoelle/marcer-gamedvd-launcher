@@ -954,7 +954,9 @@ class _SettingsFormState extends State<SettingsForm> {
                       onPressed: busy || !hasDataDir
                           ? null
                           : _downloadPirateFinder,
-                      child: const Text(kPirateFinderCatalogShortName),
+                      child: const Text(
+                        'Download $kPirateFinderCatalogShortName',
+                      ),
                     ),
                   ),
                 ],

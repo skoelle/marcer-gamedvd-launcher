@@ -517,7 +517,10 @@ void main() {
       expect(valid, isTrue);
       expect(latest!.gameinfoDirectory, dir.path);
       expect(find.text('Pete Clarke PirateFinder-Catalog'), findsOneWidget);
-      final button = find.widgetWithText(FilledButton, 'PirateFinder-Catalog');
+      final button = find.widgetWithText(
+        FilledButton,
+        'Download PirateFinder-Catalog',
+      );
       expect(button, findsOneWidget);
       expect(find.text('Check'), findsNothing);
       expect(find.text('Install'), findsNothing);

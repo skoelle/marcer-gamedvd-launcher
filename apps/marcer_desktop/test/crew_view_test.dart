@@ -426,6 +426,14 @@ void main() {
     );
     expect((headerName.center.dx - header.center.dx).abs(), lessThan(2));
     expect(overview.top, greaterThanOrEqualTo(header.bottom));
+    expect(
+      find.byKey(const ValueKey('crew-sidebar-game-header')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('crew-sidebar-game-title')),
+      findsOneWidget,
+    );
     expect(find.byType(DialogCloseButton), findsOneWidget);
     expect(
       tester.getCenter(find.byType(DialogCloseButton)).dx,

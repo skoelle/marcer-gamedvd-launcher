@@ -47,8 +47,9 @@ Save, the manual screenshot curation described below.
   menu-disk appearances, trivia), both downloaded on demand, never bundled
   (CC BY-NC-SA 4.0). PirateFinder matches use the precomputed disk-image
   hashes from `full-index.json.gz` (exact) with a title fallback.
-- **Crews tab** from `crews.json` with a release browser and PirateFinder crew
-  details.
+- **Crews tab** from `crews.json` with a release browser (game title, folder
+  buttons and lightbox-style badges for the selected release) and PirateFinder
+  crew details.
 - **Local layer & missing ZIPs** resolved from the filesystem
   (`ROOT`/`PATCH`/`BOTH`, `MISSING`), plus **Download folder** from the Marcer
   FTP for absent game folders.

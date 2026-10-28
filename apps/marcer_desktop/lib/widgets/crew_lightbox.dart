@@ -15,6 +15,7 @@ import 'crew_overview.dart';
 import 'game_info_panel.dart';
 import 'game_lightbox.dart';
 import 'local_assets_chips.dart';
+import 'open_folder_button.dart';
 import 'piratefinder_crew_dialog.dart';
 import 'piratefinder_dialog.dart';
 import 'select_menu.dart';
@@ -717,54 +718,137 @@ class _CrewLightboxState extends State<CrewLightbox> {
       card,
       rel: variant.rel,
     );
-    return GameInfoPanel(
-      info: card.info,
-      variant: ZipVariantView(
-        name: variant.name,
-        status: variant.status,
-        kind: variant.kind,
-        layer: widget.controller.variantLayer(variant),
-        rel: variant.rel,
-        size: variant.size,
-        missing: widget.controller.variantMissing(variant),
-        tos: variant.tos,
-        hideStatus: variant.status == 'skipped_disk_n',
-      ),
-      filter: widget.controller.filter,
-      variants: card.kind == 'falcon' ? kFalconVariants : kHatariVariants,
-      atariLegend: atariLegend,
-      onAtariLegend: atariLegend == null
-          ? null
-          : () => showAtariLegendDialog(
-              context,
-              game: atariLegend,
-              textsLoader: widget.controller.atariLegendTexts,
-            ),
-      pirateFinderMatch: pfMatch,
-      onPirateFinder: pfMatch == null
-          ? null
-          : () => showPirateFinderDialog(
-              context,
-              controller: widget.controller,
-              card: card,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _gameHeader(card, variant, release),
+        const Divider(height: 1),
+        Expanded(
+          child: GameInfoPanel(
+            info: card.info,
+            variant: ZipVariantView(
+              name: variant.name,
+              status: variant.status,
+              kind: variant.kind,
+              layer: widget.controller.variantLayer(variant),
               rel: variant.rel,
+              size: variant.size,
+              missing: widget.controller.variantMissing(variant),
+              tos: variant.tos,
+              hideStatus: variant.status == 'skipped_disk_n',
             ),
-      extras: LocalAssetsChips(
-        assets: widget.controller.localAssetsForCard(card),
-        service: widget.controller.localAssetsService,
+            filter: widget.controller.filter,
+            variants: card.kind == 'falcon' ? kFalconVariants : kHatariVariants,
+            atariLegend: atariLegend,
+            onAtariLegend: atariLegend == null
+                ? null
+                : () => showAtariLegendDialog(
+                    context,
+                    game: atariLegend,
+                    textsLoader: widget.controller.atariLegendTexts,
+                  ),
+            pirateFinderMatch: pfMatch,
+            onPirateFinder: pfMatch == null
+                ? null
+                : () => showPirateFinderDialog(
+                    context,
+                    controller: widget.controller,
+                    card: card,
+                    rel: variant.rel,
+                  ),
+            extras: LocalAssetsChips(
+              assets: widget.controller.localAssetsForCard(card),
+              service: widget.controller.localAssetsService,
+            ),
+            onPlay: () => _play(release.rel),
+            onPlayVariant: (variant) => widget.controller.launchCardVariant(
+              card,
+              hit.index,
+              variant: variant,
+            ),
+            onSendToCosmosEx: widget.controller.cosmosExConfigured
+                ? () => widget.controller.sendZipToCosmosEx(
+                    widget.controller.zipPathForRel(release.rel),
+                  )
+                : null,
+            onSelectGroup: (value, kind) => _selectGroup(value, kind, card),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Game-lightbox-style header for the selected crew release: game title,
+  /// ROOT/PATCH folder buttons and the same badges as the lightbox header.
+  Widget _gameHeader(GameCard card, CardVariant variant, CrewRelease release) {
+    final c = widget.controller;
+    final layer = c.cardLayer(card);
+    final year = card.year == 'unknown' ? '' : card.year;
+    final counts = card.statusCounts.entries
+        .map((e) => '${e.value}× ${e.key}')
+        .join('  ');
+    final sub = [
+      if (variant.status.isNotEmpty && variant.status != 'skipped_disk_n')
+        variant.status,
+      if (layer.isNotEmpty) layer,
+      if (variant.size != null) '${(variant.size! / 1024).round()} KB',
+    ].join('  ·  ');
+    return Container(
+      key: const ValueKey('crew-sidebar-game-header'),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      color: const Color(0xFF141414),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  card.name,
+                  key: const ValueKey('crew-sidebar-game-title'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              CardFolderButtons(
+                layers: c.cardFolderLayers(card),
+                pathFor: (layer) =>
+                    c.cardFolderPath(card, patch: layer == 'PATCH'),
+              ),
+            ],
+          ),
+          if (sub.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              sub,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              if (c.isFavoriteRel(release.rel))
+                _badge('★ FAVORITE', Colors.amber),
+              if (layer.isNotEmpty) _badge(layer, Colors.green),
+              if (c.cardMissing(card)) _badge('MISSING', Colors.redAccent),
+              if (variant.tos != null && variant.tos!.isNotEmpty)
+                _badge('TOS ${variant.tos}', Colors.deepOrange),
+              if (counts.isNotEmpty) _badge(counts, Colors.blueGrey),
+              if (year.isNotEmpty) _badge(year, Colors.teal),
+            ],
+          ),
+        ],
       ),
-      onPlay: () => _play(release.rel),
-      onPlayVariant: (variant) => widget.controller.launchCardVariant(
-        card,
-        hit.index,
-        variant: variant,
-      ),
-      onSendToCosmosEx: widget.controller.cosmosExConfigured
-          ? () => widget.controller.sendZipToCosmosEx(
-              widget.controller.zipPathForRel(release.rel),
-            )
-          : null,
-      onSelectGroup: (value, kind) => _selectGroup(value, kind, card),
     );
   }
 
