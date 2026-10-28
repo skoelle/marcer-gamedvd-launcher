@@ -86,6 +86,12 @@ The per-crew release list consumed by the desktop app's and gallery webapp's
 {
   "schema": 1,
   "generated_at": "…",
+  "source": {
+    "crew_tree": "Crew Sorted/Cracked Games - Crew Sorted",
+    "gameinfo": "games-cracked.json",
+    "zips": "full-index.json.gz",
+    "crews": "crews.json"
+  },
   "groups": [
     {
       "id": "replicants",
@@ -114,6 +120,8 @@ The per-crew release list consumed by the desktop app's and gallery webapp's
 
 It contains **all** groups; the desktop UI shows the curated selection (currently 128, cap 128), while the gallery always shows all groups. The
 `image` field is reserved for the later cracktro/logo curation phase.
+`source` uses logical names only; absolute local paths are never written into
+the published gameinfo asset (the local `crew-ranking.json` audit keeps them).
 `--crews-out` overrides the path (default `<GameinfoDirectory>/crews.json`).
 
 ### `crew-images.json` (GameinfoDirectory)

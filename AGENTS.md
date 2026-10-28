@@ -31,6 +31,12 @@ screenshot index (`index*.json`) remains the screenshot-state authority and is
 merged into the full index by the app. `tools/piratefinder-gen` was retired;
 its reusable ZIP hashing moved to `tools/_lib/zip_hashes.py`.
 
+**No absolute local paths in published artifacts.** Gameinfo/screenshot assets
+must only contain relative rel paths and logical names. Absolute paths belong
+exclusively in git-ignored `local/` audits (e.g.
+`local/crew-analysis/crew-ranking.json`); `crews.json` carries a path-free
+`source` block.
+
 Architecture decisions: [`docs/decisions/`](docs/decisions/). The backlog is
 [`docs/IDEAS.md`](docs/IDEAS.md); the user-facing overview is
 [`README.md`](README.md). Tool usage/build details live in each

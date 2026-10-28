@@ -192,6 +192,26 @@ class TabSelectionFlagsTest(unittest.TestCase):
         self.assertFalse(flags["Replicants / Masters"])
         self.assertTrue(flags["Replicants/Masters"])
 
+class CrewsSourceSummaryTest(unittest.TestCase):
+    def test_is_path_free_and_uses_logical_names(self):
+        source = ca.crews_source_summary("/mnt/nas/x/Screenshots/index.json")
+        self.assertEqual(
+            source,
+            {
+                "crew_tree": ca.DEFAULT_CREW_TREE,
+                "gameinfo": "games-cracked.json",
+                "zips": "index.json",
+                "crews": "crews.json",
+            },
+        )
+        for value in source.values():
+            self.assertFalse(Path(value).is_absolute(), value)
+            self.assertNotIn("/mnt/", value)
+
+    def test_full_index_name_is_used(self):
+        source = ca.crews_source_summary("/data/gameinfo/full-index.json.gz")
+        self.assertEqual(source["zips"], "full-index.json.gz")
+
 
 if __name__ == "__main__":
     unittest.main()

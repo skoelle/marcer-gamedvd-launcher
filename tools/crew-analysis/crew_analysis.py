@@ -861,6 +861,21 @@ def write_image_suggestions(
         "\n".join(html_lines) + "\n", encoding="utf-8")
 
 
+def crews_source_summary(zip_source: str) -> dict:
+    """Path-free provenance block for the published ``crews.json``.
+
+    The gameinfo asset is published; absolute local paths must never appear
+    in it. The local audit (``local/crew-analysis/crew-ranking.json``) keeps
+    the full paths via ``meta["source"]``.
+    """
+    return {
+        "crew_tree": DEFAULT_CREW_TREE,
+        "gameinfo": "games-cracked.json",
+        "zips": Path(zip_source).name,
+        "crews": "crews.json",
+    }
+
+
 def load_zips_from_index(
     path: Path,
     include_subdirs: bool,
@@ -1385,7 +1400,7 @@ def main() -> int:
     crews_payload = {
         "schema": SCHEMA_VERSION,
         "generated_at": generated,
-        "source": meta["source"],
+        "source": crews_source_summary(zip_source),
         "counts": {
             "groups": len(crew_groups),
             "releases": sum(len(g["releases"]) for g in crew_groups),

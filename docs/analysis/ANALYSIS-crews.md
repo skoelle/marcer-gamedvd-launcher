@@ -79,7 +79,10 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
 ## Runtime artifacts
 
 `crews.json` contains every canonical group plus its per-release list (year,
-publisher, cracker, crew, disks, flags, TOS notes and the ZIP rel path). The
+publisher, cracker, crew, disks, flags, TOS notes and the ZIP rel path). Its
+top-level `source` block uses logical names only (`crew_tree`,
+`games-cracked.json`, `full-index.json.gz`/`index.json`, `crews.json`); absolute
+local paths stay in the git-ignored `local/crew-analysis/` audits. The
 optional `excluded` flag hides a group from the desktop Crews tab (selection in
 `tools/crew-analysis/crew-tab.json`); `image` is reserved for cracktro/logo
 curation. `rel` is the full index path, matching `index.json` and
