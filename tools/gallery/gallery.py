@@ -80,7 +80,6 @@ MAX_ZIP_ENTRIES = 10000
 GAMEINFO_SUBDIR = "gameinfo"
 CREW_FILE = "crews.json"
 CREW_IMAGES_FILE = "crew-images.json"
-CREW_INITIAL_LIMIT = 128
 
 
 def log(msg):
@@ -1167,10 +1166,7 @@ class DataStore:
         if not isinstance(raw_groups, list):
             raw_groups = []
         self._crew_total_groups = len(raw_groups)
-        groups = [
-            g for g in raw_groups
-            if isinstance(g, dict) and not g.get("excluded")
-        ]
+        groups = [g for g in raw_groups if isinstance(g, dict)]
         groups.sort(key=lambda g: (
             -int(g.get("zips") or 0),
             str(g.get("name") or "").lower(),
@@ -1212,7 +1208,6 @@ class DataStore:
         self._crew_visible_groups = len(self.crew_groups)
         self._crew_release_count = sum(
             len(g.get("releases") or []) for g in self.crew_groups.values())
-        self.crews = self.crews[:CREW_INITIAL_LIMIT]
 
     def _load_crew_images(self):
         self._crew_images = {}

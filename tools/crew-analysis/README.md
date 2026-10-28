@@ -108,7 +108,7 @@ The per-crew release list consumed by the desktop app's and gallery webapp's
 }
 ```
 
-It contains **all** groups; the UI shows the curated selection (currently 128, cap 128). The
+It contains **all** groups; the desktop UI shows the curated selection (currently 128, cap 128), while the gallery always shows all groups. The
 `image` field is reserved for the later cracktro/logo curation phase.
 `--crews-out` overrides the path (default `<GameinfoDirectory>/crews.json`).
 

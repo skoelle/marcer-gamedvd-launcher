@@ -257,12 +257,8 @@ function renderStats(extra) {
       parts.push(`<span class="st">crew data: ${esc(crew.error)}</span>`);
     } else {
       const groups = crew.visible_groups || 0;
-      const shown = crew.groups || 0;
       parts.push(`<span class="st"><b>${groups}</b> crews</span>`);
       parts.push(`<span class="st"><b>${crew.releases || 0}</b> releases</span>`);
-      if (groups > shown) {
-        parts.push(`<span class="st">top <b>${shown}</b> of ${groups}</span>`);
-      }
       if (crew.generated_at) {
         parts.push(`<span class="st">crews: ${esc(crew.generated_at)}</span>`);
       }

@@ -181,10 +181,10 @@ Rules:
   `tos_bad`, `special_flag`, `special_note`, `source`, `ambiguous`.
   `rel` is normally the full index path; legacy section-relative paths are
   resolved through the cracked tree prefix.
-- `excluded: true` groups are hidden from the tab (the artifact still
-  contains them for audit).
-- The tab uses the top `128` groups by ZIP count. Current real data
-  (2026-10-24): 60 visible groups, 7,786 releases.
+- `excluded` is retained for the desktop app's curated Crews tab; the
+  gallery ignores it and always shows every group.
+- The tab shows all groups sorted by ZIP count/name (no cap). Current real
+  data (2026-10-28): 886 groups, 8,479 releases.
 - `crew-images.json` (optional): curated card image per crew keyed by
   name/id, with `rel` (release ZIP index path) and `name` (image basename
   below the screenshot archive). Missing files fall back to the best release
@@ -487,9 +487,9 @@ error body `{ "error": "<message>" }`.
   `coverage.matched_folders` figure stays cracked-only. `sections.crew`
   carries the visible crew-card count instead (no index/status counts).
 - `crews` describes the optional Crews tab: `available`, the number of
-  shown `groups` (top 128), `visible_groups` (after `excluded` filtering),
-  `total_groups` (all artifact groups), `releases` (all visible releases),
-  `generated_at` and an optional `error`.
+  shown `groups` (all groups), `visible_groups` (all groups; `excluded` is
+  ignored by the gallery), `total_groups` (all artifact groups), `releases`
+  (all releases), `generated_at` and an optional `error`.
 - `coverage` comes from `manifest.json` if available.
 - `show_candidates` / `default_status` mirror the effective config
   (section 9): the frontend disables the card candidate strip when
@@ -722,7 +722,7 @@ Semantics:
 - each release keeps the `crews.json` fields and adds `found`,
   `index_rel` (resolved full cracked-index path), `preview`, `status`,
   `kind`, `layer` and `size` joined from the cracked screenshot index.
-- `404` for an unknown or hidden (`excluded`) group.
+- `404` for an unknown group.
 - No media/body data is returned; previews are existing screenshot PNGs
   served through `/img/`.
 
@@ -968,9 +968,8 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
   freshness (the active section's index mtime, gameinfo `generated_at`).
 - Current result count of the active filters (`total` of the last
   `/api/entries` response) is shown next to the controls.
-- In the **crews** tab the bar shows `N crews`, `M releases`, a
-  `top <shown> of <visible>` segment when more groups exist than the 128
-  shown, and `crews: <generated_at>`; there are no status/ZIP segments.
+- In the **crews** tab the bar shows `N crews`, `M releases` and
+  `crews: <generated_at>`; there are no status/ZIP segments.
 
 ### 6.8 Section views
 
@@ -981,7 +980,7 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | utils | `index-utils.json` ∪ `games-utils.json` | index groups with previews + metadata-only leftovers (placeholder image) | status filter (default `with_screenshot`) |
 | magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `with_screenshot`); `letter` = magazine name, `year` from the file name |
 | falcon | `index-falcon.json` (index-only, no gameinfo) | grouped by `(letter, folder)` like the cracked view | status filter (default `with_screenshot`); Falcon titles launch with the Falcon machine/TOS 4.04 (desktop) |
-| crews | `crews.json` (+ optional `crew-images.json`) | synthetic crew/cracker cards from the top 128 non-excluded groups | search only; fixed ZIP-count order; click opens the crew release browser (6.11); no status/facets/letter |
+| crews | `crews.json` (+ optional `crew-images.json`) | synthetic crew/cracker cards from all groups (`excluded` is ignored; no cap) | search only; fixed ZIP-count order; click opens the crew release browser (6.11); no status/facets/letter |
 
 - Letter navigation, search, sorting, the status filter and the
   publisher/language/year facets work in all game sections; the remaining
@@ -1130,7 +1129,7 @@ mirrors SPEC-screenshot-generator.md §9 write safety (S1/S2).
 | Metric | Budget |
 |---|---|
 | `/api/entries` with any filter (in-memory) | < 100 ms p95 |
-| `/api/crews` list (top 128, in-memory) | < 50 ms |
+| `/api/crews` list (all groups, in-memory) | < 50 ms |
 | `/api/crews?id=` with joined releases | < 250 ms |
 | `/api/meta` after startup | < 50 ms |
 | Initial document (HTML+CSS+JS) | < 500 KB |
@@ -1262,14 +1261,14 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     are no download/open controls, and `/local-asset`-style content routes
     do not exist. Without the env vars the block is absent.
 18. **Crews**: with `crews.json` (and optional `crew-images.json`) present,
-    the last tab shows the top-128 non-excluded groups with previews and
-    `N crews`/`M releases`; search filters crew names/aliases/release
-    fields; a crew card opens the release browser, its search/sort and
-    keyboard navigation work, and a release opens the game lightbox as a
-    standalone single card (closing returns to the crew browser). Legacy
-    section-relative release paths resolve; missing/excluded groups are
-    hidden; no launch/play control exists. Without `crews.json` the tab is
-    hidden and the other sections are unaffected.
+    the last tab shows all groups with previews and `N crews`/`M releases`;
+    search filters crew names/aliases/release fields; a crew card opens the
+    release browser, its search/sort and keyboard navigation work, and a
+    release opens the game lightbox as a standalone single card (closing
+    returns to the crew browser). Legacy section-relative release paths
+    resolve; groups marked `excluded` are still shown (the gallery ignores
+    the desktop selection); no launch/play control exists. Without
+    `crews.json` the tab is hidden and the other sections are unaffected.
 
 ---
 
@@ -1328,10 +1327,11 @@ A conforming implementation satisfies all of the following.
 - [x] D6 Local asset metadata is derived from directory listings and ZIP
       central directories only (`ZipFile.infolist()`); no ZIP member is
       opened and no temp extraction exists.
-- [x] D7 `crews.json` groups with `excluded: true` are hidden; the visible
-      groups are sorted by ZIP count/name, capped at 128 cards, and their
-      releases join the cracked index preview/status/kind fields (legacy
-      section-relative `rel` paths resolve through the cracked tree).
+- [x] D7 All `crews.json` groups are shown (including `excluded: true`;
+      the gallery ignores the desktop selection), sorted by ZIP count/name
+      with no cap, and their releases join the cracked index
+      preview/status/kind fields (legacy section-relative `rel` paths
+      resolve through the cracked tree).
 
 **API**
 - [x] A1 All endpoints of section 5 exist with the documented parameters.
@@ -1342,9 +1342,9 @@ A conforming implementation satisfies all of the following.
 - [x] A5 `/api/local-assets` returns only metadata (counts, labels, kinds,
       formats) for a valid card; no file paths, URLs or bytes. Invalid
       section/id → 400, unknown card → 404.
-- [x] A6 `/api/crews` lists top-128 crew cards with `q`/pagination and
+- [x] A6 `/api/crews` lists all crew cards with `q`/pagination and
       returns one crew's releases (with joined screenshot fields) by id;
-      excluded/unknown crews → 404.
+      unknown crews → 404.
 
 **UI**
 - [x] U1 Visual design matches the `GALLERY_TEMPLATE` language (colors,

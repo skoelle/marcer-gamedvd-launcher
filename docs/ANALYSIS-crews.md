@@ -92,8 +92,9 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
 `tools/crew-analysis` writes **`crews.json`** into the `GameinfoDirectory`
 (path override: `--crews-out`). It contains every canonical group plus its
 per-release list (year, publisher, cracker, crew, disks, flags, TOS notes and
-the ZIP rel path); the optional `excluded` flag hides a group from the Crews
-tab (selection in `tools/crew-analysis/crew-tab.json`), and `image`
+the ZIP rel path); the optional `excluded` flag hides a group from the
+desktop Crews tab (selection in `tools/crew-analysis/crew-tab.json`), and
+`image`
 is reserved for the later cracktro/logo curation phase. `rel` is the **full index path**
 (`Title Sorted/Cracked Games - Title Sorted/...`), matching `index.json` and
 `GameCard.variants[].rel`; the app also accepts legacy section-relative paths
@@ -124,7 +125,7 @@ is controlled by `tools/crew-analysis/crew-tab.json` (`include_until`, `keep`,
 ### Gallery webapp
 
 `tools/gallery` consumes the same `crews.json`/`crew-images.json` artifact as a
-read-only **Crews** tab (top 128 non-excluded groups). The gallery joins each
+read-only **Crews** tab (all groups; `excluded` is ignored there). The gallery joins each
 release `rel` back to the cracked screenshot index for preview/status/kind,
 shows a release browser with a screenshot grid and compact metadata panel, and
 opens the existing game lightbox from a release. It has no launch/play control.
@@ -226,7 +227,7 @@ missing, the release-screenshot fallback is used.
 
 All groups up to `include_until` are visible; after it only the `keep` list is
 visible. `exclude` always wins. The tool writes the result as
-`"excluded": true/false` in `crews.json`; the app only reads that flag.
+`"excluded": true/false` in `crews.json`; the desktop app only reads that flag (the gallery ignores it).
 
 ## Current result
 
@@ -270,7 +271,7 @@ Generated from the local screenshot index (2026-10-26):
 | 23 | TEX - The Exceptions | 60 |
 | 24 | Was Not Was | 57 |
 
-The Crews tab currently shows 128 curated groups; the complete ranking is in
+The desktop Crews tab currently shows 128 curated groups; the gallery shows all 886 groups. The complete ranking is in
 `local/crew-analysis/crew-ranking.csv`, and groups outside the selection are
 marked `"excluded": true` in `crews.json`.
 

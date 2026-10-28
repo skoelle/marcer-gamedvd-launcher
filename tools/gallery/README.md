@@ -86,8 +86,9 @@ Backend filter/card helpers use stdlib `unittest` only:
   (including the `Kind` row) before the release-variant table, the open ZIP
   highlighted, and **clickable crew/cracker groups** (Game info values and
   release-variant rows jump to that group's ZIP), deep link `?entry=<rel>`.
-- **Crews**: the last tab lists the top 128 non-excluded groups from
-  `crews.json` with curated/release previews and a `crew`/`cracker` badge;
+- **Crews**: the last tab lists all groups from `crews.json` (the gallery
+  ignores `excluded` and has no cap) with curated/release previews and a
+  `crew`/`cracker` badge;
   search covers group names, aliases and all release fields. Clicking a crew
   card opens the release browser: screenshot grid + compact release panel,
   search/sort, arrow/PgUp/PgDn/Home/End navigation, and `Enter`/double-click

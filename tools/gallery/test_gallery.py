@@ -342,7 +342,7 @@ class CrewDataTest(unittest.TestCase):
             "releases": releases,
         }
 
-    def test_loads_visible_groups_search_and_previews(self):
+    def test_loads_all_groups_search_and_previews(self):
         groups = [
             self._group("alpha-crew", "Alpha Crew", "crew", 2, [
                 {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha",
@@ -354,21 +354,35 @@ class CrewDataTest(unittest.TestCase):
                 {"rel": self.rel_b, "zip": "b.zip", "title": "Beta",
                  "year": "1991"},
             ]),
-            self._group("hidden", "Hidden", "crew", 99, [], excluded=True),
+            self._group("hidden", "Hidden", "crew", 0, [], excluded=True),
         ]
         store = self._store(groups)
-        self.assertEqual(len(store.crews), 2)
-        self.assertNotIn("hidden", store.crew_groups)
+        self.assertEqual(len(store.crews), 3)
+        self.assertIn("hidden", store.crew_groups)
         self.assertEqual(store.crews[0]["name"], "Alpha Crew")
         self.assertEqual(store.crews[0]["preview"],
                          f"{self.tree}/A/Alpha/curated.png")
         self.assertEqual(store.crews[1]["preview"],
                          f"{self.tree}/B/Beta/b.png")
+        self.assertEqual(store.crews[2]["name"], "Hidden")
         self.assertIn("beta crackers", store.crews[1]["_search"])
-        self.assertEqual(store.meta["crews"]["groups"], 2)
-        self.assertEqual(store.meta["crews"]["visible_groups"], 2)
+        self.assertEqual(store.meta["crews"]["groups"], 3)
+        self.assertEqual(store.meta["crews"]["visible_groups"], 3)
         self.assertEqual(store.meta["crews"]["releases"], 3)
-        self.assertEqual(store.meta["sections"]["crew"]["cards"], 2)
+        self.assertEqual(store.meta["sections"]["crew"]["cards"], 3)
+
+    def test_excluded_group_detail_is_accessible(self):
+        store = self._store([
+            self._group("hidden", "Hidden", "crew", 1, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha",
+                 "year": "1990"},
+            ], excluded=True),
+        ])
+        group = store.crew_groups["hidden"]
+        detail = store.crew_detail(group)
+        self.assertEqual(len(detail["releases"]), 1)
+        self.assertEqual(detail["releases"][0]["preview"],
+                         f"{self.tree}/A/Alpha/a.png")
 
     def test_crew_detail_joins_release_preview_and_legacy_rel(self):
         store = self._store([
@@ -391,15 +405,16 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(legacy["index_rel"], self.rel_a2)
         self.assertIsNone(legacy["preview"])
 
-    def test_top_128_limit_and_visible_count(self):
+    def test_all_groups_without_limit(self):
         groups = [
             self._group(f"crew-{i}", f"Crew {i:03d}", "crew", 1000 - i, [])
             for i in range(130)
         ]
         store = self._store(groups)
-        self.assertEqual(len(store.crews), 128)
-        self.assertEqual(store.meta["crews"]["groups"], 128)
+        self.assertEqual(len(store.crews), 130)
+        self.assertEqual(store.meta["crews"]["groups"], 130)
         self.assertEqual(store.meta["crews"]["visible_groups"], 130)
+        self.assertEqual(store.meta["sections"]["crew"]["cards"], 130)
 
 
 class DataDirPathTest(unittest.TestCase):
