@@ -117,10 +117,14 @@ Save, the manual screenshot curation described below.
 - **Clickable groups** — clicking a crew/cracker in the detail sidebar (or
   the lightbox info panel) opens that group's ZIP in the lightbox; when no
   ZIP matches, the lightbox opens with a "… ZIP not found —" hint.
-- **Full-screen lightbox** — integer-upscaled pixel-art-safe image, variant
-  filmstrip with `+N` candidate badges, a scrollbar and a **favorite star on
-  every thumb** (`★` favorited, `☆` on the active variant — click or `*` to
-  toggle), candidate strip and the release-variant table; `←/→` cards,
+- **Full-screen lightbox** — integer-upscaled pixel-art-safe image with
+  clickable previous/next arrows **outside** the lightbox at the left/right
+  that also carry the neighbour title when the window is wide enough (arrow
+  only when space is tight, hidden at the first/last card and when the window
+  is too narrow, so they cannot be mistaken for switching the screenshot),
+  variant filmstrip with `+N` candidate badges, a scrollbar and a **favorite
+  star on every thumb** (`★` favorited, `☆` on the active variant — click or
+  `*` to toggle), candidate strip and the release-variant table; `←/→` cards,
   `↑/↓` variants, `PgUp/PgDn` images, `M` promote the shown candidate to the
   main image, `C` edit the shown variant's status/kind.
 - **Optional folder browser** (`T`) — the overlay tree (main + patch layer)
@@ -465,7 +469,10 @@ optional (needed to launch, not to browse).
 | `?` | Show the help overlay |
 | `ESC` / `q` | Exit (in the lightbox/dialogs, `ESC` closes that view) |
 
-In the **lightbox**: `←`/`→` switch card, `↑`/`↓` switch variant, `PgUp`/`PgDn`
+In the **lightbox**: `←`/`→` switch card (clickable arrows sit outside the
+lightbox at the left/right with the neighbour title when the window is wide
+enough; arrow only when space is tight, hidden at the first/last card and
+when the window is too narrow), `↑`/`↓` switch variant, `PgUp`/`PgDn`
 switch image, `Space`/`P` launch the shown ZIP (the favorited ZIP of that card
 when exactly one variant is starred), `*` favorite the shown variant (or click
 a filmstrip star), `M` make the shown candidate the main image, `C` edit

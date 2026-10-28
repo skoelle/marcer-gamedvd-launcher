@@ -242,8 +242,13 @@ class _GameLightboxState extends State<GameLightbox> {
     return kHatariVariants;
   }
 
-  String get _title {
-    final item = _item;
+  String get _title => _titleAt(_itemIdx);
+
+  /// Title of the item at [idx] (card name or browse-mode entry title), used
+  /// by the previous/next edge pills.
+  String _titleAt(int idx) {
+    if (idx < 0 || idx >= _items.length) return '';
+    final item = _items[idx];
     if (item is GameCard) return item.name;
     if (item is Entry) return widget.controller.titleFor(item);
     return '';
@@ -528,75 +533,176 @@ class _GameLightboxState extends State<GameLightbox> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => Navigator.of(context).pop(),
-          child: Center(
-            child: GestureDetector(
-              onTap: () => _focus.requestFocus(),
-              child: Container(
-                width: 1200,
-                height: height,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D0D0D),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF2A2A2A)),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: vs.isEmpty && _item == null
-                    ? const Center(
-                        child: Text(
-                          'No selection',
-                          style: TextStyle(color: Colors.grey),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const lightboxWidth = 1200.0;
+              const arrowSize = 44.0;
+              const arrowGap = 12.0;
+              const titleMinWidth = 96.0;
+              final sideSpace = (constraints.maxWidth - lightboxWidth) / 2;
+              final showArrow = sideSpace >= arrowSize + arrowGap;
+              final showTitle = sideSpace >= titleMinWidth + arrowGap;
+              final pillWidth = math.min(190.0, sideSpace - arrowGap);
+              return Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (showArrow && _itemIdx > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(right: arrowGap),
+                        child: _navButton(
+                          next: false,
+                          maxWidth: showTitle ? pillWidth : null,
                         ),
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _header(v, vs.length),
-                                Expanded(
-                                  child: Container(
-                                    color: Colors.black,
-                                    child: imagePath == null
-                                        ? const Center(
-                                            child: Text(
-                                              'No screenshot',
-                                              style: TextStyle(
-                                                color: Colors.grey,
-                                              ),
-                                            ),
-                                          )
-                                        : _IntegerScaledImage(path: imagePath),
-                                  ),
-                                ),
-                                if (vs.isNotEmpty) _filmstrip(vs),
-                                Container(
-                                  height: 60,
-                                  color: const Color(0xFF111111),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  child: v == null
-                                      ? const SizedBox.shrink()
-                                      : _candidateStrip(v),
-                                ),
-                                _hints(),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            width: 330,
-                            color: const Color(0xFF161616),
-                            child: _infoPanel(v),
-                          ),
-                        ],
                       ),
-              ),
-            ),
+                    GestureDetector(
+                      onTap: () => _focus.requestFocus(),
+                      child: Container(
+                        width: lightboxWidth,
+                        height: height,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D0D0D),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF2A2A2A)),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: vs.isEmpty && _item == null
+                            ? const Center(
+                                child: Text(
+                                  'No selection',
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              )
+                            : Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _header(v, vs.length),
+                                        Expanded(
+                                          child: Container(
+                                            color: Colors.black,
+                                            child: imagePath == null
+                                                ? const Center(
+                                                    child: Text(
+                                                      'No screenshot',
+                                                      style: TextStyle(
+                                                        color: Colors.grey,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : _IntegerScaledImage(
+                                                    path: imagePath,
+                                                  ),
+                                          ),
+                                        ),
+                                        if (vs.isNotEmpty) _filmstrip(vs),
+                                        Container(
+                                          height: 60,
+                                          color: const Color(0xFF111111),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          child: v == null
+                                              ? const SizedBox.shrink()
+                                              : _candidateStrip(v),
+                                        ),
+                                        _hints(),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 330,
+                                    color: const Color(0xFF161616),
+                                    child: _infoPanel(v),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                    if (showArrow && _itemIdx < _items.length - 1)
+                      Padding(
+                        padding: const EdgeInsets.only(left: arrowGap),
+                        child: _navButton(
+                          next: true,
+                          maxWidth: showTitle ? pillWidth : null,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
+      ),
+    );
+  }
+
+  /// Previous/next navigation button **outside** the lightbox (left/right of
+  /// the card) so it cannot be mistaken for switching the screenshot. Shows
+  /// the neighbour title when [maxWidth] is set (there is room for it), else a
+  /// compact arrow only; the caller hides it when the window is too narrow.
+  Widget _navButton({required bool next, double? maxWidth}) {
+    final target = next ? _itemIdx + 1 : _itemIdx - 1;
+    final title = _titleAt(target);
+    final label = title.isEmpty ? (next ? 'Next' : 'Previous') : title;
+    final icon = Icon(
+      next ? Icons.chevron_right : Icons.chevron_left,
+      size: maxWidth == null ? 26 : 18,
+      color: Colors.grey,
+    );
+    final key = ValueKey(next ? 'lightbox-next-item' : 'lightbox-prev-item');
+    final child = maxWidth == null
+        ? Container(
+            key: key,
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xCC000000),
+              border: Border.all(color: const Color(0xFF2A2A2A)),
+              shape: BoxShape.circle,
+            ),
+            child: icon,
+          )
+        : Container(
+            key: key,
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xCC000000),
+              border: Border.all(color: const Color(0xFF2A2A2A)),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!next) ...[icon, const SizedBox(width: 4)],
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Colors.white),
+                  ),
+                ),
+                if (next) ...[const SizedBox(width: 4), icon],
+              ],
+            ),
+          );
+    return Tooltip(
+      message: next ? 'Next: $label  (→)' : 'Previous: $label  (←)',
+      child: GestureDetector(
+        onTap: () {
+          _focus.requestFocus();
+          _goItem(next ? 1 : -1);
+        },
+        child: child,
       ),
     );
   }
@@ -969,7 +1075,7 @@ class _GameLightboxState extends State<GameLightbox> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       color: const Color(0xFF141414),
       child: const Text(
-        '←/→ card   ↑/↓ variant   PgUp/PgDn image   * favorite   '
+        '←/→ prev/next card   ↑/↓ variant   PgUp/PgDn image   * favorite   '
         'M make main   C change status   Esc close',
         style: TextStyle(fontSize: 10, color: Colors.grey),
       ),
