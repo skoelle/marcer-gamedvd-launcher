@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:marcer_desktop/widgets/close_button.dart';
 import 'package:marcer_desktop/widgets/help_overlay.dart';
 
 void main() {
@@ -74,6 +75,23 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+    await tester.pumpAndSettle();
+    expect(closed, isTrue);
+  });
+
+  testWidgets('the header close button dismisses the overlay', (tester) async {
+    var closed = false;
+    tester.view.physicalSize = const Size(1000, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(
+      home: HelpOverlay(onClose: () => closed = true),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DialogCloseButton), findsOneWidget);
+    await tester.tap(find.byType(DialogCloseButton));
     await tester.pumpAndSettle();
     expect(closed, isTrue);
   });

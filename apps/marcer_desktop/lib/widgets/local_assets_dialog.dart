@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../local_assets.dart';
 import '../open_local_file.dart';
+import 'close_button.dart';
 
 /// Opens the box-scan gallery: one section per edition with bounded-decode
 /// thumbnails; a thumbnail opens the full-screen image viewer.
@@ -94,11 +95,8 @@ class _DialogShell extends StatelessWidget {
                           fontWeight: FontWeight.bold),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Close (Esc)',
+                  DialogCloseButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close, size: 18),
-                    color: Colors.grey,
                   ),
                 ],
               ),
@@ -566,11 +564,8 @@ class _LocalImageViewerState extends State<_LocalImageViewer> {
                         ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Close (Esc)',
+                    DialogCloseButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close, size: 18),
-                      color: Colors.grey,
                     ),
                   ],
                 ),

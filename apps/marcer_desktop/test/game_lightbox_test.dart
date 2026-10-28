@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_controller.dart';
+import 'package:marcer_desktop/widgets/close_button.dart';
 import 'package:marcer_desktop/widgets/game_lightbox.dart';
 
 /// Previous/next navigation arrows next to the game lightbox (user request
@@ -105,6 +106,12 @@ void main() {
   ) async {
     await pumpLightbox(tester);
     expect(c.catalogCards, hasLength(2));
+    expect(find.byType(DialogCloseButton), findsOneWidget);
+    final position = tester.getRect(
+      find.byKey(const ValueKey('lightbox-position')),
+    );
+    final close = tester.getRect(find.byType(DialogCloseButton));
+    expect(close.left - position.right, greaterThanOrEqualTo(11));
 
     expect(find.byKey(const ValueKey('lightbox-prev-item')), findsNothing);
     final next = find.byKey(const ValueKey('lightbox-next-item'));

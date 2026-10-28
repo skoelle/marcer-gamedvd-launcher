@@ -10,6 +10,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
+import 'close_button.dart';
 import 'crew_overview.dart';
 import 'game_info_panel.dart';
 import 'game_lightbox.dart';
@@ -349,6 +350,19 @@ class _CrewLightboxState extends State<CrewLightbox> {
                     ],
                   ),
                 ),
+                const Divider(height: 1),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  color: const Color(0xFF141414),
+                  child: const Text(
+                    '←/→ grid   ↑/↓ release   Enter open   P/Space launch   '
+                    '/ search   ? help   Esc close',
+                    style: TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ),
               ],
             ),
           ),
@@ -432,14 +446,8 @@ class _CrewLightboxState extends State<CrewLightbox> {
                       width: 120,
                     ),
                     const Spacer(),
-                    IconButton(
-                      tooltip: 'Close (Esc)',
+                    DialogCloseButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(
-                        Icons.close,
-                        size: 18,
-                        color: Colors.grey,
-                      ),
                     ),
                   ],
                 ),

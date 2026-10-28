@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../catalog_controller.dart';
 import '../piratefinder_names.dart';
+import 'close_button.dart';
 import 'piratefinder_link.dart';
 
 /// Opens the PirateFinder details dialog for a catalog card or browse entry.
@@ -119,10 +120,7 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
-              ),
+              DialogCloseButton(onPressed: () => Navigator.of(context).pop()),
             ],
           ),
           const SizedBox(height: 8),
@@ -258,10 +256,7 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
               ],
             ),
           ),
-          IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close),
-          ),
+          DialogCloseButton(onPressed: () => Navigator.of(context).pop()),
         ],
       ),
     );

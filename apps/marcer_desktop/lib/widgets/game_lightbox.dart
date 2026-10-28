@@ -12,6 +12,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
+import 'close_button.dart';
 import 'piratefinder_dialog.dart';
 import 'game_info_panel.dart';
 import 'local_assets_chips.dart';
@@ -783,7 +784,7 @@ class _GameLightboxState extends State<GameLightbox> {
       pos += '  ·  variant ${_variantIdx + 1} / $totalVariants';
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
       color: const Color(0xFF141414),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -813,13 +814,11 @@ class _GameLightboxState extends State<GameLightbox> {
               ],
               Text(
                 pos,
+                key: const ValueKey('lightbox-position'),
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
-              IconButton(
-                tooltip: 'Close (Esc)',
-                onPressed: () => _close(),
-                icon: const Icon(Icons.close, size: 20, color: Colors.grey),
-              ),
+              const SizedBox(width: 12),
+              DialogCloseButton(onPressed: () => _close()),
             ],
           ),
           const SizedBox(height: 2),

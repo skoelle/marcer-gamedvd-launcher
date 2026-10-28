@@ -10,6 +10,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme.dart';
+import 'close_button.dart';
 
 /// Injectable URL launcher (tests).
 typedef AtariLegendUrlLauncher = Future<bool> Function(Uri uri);
@@ -216,11 +217,8 @@ class _AtariLegendDialogState extends State<AtariLegendDialog>
                   fontWeight: FontWeight.bold),
             ),
           ),
-          IconButton(
-            tooltip: 'Close (Esc)',
+          DialogCloseButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close, size: 18),
-            color: Colors.grey,
           ),
         ],
       ),
@@ -885,11 +883,8 @@ class _AtariLegendImageViewerState extends State<_AtariLegendImageViewer> {
                         ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Close (Esc)',
+                    DialogCloseButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close, size: 18),
-                      color: Colors.grey,
                     ),
                   ],
                 ),

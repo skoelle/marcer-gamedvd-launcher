@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../catalog_controller.dart';
 import '../piratefinder_names.dart';
+import 'close_button.dart';
 import 'piratefinder_link.dart';
 
 /// Opens the PirateFinder-Catalog crew lightbox for a Crews-tab group.
@@ -115,10 +116,7 @@ class _PirateFinderCrewDialogState extends State<PirateFinderCrewDialog> {
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
-              ),
+              DialogCloseButton(onPressed: () => Navigator.of(context).pop()),
             ],
           ),
           const SizedBox(height: 8),
@@ -239,10 +237,7 @@ class _PirateFinderCrewDialogState extends State<PirateFinderCrewDialog> {
               ],
             ),
           ),
-          IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close),
-          ),
+          DialogCloseButton(onPressed: () => Navigator.of(context).pop()),
         ],
       ),
     );

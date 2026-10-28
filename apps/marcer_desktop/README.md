@@ -412,11 +412,14 @@ console launcher):
 `?` opens the in-app help overlay from the catalog, folder list and lightbox.
 The lightbox uses `←/→` for cards, `↑/↓` for variants, `PgUp/PgDn` for images,
 `Space`/`P` to launch, `*` to favorite, `M` to promote the shown candidate,
-`C` to edit status/kind, `Esc` to close and `?` for help. Mouse controls:
-filmstrip thumbnails switch variants, their stars toggle favorites, the
-candidate strip selects an image, AtariLegend / Box scans / Manuals chips open
-their dialogs, and the ROOT/PATCH folder icons open the game folder in the OS
-file manager.
+`C` to edit status/kind, `Esc` to close and `?` for help. Every lightbox/dialog
+header carries the same compact, subtle `× Close (Esc)` button at the far right
+(icon-only with tooltip on windows narrower than 720 px); the help overlay and
+the crew browser also show it, and the crew browser footer repeats the `Esc`
+hint. Mouse controls: filmstrip thumbnails switch variants, their stars toggle
+favorites, the candidate strip selects an image, AtariLegend / Box scans /
+Manuals chips open their dialogs, and the ROOT/PATCH folder icons open the game
+folder in the OS file manager.
 
 ## Status filter
 

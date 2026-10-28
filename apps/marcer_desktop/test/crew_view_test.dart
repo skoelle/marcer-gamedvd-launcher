@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 import 'package:marcer_desktop/catalog_controller.dart';
 import 'package:marcer_desktop/piratefinder_data.dart';
+import 'package:marcer_desktop/widgets/close_button.dart';
 import 'package:marcer_desktop/widgets/crew_detail_panel.dart';
 import 'package:marcer_desktop/widgets/crew_lightbox.dart';
 import 'package:marcer_desktop/widgets/game_lightbox.dart';
@@ -425,6 +426,12 @@ void main() {
     );
     expect((headerName.center.dx - header.center.dx).abs(), lessThan(2));
     expect(overview.top, greaterThanOrEqualTo(header.bottom));
+    expect(find.byType(DialogCloseButton), findsOneWidget);
+    expect(
+      tester.getCenter(find.byType(DialogCloseButton)).dx,
+      greaterThan(header.center.dx),
+    );
+    expect(find.textContaining('Esc close'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump();

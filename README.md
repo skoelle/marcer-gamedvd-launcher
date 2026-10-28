@@ -53,8 +53,9 @@ Save, the manual screenshot curation described below.
   (up to 4 columns) on the left, a sidebar on the right with the shared crew
   overview above the selected ZIP info; the header spans both and shows the
   main filter bar's search field (`Search  ( / )`) with the sort menu directly
-  behind it on the left, the crew name centred and the close button at the
-  right (name/year ascending/descending, default name asc; the
+  behind it on the left, the crew name centred and the shared `× Close (Esc)`
+  button at the right (icon-only with tooltip on narrow windows; name/year
+  ascending/descending, default name asc; the
   `skipped_disk_n` status is hidden for crew releases); arrow keys navigate,
   Enter opens the normal lightbox over the currently filtered/sorted release
   list (`←`/`→` walk the games; closing the browser follows the last shown

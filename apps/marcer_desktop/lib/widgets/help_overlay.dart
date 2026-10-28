@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme.dart';
+import 'close_button.dart';
 
 /// Desktop help overlay (DarkGray background, White text, any key dismisses).
 /// Catalog/folder and lightbox controls sit side by side, mouse/details and
@@ -79,9 +80,9 @@ class _HelpOverlayState extends State<HelpOverlay> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Row(
+                            Row(
                               children: [
-                                Expanded(
+                                const Expanded(
                                   child: Text(
                                     'Help — Keys & Controls',
                                     style: TextStyle(
@@ -90,13 +91,15 @@ class _HelpOverlayState extends State<HelpOverlay> {
                                     ),
                                   ),
                                 ),
-                                Text(
+                                const Text(
                                   'Press any key to close',
                                   style: TextStyle(
                                     color: Colors.white70,
                                     fontSize: 12,
                                   ),
                                 ),
+                                const SizedBox(width: 10),
+                                DialogCloseButton(onPressed: widget.onClose),
                               ],
                             ),
                             const SizedBox(height: 18),
