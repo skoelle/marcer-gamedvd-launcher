@@ -454,6 +454,60 @@ void main() {
     expect(find.text('1 / 2'), findsNothing);
   });
 
+  testWidgets(
+      'crew lightbox uses one column and row navigation at narrow width', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await c.init();
+    });
+    CrewRelease release(int n) => CrewRelease.fromJson({
+          'rel': '$tree/A/Alpha/a$n.zip',
+          'letter': 'A',
+          'folder': 'Alpha',
+          'zip': 'a$n.zip',
+          'title': 'Alpha $n',
+          'year': '1990',
+          'crew': 'Alpha Crew',
+        });
+    final crew = CrewGroup(
+      id: 'alpha-crew',
+      name: 'Alpha Crew',
+      kind: 'crew',
+      rank: 1,
+      zips: 5,
+      aliases: const [],
+      releases: [for (var n = 1; n <= 5; n++) release(n)],
+    );
+    tester.view.physicalSize = const Size(700, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CrewLightbox(controller: c, crew: crew),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final grid = tester.widget<GridView>(find.byType(GridView));
+    final delegate =
+        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.crossAxisCount, 1,
+        reason: 'narrow grid must use the width-based column count');
+    expect(find.text('a1.zip'), findsOneWidget);
+
+    // One ArrowDown moves exactly one row (one column here); a stale/default
+    // column count of 3–4 would jump to a4/a5 instead.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(find.text('a2.zip'), findsOneWidget);
+    expect(find.text('a4.zip'), findsNothing);
+  });
+
   testWidgets('game lightbox walks the crew releases and syncs on close', (
     tester,
   ) async {

@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart' show InputFileStream;
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
@@ -244,7 +245,7 @@ class LocalAssetsService {
   }
 
   Future<String?> _extractSingle(String zipPath, String entryName) async {
-    final out = _cacheFileFor('$zipPath#$entryName', zipPath, entryName);
+    final out = await _cacheFileFor('$zipPath#$entryName', zipPath, entryName);
     final result =
         await Isolate.run(() => _extractZipEntries(zipPath, [(entryName, out)]));
     return result[entryName];
@@ -252,11 +253,14 @@ class LocalAssetsService {
 
   Future<Map<String, String>> _extractMany(
       String zipPath, List<LocalImageRef> images) async {
+    // One stat per ZIP (not per image): the stamp is identical for all
+    // entries and `stat` may be slow on a network mount.
+    final stat = await File(zipPath).stat();
     final items = <(String, String)>[
       for (final image in images)
         (
           image.entryName!,
-          _cacheFileFor(image.cacheKey, zipPath, image.entryName!),
+          _cacheFileForStat(image.cacheKey, image.entryName!, stat),
         ),
     ];
     final byEntry = await Isolate.run(() => _extractZipEntries(zipPath, items));
@@ -290,10 +294,14 @@ class LocalAssetsService {
     }
   }
 
-  String _cacheFileFor(String key, String zipPath, String entryName) {
-    final zip = File(zipPath);
-    final stamp =
-        '${zip.lastModifiedSync().millisecondsSinceEpoch}-${zip.lengthSync()}';
+  Future<String> _cacheFileFor(
+      String key, String zipPath, String entryName) async {
+    final stat = await File(zipPath).stat();
+    return _cacheFileForStat(key, entryName, stat);
+  }
+
+  String _cacheFileForStat(String key, String entryName, FileStat stat) {
+    final stamp = '${stat.modified.millisecondsSinceEpoch}-${stat.size}';
     final hash = sha1.convert(utf8.encode('$key#$stamp')).toString();
     final dir = _cacheDir ??= _createCacheDir();
     return p.join(dir.path, '$hash${p.extension(entryName)}');
@@ -652,15 +660,20 @@ class _ZipEntry {
 }
 
 List<_ZipEntry> _listZipFiles(String zipPath) {
+  InputFileStream? input;
   try {
-    final bytes = File(zipPath).readAsBytesSync();
-    final archive = ZipDecoder().decodeBytes(bytes);
+    // Stream the central directory instead of loading the whole archive into
+    // memory (box scans/manuals can be very large).
+    input = InputFileStream(zipPath);
+    final archive = ZipDecoder().decodeBuffer(input);
     return [
       for (final f in archive.files)
         if (f.isFile) _ZipEntry(f.name, f.size),
     ];
   } catch (_) {
     return const [];
+  } finally {
+    input?.closeSync();
   }
 }
 
@@ -669,9 +682,12 @@ List<_ZipEntry> _listZipFiles(String zipPath) {
 Map<String, String> _extractZipEntries(
     String zipPath, List<(String, String)> items) {
   final out = <String, String>{};
+  InputFileStream? input;
   try {
-    final bytes = File(zipPath).readAsBytesSync();
-    final archive = ZipDecoder().decodeBytes(bytes);
+    // Only the requested entries are decompressed; the archive itself is read
+    // from disk lazily instead of holding the whole ZIP in memory.
+    input = InputFileStream(zipPath);
+    final archive = ZipDecoder().decodeBuffer(input);
     final wanted = {for (final (entry, _) in items) entry};
     final byName = <String, ArchiveFile>{};
     for (final f in archive.files) {
@@ -693,6 +709,8 @@ Map<String, String> _extractZipEntries(
     }
   } catch (e) {
     stderr.writeln('[local_assets] ZIP decode failed ($zipPath): $e');
+  } finally {
+    input?.closeSync();
   }
   return out;
 }
