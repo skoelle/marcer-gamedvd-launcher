@@ -113,7 +113,7 @@ Neues Uploader-Tool, bewusst getrennt von `asset-manifest`.
   - Root-Indizes `index.json`, `index-*.json` werden wieder aufgenommen.
 - Gameinfo-Quelle: `MARCER_DATA_DIR/gameinfo`.
   - Enthalten: `games-*.json`, `manifest.json`, `crews.json`,
-    `crew-images.json` (falls vorhanden).
+    `crew-images.json` (falls vorhanden), `unmatched-report.txt`.
   - Ausgeschlossen: `.marcer-assets.json`, `*.bak-*`, Temp-Dateien und
     sonstige Dateien.
 - Python-Packer statt `7zz`: deterministisch (sortierte Einträge, feste
@@ -123,12 +123,20 @@ Neues Uploader-Tool, bewusst getrennt von `asset-manifest`.
   - geändert → neues `<kind>-<yyyyMMdd-HHmmss>.zip`
 - Ablage:
   - Screenshots-ZIP im Screenshot-Ordner
-  - Gameinfo-ZIP in `MARCER_ASSET_OUT_DIR` (Default: Parent von
-    `MARCER_DATA_DIR`)
-- Upload per FTP nach `MARCER_FTP_ASSETS_REMOTE`, binär, Temp-Name +
-  `RNFR`/`RNTO`, Größenprüfung.
-- State: `/state/asset-publish/state.json`.
-- Exit-Resultat signalisiert `uploaded`, `skipped` oder `error`.
+  - Gameinfo-ZIP in `MARCER_ASSET_OUT_DIR` (Default: `MARCER_DATA_DIR`,
+    neben dem `gameinfo/`-Ordner — wie die bisherigen Archive)
+- Upload per FTP nach `MARCER_FTP_ASSETS_REMOTE`, binär, direkt unter dem
+  finalen Namen (`STOR` + `SIZE`-Prüfung; nur mit `--upload`; ohne Flag rein
+  lokal). Der Marcer-FTP erlaubt weder `RNFR`/`RNTO` noch `DELE`: eine
+  vollständige Datei gleicher Größe wird wiederverwendet, ein Teil-Upload wird
+  beim nächsten Lauf überschrieben und kann nicht remote gelöscht werden.
+- Nach erfolgreichem Upload automatisch `asset-manifest` (ohne `--only`, damit
+  Screenshots- und Gameinfo-Eintrag gemeinsam in `latest.json` bleiben).
+- State: `/state/asset-publish/state.json` (Signatur, `uploaded`, `remote`,
+  `manifest_dirty`); fehlgeschlagene Uploads werden ohne Neupacken wiederholt,
+  fehlgeschlagene Pointer-Updates über `manifest_dirty`.
+- Exit-Resultat signalisiert `created`, `uploaded`, `skipped` oder `error`
+  (inkl. `stage` `upload`/`manifest`).
 
 ### 3.3 `tools/catalog-pipeline/`
 
@@ -240,6 +248,7 @@ curl -X POST http://<server>:8080/hook/screenshots
 - Inhaltliche Signatur entscheidet, nicht der Dateiname und nicht das Datum.
 - Unveränderte Daten erzeugen weder neues ZIP noch Upload.
 - `latest.json` wird nur nach einem erfolgreichen Upload aktualisiert.
+  `asset-publish` ruft dafür automatisch `asset-manifest` auf.
 - Ein fehlgeschlagener Pointer-Upload bleibt als „dirty“ gespeichert und wird
   beim nächsten Lauf wiederholt.
 - Alte Archive werden auf dem FTP nicht gelöscht.
@@ -256,7 +265,7 @@ curl -X POST http://<server>:8080/hook/screenshots
 | `MARCER_PATCH_DIR` | Patch-Tree (Sync-Ziel, schreibbar) |
 | `MARCER_OUT_DIR` | Screenshots + `index*.json` |
 | `MARCER_DATA_DIR` | Data-Verzeichnis (`gameinfo/`, `atarilegend/`, `piratefinder/`) |
-| `MARCER_ASSET_OUT_DIR` | Ablage der Gameinfo-ZIPs (Default: Parent von `MARCER_DATA_DIR`) |
+| `MARCER_ASSET_OUT_DIR` | Ablage der Gameinfo-ZIPs (Default: `MARCER_DATA_DIR`) |
 | `MARCER_STATE_DIR` | Persistenter Container-State (`/state`) |
 
 ### FTP
@@ -327,18 +336,27 @@ curl -X POST http://<server>:8080/hook/screenshots
 
 ### Phase 2 – `asset-publish`
 
-- [ ] `tools/asset-publish/` anlegen (MIT-Header, `run.sh`, README).
+- [x] `tools/asset-publish/` anlegen (MIT-Header, `run.sh`, README).
 - [ ] Screenshot- und Gameinfo-Quellen inklusive Excludes implementieren.
-- [ ] Signatur über sortierte `(relpath, size, sha256)`-Liste implementieren.
-- [ ] Deterministischen Python-ZIP-Packer implementieren.
+      (Gameinfo erledigt; Screenshots offen.)
+- [x] Signatur über sortierte `(relpath, size, sha256)`-Liste implementieren.
+- [x] Deterministischen Python-ZIP-Packer implementieren.
 - [ ] Ausgabepfade für Screenshots- und Gameinfo-ZIPs implementieren.
-- [ ] FTP-Upload mit Temp-Name, `RNFR`/`RNTO` und Größenprüfung.
-- [ ] Skip-Logik bei unveränderter Signatur, `--force`, `--dry-run`.
-- [ ] Maschinenlesbares Ergebnis (`uploaded`, `skipped`, `archive`, `error`).
-- [ ] State `/state/asset-publish/state.json` atomar schreiben.
-- [ ] Unit-Tests (Determinismus, Excludes, Skip, Force, Upload-Reihenfolge).
-- [ ] README mit Publish-Regeln.
-- [ ] `--dry-run` gegen die echten Ordner prüfen.
+      (Gameinfo erledigt; Screenshots offen.)
+- [x] FTP-Upload direkt unter dem finalen Namen mit `SIZE`-Prüfung
+      (Marcer-FTP erlaubt kein Rename/Delete; nur mit `--upload`; ohne Flag
+      rein lokal; `latest.json` wird danach automatisch über `asset-manifest`
+      aktualisiert).
+- [x] Skip-Logik bei unveränderter Signatur, `--force`, `--dry-run`.
+- [x] Maschinenlesbares Ergebnis (`created`, `uploaded`, `skipped`, `archive`,
+      `error` mit `stage`).
+- [x] State atomar schreiben (Default `<MARCER_DATA_DIR>/.asset-publish-state.json`,
+      im Container `MARCER_STATE_DIR/asset-publish/state.json`; inkl.
+      `uploaded`/`manifest_dirty` für Retries).
+- [x] Unit-Tests (Determinismus, Excludes, Skip, Force, Upload-Reihenfolge,
+      FTP-Fehler, Manifest-Retry).
+- [x] README mit Publish-Regeln.
+- [x] `--dry-run` gegen die echten Ordner prüfen.
 
 ### Phase 3 – `asset-manifest` Token-API
 
@@ -406,7 +424,9 @@ curl -X POST http://<server>:8080/hook/screenshots
       Aufruf liefert `409`.
 - [ ] Screenshot-Hook erzeugt/uploadet nur bei geändertem Inhalt.
 - [ ] `latest.json` wird nur nach erfolgreichem Upload aktualisiert.
-- [ ] Fehlerfall: FTP-Abbruch lässt keinen halben `.part`-Müll zurück.
+- [ ] Fehlerfall: FTP-Abbruch hinterlässt höchstens eine unvollständige
+      finale Datei; der nächste Lauf überschreibt sie (kein Remote-Delete
+      möglich).
 
 ### Phase 8 – Rollout
 

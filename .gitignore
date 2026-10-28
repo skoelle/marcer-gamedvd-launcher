@@ -41,6 +41,8 @@ desktop.config.json
 /tools/asset-manifest/__pycache__/
 /tools/archive-sync/__pycache__/
 /tools/archive-sync/tests/__pycache__/
+/tools/asset-publish/__pycache__/
+/tools/asset-publish/tests/__pycache__/
 /tools/crew-analysis/__pycache__/
 /tools/crew-analysis/tests/__pycache__/
 /tools/gallery/__pycache__

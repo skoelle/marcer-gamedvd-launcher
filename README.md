@@ -533,6 +533,7 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 |---|---|---|
 | [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR/gameinfo`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) |
 | [`tools/archive-sync`](tools/archive-sync/README.md) | Headless FTP archive sync into `MARCER_PATCH_DIR` (root is read-only): size-based change detection, parallel directory listing, atomic downloads, `changes.json`/`changes.txt` reports; no persistent state; never deletes local files. Replaces the interactive `ftp-sync` workflow for automation. | [`tools/archive-sync/README.md`](tools/archive-sync/README.md), [`PLAN-docker-pipeline.md`](docs/PLAN-docker-pipeline.md) |
+| [`tools/asset-publish`](tools/asset-publish/README.md) | Packages the catalog data into deterministic ZIPs. Currently gameinfo only: `<MARCER_DATA_DIR>/gameinfo` → `gameinfo-<yyyyMMdd-HHmmss>.zip` in `MARCER_DATA_DIR`, with a content signature that skips unchanged runs (`--force` repacks). Optional `--upload` stores the ZIP directly under its final name on `MARCER_FTP_ASSETS_REMOTE` with a size check (the Marcer FTP allows neither rename nor delete) and then updates `latest.json` via `tools/asset-manifest`; failed uploads/manifests are retried without repacking. | [`tools/asset-publish/README.md`](tools/asset-publish/README.md), [`PLAN-docker-pipeline.md`](docs/PLAN-docker-pipeline.md) |
 | [`tools/crew-analysis`](tools/crew-analysis/README.md) | Ranks cracked-game crews/scene groups by direct Disk-1 release ZIPs (crew view) by joining the `Crew Sorted` tree, the screenshot index (`index.json`) and `games-cracked.json`; disk-2+ entries (`skipped_disk_n`) are excluded. Writes ranking + audit files to `local/crew-analysis/` and suggests cracktro card images (`images`, pHash clusters seeded into `crew-images.json`). | [`tools/crew-analysis/README.md`](tools/crew-analysis/README.md), [`ANALYSIS-crews.md`](docs/ANALYSIS-crews.md) |
 | [`tools/piratefinder-gen`](tools/piratefinder-gen/README.md) | Fetches the weekly Pete Clarke Greaseweazle PirateFinder Catalog SQLite data, verifies its SHA-256, extracts the Atari ST subset and matches the cracked ZIPs by decoded image hashes (with a title fallback); writes match/crew/alias/gap reports to `local/piratefinder/`. Data is CC BY-NC-SA 4.0 and is never redistributed. | [`tools/piratefinder-gen/README.md`](tools/piratefinder-gen/README.md), [`ANALYSIS-piratefinder.md`](docs/ANALYSIS-piratefinder.md) |
 | [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR/gameinfo`), the Crews tab from optional `crews.json`/`crew-images.json`, and optional metadata-only boxscan/manual counts from `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR`. | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) |
@@ -546,9 +547,11 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 `games-*.json`) → `tools/screenshot-gen/run.sh run --scope cracked`
 (`index.json` + PNGs) → `tools/crew-analysis/run.sh` (`crews.json`) →
 `tools/crew-analysis/run.sh images --top 128 --write-images --force`
-(optional `crew-images.json`). `crew-analysis` only reads
-`games-cracked.json`; it never rewrites the normal gameinfo files. Screenshots
-and crew data should come from the same data snapshot.
+(optional `crew-images.json`) → `tools/asset-publish/run.sh publish --only
+gameinfo` (deterministic `gameinfo-*.zip` in the data directory; add
+`--upload` to send it to the FTP and update `latest.json`). `crew-analysis`
+only reads `games-cracked.json`; it never rewrites the normal gameinfo files.
+Screenshots and crew data should come from the same data snapshot.
 
 ---
 

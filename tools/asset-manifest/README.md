@@ -7,7 +7,8 @@ for catalog-data updates **without** touching the FTP.
 
 The tool never uploads anything to the FTP — it only logs in, lists the asset
 directory and reads the archive names (optionally hashing them). Uploading the
-archives is a separate, manual step.
+archives is done by [`tools/asset-publish`](../asset-publish/README.md), which
+also runs this tool automatically after a successful `--upload`.
 
 ## What it does
 
