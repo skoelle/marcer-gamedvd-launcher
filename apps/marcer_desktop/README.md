@@ -186,8 +186,9 @@ The setup/settings form is **tabbed**:
   (used both for game-folder downloads and for the catalog-data downloads),
   **ScreenshotDirectory** and **GameinfoDirectory** — the data directory, with
   **Download from FTP** next to *Browse…* — plus the **AtariLegend data** row
-  (**Download AtariLegend data**) and the **PirateFinder-Catalog** row
-  (**PirateFinder-Catalog**, no path field).
+  (**Download AtariLegend data**) and the **Pete Clarke PirateFinder-Catalog**
+  row (**PirateFinder-Catalog** button, no path field). Both the settings dialog
+  and the first-run setup show this row.
 - **Hatari** — the Hatari settings plus the **Hatari installation** and
   **TOS ROM** rows (download/install on demand, see below).
 - **CosmosEx** — its own tab after Hatari: mode dropdown, host, password, MAC
@@ -719,8 +720,10 @@ CC BY-NC-SA 4.0); it is fetched on demand:
 
 ## Pete Clarke Greaseweazle PirateFinder Catalog (optional)
 
-The optional **PirateFinder-Catalog** row (below AtariLegend data, no path
-field) downloads the generic Pete Clarke Greaseweazle PirateFinder Catalog
+The optional **Pete Clarke PirateFinder-Catalog** row (below AtariLegend data,
+no path field, **PirateFinder-Catalog** button) is shown in the settings dialog
+and the first-run setup and downloads the generic Pete Clarke Greaseweazle
+PirateFinder Catalog
 JSON from
 [`skoelle/piratefinder-catalog-json`](https://github.com/skoelle/piratefinder-catalog-json).
 The app stores it under `<GameinfoDirectory>/piratefinder/`, never in the
@@ -802,8 +805,8 @@ If the pointer provides a `sha256`, the downloaded archive is verified against
 it; a mismatch aborts the update. After a successful update the catalog reloads
 in place.
 
-The **PirateFinder-Catalog** row is fetched from GitHub, not the FTP, links to
-the original PirateFinder project and carries a clear
+The **Pete Clarke PirateFinder-Catalog** row is fetched from GitHub, not the
+FTP, links to the original PirateFinder project and carries a clear
 `CC BY-NC-SA 4.0 · not part of the Marcer catalog` hint.
 
 ## Catalog coverage

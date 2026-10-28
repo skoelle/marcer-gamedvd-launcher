@@ -7,3 +7,6 @@ const String kPirateFinderCatalogName =
 
 /// Compact label for settings rows, buttons and other narrow UI spots.
 const String kPirateFinderCatalogShortName = 'PirateFinder-Catalog';
+
+/// Name shown as the data-row label in the settings dialog and first-run setup.
+const String kPirateFinderCatalogSetupName = 'Pete Clarke PirateFinder-Catalog';

@@ -43,6 +43,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // First-run setup also exposes the optional PirateFinder data row.
+    expect(find.text('Pete Clarke PirateFinder-Catalog'), findsOneWidget);
+
     // No config yet: Save blocked until the mandatory root is valid.
     expect(_saveButton(tester).onPressed, isNull);
 

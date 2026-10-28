@@ -95,7 +95,8 @@ Save, the manual screenshot curation described below.
 - **Optional Pete Clarke Greaseweazle PirateFinder Catalog metadata** —
   download the generic
   [PirateFinder catalogue JSON](https://github.com/skoelle/piratefinder-catalog-json)
-  from the settings **PirateFinder-Catalog** row:
+  from the settings **Pete Clarke PirateFinder-Catalog** row
+  (**PirateFinder-Catalog** button; also shown in the first-run setup):
   catalogue facts, crew histories, menu-disk appearances and real trivia
   (`fact`/`note` entries from the matching menu releases). The data lives under `<GameinfoDirectory>/piratefinder/`, checked
   at startup (release builds) and listed in the same **Catalog data** dialog as
@@ -408,7 +409,7 @@ disabled even when the active tab looks fine. The two catalog-data fields each c
 **Download from FTP** button next to *Browse…* that pulls the newest
 `screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
 into the target directory (the gameinfo directory has **no** implicit
-fallback), the **AtariLegend data** row downloads into `<GameinfoDirectory>/atarilegend`, and the **PirateFinder-Catalog** row offers **PirateFinder-Catalog** for the optional PirateFinder-Catalog JSON in `<GameinfoDirectory>/piratefinder` (GitHub, CC BY-NC-SA 4.0, see [License](#license)). **Save** writes them back to the
+fallback), the **AtariLegend data** row downloads into `<GameinfoDirectory>/atarilegend`, and the **Pete Clarke PirateFinder-Catalog** row offers **PirateFinder-Catalog** for the optional PirateFinder-Catalog JSON in `<GameinfoDirectory>/piratefinder` (GitHub, CC BY-NC-SA 4.0, see [License](#license)). The PirateFinder row is also part of the first-run setup. **Save** writes them back to the
 same `desktop.config.json` and reloads the catalog in place, so new paths apply
 without restarting the app; window settings and the remaining fields stay
 untouched.

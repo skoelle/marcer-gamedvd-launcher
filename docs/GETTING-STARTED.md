@@ -139,7 +139,7 @@ MarcersGameDVD-Data/
 | `ScreenshotDirectory` | no | Target for the screenshot index (`index.json`, `index-pd.json`, `index-utils.json`, `index-magazine.json`, `index-falcon.json`) and the PNG previews. |
 | `GameinfoDirectory` | no | **Data directory**: `gameinfo/` (games JSON, `crews.json`, `crew-images.json`), `atarilegend/`, `piratefinder/`. There is no implicit fallback. |
 | `AtariLegendDirectory` (legacy) | no | Old separate AtariLegend path; moved into `<GameinfoDirectory>/atarilegend/` at startup and no longer shown in the form. |
-| `PirateFinder-Catalog` | no | Optional Pete Clarke Greaseweazle PirateFinder Catalog JSON, downloaded from GitHub into `<GameinfoDirectory>/piratefinder/` (**PirateFinder-Catalog**, with a link to the original project). Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog. |
+| `PirateFinder-Catalog` | no | Optional Pete Clarke Greaseweazle PirateFinder Catalog JSON, downloaded from GitHub into `<GameinfoDirectory>/piratefinder/` (**Pete Clarke PirateFinder-Catalog** row, **PirateFinder-Catalog** button, with a link to the original project; also shown in the first-run setup). Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog. |
 
 On first start the app migrates an old layout automatically: root-level gameinfo
 files move into `gameinfo/`, a configured `AtariLegendDirectory` moves into

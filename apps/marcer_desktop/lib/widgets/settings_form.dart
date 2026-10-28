@@ -140,7 +140,7 @@ class SettingsForm extends StatefulWidget {
   final AtariLegendFetcher atariLegendFetcher;
 
   /// Shared PF catalogue download/update state. When omitted (first-run
-  /// setup, tests) the form owns a private controller.
+  /// setup, tests) the form owns a private controller and still shows the row.
   final PirateFinderDataController? pirateFinderData;
 
   /// Overrides the platform build lookup for the Hatari install row (tests);
@@ -586,7 +586,7 @@ class _SettingsFormState extends State<SettingsForm> {
               _fieldRow(field),
               if (field.field == _Field.gameinfo) ...[
                 _atariLegendRow(),
-                if (widget.pirateFinderData != null) _pirateFinderRow(),
+                _pirateFinderRow(),
               ],
               const SizedBox(height: 8),
             ],
@@ -765,8 +765,8 @@ class _SettingsFormState extends State<SettingsForm> {
   /// AtariLegend cache row (no path field; target is `<DataDir>/atarilegend`).
   Widget _atariLegendRow() {
     final target = currentConfig.resolveAtariLegendDirectory();
-    final installed = target.isNotEmpty &&
-        File('$target/$kAtariLegendFileName').existsSync();
+    final installed =
+        target.isNotEmpty && File('$target/$kAtariLegendFileName').existsSync();
     final info = installed ? _atariLegendInfo(target) : null;
     final date = info?.assetDate ?? '';
     final status = !installed
@@ -868,7 +868,7 @@ class _SettingsFormState extends State<SettingsForm> {
           child: const Padding(
             padding: EdgeInsets.only(top: 10),
             child: Text(
-              kPirateFinderCatalogShortName,
+              kPirateFinderCatalogSetupName,
               style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
           ),

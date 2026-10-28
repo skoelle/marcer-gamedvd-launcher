@@ -459,7 +459,8 @@ void main() {
   });
 
   testWidgets(
-    'PirateFinder-Catalog row has one download action and a GitHub link',
+    'Pete Clarke PirateFinder-Catalog row has one download action and a '
+    'GitHub link',
     (tester) async {
       tester.view.physicalSize = const Size(1200, 1500);
       tester.view.devicePixelRatio = 1.0;
@@ -515,6 +516,7 @@ void main() {
 
       expect(valid, isTrue);
       expect(latest!.gameinfoDirectory, dir.path);
+      expect(find.text('Pete Clarke PirateFinder-Catalog'), findsOneWidget);
       final button = find.widgetWithText(FilledButton, 'PirateFinder-Catalog');
       expect(button, findsOneWidget);
       expect(find.text('Check'), findsNothing);
