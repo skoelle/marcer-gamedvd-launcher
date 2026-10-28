@@ -32,10 +32,13 @@ Future<bool> _openLocalPath(String path, {bool directory = false}) async {
         );
         return true;
       }
-      // `start` is a cmd built-in; the empty title argument is required so a
-      // quoted path with spaces is not mistaken for the window title.
-      final r = await Process.run('cmd', ['/c', 'start', '', normalized],
-          runInShell: true);
+      // ShellExecute via rundll32: no shell involved, so `&`, `|`, `^`, … in
+      // the path can never be interpreted as commands (unlike
+      // `cmd /c start`). Opens the file with its default application.
+      final r = await Process.run(
+        'rundll32.exe',
+        ['url.dll,FileProtocolHandler', normalized],
+      );
       return r.exitCode == 0;
     }
     final r = await Process.run('xdg-open', [normalized]);

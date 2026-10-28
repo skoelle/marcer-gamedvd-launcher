@@ -155,8 +155,9 @@ List<String> splitCommandLine(String line) {
 /// - The resolved Hatari config file must exist. This also covers the implicit
 ///   bundled fallback: Hatari itself aborts argument parsing (`-c` needs an
 ///   existing file) with exit code 1, which is otherwise hard to diagnose.
-/// - `Hatari.ArgsTemplate` must contain `{zip}` and `{cfg}`.
-String? validateHatariConfig(DesktopConfig config) {
+/// - `Hatari.ArgsTemplate` must contain `{cfg}` and, unless [requireZip] is
+///   false (GEMDOS autostart never substitutes `{zip}`), `{zip}`.
+String? validateHatariConfig(DesktopConfig config, {bool requireZip = true}) {
   final exe = config.resolveHatariExecutable();
   if (config.hatariExecutable.trim().isEmpty) {
     return 'Hatari.Executable must be set in desktop.config.json.';
@@ -171,7 +172,7 @@ String? validateHatariConfig(DesktopConfig config) {
         'Hatari.ConfigFile in desktop.config.json.';
   }
   final tpl = config.hatariArgsTemplate;
-  if (!tpl.contains('{zip}')) {
+  if (requireZip && !tpl.contains('{zip}')) {
     return 'Hatari.ArgsTemplate must contain the {zip} placeholder.';
   }
   if (!tpl.contains('{cfg}')) {

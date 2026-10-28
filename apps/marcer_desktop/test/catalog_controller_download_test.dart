@@ -252,4 +252,24 @@ void main() {
     c.clearDownloadError();
     expect(c.downloadError, isNull);
   });
+
+  test('refuses a folder that would escape the download target', () async {
+    // A malicious/broken index rel: the `<letter>/<folder>` pair resolves to
+    // `<tree>/../..`, which must never be joined onto the target directory.
+    const escapeRel = '$tree/../../escape.zip';
+    File('${tmp.path}/out/index.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'entries': {escapeRel: entry(escapeRel)},
+    }));
+    await c.init();
+    final card = c.universe.cracked.single;
+    expect(c.cardFolderRel(card), contains('..'));
+
+    final fake = _FakeDownloader();
+    c.downloader = fake;
+    await c.downloadMissing(card);
+    expect(fake.calls, 0);
+    expect(c.downloadError, contains('No folder to download'));
+    expect(c.downloading, isFalse);
+  });
 }

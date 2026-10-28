@@ -119,26 +119,32 @@ class FavoritesPathCodec {
   }
 
   String? _walkCaseInsensitive(String base, String rel) {
-    var current = base;
-    for (final part in rel.split('/')) {
-      if (part.isEmpty) continue;
-      final direct = p.join(current, part);
-      if (File(direct).existsSync()) {
-        current = direct;
-        continue;
-      }
-      final dir = Directory(current);
-      if (!dir.existsSync()) return null;
-      String? match;
-      for (final entry in dir.listSync(followLinks: false)) {
-        if (p.basename(entry.path).toLowerCase() == part.toLowerCase()) {
-          match = entry.path;
-          break;
+    try {
+      var current = base;
+      for (final part in rel.split('/')) {
+        if (part.isEmpty) continue;
+        final direct = p.join(current, part);
+        if (File(direct).existsSync()) {
+          current = direct;
+          continue;
         }
+        final dir = Directory(current);
+        if (!dir.existsSync()) return null;
+        String? match;
+        for (final entry in dir.listSync(followLinks: false)) {
+          if (p.basename(entry.path).toLowerCase() == part.toLowerCase()) {
+            match = entry.path;
+            break;
+          }
+        }
+        if (match == null) return null;
+        current = match;
       }
-      if (match == null) return null;
-      current = match;
+      return File(current).existsSync() ? current : null;
+    } catch (_) {
+      // Permission / I/O error on one path segment: no match, but never fail
+      // the whole favorites load.
+      return null;
     }
-    return File(current).existsSync() ? current : null;
   }
 }

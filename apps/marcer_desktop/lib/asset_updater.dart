@@ -111,6 +111,20 @@ class AssetUpdateController extends ChangeNotifier {
   final LatestFetcher _fetch;
   final CatalogAssetDownloader _downloader;
 
+  bool _disposed = false;
+
+  /// Notifies listeners unless the controller was already disposed (async
+  /// checks/downloads can finish after the home page is gone).
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   /// Live config (target directories + FTP settings); set by the home page.
   DesktopConfig config = DesktopConfig(rootDirectory: '');
 
@@ -180,7 +194,7 @@ class AssetUpdateController extends ChangeNotifier {
     if (checking) return;
     checking = true;
     if (manual) checkError = null;
-    notifyListeners();
+    _notify();
     try {
       final parsed =
           parseCatalogLatest(await _fetch(Uri.parse(catalogLatestUrl())));
@@ -193,7 +207,7 @@ class AssetUpdateController extends ChangeNotifier {
       if (manual) checkError = 'Could not check catalog data: $e';
     } finally {
       checking = false;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -204,7 +218,7 @@ class AssetUpdateController extends ChangeNotifier {
     final dir = _targetDirFor(asset);
     if (remote == null || dir.isEmpty) return;
     writeSkippedAsset(dir, asset, remote.archive);
-    notifyListeners();
+    _notify();
   }
 
   /// Downloads + extracts the remote version of [asset] (forced), verifies the
@@ -216,12 +230,12 @@ class AssetUpdateController extends ChangeNotifier {
     final dir = _targetDirFor(asset);
     if (dir.isEmpty) {
       error = 'No target directory for ${asset.label}.';
-      notifyListeners();
+      _notify();
       return false;
     }
     if (!config.ftpConfigured) {
       error = 'FTP not configured — set Host/User/Password in Settings.';
-      notifyListeners();
+      _notify();
       return false;
     }
 
@@ -231,7 +245,7 @@ class AssetUpdateController extends ChangeNotifier {
     updateTotal = 0;
     error = null;
     checkError = null;
-    notifyListeners();
+    _notify();
     try {
       await _downloader.download(
         asset: asset,
@@ -243,13 +257,13 @@ class AssetUpdateController extends ChangeNotifier {
           updateMessage = message;
           updateDone = done;
           updateTotal = total;
-          notifyListeners();
+          _notify();
         },
         isCancelled: isCancelled,
       );
       clearSkippedAsset(dir, asset);
       updatingAsset = null;
-      notifyListeners();
+      _notify();
       return true;
     } on DownloadCancelledException {
       error = '${asset.label} update cancelled.';
@@ -257,13 +271,13 @@ class AssetUpdateController extends ChangeNotifier {
       error = '${asset.label} update failed: $e';
     }
     updatingAsset = null;
-    notifyListeners();
+    _notify();
     return false;
   }
 
   void clearError() {
     if (error == null) return;
     error = null;
-    notifyListeners();
+    _notify();
   }
 }

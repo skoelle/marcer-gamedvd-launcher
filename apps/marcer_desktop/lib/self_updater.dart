@@ -689,6 +689,20 @@ class SelfUpdateController extends ChangeNotifier {
 
   final ReleaseListFetcher _fetch;
 
+  bool _disposed = false;
+
+  /// Notifies listeners unless the controller was already disposed (async
+  /// checks/downloads can finish after the home page is gone).
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   /// Whether this controller may check for updates (release builds; tests can
   /// override it through the constructor).
   final bool isEnabled;
@@ -724,7 +738,7 @@ class SelfUpdateController extends ChangeNotifier {
     if (!isEnabled) {
       if (manual) {
         checkError = 'Update checks are only available in release builds.';
-        notifyListeners();
+        _notify();
       }
       return;
     }
@@ -734,7 +748,7 @@ class SelfUpdateController extends ChangeNotifier {
       available = null;
       if (manual) checkError = kAppTranslocatedUpdateError;
       _log.line('check skipped: app runs from App Translocation (read-only)');
-      notifyListeners();
+      _notify();
       return;
     }
     if (phase == UpdatePhase.downloading ||
@@ -745,7 +759,7 @@ class SelfUpdateController extends ChangeNotifier {
     phase = UpdatePhase.checking;
     error = null;
     if (manual) checkError = null;
-    notifyListeners();
+    _notify();
     try {
       final list = await _fetch();
       final tag = platformAssetTag();
@@ -761,7 +775,7 @@ class SelfUpdateController extends ChangeNotifier {
       if (manual) checkError = 'Update check failed: $e';
     } finally {
       phase = UpdatePhase.none;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -770,13 +784,20 @@ class SelfUpdateController extends ChangeNotifier {
   Future<void> install() async {
     final info = available;
     if (!isEnabled || info == null) return;
+    if (phase == UpdatePhase.downloading ||
+        phase == UpdatePhase.installing ||
+        phase == UpdatePhase.restarting) {
+      // A second call while a run is active must never start another
+      // download/swap.
+      return;
+    }
     if (isTranslocated) {
       // Defense in depth (e.g. a badge found before the guard was added):
       // never download or copy into the read-only translocation directory.
       _log.line('install aborted: app runs from App Translocation (read-only)');
       phase = UpdatePhase.failed;
       error = kAppTranslocatedUpdateError;
-      notifyListeners();
+      _notify();
       return;
     }
     final installDir = installTargetDir(
@@ -788,7 +809,7 @@ class SelfUpdateController extends ChangeNotifier {
       phase = UpdatePhase.downloading;
       progress = 0;
       error = null;
-      notifyListeners();
+      _notify();
 
       log.line('--- update start: $currentVersion -> ${info.version} '
           '(${info.assetName})');
@@ -803,7 +824,7 @@ class SelfUpdateController extends ChangeNotifier {
       log.line('download ok: ${zipFile.lengthSync()} bytes');
 
       phase = UpdatePhase.installing;
-      notifyListeners();
+      _notify();
       final extractDir = Directory(p.join(tmp.path, 'extract'));
       extractDir.createSync(recursive: true);
       await extractZipToDir(zipFile, extractDir);
@@ -815,7 +836,7 @@ class SelfUpdateController extends ChangeNotifier {
         // flutter_windows.dll, which Windows refuses to rename. Stage a
         // hidden helper that waits for our exit, swaps and relaunches.
         phase = UpdatePhase.restarting;
-        notifyListeners();
+        _notify();
         await _launchWindowsHelper(
             tmp: tmp,
             installDir: Directory(installDir),
@@ -846,7 +867,7 @@ class SelfUpdateController extends ChangeNotifier {
       }
 
       phase = UpdatePhase.restarting;
-      notifyListeners();
+      _notify();
       await relaunch(installDir, log: log);
       log.line('relaunched; exiting app now');
       exit(0);
@@ -861,7 +882,7 @@ class SelfUpdateController extends ChangeNotifier {
           : '\n\n(Update log could not be written: '
               '${log.writeErrors.join('; ')})';
       error = '$e$writeNote';
-      notifyListeners();
+      _notify();
       if (tmp != null) {
         try {
           tmp.deleteSync(recursive: true);
@@ -877,7 +898,7 @@ class SelfUpdateController extends ChangeNotifier {
       phase = UpdatePhase.none;
     }
     error = null;
-    notifyListeners();
+    _notify();
   }
 
   /// Launches the Windows helper that swaps the files after this process has
@@ -1008,7 +1029,7 @@ class SelfUpdateController extends ChangeNotifier {
           received += chunk.length;
           if (total > 0) {
             progress = received / total;
-            notifyListeners();
+            _notify();
           }
         }
         await sink.flush();

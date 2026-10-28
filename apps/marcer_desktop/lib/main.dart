@@ -811,6 +811,7 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return false;
     final exe = await showHatariInstallDialog(context, config: _config);
     if (exe == null) return false;
+    if (!mounted) return false;
     final value = hatariConfigExecutable(appDir: _config.appDir, exePath: exe);
     final edited = _config.copyWith(hatariExecutable: value);
     if (widget.configPath.isNotEmpty) {

@@ -64,4 +64,25 @@ void main() {
     final boot = prepareBoot(zip);
     expect(boot.mode, 'floppy');
   });
+
+  test('GEMDOS launch only requires {cfg}, the ZIP launch still needs {zip}',
+      () {
+    final zip = writeZip('1990_01.zip', {
+      '1990_01/PLANET/PLANET.PRG': 'x',
+    });
+    final boot = prepareBoot(zip);
+    final cfg = DesktopConfig(
+      rootDirectory: tmp.path,
+      appDir: tmp.path,
+      hatariExecutable: 'hatari',
+      hatariArgsTemplate: '--configfile "{cfg}"',
+    );
+
+    final res = buildStGemdosCommand(cfg, zip, boot);
+    expect(res.error, isNull, reason: res.error);
+    expect(res.command!.arguments, contains('-c'));
+
+    // The normal (floppy/ZIP) launch keeps the strict validation.
+    expect(validateHatariConfig(cfg), contains('{zip}'));
+  });
 }

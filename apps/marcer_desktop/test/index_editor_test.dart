@@ -42,6 +42,14 @@ void main() {
           throwsA(isA<ShotgenLockedException>()));
     });
 
+    test('invalid/unreadable lock content is treated as absent', () {
+      // Invalid UTF-8 makes readAsStringSync throw; the reader must degrade to
+      // "no lock" instead of failing the caller.
+      File(shotgenLockPath(screenshotDir)).writeAsBytesSync([0xFF, 0xFE, 0x00]);
+      expect(readShotgenLockPid(screenshotDir), isNull);
+      expect(isShotgenActive(screenshotDir), isFalse);
+    });
+
     test('stale lock (dead pid) is treated as free and overwritten',
         () async {
       final proc = await Process.start('true', []);

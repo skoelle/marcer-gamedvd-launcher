@@ -1249,7 +1249,7 @@ class _IntegerScaledImage extends StatefulWidget {
 class _IntegerScaledImageState extends State<_IntegerScaledImage> {
   ui.Image? _decoded;
   bool _failed = false;
-  bool _loading = false;
+  int _generation = 0;
 
   @override
   void initState() {
@@ -1264,6 +1264,8 @@ class _IntegerScaledImageState extends State<_IntegerScaledImage> {
       _decoded?.dispose();
       _decoded = null;
       _failed = false;
+      // Bumping the generation invalidates an in-flight decode for the old
+      // path, so the new path is always loaded (even while one is running).
       _load();
     }
   }
@@ -1275,13 +1277,12 @@ class _IntegerScaledImageState extends State<_IntegerScaledImage> {
   }
 
   Future<void> _load() async {
-    if (_loading) return;
-    _loading = true;
+    final generation = ++_generation;
+    final path = widget.path;
     try {
-      final bytes = await io.File(widget.path).readAsBytes();
+      final bytes = await io.File(path).readAsBytes();
       final img = await decodeImageFromList(bytes);
-      _loading = false;
-      if (!mounted) {
+      if (!mounted || generation != _generation) {
         img.dispose();
         return;
       }
@@ -1290,8 +1291,8 @@ class _IntegerScaledImageState extends State<_IntegerScaledImage> {
         _decoded = img;
       });
     } catch (_) {
-      _loading = false;
-      if (mounted) setState(() => _failed = true);
+      if (!mounted || generation != _generation) return;
+      setState(() => _failed = true);
     }
   }
 

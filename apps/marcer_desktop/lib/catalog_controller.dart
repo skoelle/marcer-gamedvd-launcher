@@ -164,7 +164,7 @@ class CatalogController extends ChangeNotifier {
         atariLegendDir: cfg.resolveAtariLegendDirectory(),
         onProgress: (message) {
           progress = message;
-          notifyListeners();
+          if (!_disposed) notifyListeners();
         },
       );
       notices.addAll(bundle.warnings);
@@ -241,7 +241,7 @@ class CatalogController extends ChangeNotifier {
       initError = '$e';
       progress = '';
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Human-readable message when the last [init] failed, else `null`. While it
@@ -271,8 +271,22 @@ class CatalogController extends ChangeNotifier {
 
   /// Lazily loads the reviews/comments/magazines cache the first time the
   /// AtariLegend details text tabs are opened (kept for the session).
-  Future<AtariLegendTexts> atariLegendTexts() => _atariLegendTextsFuture ??=
-      Future(() => AtariLegendTexts.load(config.resolveAtariLegendDirectory()));
+  Future<AtariLegendTexts> atariLegendTexts() =>
+      _atariLegendTextsFuture ??= _loadAtariLegendTexts();
+
+  /// Loads the text cache; a failure is not cached, so a later call retries.
+  /// The load runs in a scheduled callback so the failed future is only
+  /// assigned after this method returned (see [atariLegendTexts]).
+  Future<AtariLegendTexts> _loadAtariLegendTexts() {
+    return Future(() {
+      try {
+        return AtariLegendTexts.load(config.resolveAtariLegendDirectory());
+      } catch (_) {
+        _atariLegendTextsFuture = null;
+        rethrow;
+      }
+    });
+  }
 
   bool get crewFocusActive =>
       !favoritesOnly &&
@@ -1138,6 +1152,17 @@ class CatalogController extends ChangeNotifier {
   /// Normalizes a rel path to the '/'-separated index form (cache keys).
   static String _relKey(String rel) => rel.replaceAll('\\', '/');
 
+  /// True when [rel] is absolute or contains a `..` segment. Index-derived
+  /// folders must never be able to escape a configured base directory (e.g.
+  /// the FTP download target).
+  static bool _unsafeRel(String rel) {
+    final norm = _relKey(rel);
+    if (norm.startsWith('/') || RegExp(r'^[A-Za-z]:/').hasMatch(norm)) {
+      return true;
+    }
+    return norm.split('/').contains('..');
+  }
+
   /// Directory part of a '/'-separated rel path ('' at the top level).
   static String _dirOfRel(String rel) {
     final norm = _relKey(rel);
@@ -1382,7 +1407,19 @@ class CatalogController extends ChangeNotifier {
       // index 3, a nested one in the issue directory below it.
       final parts = firstRel.split('/');
       final depth = parts.length >= 5 ? 4 : 3;
-      if (parts.length > depth) return parts.take(depth).join('/');
+      if (parts.length > depth) {
+        final candidate = parts.take(depth).join('/');
+        // Only trust the fixed depth when it still contains the known
+        // magazine segment; otherwise fall through to the `<letter>/<folder>`
+        // pair search below (unusually nested rels).
+        if (card.letter.isEmpty ||
+            candidate
+                .toLowerCase()
+                .split('/')
+                .contains(card.letter.toLowerCase())) {
+          return candidate;
+        }
+      }
     }
 
     // Locate the `<letter>/<folder>` pair inside an index rel: the index path
@@ -1570,6 +1607,7 @@ class CatalogController extends ChangeNotifier {
     if (beforeLaunch != null && !await beforeLaunch!(variant, useFalcon)) {
       return;
     }
+    if (_disposed) return;
     final result = useFalcon
         ? await launchFalcon(config, zipPath, variant: variant)
         : isMagazinePath(zipPath)
@@ -1592,7 +1630,7 @@ class CatalogController extends ChangeNotifier {
           ? 'Hatari exited with code $code.'
           : 'Hatari exited with code $code.\n\n$detail';
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Default launch variant for [card] when none is chosen explicitly: old
@@ -1778,7 +1816,7 @@ class CatalogController extends ChangeNotifier {
   Future<void> downloadMissing(GameCard card) async {
     if (downloading) return;
     final folder = cardFolderRel(card);
-    if (folder == null || folder.isEmpty) {
+    if (folder == null || folder.isEmpty || _unsafeRel(folder)) {
       downloadError = 'No folder to download for this card.';
       notifyListeners();
       return;
@@ -1810,7 +1848,7 @@ class CatalogController extends ChangeNotifier {
           downloadProgress = total <= 0
               ? 'Downloading…'
               : 'Downloading $done/$total files';
-          notifyListeners();
+          if (!_disposed) notifyListeners();
         },
         isCancelled: () => cancelled,
       );
@@ -1825,7 +1863,7 @@ class CatalogController extends ChangeNotifier {
       downloading = false;
       downloadingCard = null;
       _cancelDownload = null;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -2407,11 +2445,14 @@ class CatalogController extends ChangeNotifier {
     required String previewPath,
     required String candidatePath,
   }) {
+    final lockDir = config.screenshotDirectory;
+    var locked = false;
     try {
-      if (isShotgenActive(config.screenshotDirectory)) {
-        throw ShotgenLockedException(
-          readShotgenLockPid(config.screenshotDirectory),
-        );
+      // Actually claim the lock (not just check it) so a concurrent shotgen
+      // run cannot start between the check and the swap.
+      if (lockDir.isNotEmpty) {
+        acquireShotgenLock(lockDir);
+        locked = true;
       }
       swapPreviewCandidate(
         previewPath: previewPath,
@@ -2435,7 +2476,7 @@ class CatalogController extends ChangeNotifier {
       final v = ++_imageBump;
       _imageVersions[previewPath] = v;
       _imageVersions[candidatePath] = v;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return null;
     } on ShotgenLockedException catch (e) {
       return e.toString();
@@ -2444,6 +2485,8 @@ class CatalogController extends ChangeNotifier {
           '${e.path == null || e.path!.isEmpty ? '' : ' (${e.path})'}';
     } catch (e) {
       return 'Swap failed: $e';
+    } finally {
+      if (locked) releaseShotgenLock(lockDir);
     }
   }
 

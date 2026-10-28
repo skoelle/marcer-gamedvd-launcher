@@ -96,8 +96,17 @@ class FavoritesService {
       final list = <String>[];
       final fileOriginals = <String, String>{};
       final file = File(path);
+      String? raw;
       if (file.existsSync()) {
-        final raw = file.readAsStringSync();
+        try {
+          raw = file.readAsStringSync();
+        } catch (_) {
+          // Unreadable file: skip its entries instead of aborting the whole
+          // favorites load (the other section files may still be fine).
+          raw = null;
+        }
+      }
+      if (raw != null) {
         final hasBom = raw.startsWith('\uFEFF');
         final hasCrlf = raw.contains('\r');
         var dirty = hasBom || hasCrlf;
@@ -280,11 +289,21 @@ class FavoritesService {
         final encoded = [
           for (final key in list) _encodedFor(path, key),
         ]..sort(_byLower);
-        File(path)
-          ..parent.createSync(recursive: true)
-          ..writeAsStringSync(
-              '${encoded.join('\n')}${encoded.isEmpty ? '' : '\n'}',
-              flush: true);
+        final content = '${encoded.join('\n')}${encoded.isEmpty ? '' : '\n'}';
+        // Write to a sibling temp file first so a crash mid-write cannot
+        // truncate the existing favorites file.
+        final target = File(path)..parent.createSync(recursive: true);
+        final tmp = File('$path.tmp');
+        tmp.writeAsStringSync(content, flush: true);
+        try {
+          tmp.renameSync(path);
+        } on FileSystemException {
+          // Windows cannot rename over an existing file.
+          try {
+            target.deleteSync();
+          } catch (_) {}
+          tmp.renameSync(path);
+        }
       } catch (e) {
         error ??= '$e';
       }

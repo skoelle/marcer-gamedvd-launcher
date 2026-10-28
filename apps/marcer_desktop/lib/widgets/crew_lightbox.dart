@@ -51,8 +51,40 @@ class _CrewLightboxState extends State<CrewLightbox> {
   static const double _minCardWidth = 190;
   static const double _gridSpacing = 8;
   static const double _gridPadding = 8;
-  int _columns = 4;
-  double _rowExtent = 210;
+
+  /// Column count for a grid area of [viewportWidth] (same formula as the
+  /// `LayoutBuilder` below, so navigation and layout always agree).
+  static int _columnsForWidth(double viewportWidth) {
+    final available = viewportWidth - _gridPadding * 2;
+    return math.max(
+      1,
+      math.min(
+        4,
+        ((available + _gridSpacing) / (_minCardWidth + _gridSpacing)).floor(),
+      ),
+    );
+  }
+
+  /// Cross-axis width of the grid viewport (the `LayoutBuilder` width).
+  double get _gridWidth {
+    if (!_scroll.hasClients) return 0;
+    final box = _scroll.position.context.storageContext.findRenderObject();
+    return box is RenderBox && box.hasSize ? box.size.width : 0;
+  }
+
+  int get _columns {
+    final width = _gridWidth;
+    return width <= 0 ? 1 : _columnsForWidth(width);
+  }
+
+  double get _rowExtent {
+    final width = _gridWidth;
+    if (width <= 0) return 0;
+    final columns = _columnsForWidth(width);
+    final available = width - _gridPadding * 2;
+    final cardWidth = (available - _gridSpacing * (columns - 1)) / columns;
+    return cardWidth * 0.625 + 74 + _gridSpacing;
+  }
 
   final FocusNode _focus = FocusNode(debugLabel: 'crew-lightbox');
   final FocusNode _searchFocus = FocusNode(debugLabel: 'crew-lightbox-search');
@@ -487,19 +519,10 @@ class _CrewLightboxState extends State<CrewLightbox> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final available = constraints.maxWidth - _gridPadding * 2;
-        final columns = math.max(
-          1,
-          math.min(
-            4,
-            ((available + _gridSpacing) / (_minCardWidth + _gridSpacing))
-                .floor(),
-          ),
-        );
+        final columns = _columnsForWidth(constraints.maxWidth);
         final cardWidth = (available - _gridSpacing * (columns - 1)) / columns;
         final imageHeight = cardWidth * 0.625;
         final cardHeight = imageHeight + 74;
-        _columns = columns;
-        _rowExtent = cardHeight + _gridSpacing;
         return GridView.builder(
           controller: _scroll,
           padding: const EdgeInsets.all(_gridPadding),

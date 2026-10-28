@@ -15,7 +15,9 @@ import 'hatari_launcher.dart';
 ({HatariCommand? command, String? error}) buildStGemdosCommand(
     DesktopConfig config, String zipPath, BootMedia boot,
     {HatariVariant? variant}) {
-  final validation = validateHatariConfig(config);
+  // GEMDOS autostart passes `-d`/`--auto`, never a `{zip}` substitution, so
+  // only `{cfg}` is required here.
+  final validation = validateHatariConfig(config, requireZip: false);
   if (validation != null) return (command: null, error: validation);
   if (boot.mode != 'gemdos') {
     return (command: null, error: 'not a GEMDOS archive');

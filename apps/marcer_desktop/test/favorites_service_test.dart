@@ -69,6 +69,14 @@ void main() {
     expect(f.isEmpty, isTrue);
   });
 
+  test('save writes atomically and leaves no temp file behind', () {
+    final f = loadService();
+    expect(f.toggle('/games/Alpha.zip'), isTrue);
+    expect(f.lastSaveError, isNull);
+    expect(File('$miscFile.tmp').existsSync(), isFalse);
+    expect(File(miscFile).readAsStringSync().trim(), '/games/Alpha.zip');
+  });
+
   test('loaded paths are sorted case-insensitively', () {
     write(miscFile, '/z/Beta.zip\n/a/alpha.zip\n');
     final f = loadService();

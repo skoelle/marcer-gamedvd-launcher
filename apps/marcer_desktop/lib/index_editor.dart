@@ -29,9 +29,14 @@ String shotgenLockPath(String screenshotDir) => '$screenshotDir/$kShotgenLockNam
 
 /// PID from the lock file, or null when absent/blank/not a number.
 int? readShotgenLockPid(String screenshotDir) {
-  final lock = File(shotgenLockPath(screenshotDir));
-  if (!lock.existsSync()) return null;
-  return int.tryParse(lock.readAsStringSync().trim());
+  try {
+    final lock = File(shotgenLockPath(screenshotDir));
+    if (!lock.existsSync()) return null;
+    return int.tryParse(lock.readAsStringSync().trim());
+  } catch (_) {
+    // Unreadable lock file: treat as absent instead of failing the caller.
+    return null;
+  }
 }
 
 /// Best-effort liveness probe for a pid (POSIX: signal 0 via SIGCONT;
