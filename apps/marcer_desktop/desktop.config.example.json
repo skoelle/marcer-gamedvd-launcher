@@ -32,7 +32,7 @@
     "ShareDirectory": ""
   },
   "ShowCandidates": true,
-  "DefaultStatus": "with_screenshot",
+  "DefaultStatus": "any",
   "Window": {
     "width": 1280,
     "height": 800,

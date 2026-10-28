@@ -45,7 +45,7 @@ if [ -f "$REPO_ROOT/local/paths.env" ]; then
     "ShareDirectory": "${MARCER_COSMOSEX_SHARE:-}"
   },
   "ShowCandidates": true,
-  "DefaultStatus": "with_screenshot",
+  "DefaultStatus": "any",
   "Window": { "width": 1280, "height": 800, "maximized": true }
 }
 EOF

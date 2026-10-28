@@ -157,7 +157,9 @@ The NAS is slow. A full recursive walk over the whole volume must never happen
 blindly. Instead:
 
 - The tool maintains **one index file per scope** in `MARCER_OUT_DIR`: the
-  default scope's file is `index.json` (read by the gallery and desktop app),
+  default scope's file is `index.json` (screenshot state read by the gallery
+  and desktop app; the desktop catalog universe comes from
+  `gameinfo/full-index.json.gz`),
   every other scope uses `index-<name>.json` (section 4.4). A scope never
   reads or writes another scope's index file, so processing one scope can
   neither corrupt nor bloat the state of another.
@@ -248,8 +250,9 @@ Scope is defined in the tool config (section 11.2), so extending later is a
 config change, not a code change. Note for UI consumers: the gallery and
 desktop app read `index.json` (cracked), `index-pd.json`, `index-utils.json`,
 `index-magazine.json` (section 4.4.1) and `index-falcon.json` (section
-4.4.2); any further scope index file is
-invisible to them until a future join step.
+4.4.2) for screenshot state; the desktop app merges them over
+`gameinfo/full-index.json.gz` (ZIP universe + hashes). Any further scope index
+file is invisible to them until a future join step.
 
 #### 4.4.1 Magazine cover disks (`magazine` scope)
 
@@ -1640,8 +1643,9 @@ Resolved decisions:
   48 ended `desktop` (plain TOS desktop / program menus; expected for
   utilities that do not auto-boot — candidates for `detect` +
   `run --retry-desktop`), 2 `no_usable_shots` (black at all timepoints)
-  *(verified)*. Gallery and desktop app (cracked view) unchanged, as they
-  read only `index.json` *(verified)*.
+  *(verified)*. Gallery unchanged; the desktop app now merges
+  `gameinfo/full-index.json.gz`, so only its screenshot state comes from
+  `index.json` *(verified 2026-10-16; full-index merge added 2026-10-28)*.
 
 ### 14.1.2 PD scope + mono pilot (verified 2026-10-16)
 

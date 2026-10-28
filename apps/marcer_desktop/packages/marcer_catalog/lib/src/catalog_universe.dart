@@ -38,11 +38,13 @@ class CatalogFacets {
 }
 
 /// All catalog cards grouped per section plus their facets — the global
-/// "universe" of the desktop app, derived from the per-section screenshot
+/// "universe" of the desktop app. The screenshot-independent full index
+/// (`gameinfo/full-index.json.gz`) is the ZIP base; the per-section screenshot
 /// indices (`index.json` / `index-pd.json` / `index-utils.json` /
-/// `index-magazine.json`) + gameinfo
-/// without any filesystem scan (user decision 2026-10-11; per-section
-/// indices + pd/utils union 2026-10-16; magazine section 2026-10-22).
+/// `index-magazine.json`) overlay screenshot state, plus gameinfo
+/// without any filesystem scan (user decision 2026-10-11; full-index merge
+/// 2026-10-28; per-section indices + pd/utils union 2026-10-16; magazine
+/// section 2026-10-22).
 ///
 /// - `cracked` cards come from its index entries grouped by (letter, folder)
 ///   joined with `games-cracked.json`.

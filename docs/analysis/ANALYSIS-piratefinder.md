@@ -44,10 +44,30 @@ Relevant tables:
 | `images` | Known dumps with CRC32/MD5/SHA-1/SHA-512, size, rank, TOSEC flags, virus fields |
 | `crews` | Crew histories, members, founding date, URL, Wikipedia article |
 | `series`, `series_alias` | Series and their short names |
-| `locations`, `media`, `trivia` | Not used in this phase |
+| `locations`, `media` | Not used |
+| `trivia` | Used by the app (`fact`/`note`; Wikipedia stubs excluded) |
 
 The extracted ST subset has ~24k disks (menu/pack/single/compilation), ~29k
 images, ~48k contents rows and ~530 crews with history.
+
+### Current app usage
+
+| Data | Used by the desktop app |
+|---|---|
+| `disks` | Release/menu metadata and hash/title matching |
+| `contents` | Release contents and the per-title fact join |
+| `images` | Hashes for exact ZIP matching (via `gameinfo/full-index.json.gz`); ST virus/flags are empty |
+| `crews` | Name/aliases; the crew dialog shows members, history, founded, URL, Wikipedia, disk count and source |
+| `series` | Series/group name |
+| `trivia` | `fact`/`note` entries in both dialogs (Wikipedia stubs excluded) |
+| `links` | Release/disk links (main dialog: first candidate; crew dialog: per disk) |
+| `sources` | Sources tab and attribution |
+| `media` | **Not used** (~48% of the catalogue payload) |
+| `locations` | Not in the converted asset |
+
+Data limits: trivia reaches ~4.6% of the cards and crew-name coverage is
+~26% of the Marcer labels; `founded` is empty for all ST crews and
+`wikipedia` exists for only a few.
 
 ## 2. How it was used (historical)
 
