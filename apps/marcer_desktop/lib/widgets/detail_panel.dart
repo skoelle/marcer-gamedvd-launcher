@@ -33,7 +33,7 @@ class DetailPanel extends StatelessWidget {
   final void Function(int variant, int image)? onOpenLightbox;
 
   /// Opens a crew release (ZIP rel path) in the existing game lightbox.
-  final void Function(String rel)? onOpenCrewRelease;
+  final void Function(CrewGroup crew, String rel)? onOpenCrewRelease;
 
   @override
   Widget build(BuildContext context) {

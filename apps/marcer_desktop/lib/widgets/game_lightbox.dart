@@ -35,14 +35,19 @@ class GameLightbox extends StatefulWidget {
     this.initialVariant = 0,
     this.initialImage = 0,
     this.onToggleHelp,
-    this.fixedCard,
+    this.fixedRels,
+    this.initialIndex = 0,
   });
 
   final CatalogController controller;
 
-  /// When set, the lightbox is pinned to this cracked-game card (used by the
-  /// Crews tab release list) instead of the active catalog selection.
-  final GameCard? fixedCard;
+  /// When set, the lightbox navigates this explicit ZIP rel list (crew release
+  /// order) instead of the active catalog selection. Variants are resolved via
+  /// `CatalogController.releaseCardFor`.
+  final List<String>? fixedRels;
+
+  /// Initial position in [fixedRels].
+  final int initialIndex;
 
   /// Initial variant index (crew focus) and image index (0 = preview,
   /// gallery `openLightbox(idx, variant, img)` semantics).
@@ -73,24 +78,25 @@ class GameLightbox extends StatefulWidget {
     );
   }
 
-  /// Opens the lightbox pinned to [card] (e.g. a release clicked in the Crews
-  /// tab), without changing the active catalog section/selection.
-  static Future<void> showCard(
+  /// Opens the lightbox over an explicit release list (Crews tab / crew
+  /// release browser), without changing the active catalog section/selection.
+  /// Returns the final index in [rels] so the caller can follow the selection.
+  static Future<int?> showRels(
     BuildContext context,
     CatalogController c, {
-    required GameCard card,
-    int variant = 0,
+    required List<String> rels,
+    int initialIndex = 0,
     int image = 0,
     Future<void> Function()? onToggleHelp,
   }) {
-    return showDialog<void>(
+    return showDialog<int>(
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black87,
       builder: (_) => GameLightbox(
         controller: c,
-        fixedCard: card,
-        initialVariant: variant,
+        fixedRels: rels,
+        initialIndex: initialIndex,
         initialImage: image,
         onToggleHelp: onToggleHelp,
       ),
@@ -109,6 +115,7 @@ class _GameLightboxState extends State<GameLightbox> {
   final ScrollController _filmScroll = ScrollController();
 
   List<Object> _items = const [];
+  List<int> _entryVariants = const [];
   int _itemIdx = 0;
   int _variantIdx = 0;
   int _imageIdx = 0; // index into images = [preview?, ...candidates]
@@ -129,22 +136,40 @@ class _GameLightboxState extends State<GameLightbox> {
 
   void _rebuildItems() {
     final c = widget.controller;
-    if (widget.fixedCard != null) {
-      _items = <Object>[widget.fixedCard!];
-      _itemIdx = 0;
+    final rels = widget.fixedRels;
+    if (rels != null) {
+      final items = <Object>[];
+      final variants = <int>[];
+      for (final rel in rels) {
+        final hit = c.releaseCardFor(rel);
+        if (hit == null) continue;
+        items.add(hit.card);
+        variants.add(hit.index);
+      }
+      _items = items;
+      _entryVariants = variants;
+      _itemIdx = widget.initialIndex.clamp(0, math.max(0, items.length - 1));
     } else if (c.catalogMode) {
       _items = List<Object>.of(c.catalogCards);
+      _entryVariants = const [];
       _itemIdx = c.selectedIndex.clamp(0, math.max(0, _items.length - 1));
     } else {
       _items = c.visibleEntries.where((e) => e.kind == EntryKind.zip).toList();
+      _entryVariants = const [];
       final sel = c.selectedEntry;
       final idx = sel == null ? -1 : _items.indexOf(sel);
       _itemIdx = idx >= 0 ? idx : 0;
     }
     final vs = _variants;
-    // `initialVariant` is an index into the card's original variant order;
-    // map it to the display order (see [_variants]).
-    final pos = vs.indexWhere((v) => v.origIndex == widget.initialVariant);
+    // The initial variant is an index into the card's original variant order;
+    // map it to the display order (see [_variants]). In release-list mode the
+    // variant comes from the opening release instead.
+    final origVariant = rels != null
+        ? (_entryVariants.isEmpty
+              ? 0
+              : _entryVariants[_itemIdx.clamp(0, _entryVariants.length - 1)])
+        : widget.initialVariant;
+    final pos = vs.indexWhere((v) => v.origIndex == origVariant);
     _variantIdx = pos >= 0 ? pos : 0;
     _imageIdx = math.max(0, widget.initialImage);
   }
@@ -290,10 +315,21 @@ class _GameLightboxState extends State<GameLightbox> {
     if (next == _itemIdx) return;
     setState(() {
       _itemIdx = next;
-      _variantIdx = 0;
+      _variantIdx = widget.fixedRels != null
+          ? _variantPosition(_entryVariants[next])
+          : 0;
       _imageIdx = 0;
     });
-    widget.controller.moveSelectionTo(next);
+    // Release-list mode keeps the main catalog selection (the crew card).
+    if (widget.fixedRels == null) widget.controller.moveSelectionTo(next);
+  }
+
+  /// Display position of the variant with original index [orig] in the
+  /// currently selected item's variant list.
+  int _variantPosition(int orig) {
+    final vs = _variants;
+    final pos = vs.indexWhere((v) => v.origIndex == orig);
+    return pos >= 0 ? pos : 0;
   }
 
   void _goVariant(int delta) {
@@ -336,7 +372,7 @@ class _GameLightboxState extends State<GameLightbox> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.escape) {
-      Navigator.of(context).pop();
+      _close();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowRight) {
@@ -502,6 +538,16 @@ class _GameLightboxState extends State<GameLightbox> {
     });
   }
 
+  /// Pops the lightbox; release-list mode returns the final list index so the
+  /// crew browser can follow the last shown release.
+  void _close() {
+    if (widget.fixedRels != null) {
+      Navigator.of(context).pop(_itemIdx);
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
   void _showCurationMessage(String message) {
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
@@ -532,7 +578,7 @@ class _GameLightboxState extends State<GameLightbox> {
         // card itself only (re)focus it.
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => Navigator.of(context).pop(),
+          onTap: () => _close(),
           child: LayoutBuilder(
             builder: (context, constraints) {
               const lightboxWidth = 1200.0;
@@ -771,7 +817,7 @@ class _GameLightboxState extends State<GameLightbox> {
               ),
               IconButton(
                 tooltip: 'Close (Esc)',
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => _close(),
                 icon: const Icon(Icons.close, size: 20, color: Colors.grey),
               ),
             ],

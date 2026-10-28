@@ -903,15 +903,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// Opens a crew release in the existing game lightbox without leaving the
-  /// Crews tab (the lightbox is pinned to the cracked card of that ZIP).
-  void _openCrewRelease(String rel) {
-    final hit = _controller.releaseCardFor(rel);
-    if (hit == null) return;
-    GameLightbox.showCard(
+  /// Crews tab; `←`/`→` walk the crew's release list.
+  void _openCrewRelease(CrewGroup crew, String rel) {
+    final rels = <String>[];
+    var initial = -1;
+    for (final release in crew.releases) {
+      if (_controller.releaseCardFor(release.rel) == null) continue;
+      if (release.rel == rel) initial = rels.length;
+      rels.add(release.rel);
+    }
+    if (initial < 0) return;
+    GameLightbox.showRels(
       context,
       _controller,
-      card: hit.card,
-      variant: hit.index,
+      rels: rels,
+      initialIndex: initial,
       image: 0,
       onToggleHelp: _toggleHelpAsync,
     );

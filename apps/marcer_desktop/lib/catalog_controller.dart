@@ -2349,6 +2349,9 @@ class CatalogController extends ChangeNotifier {
     _indexTreeCache.clear();
     _statusLineCache.clear();
     _pirateFinderTitleMatches.clear();
+    // The crew release lookup holds the old card objects; rebuild it so
+    // `C` (status/kind) also refreshes releases opened from the Crews tab.
+    _releaseLookupCache = null;
   }
 
   /// Persists the pending changes (shotgen lock, atomic `index.json` +

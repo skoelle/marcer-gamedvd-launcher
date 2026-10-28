@@ -27,8 +27,8 @@ class CrewDetailPanel extends StatelessWidget {
   /// Opens the full PirateFinder-Catalog crew lightbox.
   final VoidCallback? onOpenPirateFinder;
 
-  /// Opens the cracked-game card + variant for a release `rel` path.
-  final void Function(String rel)? onOpenRelease;
+  /// Opens the release `rel` path within this crew's release list.
+  final void Function(CrewGroup crew, String rel)? onOpenRelease;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +91,9 @@ class CrewDetailPanel extends StatelessWidget {
         _flag(release.specialFlag, Colors.blueGrey),
     ];
     return InkWell(
-      onTap: onOpenRelease == null ? null : () => onOpenRelease!(release.rel),
+      onTap: onOpenRelease == null
+          ? null
+          : () => onOpenRelease!(crew, release.rel),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Column(

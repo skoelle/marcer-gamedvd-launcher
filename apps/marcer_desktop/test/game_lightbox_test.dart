@@ -76,6 +76,8 @@ void main() {
     WidgetTester tester, {
     Size size = const Size(1700, 900),
     int selected = 0,
+    List<String>? fixedRels,
+    int initialIndex = 0,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -86,7 +88,13 @@ void main() {
     c.selectedIndex = selected;
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: GameLightbox(controller: c)),
+        home: Scaffold(
+          body: GameLightbox(
+            controller: c,
+            fixedRels: fixedRels,
+            initialIndex: initialIndex,
+          ),
+        ),
       ),
     );
     await tester.pump();
@@ -113,6 +121,35 @@ void main() {
       find.ancestor(of: next, matching: find.byType(Tooltip)),
     );
     expect(tooltip.message, contains(c.catalogCards[1].name));
+  });
+
+  testWidgets('explicit release list navigates across games', (tester) async {
+    await pumpLightbox(tester, fixedRels: [relAlpha, relBeta]);
+    final names = c.catalogCards.map((card) => card.name).toList();
+    expect(names, hasLength(2));
+
+    expect(find.byKey(const ValueKey('lightbox-prev-item')), findsNothing);
+    final next = find.byKey(const ValueKey('lightbox-next-item'));
+    expect(
+      find.descendant(of: next, matching: find.text(names[1])),
+      findsOneWidget,
+    );
+
+    await tester.tap(next);
+    await tester.pump();
+
+    expect(
+      c.selectedIndex,
+      0,
+      reason: 'crew navigation must not move the catalog selection',
+    );
+    final prev = find.byKey(const ValueKey('lightbox-prev-item'));
+    expect(prev, findsOneWidget);
+    expect(
+      find.descendant(of: prev, matching: find.text(names[0])),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('lightbox-next-item')), findsNothing);
   });
 
   testWidgets('clicking an arrow navigates like the arrow key', (tester) async {

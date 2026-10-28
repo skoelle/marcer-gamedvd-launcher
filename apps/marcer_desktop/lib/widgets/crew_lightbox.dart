@@ -256,16 +256,27 @@ class _CrewLightboxState extends State<CrewLightbox> {
   }
 
   void _openGameLightbox() {
-    final release = _current;
-    if (release == null) return;
-    final hit = widget.controller.releaseCardFor(release.rel);
-    if (hit == null) return;
-    GameLightbox.showCard(
+    final rels = <String>[];
+    final releaseIndices = <int>[];
+    var initial = -1;
+    for (var i = 0; i < _releases.length; i++) {
+      final rel = _releases[i].rel;
+      if (widget.controller.releaseCardFor(rel) == null) continue;
+      if (i == _selected) initial = rels.length;
+      rels.add(rel);
+      releaseIndices.add(i);
+    }
+    if (initial < 0 || rels.isEmpty) return;
+    GameLightbox.showRels(
       context,
       widget.controller,
-      card: hit.card,
-      variant: hit.index,
-    );
+      rels: rels,
+      initialIndex: initial,
+    ).then((finalIndex) {
+      if (!mounted || finalIndex == null) return;
+      if (finalIndex < 0 || finalIndex >= releaseIndices.length) return;
+      _select(releaseIndices[finalIndex]);
+    });
   }
 
   void _playSelected() {

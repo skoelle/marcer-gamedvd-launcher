@@ -47,7 +47,8 @@ Save, the manual screenshot curation described below.
   by `tools/crew-analysis`); it prefers a curated cracktro image from
   `crew-images.json`, then the best release screenshot, then a group icon. Its
   detail panel lists all releases of the selected crew and a release click
-  opens the existing lightbox pinned to that ZIP. Double-clicking a crew card
+  opens the existing lightbox over that crew's release list (`←`/`→` walk the
+  games). Double-clicking a crew card
   opens a release browser: all releases as a responsive screenshot grid
   (up to 4 columns) on the left, a sidebar on the right with the shared crew
   overview above the selected ZIP info; the header spans both and shows the
@@ -55,7 +56,9 @@ Save, the manual screenshot curation described below.
   behind it on the left, the crew name centred and the close button at the
   right (name/year ascending/descending, default name asc; the
   `skipped_disk_n` status is hidden for crew releases); arrow keys navigate,
-  Enter opens the normal lightbox and P/Play launches. The PirateFinder-Catalog
+  Enter opens the normal lightbox over the currently filtered/sorted release
+  list (`←`/`→` walk the games; closing the browser follows the last shown
+  release) and P/Play launches. The PirateFinder-Catalog
   block in the crew overview has a **More** button that opens a crew-only PF
   lightbox with `Overview`, `Releases`, `Menus`, `Trivia` and `Sources`.
 - **Type-to-filter dropdowns** — every filter dropdown (publisher, crew,

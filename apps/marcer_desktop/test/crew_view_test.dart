@@ -12,6 +12,7 @@ import 'package:marcer_desktop/catalog_controller.dart';
 import 'package:marcer_desktop/piratefinder_data.dart';
 import 'package:marcer_desktop/widgets/crew_detail_panel.dart';
 import 'package:marcer_desktop/widgets/crew_lightbox.dart';
+import 'package:marcer_desktop/widgets/game_lightbox.dart';
 
 /// PF data controller with an injected index (no file/isolate needed).
 class _FakePirateFinderData extends PirateFinderDataController {
@@ -438,6 +439,43 @@ void main() {
     expect(find.text('1 / 2'), findsNothing);
   });
 
+  testWidgets('game lightbox walks the crew releases and syncs on close', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await c.init();
+    });
+    final crew = c.crews.groups.firstWhere(
+      (group) => group.name == 'Alpha Crew',
+    );
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CrewLightbox(controller: c, crew: crew),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('a_v2.zip'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.byType(GameLightbox), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GameLightbox), findsNothing);
+    expect(find.text('a_v2.zip'), findsOneWidget);
+  });
+
   testWidgets('crew lightbox starts on the first sorted release', (
     tester,
   ) async {
@@ -696,7 +734,7 @@ void main() {
             height: 700,
             child: CrewDetailPanel(
               crew: group,
-              onOpenRelease: (rel) => opened = rel,
+              onOpenRelease: (crew, rel) => opened = rel,
             ),
           ),
         ),
