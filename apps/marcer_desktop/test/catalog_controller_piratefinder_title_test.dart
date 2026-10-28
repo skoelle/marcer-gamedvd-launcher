@@ -13,6 +13,9 @@ class _FakePirateFinderData extends PirateFinderDataController {
 
   @override
   PirateFinderIndex? get index => value;
+
+  @override
+  Future<PirateFinderIndex?> ensureIndex({bool force = false}) async => value;
 }
 
 PirateFinderIndex _index() => PirateFinderIndex.fromJson({
@@ -81,6 +84,22 @@ void main() {
     expect(match, isNotNull);
     expect(match!.method, 'title');
     expect(controller.pirateFinderTitleMatchForCard(card), same(match));
+  });
+
+  test('without the full index the async match stays title-only', () async {
+    final data = _FakePirateFinderData(_index());
+    final controller = CatalogController(DesktopConfig(rootDirectory: ''));
+    controller.pirateFinderData = data;
+    final card = _card();
+
+    expect(controller.hasFullIndex, isFalse);
+    final match = await controller.pirateFinderMatchForCard(
+      card,
+      rel: 'A/Arkanoid/Arkanoid.zip',
+    );
+    expect(match, isNotNull);
+    expect(match!.method, 'title');
+    expect(match.confidence, 'likely');
   });
 
   test('no title match yields no button data', () {

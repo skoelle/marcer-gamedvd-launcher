@@ -317,7 +317,7 @@ void main() {
         ..writeAsStringSync('{"RootDirectory": "/r"}');
       final c = DesktopConfig.load(f.path);
       expect(c.showCandidates, isTrue);
-      expect(c.defaultStatus, 'with_screenshot');
+      expect(c.defaultStatus, 'any');
       expect(c.windowMaximized, isTrue, reason: 'start maximized by default');
       expect(c.windowWidth, 1280);
       expect(c.windowHeight, 800);

@@ -11,17 +11,23 @@ import 'close_button.dart';
 import 'piratefinder_link.dart';
 
 /// Opens the PirateFinder details dialog for a catalog card or browse entry.
-/// The catalogue is preloaded; matches use title/crew metadata.
+/// The catalogue is preloaded; [rel] is the currently shown ZIP, whose
+/// precomputed full-index hashes give an exact match when available.
 Future<void> showPirateFinderDialog(
   BuildContext context, {
   required CatalogController controller,
   GameCard? card,
   Entry? entry,
+  String? rel,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) =>
-        PirateFinderDialog(controller: controller, card: card, entry: entry),
+    builder: (_) => PirateFinderDialog(
+      controller: controller,
+      card: card,
+      entry: entry,
+      rel: rel,
+    ),
   );
 }
 
@@ -31,11 +37,15 @@ class PirateFinderDialog extends StatefulWidget {
     required this.controller,
     this.card,
     this.entry,
+    this.rel,
   });
 
   final CatalogController controller;
   final GameCard? card;
   final Entry? entry;
+
+  /// Currently shown ZIP (root-relative); enables the exact full-index match.
+  final String? rel;
 
   @override
   State<PirateFinderDialog> createState() => _PirateFinderDialogState();
@@ -55,8 +65,14 @@ class _PirateFinderDialogState extends State<PirateFinderDialog> {
     var index = data?.index;
     index ??= await data?.ensureIndex();
     final match = widget.card != null
-        ? widget.controller.pirateFinderTitleMatchForCard(widget.card!)
-        : widget.controller.pirateFinderTitleMatchForEntry(widget.entry!);
+        ? await widget.controller.pirateFinderMatchForCard(
+            widget.card!,
+            rel: widget.rel,
+          )
+        : await widget.controller.pirateFinderMatchForEntry(
+            widget.entry!,
+            rel: widget.rel,
+          );
     if (index == null) {
       return _PfLookup(index: null, match: match, error: data?.indexError);
     }

@@ -39,17 +39,21 @@ Rerun `extract` whenever the XLS files change (`check` detects staleness); rerun
 
 ## Build order
 
-This tool is step 1 of the catalog-data pipeline:
+This tool is step 1 of the catalog-data pipeline (no screenshots required):
 
 ```sh
 tools/gameinfo-gen/run.sh extract          # 1) games-*.json
-tools/screenshot-gen/run.sh run --scope cracked  # 2) index.json + PNGs
+tools/full-index-gen/run.sh run            # 2) gameinfo/full-index.json.gz
 tools/crew-analysis/run.sh                 # 3) crews.json
-tools/crew-analysis/run.sh images --top 128 --write-images --force  # 4) optional
+tools/asset-publish/run.sh publish --only gameinfo
+
+# optional, after screenshots were captured on the dev machine:
+tools/screenshot-gen/run.sh run --scope cracked     # index.json + PNGs
+tools/crew-analysis/run.sh images --top 128 --write-images --force
 ```
 
-`crew-analysis` only reads `games-cracked.json`; it never rewrites the
-`games-*.json` files. See
+`crew-analysis` only reads `games-cracked.json` (and the full index); it never
+rewrites the `games-*.json` files. See
 [`ANALYSIS-crews.md`](../../docs/analysis/ANALYSIS-crews.md) and the
 [crew-analysis README](../crew-analysis/README.md).
 

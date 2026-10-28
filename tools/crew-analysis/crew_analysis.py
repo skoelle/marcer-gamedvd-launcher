@@ -8,8 +8,10 @@ crackers) and prints a "crew view" ranking. The canonical group names come from
 the ``Crew Sorted/Cracked Games - Crew Sorted`` tree; additional groups are
 taken from the ``crew``/``cracked_by`` fields of ``games-cracked.json``. The
 ZIP universe is the direct (non-subfolder) release layer of
-``Title Sorted/Cracked Games - Title Sorted`` as published in the screenshot
-index; entries with ``status == "skipped_disk_n"`` (disk 2+) are excluded.
+``Title Sorted/Cracked Games - Title Sorted`` from
+``<GameinfoDirectory>/full-index.json.gz`` (built by ``tools/full-index-gen``,
+no screenshots required); disk-2+ entries are derived from the filename. The
+screenshot index is only a fallback when the full index is missing.
 
 Attribution is intentionally conservative and prefers crews over individual
 crackers (crew view):
@@ -19,9 +21,9 @@ crackers (crew view):
 3. alias/fuzzy matching against canonical group aliases.
 
 Paths/environment (see ``run.sh`` and the repo ``local/paths.env``):
-``MARCER_ROOT_DIR``, ``MARCER_DATA_DIR`` (gameinfo files are read/written
-under ``<MARCER_DATA_DIR>/gameinfo``) and ``MARCER_OUT_DIR`` (screenshot
-output directory containing the required ``index.json``; override with
+``MARCER_ROOT_DIR``, ``MARCER_DATA_DIR`` (gameinfo files and
+``full-index.json.gz`` are read/written under ``<MARCER_DATA_DIR>/gameinfo``)
+and optionally ``MARCER_OUT_DIR`` (screenshot index fallback; override with
 ``--index``).
 
 Outputs go to ``--out`` (default ``local/crew-analysis``) and contain the
@@ -32,6 +34,7 @@ from __future__ import annotations
 import argparse
 import csv
 import difflib
+import gzip
 import html
 import json
 import os
@@ -41,7 +44,11 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-TOOL_VERSION = "0.1.4"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _lib import catalog_sections as cs  # noqa: E402
+
+TOOL_VERSION = "0.1.5"
 SCHEMA_VERSION = 1
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -892,6 +899,47 @@ def load_zips_from_index(
     return out, skipped_disks
 
 
+def load_zips_from_full_index(
+    path: Path,
+    include_subdirs: bool,
+) -> tuple[list[tuple[str, str, str, str, int | None, bool]], int]:
+    """Load the cracked ZIP universe from ``full-index.json.gz``.
+
+    The full index is built from the game trees before screenshots exist, so
+    the ranking no longer depends on the screenshot index. Disk-2+ entries are
+    derived from the filename with the shared shotgen regex.
+    """
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError, gzip.BadGzipFile) as exc:
+        sys.exit(f"error: cannot read full index {path}: {exc}")
+    entries = data.get("entries", {})
+    out = []
+    skipped_disks = 0
+    for rel, value in entries.items():
+        if not isinstance(rel, str) or not rel.startswith(INDEX_PREFIX):
+            continue
+        if not isinstance(value, dict):
+            continue
+        if value.get("section") not in (None, "cracked"):
+            continue
+        short = rel[len(INDEX_PREFIX):]
+        parts = short.split("/")
+        direct = len(parts) == 3
+        if not direct and not include_subdirs:
+            continue
+        if len(parts) < 3:
+            continue
+        name = str(value.get("name") or parts[-1])
+        if cs.is_skipped_disk(name):
+            skipped_disks += 1
+            continue
+        size = value.get("size")
+        out.append((rel, parts[0], parts[1], name, size, direct))
+    return out, skipped_disks
+
+
 # --------------------------------------------------------------------------
 # matching
 # --------------------------------------------------------------------------
@@ -1074,7 +1122,8 @@ def main() -> int:
                         help="ranking (default) or images (suggest cracktro card images)")
     parser.add_argument("--root", default=env("MARCER_ROOT_DIR"), help="Root game directory (MARCER_ROOT_DIR)")
     parser.add_argument("--gameinfo", default=default_gameinfo_dir(), help="Gameinfo directory containing games-cracked.json (default: MARCER_DATA_DIR/gameinfo)")
-    parser.add_argument("--index", default=env("MARCER_OUT_DIR"), help="Screenshot output directory or index.json path (MARCER_OUT_DIR; required)")
+    parser.add_argument("--full-index", default="", help="full-index.json.gz path (default: <GameinfoDirectory>/full-index.json.gz; preferred over --index)")
+    parser.add_argument("--index", default=env("MARCER_OUT_DIR"), help="Screenshot output directory or index.json path (MARCER_OUT_DIR; fallback when the full index is missing)")
     parser.add_argument("--include-subdirs", action="store_true", help="Include STX/Original/Demo/... subfolders")
     parser.add_argument("--top", type=int, default=24, help="Rows printed to the console (default: 24)")
     parser.add_argument("--out", default=str(REPO_ROOT / "local" / "crew-analysis"), help="Output directory")
@@ -1115,16 +1164,30 @@ def main() -> int:
         raw_crew_groups, gameinfo_labels, explicit, exclude
     )
 
-    index_path: Path | None = None
-    if args.index:
-        candidate = Path(args.index).expanduser()
-        index_path = candidate if candidate.is_file() else candidate / "index.json"
-    if not index_path or not index_path.is_file():
-        target = str(index_path) if index_path else "MARCER_OUT_DIR is not set"
-        sys.exit(f"error: screenshot index not found: {target} "
-                 "(set MARCER_OUT_DIR or --index)")
-    zips, skipped_disks = load_zips_from_index(index_path, args.include_subdirs)
-    zip_source = str(index_path)
+    full_index_path = (
+        Path(args.full_index).expanduser()
+        if args.full_index
+        else gameinfo_dir / "full-index.json.gz"
+    )
+    if full_index_path.is_file():
+        zips, skipped_disks = load_zips_from_full_index(
+            full_index_path, args.include_subdirs)
+        zip_source = str(full_index_path)
+    else:
+        index_path: Path | None = None
+        if args.index:
+            candidate = Path(args.index).expanduser()
+            index_path = candidate if candidate.is_file() else candidate / "index.json"
+        if not index_path or not index_path.is_file():
+            target = str(index_path) if index_path else "MARCER_OUT_DIR is not set"
+            sys.exit(
+                f"error: full index not found: {full_index_path}; screenshot "
+                f"index not found: {target} (run full-index-gen, or set "
+                f"MARCER_OUT_DIR/--index)"
+            )
+        zips, skipped_disks = load_zips_from_index(
+            index_path, args.include_subdirs)
+        zip_source = str(index_path)
 
     primary: Counter[str] = Counter()
     source_counts: Counter[str] = Counter()

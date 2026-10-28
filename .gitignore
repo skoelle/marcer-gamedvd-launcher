@@ -51,7 +51,9 @@ desktop.config.json
 /local/
 
 # PirateFinder tool bytecode
-/tools/piratefinder-gen/**/__pycache__/
+/tools/_lib/__pycache__/
+/tools/full-index-gen/__pycache__/
+/tools/full-index-gen/tests/__pycache__/
 
 # Local machine-specific tool overrides (docs mention config.local.json)
 /tools/screenshot-gen/config.local.json

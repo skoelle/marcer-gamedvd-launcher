@@ -1,7 +1,7 @@
 # ANALYSIS: Crews in the Cracked Section
 
-Analysis of the `Crew Sorted` tree joined with the screenshot index and the
-gameinfo metadata (`games-cracked.json`). The result is a **crew view** for the
+Analysis of the `Crew Sorted` tree joined with the screenshot-independent
+`full-index.json.gz` and the gameinfo metadata (`games-cracked.json`). The result is a **crew view** for the
 cracked section: which crews and scene groups have the most release ZIPs,
 analogous to the catalog sections `games`, `pd`, `utils`, `magazines` and
 `falcon`. The runtime artifacts are consumed by the desktop app
@@ -18,26 +18,30 @@ into `local/crew-analysis/`.
 | Source | Role |
 |---|---|
 | `Crew Sorted/Cracked Games - Crew Sorted` | canonical group names, exact ZIP basename → crew mapping |
-| `index.json` (screenshot archive) | ZIP universe (required; direct Disk-1 release layer, `skipped_disk_n` excluded) |
+| `full-index.json.gz` (gameinfo) | ZIP universe (preferred; direct Disk-1 release layer, disk-2+ excluded from the filename). Built by `tools/full-index-gen` |
+| `index.json` (screenshot archive) | legacy fallback when the full index is missing |
 | `games-cracked.json` | `crew` / `cracked_by` per game folder and variant |
 
-`Crew Sorted` alone is incomplete; the screenshot index supplies the release
-ZIPs, and the remaining releases are attributed through `games-cracked.json`
-plus alias/fuzzy matching.
+`Crew Sorted` alone is incomplete; the full index supplies the release ZIPs,
+and the remaining releases are attributed through `games-cracked.json` plus
+alias/fuzzy matching.
 
 ## Build order
 
-The normal game metadata and the screenshot index are prerequisites:
+The normal game metadata and the full index are prerequisites:
 
 ```sh
 tools/gameinfo-gen/run.sh extract
-tools/screenshot-gen/run.sh run --scope cracked
+tools/full-index-gen/run.sh run
 tools/crew-analysis/run.sh
-tools/crew-analysis/run.sh images --top 128 --write-images --force   # optional
+# optional, after screenshots exist on the dev machine:
+tools/screenshot-gen/run.sh run --scope cracked
+tools/crew-analysis/run.sh images --top 128 --write-images --force
 ```
 
-- The screenshot index is the only ZIP source; a missing `index.json` is an
-  error (no filesystem fallback).
+- The full index is the ZIP source for `ranking`; a missing
+  `full-index.json.gz` falls back to `index.json` (legacy).
+- `images` still needs the screenshot index.
 - `crew-analysis` reads `games-cracked.json` but never modifies it.
 - Generate screenshots and crew data from the same snapshot: `crews.json`
   stores full ZIP rel paths and `crew-images.json` references PNG basenames/
@@ -127,10 +131,10 @@ repeated screens per crew from the existing per-ZIP screenshot sidecars
 
 - **Counts are Disk-1 ZIP files, not distinct games.** File versions count
   individually; disk-2+ ZIPs are excluded.
-- **Index only:** the merged `index.json` ZIP list (root + patch) is read; a
-  stale index can lag behind new ZIPs.
+- **Index only:** the full index (root + patch) is read; a stale full index
+  can lag behind new ZIPs until `full-index-gen` runs.
 - **Crew Sorted is a hint, not the source of truth.** It supplies canonical
-  names and exact matches; the release count comes from the screenshot index and
+  names and exact matches; the release count comes from the full index and
   gameinfo.
 - **Alias curation is ongoing.** New gameinfo data can add labels; check
   `groups-review.csv` and extend `aliases.json`/`exclude.txt`.

@@ -137,10 +137,15 @@ void main() {
     expect(c.countText, '1 result');
     expect(c.statusLine, contains('desktop 1 (1 zips)'));
 
-    // Default status: screenshot cards == the `with screenshot` segment.
-    c.resetFilters();
+    // Explicit `with screenshot` filter == the segment.
+    c.setStatus('with_screenshot');
     expect(c.countText, '3 results');
     expect(c.statusLine, contains('3 with screenshot'));
+
+    // New default (`any`): every card is visible, including new ZIPs without
+    // screenshots yet.
+    c.resetFilters();
+    expect(c.countText, '5 results');
   });
 
   test('pd/utils sections use their own index and the configured default',
@@ -168,7 +173,7 @@ void main() {
     await c.init();
 
     c.setSection('pd');
-    expect(c.filter.status, 'with_screenshot');
+    expect(c.filter.status, 'any');
     expect(c.countText, '1 result');
     // Header + status segments come from the pd index, not the cracked one.
     expect(c.statusLine, contains('1 folders'));

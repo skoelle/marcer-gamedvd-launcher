@@ -19,8 +19,17 @@ added or removed. The documentation taxonomy is described in
 | Gameinfo extractor | `tools/gameinfo-gen/` | [`ANALYSIS-game-data.md`](docs/analysis/ANALYSIS-game-data.md) |
 | Crew analysis | `tools/crew-analysis/` | [`ANALYSIS-crews.md`](docs/analysis/ANALYSIS-crews.md) |
 | AtariLegend import | `tools/atarilegend-gen/` | [`ANALYSIS-atarilegend.md`](docs/analysis/ANALYSIS-atarilegend.md) |
-| PirateFinder import | `tools/piratefinder-gen/` | [`ANALYSIS-piratefinder.md`](docs/analysis/ANALYSIS-piratefinder.md) |
+| Full catalog index | `tools/full-index-gen/` | [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md), [`ANALYSIS-piratefinder.md`](docs/analysis/ANALYSIS-piratefinder.md) |
+| Shared pipeline helpers | `tools/_lib/` | Section trees/overlay scan (`catalog_sections.py`) + disk-image hashing (`zip_hashes.py`) |
 | Archive sync / asset publish / manifest | `tools/archive-sync/`, `tools/asset-publish/`, `tools/asset-manifest/` | [`docs/plans/PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) + each tool README |
+
+Catalog data flow: `tools/full-index-gen` scans the game trees (no screenshot
+index) and writes `<MARCER_DATA_DIR>/gameinfo/full-index.json.gz` — the ZIP
+universe plus per-member disk-image hashes. It ships in the gameinfo asset, so
+new ZIPs appear in the desktop app immediately (without screenshots). The
+screenshot index (`index*.json`) remains the screenshot-state authority and is
+merged into the full index by the app. `tools/piratefinder-gen` was retired;
+its reusable ZIP hashing moved to `tools/_lib/zip_hashes.py`.
 
 Architecture decisions: [`docs/decisions/`](docs/decisions/). The backlog is
 [`docs/IDEAS.md`](docs/IDEAS.md); the user-facing overview is

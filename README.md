@@ -45,7 +45,8 @@ Save, the manual screenshot curation described below.
   screenshots, reviews, magazines, comments, community score) and the optional
   **Pete Clarke PirateFinder catalog** (catalogue facts, crew histories,
   menu-disk appearances, trivia), both downloaded on demand, never bundled
-  (CC BY-NC-SA 4.0).
+  (CC BY-NC-SA 4.0). PirateFinder matches use the precomputed disk-image
+  hashes from `full-index.json.gz` (exact) with a title fallback.
 - **Crews tab** from `crews.json` with a release browser and PirateFinder crew
   details.
 - **Local layer & missing ZIPs** resolved from the filesystem
@@ -257,8 +258,8 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 | [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR/gameinfo`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](docs/analysis/ANALYSIS-game-data.md) |
 | [`tools/archive-sync`](tools/archive-sync/README.md) | Headless FTP archive sync into `MARCER_PATCH_DIR` (root is read-only): size-based change detection, parallel directory listing, atomic downloads, `changes.json`/`changes.txt` reports; no persistent state; never deletes local files. Replaces the interactive `ftp-sync` workflow for automation. | [`tools/archive-sync/README.md`](tools/archive-sync/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | [`tools/asset-publish`](tools/asset-publish/README.md) | Packages the catalog data into deterministic ZIPs. Currently gameinfo only: `<MARCER_DATA_DIR>/gameinfo` → `gameinfo-<yyyyMMdd-HHmmss>.zip` in `MARCER_DATA_DIR`, with a content signature that skips unchanged runs (`--force` repacks). Optional `--upload` stores the ZIP directly under its final name on `MARCER_FTP_ASSETS_REMOTE` with a size check (the Marcer FTP allows neither rename nor delete) and then updates `latest.json` via `tools/asset-manifest`; failed uploads/manifests are retried without repacking. | [`tools/asset-publish/README.md`](tools/asset-publish/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
-| [`tools/crew-analysis`](tools/crew-analysis/README.md) | Ranks cracked-game crews/scene groups by direct Disk-1 release ZIPs (crew view) by joining the `Crew Sorted` tree, the screenshot index (`index.json`) and `games-cracked.json`; disk-2+ entries (`skipped_disk_n`) are excluded. Writes ranking + audit files to `local/crew-analysis/` and suggests cracktro card images (`images`, pHash clusters seeded into `crew-images.json`). | [`tools/crew-analysis/README.md`](tools/crew-analysis/README.md), [`ANALYSIS-crews.md`](docs/analysis/ANALYSIS-crews.md) |
-| [`tools/piratefinder-gen`](tools/piratefinder-gen/README.md) | Fetches the weekly Pete Clarke Greaseweazle PirateFinder Catalog SQLite data, verifies its SHA-256, extracts the Atari ST subset and matches the cracked ZIPs by decoded image hashes (with a title fallback); writes match/crew/alias/gap reports to `local/piratefinder/`. Data is CC BY-NC-SA 4.0 and is never redistributed. | [`tools/piratefinder-gen/README.md`](tools/piratefinder-gen/README.md), [`ANALYSIS-piratefinder.md`](docs/analysis/ANALYSIS-piratefinder.md) |
+| [`tools/crew-analysis`](tools/crew-analysis/README.md) | Ranks cracked-game crews/scene groups by direct Disk-1 release ZIPs (crew view) by joining the `Crew Sorted` tree, `full-index.json.gz` and `games-cracked.json`; disk-2+ entries are excluded. Writes ranking + audit files to `local/crew-analysis/` and suggests cracktro card images (`images`, pHash clusters seeded into `crew-images.json`). The ranking no longer depends on the screenshot index. | [`tools/crew-analysis/README.md`](tools/crew-analysis/README.md), [`ANALYSIS-crews.md`](docs/analysis/ANALYSIS-crews.md) |
+| [`tools/full-index-gen`](tools/full-index-gen/README.md) | Builds the screenshot-independent catalog index `gameinfo/full-index.json.gz` from the game trees alone: every ZIP with section, layer, size and per-member disk-image hashes (SHA-1/SHA-512/CRC32+size) plus a container fingerprint. Incremental (only new/changed ZIPs are hashed). Ships with the gameinfo asset, so new ZIPs reach the desktop app immediately, even without screenshots. | [`tools/full-index-gen/README.md`](tools/full-index-gen/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR/gameinfo`), the Crews tab from optional `crews.json`/`crew-images.json`, and optional metadata-only boxscan/manual counts from `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR`. | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/specs/SPEC-gallery-webapp.md) |
 | [`tools/asset-manifest`](tools/asset-manifest/README.md) | Lists the newest `screenshots-*.zip` / `gameinfo-*.zip` on the Marcer FTP (read-only: connect + list, never uploads) and publishes a `latest.json` pointer as a GitHub release asset on the fixed `catalog-latest` prerelease (used by the desktop update check). | [`tools/asset-manifest/README.md`](tools/asset-manifest/README.md) |
 | [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`; entry kinds are `game`, `desktop`, `textscreen`, `darkscreen`,
@@ -266,15 +267,19 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 `run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview; old titles that hang on TOS 1.04 are re-captured via `run --retry-no-usable --tos 1.02` (a success records a sparse `tos: "1.02"` marker shown as a `TOS 1.02` badge in the gallery/desktop app, failed attempts go to `tos_tried`); the root/patch overlay merge is case-insensitive for file **and** folder names, so each directory has exactly one canonical output spelling; processing happens in named **scopes** — one scope per invocation via `--scope`, default `cracked` on `index.json`, the opt-in `utils` scope (`Title Sorted/Utilitys - Title Sorted`) on `index-utils.json`, the opt-in `pd` scope (`Title Sorted/PD Games - Title Sorted`) on `index-pd.json`, the opt-in `magazine` scope (`Bonus/Magazine Cover Disks`, scope-local `exclude_dirs: ["dupes"]`) on `index-magazine.json`, the opt-in `falcon` scope (`Falcon 030/Title Sorted`, own TOS 4.04 + Falcon profile, GEMDOS titles extracted and autostarted with `-d`/`--auto`; the static TOS 4.04 boot screens (Atari logo, plain green Videl stage) are detected/rejected before preview selection and removed from older shots via the offline `cleanup-boot-logo` pass) on `index-falcon.json`; monitor mode comes from the gameinfo `screen_format` rules (`MARCER_DATA_DIR/gameinfo/games-<scope>.json`: utils mono unless `Not Mono`/`Low`/`Mid`, including utils entries without a gameinfo match, pd mono only for all-`High` folders) with the `mono_dir_suffix` folder check as fallback; mono boots Hatari `--mono --tos-res high` (ST high res 640x400), and the rules affect future captures only). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/specs/SPEC-screenshot-generator.md) |
 
 
-**Catalog-data pipeline:** `tools/gameinfo-gen/run.sh extract` (normal
-`games-*.json`) → `tools/screenshot-gen/run.sh run --scope cracked`
-(`index.json` + PNGs) → `tools/crew-analysis/run.sh` (`crews.json`) →
-`tools/crew-analysis/run.sh images --top 128 --write-images --force`
-(optional `crew-images.json`) → `tools/asset-publish/run.sh publish --only
-gameinfo` (deterministic `gameinfo-*.zip` in the data directory; add
-`--upload` to send it to the FTP and update `latest.json`). `crew-analysis`
-only reads `games-cracked.json`; it never rewrites the normal gameinfo files.
-Screenshots and crew data should come from the same data snapshot.
+**Catalog-data pipeline (no screenshots required):** `tools/gameinfo-gen/run.sh
+extract` (normal `games-*.json`) → `tools/full-index-gen/run.sh run`
+(`gameinfo/full-index.json.gz`) → `tools/crew-analysis/run.sh` (`crews.json`)
+→ `tools/asset-publish/run.sh publish --only gameinfo` (deterministic
+`gameinfo-*.zip` in the data directory; add `--upload` to send it to the FTP
+and update `latest.json`).
+
+`tools/screenshot-gen` runs separately on the dev machine; its `index*.json`
+and PNGs are uploaded only after new screenshots were captured. The desktop
+app merges the gameinfo full index (ZIP universe + hashes) with the screenshot
+index (status/kind/preview), so new ZIPs are visible immediately without
+waiting for screenshots. Precomputed hashes give exact PirateFinder matches
+without decoding ZIPs at runtime.
 
 ---
 

@@ -15,7 +15,9 @@ Uint8List _packTrack(List<int> raw) {
   while (index < raw.length) {
     final value = raw[index];
     var run = 1;
-    while (index + run < raw.length && raw[index + run] == value && run < 0xFFFF) {
+    while (index + run < raw.length &&
+        raw[index + run] == value &&
+        run < 0xFFFF) {
       run++;
     }
     if (run >= 4 || value == 0xE5) {
@@ -35,11 +37,16 @@ Uint8List _packTrack(List<int> raw) {
 Uint8List _buildMsa(Uint8List raw, int sectors, int sides, int tracks) {
   final trackSize = sectors * 512;
   final header = <int>[
-    0x0E, 0x0F,
-    (sectors >> 8) & 0xFF, sectors & 0xFF,
-    0, sides - 1,
-    0, 0,
-    (tracks - 1) >> 8, (tracks - 1) & 0xFF,
+    0x0E,
+    0x0F,
+    (sectors >> 8) & 0xFF,
+    sectors & 0xFF,
+    0,
+    sides - 1,
+    0,
+    0,
+    (tracks - 1) >> 8,
+    (tracks - 1) & 0xFF,
   ];
   final body = <int>[];
   for (var track = 0; track < tracks; track++) {
@@ -91,5 +98,27 @@ void main() {
     final rawSha1 = sha1.convert(raw).toString();
     expect(hashes.any((h) => h['sha1'] == rawSha1), isTrue);
     expect(hashes.any((h) => h['size'] == raw.length), isTrue);
+  });
+
+  test('zipFingerprint uses only the central directory crc/size pairs', () {
+    const sectors = 9;
+    const sides = 1;
+    const tracks = 1;
+    final raw = Uint8List(tracks * sides * sectors * 512);
+    raw[0] = 7;
+    final msa = _buildMsa(raw, sectors, sides, tracks);
+    final archive = Archive()
+      ..addFile(ArchiveFile('game.msa', msa.length, msa))
+      ..addFile(ArchiveFile('game.st', raw.length, raw));
+    final zip = ZipEncoder().encode(archive)!;
+    final tmp = Directory.systemTemp.createTempSync('pf_zip_fp');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final path = '${tmp.path}/game.zip';
+    File(path).writeAsBytesSync(zip);
+
+    String pair(List<int> data) =>
+        '${getCrc32(data).toRadixString(16).padLeft(8, '0')}:${data.length}';
+    final expected = [pair(msa), pair(raw)]..sort();
+    expect(pirateFinderZipFingerprint(path), expected.join(','));
   });
 }

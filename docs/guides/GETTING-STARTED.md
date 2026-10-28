@@ -127,7 +127,7 @@ GameDVD-Patch/                 <- PatchDirectory (optional)
 MarcersGameDVD-Data/
   Screenshots/                 <- ScreenshotDirectory (separate)
   Data/                        <- GameinfoDirectory (the data directory)
-    gameinfo/                  <- games-*.json, crews.json, …
+    gameinfo/                  <- games-*.json, crews.json, full-index.json.gz, …
     atarilegend/               <- atarilegend.json, atarilegend-texts.json
     piratefinder/              <- PirateFinder-Catalog JSON
 ```
@@ -137,7 +137,7 @@ MarcersGameDVD-Data/
 | `RootDirectory` | yes | The local Marcer GameDVD game tree. Navigation never leaves it. |
 | `PatchDirectory` | no | Optional overlay/patch tree. Files there take precedence over the root. Leave empty for no patch layer. |
 | `ScreenshotDirectory` | no | Target for the screenshot index (`index.json`, `index-pd.json`, `index-utils.json`, `index-magazine.json`, `index-falcon.json`) and the PNG previews. |
-| `GameinfoDirectory` | no | **Data directory**: `gameinfo/` (games JSON, `crews.json`, `crew-images.json`), `atarilegend/`, `piratefinder/`. There is no implicit fallback. |
+| `GameinfoDirectory` | no | **Data directory**: `gameinfo/` (games JSON, `crews.json`, `crew-images.json`, `full-index.json.gz`), `atarilegend/`, `piratefinder/`. There is no implicit fallback. |
 | `AtariLegendDirectory` (legacy) | no | Old separate AtariLegend path; moved into `<GameinfoDirectory>/atarilegend/` at startup and no longer shown in the form. |
 | `PirateFinder-Catalog` | no | Optional Pete Clarke Greaseweazle PirateFinder Catalog JSON, downloaded from GitHub into `<GameinfoDirectory>/piratefinder/` (**Pete Clarke PirateFinder-Catalog** row, **PirateFinder-Catalog** button, with a link to the original project; also shown in the first-run setup). Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog. |
 
@@ -145,9 +145,11 @@ On first start the app migrates an old layout automatically: root-level gameinfo
 files move into `gameinfo/`, a configured `AtariLegendDirectory` moves into
 `atarilegend/`, and `piratefinder/` is created. Screenshots are not touched.
 
-Without screenshots/gameinfo the catalog is empty or incomplete; the app then
-shows a notice that points to the download buttons and to the status filter
-**any**.
+Without the gameinfo asset the catalog is empty; the app then shows a notice
+that points to the download buttons and to the status filter **any**. With
+gameinfo only (no screenshots) the catalog is complete but has no previews or
+screenshot statuses; new ZIPs packed into `full-index.json.gz` appear
+immediately.
 
 ---
 
@@ -253,7 +255,9 @@ download buttons. The same connection is used for:
 3. Set **`GameinfoDirectory`** (the data directory) and click **Download from
    FTP** next to it. The newest `gameinfo-*.zip` is extracted into
    `GameinfoDirectory/gameinfo/`. It normally contains the game metadata; newer
-   archives may also contain `crews.json`/`crew-images.json` for the Crews tab.
+   archives may also contain `crews.json`/`crew-images.json` for the Crews tab
+   and `full-index.json.gz`, the screenshot-independent catalog index that makes
+   new ZIPs visible before their screenshots exist.
 4. Optional: click **Download AtariLegend data** (no path field). This
    downloads the weekly AtariLegend dump into
    `<GameinfoDirectory>/atarilegend/`, builds the compact cache and can be

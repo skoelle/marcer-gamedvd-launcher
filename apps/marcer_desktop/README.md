@@ -10,8 +10,9 @@ covers building and running the app.
 ## Structure
 
 - `packages/marcer_catalog/` — pure Dart data layer (overlay merge, gameinfo
-  join, screenshot index, `GameCard` universe + facets + filter/sort engine,
-  config). No Flutter dependency; unit-tested via `dart test`.
+  join, screenshot-independent full index + screenshot overlay, `GameCard`
+  universe + facets + filter/sort engine, config). No Flutter dependency;
+  unit-tested via `dart test`.
 - `lib/` — Flutter app (gallery catalog grid, optional folder browser,
   list/grid entry views, lightbox with a gallery-style status bar).
 - `assets/icon/app_icon.png` — master app icon; `tool/generate_icons.py`
@@ -42,7 +43,8 @@ macOS); the Dart package name stays `marcer_desktop`.
 - Linux desktop toolchain: `clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev`
 - Data roots reachable (see `local/paths.env`): game tree, patch tree,
   screenshot archive (`index.json`, `index-pd.json`, `index-utils.json`,
-  `index-magazine.json`, `index-falcon.json` + PNGs), gameinfo directory.
+  `index-magazine.json`, `index-falcon.json` + PNGs) and gameinfo directory
+  (including `full-index.json.gz`, the screenshot-independent catalog index).
   All optional — missing artifacts degrade to empty states.
 
 ## Commands

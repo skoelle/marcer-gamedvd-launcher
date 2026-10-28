@@ -1,5 +1,5 @@
 name: marcer_catalog
-description: "Pure-Dart data layer for the Marcer GameDVD desktop app (overlay merge, gameinfo join, screenshot index)."
+description: "Pure-Dart data layer for the Marcer GameDVD desktop app (overlay merge, gameinfo join, full index + screenshot overlay)."
 version: 0.0.1
 publish_to: 'none'
 

@@ -80,8 +80,16 @@ class CatalogController extends ChangeNotifier {
   }
 
   final Map<String, PirateFinderMatch?> _pirateFinderTitleMatches = {};
+
+  /// Container fingerprints of ZIPs not covered by the full index (renamed /
+  /// locally added files), keyed by rel. Cleared on catalog reload.
+  final Map<String, String> _pirateFinderFingerprints = {};
   String? _lastPirateFinderVersion;
   bool _lastPirateFinderIndexReady = false;
+
+  /// Screenshot-independent catalog index from the gameinfo asset (ZIP
+  /// universe + disk-image hashes). Null until a catalog bundle was loaded.
+  FullIndex? _fullIndex;
 
   void _onPirateFinderDataChanged() {
     final version = _pirateFinderData?.local?.sha256;
@@ -148,6 +156,8 @@ class CatalogController extends ChangeNotifier {
     _localAssetsCache.clear();
     _cardFolderLayersCache.clear();
     _pirateFinderTitleMatches.clear();
+    _pirateFinderFingerprints.clear();
+    _fullIndex = null;
     _indexTreeCache.clear();
     _releaseLookupCache = null;
     _crewCardsBase = null;
@@ -169,6 +179,7 @@ class CatalogController extends ChangeNotifier {
       );
       notices.addAll(bundle.warnings);
       screenshots = bundle.index;
+      _fullIndex = bundle.fullIndex;
       gameinfo = bundle.info;
       crews = bundle.crews;
       crewImages = bundle.crewImages;
@@ -967,16 +978,63 @@ class CatalogController extends ChangeNotifier {
     return match;
   }
 
+  /// True when the gameinfo full index supplies precomputed ZIP hashes.
+  /// Without it the app keeps the previous title-only PirateFinder behavior.
+  bool get hasFullIndex => _fullIndex?.isEmpty == false;
+
+  /// Exact match for a card via the precomputed full-index hashes of [rel]
+  /// (the ZIP shown in the detail view). Falls back to the title match.
+  PirateFinderMatch? pirateFinderIndexMatchForCard(
+    GameCard card, {
+    String? rel,
+  }) {
+    final index = _pirateFinderData?.index;
+    if (index == null) {
+      _requestPirateFinderIndex();
+      return null;
+    }
+    final target = rel ?? _preferredRelForCard(card);
+    if (target != null) {
+      final hashes = _fullIndex?.hashesForRel(target) ?? const [];
+      if (hashes.isNotEmpty) {
+        final exact = index.matchByHashes(hashes);
+        if (exact != null) return exact;
+      }
+    }
+    return pirateFinderTitleMatchForCard(card);
+  }
+
+  /// Exact match for a browse-mode ZIP entry via the full-index hashes.
+  PirateFinderMatch? pirateFinderIndexMatchForEntry(Entry entry) {
+    final index = _pirateFinderData?.index;
+    if (index == null) {
+      _requestPirateFinderIndex();
+      return null;
+    }
+    final hashes = _fullIndex?.hashesForRel(relOf(entry)) ?? const [];
+    if (hashes.isNotEmpty) {
+      final exact = index.matchByHashes(hashes);
+      if (exact != null) return exact;
+    }
+    return pirateFinderTitleMatchForEntry(entry);
+  }
+
+  String? _preferredRelForCard(GameCard card) {
+    final preview = card.previewVariant?.rel;
+    if (preview != null && preview.isNotEmpty) return preview;
+    return card.variants.isEmpty ? null : card.variants.first.rel;
+  }
+
   void _requestPirateFinderIndex() {
     final data = _pirateFinderData;
     if (data == null || data.hasIndex || data.local == null) return;
     unawaited(data.ensureIndex());
   }
 
-  /// Matches a card against the downloaded PirateFinder catalogue. The
-  /// selected ZIP is tried by exact disk-image hashes first; title + gameinfo
-  /// crew/cracker/year is the fallback. The UI uses the title-only methods
-  /// above, so the detail button only appears for a confirmed title match.
+  /// Matches a card against the downloaded PirateFinder catalogue. With the
+  /// full index the selected ZIP is tried by exact disk-image hashes first;
+  /// title + gameinfo crew/cracker/year is the fallback. Without the full
+  /// index this is the pre-gate title-only behavior (no ZIP I/O).
   Future<PirateFinderMatch?> pirateFinderMatchForCard(
     GameCard card, {
     String? rel,
@@ -1105,10 +1163,38 @@ class CatalogController extends ChangeNotifier {
     if (controller == null) return null;
     final index = await controller.ensureIndex();
     if (index == null) return null;
-    if (rel != null && rel.isNotEmpty) {
-      try {
-        final hashes = await pirateFinderHashesForZip(zipPathForRel(rel));
+    if (rel != null && rel.isNotEmpty && hasFullIndex) {
+      // Preferred path: hashes precomputed by tools/full-index-gen. No ZIP
+      // decode, works for new ZIPs before screenshots exist. Without the
+      // full index the old title-only behavior is kept (no ZIP I/O).
+      var hashes = _fullIndex?.hashesForRel(rel) ?? const [];
+      if (hashes.isEmpty) {
+        // Renamed/local ZIP: resolve it by its container fingerprint, which
+        // only needs the ZIP central directory (no decoding).
+        final fingerprint = _pirateFinderFingerprints.putIfAbsent(rel, () {
+          try {
+            return pirateFinderZipFingerprint(zipPathForRel(rel));
+          } catch (_) {
+            return '';
+          }
+        });
+        if (fingerprint.isNotEmpty) {
+          hashes = _fullIndex?.hashesForFingerprint(fingerprint) ?? const [];
+        }
+      }
+      if (hashes.isNotEmpty) {
         final exact = index.matchByHashes(hashes);
+        if (exact != null) return exact;
+        return index.matchByTitles(
+          titles.where((title) => title.trim().isNotEmpty),
+          labels: labels,
+          years: years,
+          publishers: publishers,
+        );
+      }
+      try {
+        final decoded = await pirateFinderHashesForZip(zipPathForRel(rel));
+        final exact = index.matchByHashes(decoded);
         if (exact != null) return exact;
       } catch (_) {
         // Unreadable/undecodable ZIP: fall through to the title match.

@@ -73,6 +73,7 @@ INCLUDE_PATTERNS = (
     "crews.json",
     "crew-images.json",
     "unmatched-report.txt",
+    "full-index.json.gz",
 )
 
 # Fixed timestamp inside the ZIP so identical content produces identical

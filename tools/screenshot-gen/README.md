@@ -144,10 +144,11 @@ numbered set's lowest part. ZIPs holding a single floppy image use `--disk-a`;
 two images are mounted as drive A/B. The ST `--mono` logic does not apply to
 the Videl.
 
-The default scope always maps to `index.json` — that is the file the
-gallery and the desktop app read (the cracked view); other scope index
-files were invisible to them until the `magazine`/`falcon` sections were
-added (`index-magazine.json`, `index-falcon.json`, now read by both UIs).
+The default scope always maps to `index.json`. The gallery reads these files
+directly; the desktop app uses them for screenshot state
+(`preview`/`status`/`kind`) and merges them over the screenshot-independent
+`gameinfo/full-index.json.gz` (ZIP universe + hashes) built by
+`tools/full-index-gen`.
 Every other scope uses
 `index-<name>.json`, overridable per scope with an explicit `"index"`
 key. One scope never reads or writes another scope's index, so a utils

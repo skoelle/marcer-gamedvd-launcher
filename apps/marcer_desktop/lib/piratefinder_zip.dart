@@ -4,7 +4,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
 
 /// Hash maps of every decodable ST disk image in [zipPath], for matching
@@ -13,7 +13,9 @@ import 'package:crypto/crypto.dart';
 /// `.msa` members yield both their decoded raw-sector hashes (TOSEC-style) and
 /// the container hashes (Atari Legend stores the SHA-512 of the `.msa` file).
 /// `.st` members are raw images; `.stx` members are hashed as stored.
-Future<List<Map<String, dynamic>>> pirateFinderHashesForZip(String zipPath) async {
+Future<List<Map<String, dynamic>>> pirateFinderHashesForZip(
+  String zipPath,
+) async {
   final bytes = await File(zipPath).readAsBytes();
   final archive = ZipDecoder().decodeBytes(bytes);
   final result = <Map<String, dynamic>>[];
@@ -36,6 +38,33 @@ Future<List<Map<String, dynamic>>> pirateFinderHashesForZip(String zipPath) asyn
     }
   }
   return result;
+}
+
+/// Stable container fingerprint of the image members in [zipPath]:
+/// sorted `crc32:size` pairs (`tools/full-index-gen` writes the same value).
+///
+/// Reads only the ZIP central directory — no member is decompressed or
+/// decoded. Lets the full index resolve a renamed ZIP by content.
+String pirateFinderZipFingerprint(String zipPath) {
+  final input = InputFileStream(zipPath);
+  try {
+    final archive = ZipDecoder().decodeBuffer(input);
+    final values = <String>{};
+    for (final file in archive.files) {
+      if (!file.isFile) continue;
+      final suffix = _suffix(file.name);
+      if (suffix != '.msa' && suffix != '.st' && suffix != '.stx') continue;
+      final crc = file.crc32;
+      final size = file.size;
+      if (crc == null || size <= 0) continue;
+      if (size > 64 * 1024 * 1024) continue;
+      values.add('${crc.toRadixString(16).padLeft(8, '0')}:$size');
+    }
+    final sorted = values.toList()..sort();
+    return sorted.join(',');
+  } finally {
+    input.closeSync();
+  }
 }
 
 /// Decodes an MSA archive to the raw ST sector image.

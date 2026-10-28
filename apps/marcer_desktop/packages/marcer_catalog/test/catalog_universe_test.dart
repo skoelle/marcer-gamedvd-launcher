@@ -460,8 +460,8 @@ void main() {
       noShot = u.cracked.firstWhere((c) => c.folder == 'Beta');
     });
 
-    test('default status with_screenshot keeps only screenshot cards', () {
-      final f = CatalogFilter();
+    test('with_screenshot keeps only screenshot cards', () {
+      final f = CatalogFilter(status: 'with_screenshot');
       expect(matchesCard(alpha, f), isTrue);
       expect(matchesCard(noShot, f), isFalse);
       f.status = 'any';

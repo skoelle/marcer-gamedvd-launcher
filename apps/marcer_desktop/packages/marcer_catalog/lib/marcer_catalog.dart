@@ -16,6 +16,7 @@ export 'src/catalog_universe.dart';
 export 'src/config.dart';
 export 'src/crews.dart';
 export 'src/entry.dart';
+export 'src/full_index.dart';
 export 'src/gameinfo.dart';
 export 'src/launch.dart';
 export 'src/magazine.dart';

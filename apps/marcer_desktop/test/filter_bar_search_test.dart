@@ -155,8 +155,8 @@ void main() {
   testWidgets('status menu selects by click and keyboard', (tester) async {
     final c = await pumpFilterBar(tester);
 
-    // Click selection.
-    await tester.tap(find.text('with screenshot'));
+    // Click selection (the new default anchor is `any status`).
+    await tester.tap(find.text('any status'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('pending'), findsOneWidget);

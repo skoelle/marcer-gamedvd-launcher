@@ -43,6 +43,10 @@ import zipfile
 from collections import deque
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _lib import catalog_sections as cs  # noqa: E402
+
 TOOL_VERSION = "0.1.1"
 GAMEINFO_SUBDIR = "gameinfo"
 STOP_EVENT = None  # set in main
@@ -58,49 +62,8 @@ DEFAULT_CONFIG = {
     # (--scope overrides the default). The default scope's index is
     # index.json; every other scope uses index-<name>.json unless the
     # scope spec sets an explicit "index" key.
-    "scope_default": "cracked",
-    "scopes": {
-        "cracked": {
-            "trees": [
-                "Title Sorted/Cracked Games - Title Sorted",
-            ],
-        },
-        "utils": {
-            "trees": [
-                "Title Sorted/Utilitys - Title Sorted",
-            ],
-        },
-        "pd": {
-            "trees": [
-                "Title Sorted/PD Games - Title Sorted",
-            ],
-        },
-        "magazine": {
-            "trees": [
-                "Bonus/Magazine Cover Disks",
-            ],
-            "exclude_dirs": [
-                "dupes",
-            ],
-            "boot": "auto",
-        },
-        "falcon": {
-            "trees": [
-                "Falcon 030/Title Sorted",
-            ],
-            "index": "index-falcon.json",
-            "tos_default": "4.04",
-            "timepoints": [15, 30, 60],
-            "profile": {
-                "name": "falcon",
-                "machine": "falcon",
-                "memsize": "14",
-                "zoom": "1",
-                "monitor": "rgb",
-                "extra_args": ["--dsp", "emu", "--cpuclock", "16"],
-            },
-        },
-    },
+    "scope_default": cs.DEFAULT_SCOPE,
+    "scopes": cs.DEFAULT_SCOPES,
     # Directory names ending with this suffix (case-insensitive, matched
     # against the entry's game folder, e.g. "Abalone - Mono") are booted
     # with --mono --tos-res high (ST high res, 640x400). Empty = disabled.
@@ -131,13 +94,11 @@ DEFAULT_CONFIG = {
     },
     # Legacy (pre-scopes) single-scope configuration: used only when the
     # merged config carries no "scopes" entry at all.
-    "scope_trees": [
-        "Title Sorted/Cracked Games - Title Sorted",
-    ],
+    "scope_trees": list(cs.DEFAULT_SCOPES["cracked"]["trees"]),
     # Sub-directory names that never contain Hatari disk images (box scans,
     # manuals, Kryoflux flux dumps). Matched case-insensitively, ignoring
     # spaces/underscores/dashes, at any depth below the scope tree.
-    "exclude_dirs": ["kryoflux", "boxscan", "manual"],
+    "exclude_dirs": list(cs.DEFAULT_EXCLUDE_DIRS),
     "timepoints": [10, 25, 45],
     "entry_timeout_s": 90,
     "keep_candidates": True,
@@ -152,10 +113,7 @@ DEFAULT_CONFIG = {
         "1.02": "MARCER_TOS102_IMG",
         "4.04": "MARCER_TOS404_IMG",
     },
-    "disk_skip_regex": (
-        r"(?i)(?:^|[\s\-_.])(?:disk|side|disc)[\s\-_.]*"
-        r"(?:[2-9]|b|ii|iii)(?:$|[\s\-_.])"
-    ),
+    "disk_skip_regex": cs.DEFAULT_DISK_SKIP_REGEX,
     "filters": {
         "black_mean_max": 0.02,
         "black_std_max": 1.0,
@@ -258,38 +216,10 @@ def resolve_scopes(cfg: dict) -> tuple:
     ``scope_default`` away from a section the UIs display, keep that
     section on ``index.json`` via an explicit ``index`` entry.
     """
-    default = (cfg.get("scope_default") or "cracked").strip()
-    raw = cfg.get("scopes") or {}
-    if not raw:
-        # legacy single-scope config (pre-scopes)
-        raw = {"cracked": {"trees": cfg.get("scope_trees")
-                           or DEFAULT_CONFIG["scope_trees"]}}
-        default = "cracked"
-    scopes = {}
-    for name, spec in raw.items():
-        if isinstance(spec, dict):
-            trees = [str(t) for t in (spec.get("trees") or [])]
-            index = spec.get("index")
-            exclude = [str(d) for d in (spec.get("exclude_dirs") or [])]
-            profile = spec.get("profile") or {}
-            tos_default = spec.get("tos_default")
-            timepoints = spec.get("timepoints")
-            boot = spec.get("boot")
-        else:
-            sys.exit(f"error: scopes.{name} must be an object with a "
-                     f"trees list")
-        if not trees:
-            sys.exit(f"error: scope {name!r} has no trees")
-        if not index:
-            index = "index.json" if name == default else f"index-{name}.json"
-        scopes[name] = {"name": name, "trees": trees, "index": index,
-                        "exclude_dirs": exclude, "profile": profile,
-                        "tos_default": tos_default,
-                        "timepoints": timepoints, "boot": boot}
-    if default not in scopes:
-        sys.exit(f"error: scope_default {default!r} is not defined in "
-                 f"scopes ({', '.join(sorted(scopes))})")
-    return default, scopes
+    try:
+        return cs.resolve_scopes(cfg)
+    except ValueError as error:
+        sys.exit(f"error: {error}")
 
 
 def require_env(name: str) -> str:
@@ -1021,68 +951,30 @@ def write_json_atomic(path: Path, data: dict) -> None:
 
 
 def _is_ignored(name: str) -> bool:
-    return name.startswith(".") or name.startswith("@")
+    return cs.is_ignored(name)
 
 
 def _norm_dir(name: str) -> str:
     """Lowercase a directory name without spaces/underscores/dashes."""
-    return re.sub(r"[\s_-]", "", name.lower())
+    return cs.norm_dir(name)
 
 
 def _excluded_dirs(cfg: dict, scope: dict = None) -> set:
-    """Normalized directory names never entered by the scan.
-
-    The global ``exclude_dirs`` list is always applied; a scope may add
-    its own via the ``exclude_dirs`` key (e.g. the magazine scope skips
-    the ``Dupes`` sub-folders).
-    """
-    names = list(cfg.get("exclude_dirs") or [])
-    if scope:
-        names += list(scope.get("exclude_dirs") or [])
-    return {_norm_dir(n) for n in names}
+    """Normalized directory names never entered by the scan."""
+    return cs.excluded_dirs(cfg, scope)
 
 
 def scan_tree(layer_base: Path, scope: str, disk_re, exclude=None) -> dict:
-    """Return {relpath: {size, mtime}} for zips under layer_base/scope.
-
-    Directories whose normalized name is in ``exclude`` are never entered,
-    so their contents never appear in the index.
-    """
-    exclude = exclude or set()
-    found = {}
-    base = layer_base / scope
-    if not base.is_dir():
-        return found
-    stack = [base]
-    n_dirs = 0
-    while stack:
-        if STOP_EVENT is not None and STOP_EVENT.is_set():
-            break
-        d = stack.pop()
-        try:
-            with os.scandir(d) as it:
-                for e in it:
-                    if _is_ignored(e.name):
-                        continue
-                    if e.is_dir(follow_symlinks=False):
-                        if _norm_dir(e.name) in exclude:
-                            continue
-                        stack.append(e.path)
-                        n_dirs += 1
-                        if n_dirs % 200 == 0:
-                            print(f"  ... {n_dirs} dirs, {len(found)} zips",
-                                  flush=True)
-                    elif e.name.lower().endswith(".zip"):
-                        rel = Path(e.path).relative_to(layer_base).as_posix()
-                        try:
-                            st = e.stat(follow_symlinks=False)
-                        except OSError:
-                            continue
-                        found[rel] = {"size": st.st_size,
-                                      "mtime": int(st.st_mtime)}
-        except OSError as ex:
-            print(f"  scan error {d}: {ex}", file=sys.stderr, flush=True)
-    return found
+    """Return {relpath: {size, mtime}} for zips under layer_base/scope."""
+    should_stop = STOP_EVENT.is_set if STOP_EVENT is not None else None
+    return cs.scan_tree(
+        layer_base,
+        scope,
+        disk_re,
+        exclude,
+        should_stop=should_stop,
+        on_error=lambda message: print(message, file=sys.stderr, flush=True),
+    )
 
 
 def build_index(cfg: dict, P: dict, full: bool, scope: dict) -> dict:
@@ -1106,56 +998,23 @@ def build_index(cfg: dict, P: dict, full: bool, scope: dict) -> dict:
         r_map = scan_tree(root, scope_tree, disk_re, exclude)
         p_map = scan_tree(patch, scope_tree, disk_re, exclude) \
             if patch else {}
-        # Overlay merge case-insensitively (SPEC §7): a patch file whose
-        # name differs only in case from a root file overrides it, and the
-        # patch spelling becomes the canonical rel — the same rule as the
-        # console launcher's OrdinalIgnoreCase merge. Case-sensitive
-        # merging created duplicate entries per game whose second capture
-        # was then renamed by a case-insensitive NAS (…CaseConflict).
-        merged = {}  # rel.lower() -> [rel, src, layer]
-        for rel, info in r_map.items():
-            merged[rel.lower()] = [rel, info, "ROOT"]
-        for rel, info in p_map.items():
-            key = rel.lower()
-            if key in merged:
-                merged[key] = [rel, info, "BOTH"]
-            else:
-                merged[key] = [rel, info, "PATCH"]
-        # Directory-level canonical spelling (SPEC §7, launcher merge):
-        # when the same directory exists in both layers under a spelling
-        # that differs only in case, the patch spelling wins for EVERY
-        # file below it — including root-only files. Without this, a
-        # root-only zip kept its root folder spelling next to patch-only
-        # zips under the patch spelling, producing two case-variant
-        # output directories that a case-insensitive NAS/Dropbox sync
-        # renames into …CaseConflict siblings mid-run.
-        canon_dirs = {}  # dir path (lower) -> winning spelling
-        for rel in r_map:
-            d = str(Path(rel).parent)
-            canon_dirs.setdefault(d.lower(), d)
-        for rel in p_map:
-            d = str(Path(rel).parent)
-            canon_dirs[d.lower()] = d
+        # Overlay merge (SPEC §7) shared with tools/full-index-gen.
+        merged = cs.canonical_merge(r_map, p_map)
         low_entries = {k.lower(): k for k in entries}
-        for key in sorted(merged):
-            rel, src, layer = merged[key]
-            orig_rel = rel  # layer's own spelling, used to read the source
-            parent = canon_dirs.get(str(Path(rel).parent).lower())
-            if parent:
-                rel = (str(Path(parent) / Path(rel).name) if parent != "."
-                       else Path(rel).name)
+        for rel in sorted(merged):
+            item = merged[rel]
+            layer = item["layer"]
             # src_rel keeps the spelling the file actually has under its
             # own layer root; only differs from rel when the canonical
             # (patch) folder spelling wins over a root-only folder.
-            src_rel = orig_rel if orig_rel != rel else None
-            key = rel.lower()
+            src_rel = item.get("src_rel")
             seen.add(rel)
             name = Path(rel).name
-            old_key = rel if rel in entries else low_entries.get(key)
+            old_key = rel if rel in entries else low_entries.get(rel.lower())
             old = entries.get(old_key) if old_key else None
             if (old and not full
-                    and old.get("size") == src["size"]
-                    and old.get("mtime") == src["mtime"]):
+                    and old.get("size") == item["size"]
+                    and old.get("mtime") == item["mtime"]):
                 if old_key != rel:
                     # entry found under the losing spelling only: keep its
                     # curated state, re-keyed to the winning (patch) name
@@ -1177,8 +1036,8 @@ def build_index(cfg: dict, P: dict, full: bool, scope: dict) -> dict:
                 "rel": rel,
                 "name": name,
                 "layer": layer,
-                "size": src["size"],
-                "mtime": src["mtime"],
+                "size": item["size"],
+                "mtime": item["mtime"],
                 "status": status,
                 "kind": None,
                 "preview": None,

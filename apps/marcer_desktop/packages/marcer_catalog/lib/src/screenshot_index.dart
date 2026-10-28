@@ -4,6 +4,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'full_index.dart';
+
 /// Index file name per section (`index.json` stays the cracked index for
 /// backward compatibility; `pd`/`utils` get their own files next to it —
 /// see `SPEC-screenshot-generator.md`).
@@ -58,6 +60,15 @@ class ScreenshotIndex {
   /// Empty index for an unconfigured output directory.
   ScreenshotIndex.empty(String reason)
       : this._(const {}, '', reason, null, '');
+
+  /// Builds an index from already-merged entries (full index + screenshot
+  /// overlay). Used by [ScreenshotIndices.merge].
+  factory ScreenshotIndex.fromEntries(
+    Map<String, ScreenshotEntry> entries,
+    String screenshotDirectory,
+    String indexName,
+  ) =>
+      ScreenshotIndex._(entries, screenshotDirectory, null, null, indexName);
 
   final Map<String, ScreenshotEntry> _entries;
   final String screenshotDirectory;
@@ -142,6 +153,79 @@ class ScreenshotIndices {
       }
     }
     return ScreenshotIndices._(bySection, warnings);
+  }
+
+
+  /// Merges the screenshot-independent [full] index (base universe + hashes)
+  /// with the screenshot indices (overlay: status/kind/preview/candidates).
+  ///
+  /// - Entries only in the full index appear immediately as `pending`, without
+  ///   a preview (new ZIPs before screenshots exist).
+  /// - Entries in both keep the screenshot state; the full index supplies the
+  ///   size/layer fallback.
+  /// - Entries only in the screenshot index are kept as-is (a gameinfo asset
+  ///   that lags behind the screenshots must not hide them).
+  ///
+  /// When [full] is empty the screenshot indices are returned unchanged.
+  factory ScreenshotIndices.merge({
+    required ScreenshotIndices screenshots,
+    required FullIndex full,
+  }) {
+    if (full.isEmpty) return screenshots;
+    final merged = <String, Map<String, ScreenshotEntry>>{
+      for (final section in kSectionIndexNames.keys) section: {},
+    };
+    full.entries.forEach((rel, entry) {
+      final bucket = merged.putIfAbsent(entry.section, () => {});
+      bucket[rel] = ScreenshotEntry(
+        rel: rel,
+        name: entry.name,
+        status: 'pending',
+        kind: null,
+        layer: entry.layer,
+        preview: null,
+        candidates: const [],
+        size: entry.size,
+        zipContents: const [],
+        tos: null,
+      );
+    });
+    for (final section in kSectionIndexNames.keys) {
+      final shot = screenshots.forSection(section);
+      final bucket = merged.putIfAbsent(section, () => {});
+      shot.entries.forEach((rel, value) {
+        final base = bucket[rel];
+        bucket[rel] = base == null ? value : _mergeEntry(base, value);
+      });
+    }
+    final bySection = <String, ScreenshotIndex>{};
+    merged.forEach((section, entries) {
+      final shot = screenshots.forSection(section);
+      bySection[section] = ScreenshotIndex.fromEntries(
+        entries,
+        shot.screenshotDirectory,
+        kSectionIndexNames[section] ?? shot.indexName,
+      );
+    });
+    return ScreenshotIndices._(bySection, [...screenshots.warnings]);
+  }
+
+  static ScreenshotEntry _mergeEntry(
+    ScreenshotEntry base,
+    ScreenshotEntry shot,
+  ) {
+    return ScreenshotEntry(
+      rel: shot.rel.isNotEmpty ? shot.rel : base.rel,
+      name: shot.name.isNotEmpty ? shot.name : base.name,
+      status: shot.status,
+      kind: shot.kind,
+      layer: shot.layer.isNotEmpty ? shot.layer : base.layer,
+      preview: shot.preview,
+      candidates: shot.candidates,
+      size: shot.size ?? base.size,
+      zipContents: shot.zipContents,
+      tos: shot.tos,
+    );
   }
 
   final Map<String, ScreenshotIndex> _bySection;

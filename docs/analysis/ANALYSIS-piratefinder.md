@@ -1,18 +1,26 @@
 # ANALYSIS: Pete Clarke Greaseweazle PirateFinder Catalog
 
+> **Status (2026-10-28): historical analysis.** The original importer
+> `tools/piratefinder-gen` has been retired. Its reusable ZIP decoding/hashing
+> moved to [`tools/_lib/zip_hashes.py`](../../tools/_lib/zip_hashes.py) and
+> [`tools/full-index-gen`](../../tools/full-index-gen/README.md) now builds the
+> screenshot-independent `gameinfo/full-index.json.gz` (ZIP universe + disk
+> hashes). The desktop app downloads the generic PirateFinder catalogue from
+> [`piratefinder-catalog-json`](https://github.com/skoelle/piratefinder-catalog-json)
+> and matches it against those precomputed hashes (title fallback). The raw
+> SQLite, local match reports and the commands below are no longer produced by
+> this repository.
+
 Analysis of the
 [Pete Clarke Greaseweazle PirateFinder Catalog](https://github.com/peteclarke-del/PirateFinder)
-and how its Atari ST data is used for the Marcer GameDVD project. The
-implementation is the read-only tool
-[`tools/piratefinder-gen`](../../tools/piratefinder-gen/README.md); consumer
+and how its Atari ST data is used for the Marcer GameDVD project. Consumer
 behavior is specified in [`SPEC-desktop.md`](../specs/SPEC-desktop.md).
 
 **Licence:** the PirateFinder-Catalog is **CC BY-NC-SA 4.0**, because it
-includes Atari Legend data under that licence. The tool does not redistribute
-the database or derived index files; it fetches the release from GitHub and
-keeps everything local (`MARCER_PIRATEFINDER_DIR`, default
-`local/piratefinder/`). The raw SQLite is not committed and must not be
-published with the Marcer artifacts.
+includes Atari Legend data under that licence. Neither the database nor any
+PirateFinder-derived data is redistributed with the Marcer artifacts; the app
+downloads the generic JSON catalogue separately. The raw SQLite is not
+committed and must not be published with the Marcer artifacts.
 
 ---
 
@@ -41,7 +49,7 @@ Relevant tables:
 The extracted ST subset has ~24k disks (menu/pack/single/compilation), ~29k
 images, ~48k contents rows and ~530 crews with history.
 
-## 2. How it is used
+## 2. How it was used (historical)
 
 ```sh
 tools/piratefinder-gen/run.sh fetch     # newest catalogue-* release + SHA-256
@@ -49,6 +57,9 @@ tools/piratefinder-gen/run.sh extract   # ST subset -> compact JSON
 tools/piratefinder-gen/run.sh match     # Marcer cracked ZIPs vs. catalogue
 tools/piratefinder-gen/run.sh report    # regenerate the reports
 ```
+
+Current pipeline: `tools/full-index-gen` hashes the ZIPs (no PirateFinder
+data), and the desktop app joins the separately downloaded generic catalogue.
 
 ### Matching
 
@@ -123,7 +134,11 @@ catalogue.
   present.
 - ST virus information is not available (see above).
 
-## 5. Reproduction
+## 5. Reproduction (historical)
+
+The original importer was removed; these commands are kept as a record of how
+the numbers above were produced. They require the retired
+`tools/piratefinder-gen` from git history.
 
 ```sh
 tools/piratefinder-gen/run.sh fetch --tag catalogue-2026-10-19
@@ -133,5 +148,5 @@ tools/piratefinder-gen/run.sh report
 .venv/bin/python -m unittest discover -s tools/piratefinder-gen/tests -v
 ```
 
-The match step reads the local trees and `index.json` and writes only below
-`MARCER_PIRATEFINDER_DIR`.
+The current pipeline instead runs `tools/full-index-gen` (hashes only, no
+PirateFinder data) and lets the desktop app join the downloaded catalogue.

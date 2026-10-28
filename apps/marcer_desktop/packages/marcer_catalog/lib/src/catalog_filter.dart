@@ -47,7 +47,7 @@ Set<String> kindFilters(String kind) => switch (kind) {
 class CatalogFilter {
   CatalogFilter({
     this.section = 'cracked',
-    this.status = 'with_screenshot',
+    this.status = 'any',
     this.q = '',
     this.letter = 'any',
     this.publisher = 'any',
@@ -85,7 +85,7 @@ class CatalogFilter {
 
   /// Status value considered "default" (gallery `default_status` config);
   /// [isActive] and [reset] use it instead of a hardcoded value.
-  String factoryStatus = 'with_screenshot';
+  String factoryStatus = 'any';
 
   /// True when anything deviates from the factory state — the app is in
   /// catalog (global) mode while active.

@@ -133,6 +133,12 @@ class _FakeController extends CatalogController {
         method: 'title',
         confidence: 'likely',
       );
+
+  @override
+  Future<PirateFinderMatch?> pirateFinderMatchForEntry(
+    Entry entry, {
+    String? rel,
+  }) async => pirateFinderTitleMatchForEntry(entry);
 }
 
 void main() {

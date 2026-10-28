@@ -1137,9 +1137,9 @@ class _GameLightboxState extends State<GameLightbox> {
       listenable: widget.controller,
       builder: (context, _) {
         final pfMatch = item is GameCard
-            ? widget.controller.pirateFinderTitleMatchForCard(item)
+            ? widget.controller.pirateFinderIndexMatchForCard(item, rel: v?.rel)
             : item is Entry
-            ? widget.controller.pirateFinderTitleMatchForEntry(item)
+            ? widget.controller.pirateFinderIndexMatchForEntry(item)
             : null;
         return GameInfoPanel(
           info: _info,
@@ -1159,6 +1159,7 @@ class _GameLightboxState extends State<GameLightbox> {
                   controller: widget.controller,
                   card: item is GameCard ? item : null,
                   entry: item is Entry ? item : null,
+                  rel: v?.rel,
                 ),
           extras: localAssets == null
               ? null

@@ -36,7 +36,7 @@ Rules:
 
 | File | What it covers |
 |---|---|
-| [`PLAN-docker-pipeline.md`](plans/PLAN-docker-pipeline.md) | Server automation: archive sync, change detection, gameinfo/crews/index, asset packaging/upload and the `latest.json` pointer. |
+| [`PLAN-docker-pipeline.md`](plans/PLAN-docker-pipeline.md) | Server automation: archive sync, change detection, gameinfo/full-index/crews, asset packaging/upload and the `latest.json` pointer. Screenshot generation stays on the dev machine. |
 
 ## Specs
 
@@ -54,7 +54,7 @@ Rules:
 | [`ANALYSIS-game-data.md`](analysis/ANALYSIS-game-data.md) | XLS metadata sources, matching rules, `games-*.json` schema. |
 | [`ANALYSIS-crews.md`](analysis/ANALYSIS-crews.md) | Crew ranking: data sources, attribution/alias rules, `crews.json`/`crew-images.json`. |
 | [`ANALYSIS-atarilegend.md`](analysis/ANALYSIS-atarilegend.md) | Weekly AtariLegend dumps: contents, folder↔game matching, asset/URL conventions, runtime schema, licensing. |
-| [`ANALYSIS-piratefinder.md`](analysis/ANALYSIS-piratefinder.md) | PirateFinder catalogue: schema, import, hash/title matching, crew/menu-disk metadata, limitations. |
+| [`ANALYSIS-piratefinder.md`](analysis/ANALYSIS-piratefinder.md) | Historical PirateFinder catalogue analysis: schema, matching, crew/menu-disk metadata, limitations. The importer was retired in favour of `tools/full-index-gen` + runtime matching in the app. |
 | [`ANALYSIS-boxscan-manual-assets.md`](analysis/ANALYSIS-boxscan-manual-assets.md) | `Boxscan/` and `Manual/` folders: location, naming variants, ZIP/loose-file structure, edge cases. |
 
 ## Decisions

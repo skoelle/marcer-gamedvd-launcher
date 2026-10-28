@@ -713,7 +713,10 @@ class _CrewLightboxState extends State<CrewLightbox> {
     final card = hit.card;
     final variant = card.variants[hit.index];
     final atariLegend = widget.controller.atariLegendForCard(card);
-    final pfMatch = widget.controller.pirateFinderTitleMatchForCard(card);
+    final pfMatch = widget.controller.pirateFinderIndexMatchForCard(
+      card,
+      rel: variant.rel,
+    );
     return GameInfoPanel(
       info: card.info,
       variant: ZipVariantView(
@@ -744,6 +747,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
               context,
               controller: widget.controller,
               card: card,
+              rel: variant.rel,
             ),
       extras: LocalAssetsChips(
         assets: widget.controller.localAssetsForCard(card),

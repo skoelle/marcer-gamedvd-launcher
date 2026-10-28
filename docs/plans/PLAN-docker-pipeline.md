@@ -18,7 +18,7 @@ Ein Container (`amd64`) läuft auf dem Server und bietet:
 - Screenshot-Hook per HTTP (`POST /hook/screenshots`) nach dem Dev-Lauf
 - Sync nach `PatchDirectory`
 - Änderungsprotokoll als JSON und Text
-- `gameinfo-gen`, `crew-analysis` und `screenshot-gen index` (nur Index)
+- `gameinfo-gen`, `full-index-gen` und `crew-analysis` (ohne Screenshot-Index)
 - ZIP-Erstellung für `screenshots` und `gameinfo`
 - FTP-Upload nur bei inhaltlicher Änderung
 - `latest.json` nur nach einem tatsächlichen Upload
@@ -48,8 +48,7 @@ Dev-Server (Hatari/Xvfb)
 |  POST /run --------------------------+--> Monatslauf         |
 |  POST /hook/screenshots -----------------> Screenshot-Hook   |
 |                                                              |
-|  archive-sync -> gameinfo-gen -> crew-analysis               |
-|               -> shotgen index (nur betroffene Scopes)       |
+|  archive-sync -> gameinfo-gen -> full-index-gen -> crew-analysis |
 |               -> asset-publish (gameinfo, nur bei Änderung)  |
 |               -> asset-manifest (latest.json, nur nach Upload)|
 +--------------------------------------------------------------+
@@ -113,7 +112,8 @@ Neues Uploader-Tool, bewusst getrennt von `asset-manifest`.
   - Root-Indizes `index.json`, `index-*.json` werden wieder aufgenommen.
 - Gameinfo-Quelle: `MARCER_DATA_DIR/gameinfo`.
   - Enthalten: `games-*.json`, `manifest.json`, `crews.json`,
-    `crew-images.json` (falls vorhanden), `unmatched-report.txt`.
+    `crew-images.json` (falls vorhanden), `full-index.json.gz`,
+    `unmatched-report.txt`.
   - Ausgeschlossen: `.marcer-assets.json`, `*.bak-*`, Temp-Dateien und
     sonstige Dateien.
 - Python-Packer statt `7zz`: deterministisch (sortierte Einträge, feste
@@ -152,8 +152,9 @@ Orchestrator, HTTP-Service und Scheduler in einem Prozess.
 - Scheduler: 1. des Monats, 03:00 Europe/Berlin, konfigurierbar.
 - Persistenter Scheduler-State verhindert Doppelläufe nach Restart.
 - Run-Reports: `/state/runs/<timestamp>.json` + stdout für `docker logs`.
-- Prüft vor `shotgen index`, ob ein `shotgen.lock` eines Dev-Runs existiert →
-  sauberer Busy-Fehler statt Konflikt.
+- Prüft im Screenshot-Hook, ob ein `shotgen.lock` eines Dev-Runs existiert →
+  sauberer Busy-Fehler statt Konflikt. Der Monatslauf fasst den Screenshot-Index
+  nicht an.
 - Merkt fehlgeschlagene `latest.json`-Updates als „dirty“ und wiederholt sie
   beim nächsten Lauf.
 - CLI: `serve`, `run --once`, `status`.
@@ -197,16 +198,19 @@ Orchestrator, HTTP-Service und Scheduler in einem Prozess.
    - XLS geändert, Ordner neu/entfernt, `gameinfo-gen check` fehlgeschlagen
      oder Erstlauf → `gameinfo-gen extract`.
    - sonst überspringen.
-4. Wenn `gameinfo` lief oder der Cracked-Bereich Änderungen hat →
-   `crew-analysis` (nur Ranking).
-5. Für **jeden betroffenen Scope**:
-   `shotgen index --scope <name>`.
-6. `asset-publish --only gameinfo`.
+4. Wenn `gameinfo` lief oder neue/geänderte ZIPs im Cracked-Bereich sind →
+   `full-index-gen run` (inkrementell, schreibt `gameinfo/full-index.json.gz`).
+5. Wenn `gameinfo` lief oder der Cracked-Bereich Änderungen hat →
+   `crew-analysis` (nur Ranking, liest den Full-Index).
+6. `asset-publish --only gameinfo` (enthält `full-index.json.gz`).
    - unverändert → Skip
    - geändert → ZIP erstellen und hochladen
 7. Nur wenn ein Upload erfolgte oder der Pointer „dirty“ ist:
    `asset-manifest` → `latest.json`.
 8. Run-Report schreiben.
+
+`shotgen index` läuft **nicht** in diesem Lauf. Screenshots und ihr Index
+werden auf dem Dev-Rechner erzeugt und über den Screenshot-Hook veröffentlicht.
 
 **Wichtig:** Der Monatslauf packt/uploadet **keine** Screenshots, auch wenn
 sich nur `index*.json` geändert hat.
@@ -235,8 +239,9 @@ curl -X POST http://<server>:8080/hook/screenshots
 - **gameinfo:** XLS-Änderung, neue Ordner (als `new` im Sync-Report),
   fehlendes/inkonsistentes `manifest.json` oder Erstlauf.
 - **crews:** `gameinfo` lief oder Cracked-Bereich geändert.
-- **index:** mindestens ein `new`/`changed`-Pfad im jeweiligen Scope-Baum oder
-  Indexdatei fehlt.
+- **full-index:** mindestens ein `new`/`changed` ZIP, `full-index.json.gz`
+  fehlt oder `full-index-gen check` meldet eine Abweichung.
+- **index:** nur noch dev-seitig für die Screenshot-Erzeugung.
 - **No-Op:** keine `new`/`changed`-Pfade und alle Indexdateien vorhanden →
   Lauf endet erfolgreich mit „nothing changed“.
 
@@ -331,7 +336,8 @@ Offen:
   Hash-Modus (z. B. für XLS).
 - **Schreibrechte:** FTP-User und NAS-Mounts müssen Schreiben erlauben.
 - **Parallele Dev-/Server-Läufe:** `shotgen index` und `shotgen run` dürfen
-  nicht gleichzeitig auf denselben Index schreiben; Lock-Prüfung nötig.
+  nicht gleichzeitig auf denselben Index schreiben; der Screenshot-Hook prüft
+  deshalb den `shotgen.lock`.
 - **Dateisperren auf NAS:** `flock` kann unzuverlässig sein; zusätzlich
   PID-/Heartbeat-Marker im State prüfen.
 - **GitHub-PAT:** muss Releases/Assets im Zielrepo schreiben dürfen.

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import gzip
 import json
 import sys
 import tempfile
@@ -89,6 +90,57 @@ class LoadZipsFromIndexTest(unittest.TestCase):
         self.assertEqual(len(zips), 1)
         rel, letter, folder, name, size, direct = zips[0]
         self.assertEqual(rel, ZIP)
+        self.assertEqual((letter, folder), ("A", "Alpha"))
+        self.assertEqual(name, Path(ZIP).name)
+        self.assertEqual(size, 1234)
+        self.assertTrue(direct)
+
+
+class LoadZipsFromFullIndexTest(unittest.TestCase):
+    PREFIX = "Title Sorted/Cracked Games - Title Sorted/"
+
+    def write_full_index(self, root: Path, entries: dict) -> Path:
+        path = root / "full-index.json.gz"
+        with gzip.open(path, "wt", encoding="utf-8") as handle:
+            json.dump({"entries": entries}, handle)
+        return path
+
+    def test_uses_section_and_derives_skipped_disks(self):
+        values = {
+            self.PREFIX + ZIP: {"section": "cracked", "name": Path(ZIP).name},
+            self.PREFIX + DISK2: {"section": "cracked", "name": Path(DISK2).name},
+            self.PREFIX + BETA: {"section": "cracked", "name": Path(BETA).name},
+            self.PREFIX + SUB_ZIP: {"section": "cracked", "name": Path(SUB_ZIP).name},
+            self.PREFIX + SUB_DISK3: {
+                "section": "cracked", "name": Path(SUB_DISK3).name},
+            self.PREFIX + "P/Other/Other.zip": {
+                "section": "pd", "name": "Other.zip"},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_full_index(Path(tmp), values)
+            zips, skipped = ca.load_zips_from_full_index(
+                path, include_subdirs=False)
+            all_zips, all_skipped = ca.load_zips_from_full_index(
+                path, include_subdirs=True)
+
+        rels = {item[0] for item in zips}
+        self.assertEqual(rels, {self.PREFIX + ZIP, self.PREFIX + BETA})
+        self.assertEqual(skipped, 1)
+        all_rels = {item[0] for item in all_zips}
+        self.assertIn(self.PREFIX + SUB_ZIP, all_rels)
+        self.assertEqual(all_skipped, 2)
+        self.assertNotIn(self.PREFIX + "P/Other/Other.zip", all_rels)
+
+    def test_metadata_is_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_full_index(Path(tmp), {
+                self.PREFIX + ZIP: {
+                    "section": "cracked", "name": Path(ZIP).name, "size": 1234},
+            })
+            zips, _skipped = ca.load_zips_from_full_index(
+                path, include_subdirs=False)
+        rel, letter, folder, name, size, direct = zips[0]
+        self.assertEqual(rel, self.PREFIX + ZIP)
         self.assertEqual((letter, folder), ("A", "Alpha"))
         self.assertEqual(name, Path(ZIP).name)
         self.assertEqual(size, 1234)

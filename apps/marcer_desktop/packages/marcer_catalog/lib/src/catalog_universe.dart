@@ -7,6 +7,7 @@ import 'dart:isolate';
 import 'atarilegend.dart';
 import 'card.dart';
 import 'crews.dart';
+import 'full_index.dart';
 import 'gameinfo.dart';
 import 'magazine.dart';
 import 'screenshot_index.dart';
@@ -433,6 +434,7 @@ Set<String> kindFields(String kind) => switch (kind) {
 class CatalogBundle {
   CatalogBundle({
     required this.index,
+    required this.fullIndex,
     required this.info,
     required this.crews,
     required this.crewImages,
@@ -511,8 +513,15 @@ class CatalogBundle {
     final warnings = <String>[];
 
     onProgress?.call('Loading screenshot index…');
-    final index = ScreenshotIndices.load(screenshotDir);
-    warnings.addAll(index.warnings);
+    final screenshots = ScreenshotIndices.load(screenshotDir);
+    warnings.addAll(screenshots.warnings);
+
+    onProgress?.call('Loading full index…');
+    final fullIndex = FullIndex.load(gameinfoDir, warnings: warnings);
+    final index = ScreenshotIndices.merge(
+      screenshots: screenshots,
+      full: fullIndex,
+    );
 
     onProgress?.call('Loading game metadata…');
     GameInfoIndex info;
@@ -545,6 +554,7 @@ class CatalogBundle {
     onProgress?.call('Finalizing…');
     return CatalogBundle(
       index: index,
+      fullIndex: fullIndex,
       info: info,
       crews: crews,
       crewImages: crewImages,
@@ -555,6 +565,7 @@ class CatalogBundle {
   }
 
   final ScreenshotIndices index;
+  final FullIndex fullIndex;
   final GameInfoIndex info;
   final CrewIndex crews;
   final CrewImageIndex crewImages;

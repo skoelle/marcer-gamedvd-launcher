@@ -164,6 +164,7 @@ class GameinfoPublishTests(unittest.TestCase):
     def test_excludes_backups_markers_and_unknown_files(self) -> None:
         (self.source / "crew-images.json").write_text('{"images": {}}\n')
         (self.source / "crew-images.json.bak-20261028-162748").write_text("old\n")
+        (self.source / "full-index.json.gz").write_bytes(b"index\n")
         (self.source / ".marcer-assets.json").write_text("{}\n")
         (self.source / "notes.txt").write_text("ignore me\n")
         (self.source / "games-cracked.json.tmp").write_text("tmp\n")
@@ -178,6 +179,7 @@ class GameinfoPublishTests(unittest.TestCase):
                     "manifest.json",
                     "crews.json",
                     "crew-images.json",
+                    "full-index.json.gz",
                     "unmatched-report.txt",
                 ]
             ),

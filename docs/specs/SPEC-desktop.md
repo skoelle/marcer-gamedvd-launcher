@@ -140,7 +140,7 @@ fine while another one still blocks **Save**).
 | `RootDirectory` | yes | game root; navigation never leaves it |
 | `PatchDirectory` | no | empty/missing ⇒ no patch layer |
 | `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`/`index-magazine.json`/`index-falcon.json`, PNGs) |
-| `GameinfoDirectory` | no | **data directory**: `gameinfo/` (games JSON, `crews.json`, `crew-images.json`), `atarilegend/`, `piratefinder/`; screenshots stay separate. No implicit fallback |
+| `GameinfoDirectory` | no | **data directory**: `gameinfo/` (games JSON, `crews.json`, `crew-images.json`, `full-index.json.gz`), `atarilegend/`, `piratefinder/`; screenshots stay separate. No implicit fallback |
 | `AtariLegendDirectory` (legacy) | no | old separate AtariLegend path; migrated at startup into `<GameinfoDirectory>/atarilegend`, no longer shown in the form |
 | `PirateFinder-Catalog` | no | optional PirateFinder-Catalog-only catalogue JSON; **PirateFinder-Catalog** downloads `piratefinder-catalog-atari-st.json.gz` from the GitHub `piratefinder-catalog-json` release into `<GameinfoDirectory>/piratefinder/` and links to the original PirateFinder project. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog |
 | `Hatari.Executable` | for launch | Hatari binary; relative resolves against the app dir |
@@ -156,7 +156,7 @@ fine while another one still blocks **Save**).
 | `CosmosEx.Mac` | no | cosmo2ex device MAC (`aa:bb:…` or 12 hex chars); empty selects the only device |
 | `CosmosEx.ShareDirectory` | for cosmo2ex | local/mounted view of the device's `FLOPPY_IMAGES_DIR` (SMB/NFS/local); images are copied there before the path insert |
 | `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
-| `DefaultStatus` | no | initial status preset for **all** sections (default `with_screenshot`) |
+| `DefaultStatus` | no | initial status preset for **all** sections (default `any`, so new ZIPs without screenshots are visible) |
 | `Window.width/height` | no | initial/restore window size (default 1280×800) |
 | `Window.maximized` | no | start maximized (default `true`; Windows first fills the primary display's work area synchronously, then maximizes; `false` ⇒ `width`×`height`, centered, clamped to the work area) |
 
@@ -384,8 +384,9 @@ the crew PF lightbox with `Overview` (history/members/founded/links),
   remains reachable.
 - `done` uses the aggregated card status. `desktop text`/`desktop black`
   are strict per-ZIP kind filters.
-- The default is `with screenshot` for **all** sections; change `DefaultStatus` in
-  `desktop.config.json` to use another preset on startup and after section switches.
+- The default is `any` for **all** sections, so newly added ZIPs appear
+  immediately even before their screenshots exist. Set `DefaultStatus` in
+  `desktop.config.json` to `with_screenshot` to start with the old behaviour.
 
 Card previews follow the active status filter: `with screenshot`, `any` and
 `done` keep the done-first preview; `desktop`/`no usable shots` and the other
@@ -414,12 +415,13 @@ Status info in catalog mode is **section-aware** (same `games (ZIPs)` format
 as the gallery's statistics bar, plus the folder total; the gallery labels
 the coverage `info N folders` / `N without info`):
 
-- `3287 folders` — games (cards) of the active section; cracked cards are
-  built from `index.json`, pd/utils cards are the union of their own
-  index (`index-pd.json` / `index-utils.json`) and gameinfo-only folders,
-  magazine cards come from `index-magazine.json` (one card per issue,
-  filename-derived) and falcon cards from `index-falcon.json`; every game
-  folder with at least one ZIP is one card.
+- `3287 folders` — games (cards) of the active section. The ZIP universe comes
+  from `full-index.json.gz` (gameinfo asset), merged with the screenshot index;
+  if the full index is missing, the per-section screenshot indices are used as
+  before. pd/utils cards also include gameinfo-only folders, magazine cards
+  come from the magazine section (one card per issue, filename-derived) and
+  falcon cards from its section; every game folder with at least one ZIP is one
+  card.
 - `3211 with screenshot` — games of the section with a preview (prefer
   `done` game shot, else first `done`, else first `desktop`).
 - `done 2635 (8979 zips)` — per status: number of **games** (cards) plus
@@ -435,13 +437,14 @@ the coverage `info N folders` / `N without info`):
   gameinfo join is empty.
 - `index.json: …` (or `index-pd.json` / `index-utils.json` /
   `index-magazine.json` / `index-falcon.json` for those sections),
-  `gameinfo: …` — active index mtime and gameinfo generation timestamp.
+  `gameinfo: …` — active index mtime and gameinfo generation timestamp. The
+  full-index merge is reported in the loading progress.
 
 ## Missing ZIPs
 
-The catalog is built from the screenshot index + gameinfo **without any
-filesystem scan**, so it also lists games/ZIPs that are not synced locally
-yet. The app therefore resolves ZIP existence **and** the displayed
+The catalog is built from `full-index.json.gz` (merged with the screenshot
+index) and gameinfo **without any filesystem scan**, so it also lists
+games/ZIPs that are not synced locally yet. The app therefore resolves ZIP existence **and** the displayed
 `ROOT`/`PATCH`/`BOTH` layer on demand from the actual filesystem (cached), so
 a ZIP moved between layers still shows where it really lives, and it marks
 absent files:
@@ -551,8 +554,10 @@ time), so browsing stays responsive.
 
 ## Catalog data (Download from FTP)
 
-The catalog is built from the screenshot index and the gameinfo JSONs; without
-them the catalog is empty. `ScreenshotDirectory` contains the generated **ZIP
+The catalog is built from `full-index.json.gz` (in the gameinfo asset) merged
+with the screenshot index and the gameinfo JSONs. With only the gameinfo asset
+the catalog is complete but has no previews/status yet; the screenshots add
+them. Without either asset the catalog is empty. `ScreenshotDirectory` contains the generated **ZIP
 boot-state previews** (loaders, desktops, text screens, …), not AtariLegend
 images; see *Screenshots: actual ZIP boot state* in the root README. AtariLegend's
 curated screenshots are separate and only appear in the AtariLegend dialog.
@@ -706,9 +711,12 @@ release date and crew info inline; Contents are shown per release when they add
 information. The Trivia tab lists only real `fact`/`note` entries, collected from
 the matching menu appearances (Wikipedia stubs are excluded) and merged by
 text+url with the source menu shown. There is no Crew tab, dropdown or release
-selector. The catalogue is preloaded at startup; hash matching remains in the data layer but is not used
-for visibility. The dialog is metadata-only (no media tab and no card-preview
-fallback yet).
+selector. The catalogue is preloaded at startup. Matches use the precomputed disk-image
+hashes from `gameinfo/full-index.json.gz` (exact, no ZIP decoding); a renamed
+ZIP is resolved by its container fingerprint (ZIP central directory). If no
+hash entry exists, normalised title + crew/cracker/year metadata is the
+fallback (`likely`). The dialog is metadata-only (no media tab and no
+card-preview fallback yet).
 
 ## Catalog-data update check
 
@@ -757,11 +765,11 @@ FTP, links to the original PirateFinder project and carries a clear
 ## Catalog coverage
 
 Conversely, a ZIP that exists in your `RootDirectory`/`PatchDirectory` but is
-in **neither** the screenshot index nor gameinfo does **not** appear in the
-catalog at all — the catalog is artifact-driven, not a tree listing. Such files
-are only reachable in the folder browser (`T`); regenerate the artifacts
-(`shotgen index`, `gameinfo-gen extract`) to bring them into the catalog. The
-displayed `ROOT`/`PATCH`/`BOTH` layer is always resolved from your own copy
+in **neither** the full index, the screenshot index nor gameinfo does **not**
+appear in the catalog — the catalog is artifact-driven, not a live tree
+listing. Such files are only reachable in the folder browser (`T`); run
+`full-index-gen` (and, for previews, `shotgen`) to bring them into the catalog.
+The displayed `ROOT`/`PATCH`/`BOTH` layer is always resolved from your own copy
 (see above), never from the published index. See
 [`DECISION-catalog-data-source.md`](../decisions/DECISION-catalog-data-source.md).
 
