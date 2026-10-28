@@ -14,6 +14,23 @@ import 'package:marcer_desktop/catalog_assets.dart';
 import 'package:marcer_desktop/piratefinder_data.dart';
 import 'package:marcer_desktop/widgets/asset_update_dialog.dart';
 
+class _FakePirateFinderDownloader implements PirateFinderDownloader {
+  int calls = 0;
+
+  @override
+  Future<void> download({
+    required PirateFinderRemoteAsset asset,
+    required String targetDir,
+    PirateFinderProgress? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    calls++;
+    Directory(targetDir).createSync(recursive: true);
+    File('$targetDir/${asset.file}').writeAsStringSync('fake catalogue');
+    onProgress?.call('Downloading…', 1, 1);
+  }
+}
+
 class _FakeAtariLegendFetcher implements AtariLegendFetcher {
   int latestCalls = 0;
   int fetchCalls = 0;
@@ -252,6 +269,79 @@ void main() {
       );
     },
   );
+
+  testWidgets('PirateFinder update reloads the catalog', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tmp = Directory.systemTemp.createTempSync('asset_dialog_pf_update');
+    addTearDown(() {
+      if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+    });
+    Directory('${tmp.path}/root').createSync();
+
+    final assets = AssetUpdateController(fetcher: (_) async => '{}');
+    assets.config = DesktopConfig(rootDirectory: '${tmp.path}/root');
+    await assets.check(force: true);
+
+    final downloader = _FakePirateFinderDownloader();
+    final pf =
+        PirateFinderDataController(
+            fetcher: (_) async {
+              return jsonEncode({
+                'generated_at': '2026-10-24T12:34:16Z',
+                'source': {'tag': 'catalogue-2026-10-19'},
+                'assets': {
+                  'atari-st': {
+                    'file': 'piratefinder-catalog-atari-st.json.gz',
+                    'size': 10,
+                    'sha256': 'abc',
+                  },
+                },
+              });
+            },
+            downloader: downloader,
+          )
+          ..config = DesktopConfig(
+            rootDirectory: '${tmp.path}/root',
+            gameinfoDirectory: '${tmp.path}/data',
+            appDir: tmp.path,
+          );
+    await pf.check(force: true);
+    var applied = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => showAssetUpdateDialog(
+                  context,
+                  controller: assets,
+                  pirateFinder: pf,
+                  onApplied: () => applied++,
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Install'), findsOneWidget);
+    await tester.tap(find.text('Install'));
+    await tester.pumpAndSettle();
+
+    expect(downloader.calls, 1);
+    expect(applied, 1);
+    expect(find.text('up to date'), findsOneWidget);
+    expect(find.text('Install'), findsNothing);
+  });
 
   testWidgets('AtariLegend only checks on demand, then offers an update', (
     tester,

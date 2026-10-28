@@ -89,7 +89,9 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
     final pf = widget.pirateFinder;
     if (pf == null || pf.busy) return;
     _cancelRequested = false;
-    await pf.update(isCancelled: () => _cancelRequested);
+    final ok = await pf.update(isCancelled: () => _cancelRequested);
+    if (!mounted) return;
+    if (ok) widget.onApplied();
   }
 
   Future<void> _updateAtariLegend() async {
@@ -142,8 +144,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                           SizedBox(width: 8),
                           Text(
                             'checking…',
-                            style:
-                                TextStyle(fontSize: 11, color: Colors.grey),
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
                           ),
                         ],
                       ),
@@ -256,10 +257,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                     ),
                     const Text(
                       'manual check only — no auto-check',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFF7A7A7A),
-                      ),
+                      style: TextStyle(fontSize: 10, color: Color(0xFF7A7A7A)),
                     ),
                   ],
                 ),
@@ -485,8 +483,7 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
         (dataPresent ? 'version unknown (data present)' : 'not installed');
     final pending = c.isPending(asset);
     final updating = c.updatingAsset == asset;
-    final busy =
-        c.busy || c.checking || (widget.pirateFinder?.busy ?? false);
+    final busy = c.busy || c.checking || (widget.pirateFinder?.busy ?? false);
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -567,8 +564,9 @@ class _AssetUpdateDialogState extends State<AssetUpdateDialog> {
                     style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50)),
                   ),
                 OutlinedButton(
-                  onPressed:
-                      busy ? null : () => c.check(force: true, manual: true),
+                  onPressed: busy
+                      ? null
+                      : () => c.check(force: true, manual: true),
                   child: const Text('Check'),
                 ),
                 if (pending) ...[
