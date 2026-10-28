@@ -300,188 +300,52 @@ curl -X POST http://<server>:8080/hook/screenshots
 
 ---
 
-## 6. Umsetzungsschritte
+## 6. Offene Umsetzungsschritte
 
-### Phase 0 – Vorbereitung
+Erledigt sind `tools/archive-sync` (plan/sync/status, Größenvergleich, atomare
+Downloads), `tools/asset-publish` für Gameinfo (Signatur, ZIP, FTP-Upload,
+State/Retry) sowie die Plan-/README-Verknüpfung.
 
-- [x] Plan als Markdown in `docs/PLAN-docker-pipeline.md` ablegen.
-- [ ] Diesen Plan freigeben.
-- [ ] Env-Variablen-Namen und State-Layout finalisieren.
-- [ ] FTP-Schreibrecht auf `/Uploads/MarcerGameDVDLauncher-assets/` prüfen.
-- [ ] GitHub-PAT mit Release-/Asset-Schreibrecht prüfen.
-- [ ] Server-Mounts und UID/GID für die Bind-Mounts dokumentieren.
-- [ ] Entscheiden, ob der Container `MARCER_OUT_DIR` und `MARCER_DATA_DIR`
-      schreibend mounten darf (benötigt für Index/Assets).
+Offen:
 
-### Phase 1 – `archive-sync`
+- **asset-publish:** Screenshot-Quelle inkl. Excludes, Ausgabepfad und
+  `--dry-run`-Prüfung.
+- **asset-manifest:** GitHub-Token-API (Release finden/erstellen,
+  `latest.json` ersetzen), `--skip-unchanged`, `gh`-Fallback behalten.
+- **catalog-pipeline:** Step-Runner, Änderungsabbildung, Monatslauf,
+  Screenshot-Hook, globaler Lock + `shotgen.lock`-Prüfung, HTTP-Endpoints,
+  Scheduler-State, Dirty-Pointer-Retry, Run-Reports, CLI, Tests.
+- **Docker/CI:** Dockerfile, Compose, `.env.example`, `.dockerignore`,
+  GHCR-Workflow, lokaler Build.
+- **Dokumentation:** Root-README-Tool-Tabelle, AGENTS-Modulübersicht,
+  Tool-READMEs, GETTING-STARTED-Abschnitt.
+- **Verifikation/Rollout:** Unit-Tests, echter FTP-Lesezugriff,
+  `--dry-run`-Läufe, No-Op-Test, Container-Start, HTTP-Checks, erster
+  manueller `/run`, Screenshot-Hook, Scheduler, Backup des State-Verzeichnisses.
 
-- [x] `tools/archive-sync/` anlegen (MIT-Header, `run.sh`, README).
-- [x] Env-/Pfad-Loader inkl. `MARCER_FTP_REMOTE` implementieren.
-- [x] FTP-Client: Connect, passive Mode, MLSD mit LIST/SIZE-Fallback,
-      Retry/Reconnect.
-- [x] Remote-Baum rekursiv lesen, Excludes und Path-Traversal-Schutz.
-- [x] Lokalen Union-Baum (Root/Patch, Patch gewinnt) und Case-Behandlung
-      implementieren.
-- [x] `plan`/`sync`: `new`, `changed`, `in_sync`, `local_only`, `downloads`
-      auf Basis des Größenvergleichs.
-- [x] Atomaren Download (`.part`, Größenprüfung, `os.replace`, mtime setzen)
-      implementieren.
-- [x] Reports `changes.json`/`changes.txt` schreiben (kein `state.json`).
-- [x] CLI `plan|sync|status`, `--dry-run`, `--force`, `--only`, `--exclude`.
-- [x] Parallele FTP-Listing-Worker (`--workers`, `MARCER_SYNC_WORKERS`).
-- [x] Unvollständige Verzeichnisse im Report sicher behandeln.
-- [x] Unit-Tests (Vergleich, Patch-Vorrang, kein Löschen, Traversal, Report).
-- [x] README mit Beispielen und Sicherheitsregeln.
-- [x] Read-only-Test gegen echten FTP (`plan`, Scope `pd` und `A`).
+## 7. Offene Punkte und Risiken
 
-### Phase 2 – `asset-publish`
-
-- [x] `tools/asset-publish/` anlegen (MIT-Header, `run.sh`, README).
-- [ ] Screenshot- und Gameinfo-Quellen inklusive Excludes implementieren.
-      (Gameinfo erledigt; Screenshots offen.)
-- [x] Signatur über sortierte `(relpath, size, sha256)`-Liste implementieren.
-- [x] Deterministischen Python-ZIP-Packer implementieren.
-- [ ] Ausgabepfade für Screenshots- und Gameinfo-ZIPs implementieren.
-      (Gameinfo erledigt; Screenshots offen.)
-- [x] FTP-Upload direkt unter dem finalen Namen mit `SIZE`-Prüfung
-      (Marcer-FTP erlaubt kein Rename/Delete; nur mit `--upload`; ohne Flag
-      rein lokal; `latest.json` wird danach automatisch über `asset-manifest`
-      aktualisiert).
-- [x] Skip-Logik bei unveränderter Signatur, `--force`, `--dry-run`.
-- [x] Maschinenlesbares Ergebnis (`created`, `uploaded`, `skipped`, `archive`,
-      `error` mit `stage`).
-- [x] State atomar schreiben (Default `<MARCER_DATA_DIR>/.asset-publish-state.json`,
-      im Container `MARCER_STATE_DIR/asset-publish/state.json`; inkl.
-      `uploaded`/`manifest_dirty` für Retries).
-- [x] Unit-Tests (Determinismus, Excludes, Skip, Force, Upload-Reihenfolge,
-      FTP-Fehler, Manifest-Retry).
-- [x] README mit Publish-Regeln.
-- [x] `--dry-run` gegen die echten Ordner prüfen.
-
-### Phase 3 – `asset-manifest` Token-API
-
-- [ ] `MARCER_GITHUB_TOKEN` und Repo/Tag-Konfiguration ergänzen.
-- [ ] GitHub-API: Release per Tag finden/erstellen.
-- [ ] GitHub-API: `latest.json` als Asset ersetzen.
-- [ ] `--skip-unchanged` für identischen Pointer-Inhalt.
-- [ ] `gh`-Fallback für lokale Dev-Läufe erhalten.
-- [ ] Unit-Tests mit gemockter GitHub-API.
-- [ ] README aktualisieren.
-
-### Phase 4 – `catalog-pipeline`
-
-- [ ] `tools/catalog-pipeline/` anlegen (MIT-Header, `run.sh`, README).
-- [ ] Step-Runner mit Timeout, Logging und Fehlerbehandlung.
-- [ ] Änderungsabbildung auf `gameinfo`, `crews` und betroffene Scopes.
-- [ ] Monatslauf implementieren (ohne Screenshot-Paketierung).
-- [ ] Screenshot-Hook implementieren.
-- [ ] Globalen Lock und `shotgen.lock`-Prüfung implementieren.
-- [ ] HTTP-Endpoints `/healthz`, `/status`, `/run`, `/hook/screenshots`.
-- [ ] Busy-Antwort `409` und Job-Status.
-- [ ] Scheduler 1. des Monats 03:00 Europe/Berlin.
-- [ ] Scheduler-State gegen Doppelläufe nach Restart.
-- [ ] „dirty pointer“-Retry implementieren.
-- [ ] Run-Reports unter `/state/runs/` schreiben.
-- [ ] CLI `serve`, `run --once`, `status`.
-- [ ] Unit-Tests (Mapping, No-Op, HTTP, Scheduler, Retry).
-- [ ] README mit Betrieb und Triggern.
-- [ ] Lokaler `run --once --dry-run` gegen die Shared-Ordner.
-
-### Phase 5 – Docker und CI
-
-- [ ] `docker/Dockerfile` erstellen (Python-venv + `olefile`).
-- [ ] Non-root-Betrieb über `PUID`/`PGID` vorbereiten.
-- [ ] `docker/compose.yml` mit Mounts, Healthcheck und Port `8080`.
-- [ ] `docker/.env.example` ohne echte Secrets.
-- [ ] `.dockerignore` für einen kleinen Build-Kontext.
-- [ ] `.github/workflows/pipeline-image.yml` für GHCR (amd64).
-- [ ] Image lokal bauen und `docker compose config` prüfen.
-- [ ] `docker/README.md` für Deployment schreiben.
-
-### Phase 6 – Dokumentation
-
-- [ ] Root-`README.md`: neue Tools in der Tool-Tabelle ergänzen.
-- [ ] `AGENTS.md`: Module-Overview um die neuen Tools und den Container
-      erweitern.
-- [x] Plan in `docs/README.md` verlinken.
-- [ ] Tool-READMEs in `docs/README.md` ergänzen.
-- [ ] `docs/GETTING-STARTED.md`: kurzen Abschnitt „Server-Automatisierung“
-      ergänzen.
-- [ ] Tool-READMEs für `archive-sync`, `asset-publish`, `catalog-pipeline`.
-- [ ] Keine Secrets, Host-Pfade oder Tokens im Repo dokumentieren.
-
-### Phase 7 – Verifikation
-
-- [ ] Alle neuen Unit-Tests laufen mit dem Repo-`.venv`.
-- [ ] `archive-sync plan` gegen echten FTP (read-only).
-- [ ] `asset-publish --dry-run` für Screenshots und Gameinfo.
-- [ ] `asset-publish --force --dry-run` prüft ZIP-Erstellung.
-- [ ] `pipeline run --once --dry-run` prüft die Schrittfolge.
-- [ ] No-Op-Test: zweiter Lauf ohne Änderungen erzeugt keinen Upload.
-- [ ] Docker-Image baut und startet.
-- [ ] `GET /healthz` und `GET /status` liefern plausible Antworten.
-- [ ] `POST /run` und `POST /hook/screenshots` liefern `202`; paralleler
-      Aufruf liefert `409`.
-- [ ] Screenshot-Hook erzeugt/uploadet nur bei geändertem Inhalt.
-- [ ] `latest.json` wird nur nach erfolgreichem Upload aktualisiert.
-- [ ] Fehlerfall: FTP-Abbruch hinterlässt höchstens eine unvollständige
-      finale Datei; der nächste Lauf überschreibt sie (kein Remote-Delete
-      möglich).
-
-### Phase 8 – Rollout
-
-- [ ] `docker compose up -d` auf dem Server.
-- [ ] Ersten manuellen `/run` ausführen und Log/Report prüfen.
-- [ ] Prüfen, dass `gameinfo`/`crews`/`index` aktualisiert wurden.
-- [ ] Prüfen, dass unveränderte Assets nicht erneut hochgeladen wurden.
-- [ ] Screenshot-Lauf auf dem Dev-Server starten.
-- [ ] `POST /hook/screenshots` ausführen und Upload/Pointer prüfen.
-- [ ] Monatlichen Scheduler aktivieren und den nächsten Termin prüfen.
-- [ ] Alten manuellen ftp-sync-Workflow deaktivieren.
-- [ ] State-Verzeichnis in die Server-Backups aufnehmen.
-
----
-
-## 7. Testmatrix
-
-| Bereich | Fälle |
-|---|---|
-| Sync | neu, geändert, in sync, local only, Patch-Vorrang, Case-Kollision, Path-Traversal, parallele Listing-Worker, unvollständige Verzeichnisse, Abbruch/Neustart (kein Resume) |
-| Publish | gleiche Signatur, geänderte Signatur, `--force`, Excludes, deterministisches ZIP, Upload-Fehler |
-| Pipeline | XLS-Änderung, neue ZIPs, neuer Ordner, Scope-Mapping, No-Op, parallele Requests, Scheduler, Pointer-Retry |
-| GitHub | Release vorhanden/fehlt, Asset vorhanden/fehlt, identischer Pointer, API-Fehler |
-| Docker | Build, Compose-Config, Healthcheck, non-root-Schreibrechte |
-| Integration | Monatslauf, Screenshot-Hook, echter FTP-Lesezugriff, echter Upload im Testordner |
-
----
-
-## 8. Offene Punkte und Risiken
-
-- **FTP-mtime:** Verlässlichkeit der Server-Zeiten ist unklar. Im MVP nur
-  diagnostisch; später `--use-mtime` prüfen.
-- **Gleich große, geänderte Dateien:** werden im MVP nicht erkannt. Später
-  optionaler Hash-Modus (z. B. für XLS).
-- **500-MB-Uploads:** werden durch die Regel „Screenshots nur im Hook“
-  vermieden; der Monatslauf lädt keine Screenshots hoch.
+- **FTP-mtime:** Verlässlichkeit der Server-Zeiten unklar; im MVP nur
+  diagnostisch, später `--use-mtime` prüfen.
+- **Gleich große, geänderte Dateien:** im MVP nicht erkannt; später optionaler
+  Hash-Modus (z. B. für XLS).
 - **Schreibrechte:** FTP-User und NAS-Mounts müssen Schreiben erlauben.
 - **Parallele Dev-/Server-Läufe:** `shotgen index` und `shotgen run` dürfen
   nicht gleichzeitig auf denselben Index schreiben; Lock-Prüfung nötig.
-- **Dateisperren auf NAS:** `flock` kann je nach NAS unzuverlässig sein;
-  zusätzlich PID-/Heartbeat-Marker im State prüfen.
+- **Dateisperren auf NAS:** `flock` kann unzuverlässig sein; zusätzlich
+  PID-/Heartbeat-Marker im State prüfen.
 - **GitHub-PAT:** muss Releases/Assets im Zielrepo schreiben dürfen.
-- **Crew-Images:** bleiben vorerst manuell; später eigener Pipeline-Schritt.
+- **Crew-Images:** bleiben vorerst manuell; später eigener Schritt.
 - **Lokale Löschungen:** werden nicht automatisch nachgezogen; optionales
   `--prune` nur mit ausdrücklicher Freigabe.
 
----
+## 8. Definition of Done
 
-## 9. Definition of Done
-
-- [ ] Monatslauf läuft unbeaufsichtigt und ist per HTTP manuell auslösbar.
-- [ ] Screenshot-Hook verpackt und veröffentlicht nur nach dem Dev-Lauf.
-- [ ] Unveränderte Daten erzeugen keinen Upload.
-- [ ] `latest.json` wird nur nach erfolgreichem Upload aktualisiert.
-- [ ] `screenshot-gen index` läuft nur für betroffene Scopes.
-- [ ] Kein `shotgen run`, Hatari oder Xvfb im Container.
-- [ ] State, Reports und Locks überleben Container-Neustarts.
-- [ ] Tests und Doku sind aktualisiert; keine Secrets im Repo.
+- Monatslauf läuft unbeaufsichtigt und ist per HTTP manuell auslösbar.
+- Screenshot-Hook verpackt und veröffentlicht nur nach dem Dev-Lauf.
+- Unveränderte Daten erzeugen keinen Upload; `latest.json` wird nur nach
+  erfolgreichem Upload aktualisiert.
+- `screenshot-gen index` läuft nur für betroffene Scopes; kein `shotgen run`,
+  Hatari oder Xvfb im Container.
+- State, Reports und Locks überleben Container-Neustarts.
+- Tests und Doku sind aktualisiert; keine Secrets im Repo.

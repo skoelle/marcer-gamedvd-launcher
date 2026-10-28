@@ -7,7 +7,7 @@ import 'dart:io';
 
 import 'package:marcer_catalog/marcer_catalog.dart';
 
-/// Starts Hatari for one ZIP (SPEC.md §12). Non-blocking: the process runs in
+/// Starts Hatari for one ZIP (SPEC-launcher.md §12). Non-blocking: the process runs in
 /// the background and the caller is notified when it exits.
 ///
 /// Stderr/stdout are drained from the start (a full pipe would otherwise block
@@ -75,7 +75,7 @@ class _TailBuffer {
 }
 
 /// Launches Hatari for [zipPath]. Returns a [HatariProcess] on success or an
-/// error message when the configuration/ZIP is invalid (SPEC.md §5.4, E3/E4,E7).
+/// error message when the configuration/ZIP is invalid (SPEC-launcher.md §5.4, E3/E4,E7).
 Future<({HatariProcess? process, String? error})> launchHatari(
   DesktopConfig config,
   String zipPath, {

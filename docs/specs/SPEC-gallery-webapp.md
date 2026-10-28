@@ -16,11 +16,11 @@ the development machine on 2026-10-11 against the real data directories.
 Everything else is *(untested)* and must be confirmed during implementation.
 
 **Related documents:**
-- [`SPEC.md`](SPEC.md) — launcher specification (overlay rules, section 7)
+- [`SPEC-launcher.md`](SPEC-launcher.md) — launcher specification (overlay rules, section 7)
 - [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) — screenshot pipeline, `index.json` schema
-- [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md) — game metadata sources and data model
-- [`DECISION-app-architecture.md`](DECISION-app-architecture.md) — why this app is Python + HTML (decision record)
-- [`tools/screenshot-gen/shotgen.py`](../tools/screenshot-gen/shotgen.py) — former static gallery (`html` command, `GALLERY_TEMPLATE`) — the design reference this spec replaced; both removed in M6
+- [`ANALYSIS-game-data.md`](../analysis/ANALYSIS-game-data.md) — game metadata sources and data model
+- [`DECISION-app-architecture.md`](../decisions/DECISION-app-architecture.md) — why this app is Python + HTML (decision record)
+- [`tools/screenshot-gen/shotgen.py`](../../tools/screenshot-gen/shotgen.py) — former static gallery (`html` command, `GALLERY_TEMPLATE`) — the design reference this spec replaced; both removed in M6
 
 ---
 
@@ -73,7 +73,7 @@ Everything else is *(untested)* and must be confirmed during implementation.
 - **No user accounts, no write-back** (no favorites, no annotations), no
   configuration UI (config file only).
 - No modification of `tools/screenshot-gen` beyond removing the `html`
-  subcommand at the end of the migration (milestone M6, section 11).
+  subcommand at the end of the migration.
 
 ---
 
@@ -1272,30 +1272,7 @@ Manual test pass (required before delivery, per AGENTS.md policy):
 
 ---
 
-## 11. Milestones
-
-- **M1** Skeleton: `tools/gallery/` with `run.sh`, config, static shell,
-  `/api/meta` + static serving. Checkable: page loads, stats visible.
-- **M2** List API + grid: join (4.1–4.2), pagination, `with_screenshot`
-  default, design parity with the old gallery. Checkable: side-by-side with
-  `shotgen html`.
-- **M3** Discovery: search, all facets/filters, sorting, letter nav,
-  statistics bar, URL state. Checkable: section 10 items 3–5.
-- **M4** Metadata views: hover panels, PD/Utils tabs, variant grouping
-  completed, screenshots-only degradation. Checkable: items 6 + degraded
-  mode.
-- **M5** Lightbox + keyboard + deep links. Checkable: items 7–9.
-- **M6** Migration & docs: remove `shotgen html` + `GALLERY_TEMPLATE` from
-  `tools/screenshot-gen/shotgen.py` (keep `run.sh html` failing with a
-  pointer to the new tool), update `tools/screenshot-gen/README.md`,
-  `tools/gallery/README.md`, root `README.md` (usage) and `AGENTS.md`
-  (tools overview), and sync `ANALYSIS-game-data.md` §5.1 +
-  `DECISION-app-architecture.md` §5 with `MARCER_DATA_DIR`. Checkable:
-  section 10 full pass + docs review.
-
----
-
-## 12. Conformance Checklist
+## 11. Conformance Checklist
 
 A conforming implementation satisfies all of the following.
 
@@ -1388,4 +1365,4 @@ A conforming implementation satisfies all of the following.
 
 ## License
 
-Licensed under the [MIT License](../LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+Licensed under the [MIT License](../../LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

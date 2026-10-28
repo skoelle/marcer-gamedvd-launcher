@@ -116,7 +116,7 @@ Future<void> main() async {
   // decision 2026-10-15); otherwise the configured size, centered. The
   // configured size is also the restore size under a maximized start.
   WidgetsFlutterBinding.ensureInitialized();
-  // macOS: the app is not sandboxed (see docs/DECISION-macos-distribution.md),
+  // macOS: the app is not sandboxed (see docs/decisions/DECISION-macos-distribution.md),
   // so file_picker must skip its user-selected entitlement check, otherwise
   // every picker call fails with ENTITLEMENT_NOT_FOUND.
   if (Platform.isMacOS) {
@@ -617,7 +617,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  /// Surfaces launch errors (SPEC.md E3/E4/E7) and download failures as a
+  /// Surfaces launch errors (SPEC-launcher.md E3/E4/E7) and download failures as a
   /// modal, once per error.
   void _onControllerChanged() {
     if (!mounted) return;

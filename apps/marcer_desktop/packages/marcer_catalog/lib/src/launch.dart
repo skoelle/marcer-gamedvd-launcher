@@ -93,7 +93,7 @@ const List<HatariVariant> kFalconVariants = [
   ),
 ];
 
-/// Builds the Hatari command for one ZIP (SPEC.md §12.1).
+/// Builds the Hatari command for one ZIP (SPEC-launcher.md §12.1).
 ///
 /// `{cfg}` → the Hatari config file (`Hatari.ConfigFile`, or the bundled
 /// fallback next to the executable) and `{zip}` → the effective ZIP path.
@@ -107,7 +107,7 @@ class HatariCommand {
 }
 
 /// Substitutes `{cfg}` / `{zip}` in [template] and splits it into arguments
-/// (double/single quotes group a token; SPEC.md §12.1, E12).
+/// (double/single quotes group a token; SPEC-launcher.md §12.1, E12).
 List<String> hatariArguments(String template, String cfgPath, String zipPath) {
   final expanded = template
       .replaceAll('{cfg}', cfgPath)
@@ -148,7 +148,7 @@ List<String> splitCommandLine(String line) {
   return args;
 }
 
-/// Validates the Hatari launch configuration (SPEC.md §5.4, E3/E4).
+/// Validates the Hatari launch configuration (SPEC-launcher.md §5.4, E3/E4).
 /// Returns a clear error message, or null when every requirement holds.
 ///
 /// - `Hatari.Executable` must be set and exist.
@@ -183,7 +183,7 @@ String? validateHatariConfig(DesktopConfig config, {bool requireZip = true}) {
 
 /// Builds the full Hatari command for [zipPath], or returns an error message.
 ///
-/// [zipPath] must exist (SPEC.md E7 handles the vanished-ZIP case as a modal).
+/// [zipPath] must exist (SPEC-launcher.md E7 handles the vanished-ZIP case as a modal).
 /// [variant] appends its extra arguments and, when it requires a TOS ROM,
 /// `--tos <appDir/file>` (error when that file is missing).
 ({HatariCommand? command, String? error}) buildHatariCommand(

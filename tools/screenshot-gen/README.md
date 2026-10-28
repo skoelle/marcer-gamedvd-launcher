@@ -5,7 +5,7 @@ ZIP in Hatari on a virtual X display. The result documents the actual **boot
 state** of every ZIP (game, crack intro, TOS desktop, text screen or no usable
 image) and the differences between release/crack variants — it is deliberately
 not a collection of curated in-game or AtariLegend screenshots. See
-[`SPEC-screenshot-generator.md`](../../docs/SPEC-screenshot-generator.md) for the
+[`SPEC-screenshot-generator.md`](../../docs/specs/SPEC-screenshot-generator.md) for the
 full specification.
 
 ## Requirements
@@ -635,7 +635,7 @@ this tool (`run`, `detect`, `reclassify`, all `--retry-*`) works on
 Reversely, the app's `desktop text` / `desktop black` status filters are
 strictly `status: desktop`, so a curated entry that moves to `done` leaves
 those filters and shows up as a normal `done` card with its kind as text.
-The full matrix is in `docs/SPEC-screenshot-generator.md` §10.5.
+The full matrix is in `docs/specs/SPEC-screenshot-generator.md` §10.5.
 
 ### Excluded directories
 

@@ -39,9 +39,9 @@ source.
 the app.
 
 For the full feature list and keyboard shortcuts see
-[`apps/marcer_desktop/README.md`](../apps/marcer_desktop/README.md). The legacy
+[`SPEC-desktop.md`](../specs/SPEC-desktop.md). The legacy
 console launcher has its own documentation:
-[`apps/marcer_console/README.md`](../apps/marcer_console/README.md).
+[`apps/marcer_console/README.md`](../../apps/marcer_console/README.md).
 
 ---
 
@@ -164,7 +164,7 @@ The tool and its workflow were introduced by its author in this
 (group membership / Facebook login required).
 
 For headless/server automation the repo now includes the Python
-[`tools/archive-sync`](../tools/archive-sync/README.md) tool (`plan` / `sync` /
+[`tools/archive-sync`](../../tools/archive-sync/README.md) tool (`plan` / `sync` /
 `status`, change report, no interactive key presses). It downloads into
 `PatchDirectory` just like `ftp-sync`; see its README for the environment
 variables and the report files.
@@ -414,7 +414,7 @@ without a patch directory still need the app to live in a writable folder.
 
 ## 9. Related documentation
 
-- [`apps/marcer_desktop/README.md`](../apps/marcer_desktop/README.md) — full desktop feature and configuration reference
-- [`apps/marcer_console/README.md`](../apps/marcer_console/README.md) — legacy console launcher and the original `ftp-sync` notes
-- [`DECISION-macos-distribution.md`](DECISION-macos-distribution.md) — why the app is not sandboxed and the Gatekeeper/notarization background
-- [`SPEC.md`](SPEC.md) — launcher behavior and overlay/patch rules
+- [`apps/marcer_desktop/README.md`](../../apps/marcer_desktop/README.md) — build/run instructions; behavior is in `SPEC-desktop.md`
+- [`apps/marcer_console/README.md`](../../apps/marcer_console/README.md) — legacy console launcher and the original `ftp-sync` notes
+- [`DECISION-macos-distribution.md`](../decisions/DECISION-macos-distribution.md) — why the app is not sandboxed and the Gatekeeper/notarization background
+- [`SPEC-launcher.md`](../specs/SPEC-launcher.md) — launcher behavior and overlay/patch rules

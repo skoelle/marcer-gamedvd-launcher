@@ -4,7 +4,7 @@ Dynamic replacement for the former static `shotgen html` gallery (removed):
 browses the
 screenshot archive together with the game metadata as a searchable,
 filterable card grid with lightbox, keyboard control and deep links.
-See [`SPEC-gallery-webapp.md`](../../docs/SPEC-gallery-webapp.md) for the full
+See [`SPEC-gallery-webapp.md`](../../docs/specs/SPEC-gallery-webapp.md) for the full
 specification.
 
 ## Requirements

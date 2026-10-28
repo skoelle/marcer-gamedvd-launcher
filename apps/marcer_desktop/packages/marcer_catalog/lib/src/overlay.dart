@@ -5,7 +5,7 @@ import 'dart:io';
 
 import 'entry.dart';
 
-/// Overlay merge per `SPEC.md` §7 (R11–R17).
+/// Overlay merge per `SPEC-launcher.md` §7 (R11–R17).
 ///
 /// Read-only: never writes into [rootDir] or [patchDir].
 class OverlayBrowser {

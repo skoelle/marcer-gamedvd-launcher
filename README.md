@@ -32,253 +32,34 @@ Save, the manual screenshot curation described below.
 
 ### ✨ Features
 
-- **Gallery-style catalog grid** as the default view — every game as a card
-  with its best screenshot, section tabs (`games` / `pd` / `utils` /
-  `magazines` / `falcon` / `crews`; `games` is the former `cracked` section) and
-  global filters: search, status, publisher, crew, cracker, language, year,
-  tri-state `raw` / `pasti` / `boxscan`, `TOS/Bad`, and a combined sort
-  dropdown (`name asc` … `crew desc`, same width as `TOS/Bad`). The
-  `magazines` tab shows the `Bonus/Magazine Cover Disks` collection
-  (index-magazine.json) with one filename-derived card per issue (ST-Computer
-  GEMDOS cover disks are extracted and launched via `-d`/`--auto`); the
-  `falcon` tab shows `Falcon 030/Title Sorted` (index-falcon.json) and
-  launches its titles as a Falcon 030 (TOS 4.04). The `crews` tab (last tab)
-  shows the curated crew selection (currently 128 groups, cap 128) by direct release ZIPs from `crews.json` (generated
-  by `tools/crew-analysis`); it prefers a curated cracktro image from
-  `crew-images.json`, then the best release screenshot, then a group icon. Its
-  detail panel lists all releases of the selected crew and a release click
-  opens the existing lightbox over that crew's release list (`←`/`→` walk the
-  games). Double-clicking a crew card
-  opens a release browser: all releases as a responsive screenshot grid
-  (up to 4 columns) on the left, a sidebar on the right with the shared crew
-  overview above the selected ZIP info; the header spans both and shows the
-  main filter bar's search field (`Search  ( / )`) with the sort menu directly
-  behind it on the left, the crew name centred and the shared `× Close (Esc)`
-  button at the right (icon-only with tooltip on narrow windows; name/year
-  ascending/descending, default name asc; the
-  `skipped_disk_n` status is hidden for crew releases); arrow keys navigate,
-  Enter opens the normal lightbox over the currently filtered/sorted release
-  list (`←`/`→` walk the games; closing the browser follows the last shown
-  release) and P/Play launches. The PirateFinder-Catalog
-  block in the crew overview has a **More** button that opens a crew-only PF
-  lightbox with `Overview`, `Releases`, `Menus`, `Trivia` and `Sources`.
-- **Type-to-filter dropdowns** — every filter dropdown (publisher, crew,
-  cracker, language, year, genre/developers, status, sort, raw/pasti/boxscan,
-  TOS/Bad) opens a searchable, virtualized menu (only the visible rows are
-  built); the selected entry opens scrolled into view, `↑`/`↓` move the
-  highlight, `Enter` selects and the menu spans up to ¾ of the screen height.
-  Short lists get the same search field and look.
-- **Gallery-style detail sidebar** — Game info, the "This ZIP" table (File,
-  Status, **Kind**, Layer, Size, Path) and the full Release-variants table
-  (the open ZIP highlighted).
-- **⭐ Marcer's curated box scans & manuals** — the hand-curated `Boxscan/` and
-  `Manual/` folders shipped with the archive are a first-class part of the app.
-  Clickable `Box scans (N)` / `Manuals (N)` chips in the detail sidebar and
-  lightbox open a per-edition gallery with a full-screen viewer, or the grouped
-  manual list (scan/text PDFs, image-page manuals, PDFs/`.doc`/`.txt` in the OS
-  default app, `.msa` as info-only disk images). Discovered lazily for the
-  selected card — nothing is indexed or extracted up front. Nothing is bundled;
-  the app never modifies these curated files.
-- **Open the game folder** — ROOT/PATCH folder icons in the detail sidebar and
-  lightbox header open the selected card's game folder in the OS file manager
-  (grey ROOT, amber PATCH); only layers where the folder actually exists get
-  an icon.
-- **Optional AtariLegend metadata** — fetch the weekly
-  [AtariLegend](https://www.atarilegend.com/) database on demand from the
-  settings (**AtariLegend data** → **Download AtariLegend data**): genre,
-  developer, original credits/roles, boxscans/screenshots, reviews, magazines,
-  comments and the community score. The screenshots/boxscans inside that
-  dialog are AtariLegend's own curated images, separate from the generated ZIP
-  boot previews (see *Screenshots: actual ZIP boot state*).
-  Matched cards (including Falcon titles) get an **AtariLegend** button
-  in the detail sidebar and the lightbox, plus additional **Genre** and
-  **Developers** filter dropdowns; the Publisher filter then also matches
-  AtariLegend publishers. Nothing is bundled — the data is downloaded at
-  runtime and is **CC BY-NC-SA 4.0** (non-commercial, attribution, share-alike):
-  see [License](#license).
-- **Optional Pete Clarke Greaseweazle PirateFinder Catalog metadata** —
-  download the generic
-  [PirateFinder catalogue JSON](https://github.com/skoelle/piratefinder-catalog-json)
-  from the settings **Pete Clarke PirateFinder-Catalog** row
-  (**PirateFinder-Catalog** button; also shown in the first-run setup):
-  catalogue facts, crew histories, menu-disk appearances and real trivia
-  (`fact`/`note` entries from the matching menu releases). The data lives under `<GameinfoDirectory>/piratefinder/`, checked
-  at startup (release builds) and listed in the same **Catalog data** dialog as
-  gameinfo and screenshots. The row links to the
-  [original PirateFinder project](https://github.com/peteclarke-del/PirateFinder).
-  It is **CC BY-NC-SA 4.0**, not part of the Marcer catalog, never bundled and
-  never uploaded. The catalogue is preloaded at startup (the settings row shows its index
-  status). A `PirateFinder Crew Releases` section appears before the release
-  variants only for a title/crew match; it lists the matching crews and has a
-  right-aligned red `Crews` button. The dialog has `Release (N)`, `Menus (N)`,
-  `Trivia (N)` and `Sources` tabs; the Release tab lists each candidate with
-  its crew and release date, and crew/contents details inline. A crew's
-  PirateFinder block has a **More** action with the crew history/members,
-  all PF single releases and menus/packs, crew trivia and catalogue sources.
-- **Crew / cracker focus** — pick a crew or cracker and each card jumps to
-  *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
-  matching tolerates `&`/`and` and small typos).
-- **Clickable groups** — clicking a crew/cracker in the detail sidebar (or
-  the lightbox info panel) opens that group's ZIP in the lightbox; when no
-  ZIP matches, the lightbox opens with a "… ZIP not found —" hint.
-- **Full-screen lightbox** — integer-upscaled pixel-art-safe image with
-  clickable previous/next arrows **outside** the lightbox at the left/right
-  that also carry the neighbour title when the window is wide enough (arrow
-  only when space is tight, hidden at the first/last card and when the window
-  is too narrow, so they cannot be mistaken for switching the screenshot),
-  variant filmstrip with `+N` candidate badges, a scrollbar and a **favorite
-  star on every thumb** (`★` favorited, `☆` on the active variant — click or
-  `*` to toggle), candidate strip and the release-variant table; `←/→` cards,
-  `↑/↓` variants, `PgUp/PgDn` images, `M` promote the shown candidate to the
-  main image, `C` edit the shown variant's status/kind.
-- **Optional folder browser** (`T`) — the overlay tree (main + patch layer)
-  with layer labels and the virtual `Favorites` folder.
-- **Multi-variant cards** — a 2×2 grid of screenshots when a folder has
-  several ZIPs. For `with screenshot` / `any` / `done`, the default order is
-  `done game` → other `done` → `desktop`; if exactly one shown thumb is a
-  `done` game shot, the large game preview is shown instead. For every
-  concrete status filter (`desktop`, `no usable shots`, `pending`, …), the
-  selected status is ordered first and the 2×2 grid is shown even when there
-  is exactly one `done` thumb; the large single-image fallback shows the
-  selected status preview when no 2×2 grid applies. The default preview
-  prefers a `done` variant of kind `game` over e.g. `textscreen`, then other
-  `done`/`desktop` variants, then any preview (a `no_usable_shots` entry that
-  kept its last capture still shows it). ZIPs directly in the game folder
-  are listed before ZIPs from its subfolders (`Original/`, `STX/`, …) in the
-  variant table and lightbox filmstrip. Same rules as the gallery webapp.
-- **Local layer & missing ZIPs** — the card/variant layer badge
-  (`ROOT`/`PATCH`/`BOTH`) and the "This ZIP" **Layer** row are resolved from
-  the actual filesystem, not the published index: a ZIP moved from the patch
-  layer into the main folder shows `ROOT`, and `BOTH` when a card's variants
-  are split across layers. Launching still prefers the patch copy whenever it
-  exists. A card without any local ZIP gets a red `MISSING` badge, a single
-  absent variant is tagged in the lightbox filmstrip. The check is cached per
-  session — reload the settings to pick up files synced while the app runs.
-- **Download missing game folders (FTP)** — a `MISSING` catalog card shows a
-  **Download folder** button in the detail sidebar that pulls the card's whole
-  folder (all ZIP variants + subdirectories) recursively from the Marcer FTP
-  server into the patch layer (the root directory when no `PatchDirectory` is
-  set) and then clears the `MISSING`/layer badges in place. The folder is
-  resolved from the index rels, so a first ZIP nested in a subfolder
-  (`Original/`, `STX/`, …) or an undiscovered section tree never downloads
-  only that subfolder. Plain FTP (port 21,
-  or `host:port` for a non-standard port); the connection settings
-  (`Ftp.Host`/`Ftp.User`/`Ftp.Password`, optional `Ftp.RemoteBase`, default
-  `/GameDVD/`) are edited in the settings editor.
-  Existing local files are skipped, progress + **Cancel** show in the sidebar
-  and status bar, failures appear as a modal, and an unconfigured host shows a
-  hint instead of downloading.
-- **Catalog-data update check** — after the app self-update check a silent
-  startup check (release builds) fetches the small `latest.json` pointer
-  published by `tools/asset-manifest` from the GitHub `catalog-latest`
-  prerelease (**GitHub only, never the FTP**). An always-visible gray
-  **dataset** button in the top bar shows a green count badge when newer
-  `screenshots`/`gameinfo` archives are available; the dialog lists **game info
-  before screenshots** with the local vs. remote archive and per asset
-  **Update**/**Install** + **Skip this version** (skip is stored in
-  `<targetDir>/.marcer-assets.json` and cleared on update), verifies the
-  `sha256` when the pointer provides one and reloads the catalog after a
-  successful update.
-- **Gallery-style status bar** — section-aware coverage as separate games
-  segments (`3287 folders`, `3211 with screenshot`), status counts as
-  `done <games> (<zips> zips)`, gameinfo coverage (`gameinfo N folders` /
-  `N without gameinfo`), the active index mtime (`index.json` /
-  `index-pd.json` / `index-utils.json` / `index-magazine.json` /
-  `index-falcon.json`) and gameinfo
-  generation time;
-  the running app version (right-aligned).
-- **Status filter** — `with screenshot` / `any` / `done` / `desktop (only)` /
-  `desktop (any ZIP)` / `desktop text` / `desktop black` / `pending` /
-  `no usable shots (only)` / `no usable shots (any ZIP)` / … , available in
-  the five game sections (cracked, pd, utils, magazine, falcon; all default
-  to the configured `DefaultStatus`, normally `with_screenshot`). The Crews
-  tab has no screenshot-status filter.
-  `pending`, `desktop (any ZIP)`, `no usable shots (any ZIP)`,
-  `interrupted` and `skipped (disk 2+)` match when **at least one** ZIP has
-  that status; the `(only)` variants use the aggregated card status
-  (`done → desktop → no usable shots → interrupted → pending → skipped`).
-  The two `desktop …` kind presets are app-only extras.
-  The status bar reports each status as games (ZIPs), so the games number
-  equals the result count
-  of the matching dropdown selection.
-- **Launch with Hatari** — start the selected ZIP in the emulator (`P` in the
-  list/grid, `Space`/`P` in the lightbox, or the **(P)lay** button in the
-  detail sidebar). Argument template with `{cfg}`/`{zip}` substitution and the
-  bundled `MarcerGameDvd-Hatari.cfg` fallback; non-blocking. Hatari always
-  starts windowed; `F11` switches to a centered, aspect-preserved fullscreen
-  (black letterbox bars instead of stretching). The **PLAY** button
-  is a split button: the main part launches the default variant, the arrow opens
-  a variant menu — **Standard** (ST, TOS 1.04), **Mono** (`--monitor mono`),
-  **STE** (`--machine ste`, TOS 1.62 → `TOS162.IMG`), **Low Res TOS
-  1.02** (`TOS102.IMG`) and **Low Res TOS 1.00** (`TOS100.IMG`); a missing
-  variant TOS is downloaded on demand.
-- **Send to CosmosEx** — when `CosmosEx.Host` is set (Settings →
-  **CosmosEx** tab), the PLAY dropdown gains **Send to CosmosEx**. `CosmosEx.Mode` is `auto` (default), `legacy` or
-  `cosmo2ex`: `auto` tries the classic ce-atari upload first, then cosmo2ex.
-  **Legacy** uploads the selected ZIP to slot 0 (`POST /api/v1/floppy/0`,
-  multipart, then `PUT` to activate; the device extracts the first
-  `.st/.msa`). **cosmo2ex** has no upload API: the app extracts the first
-  `.st/.msa`, copies it into the mounted `CosmosEx.ShareDirectory` (the
-  device's `FLOPPY_IMAGES_DIR`), logs in with `CosmosEx.Password`, reads the
-  device-side path from `GET /fdd/{mac}/image` (`defaultDir`) and inserts it
-  with `PUT /fdd/{mac}/image` (device picked automatically when there is only
-  one, otherwise set `CosmosEx.Mac`). Progress shows in the status bar,
-  success as a snackbar and failures as a modal.
-- **Download & install Hatari** — when no emulator is configured, the app offers
-  to download prebuilt Hatari **2.6.1** (Windows x64 / macOS universal from
-  [hatari-emu.org](https://www.hatari-emu.org/)) before launch or from the
-  settings **Hatari installation** row, unpacks it into `<appDir>/hatari` and
-  writes the relative `Hatari.Executable` path back to the config. Linux has no
-  official prebuilt binary (manual/system install).
-- **Favorites** (`*` on the selected ZIP/card, in the detail panel or on a
-  filmstrip star) with `FAVORITE` badges, one virtual `Favorites` folder per
-  section in the browser view and a **★ Favorites** filter that lists the
-  favorite games of the **active section** (status and facets are ignored
-  there, the text search stays active). A card counts as favorite as soon as **any** of
-  its ZIPs is starred, and launching it plays that starred ZIP when exactly
-  one variant is favorited; pd/utils cards resolve their folder ZIPs on
-  demand, so they can be starred and launched like cracked games. Persisted
-  per section tree as `favorites.txt` with **root-relative POSIX paths** (one
-  path per line — `Patch/<section tree>/favorites.txt`; the console launcher
-  uses the same portable format in `Patch/favorites.txt`; without a
-  `PatchDirectory` each section gets `favorites-<section>.txt` next to the
-  executable). Paths outside every section tree go to the misc file.
-  Legacy absolute paths (including Windows
-  `Y:\…` and Linux `/mnt/…` lines) are read and migrated on startup;
-  unresolvable foreign lines are preserved but not shown. The first migration
-  creates a timestamped `.bak-*` copy of each rewritten file.
-- **Manual screenshot curation** — `M` in the lightbox swaps the currently
-  viewed candidate with the variant's main image (fixed file names, only the
-  PNG contents trade places); the grid card, detail view, filmstrip and
-  candidate strips refresh immediately (per-path image version keys, so only
-  the swapped files re-decode). `C` (lightbox/detail view) changes a ZIP's
-  `status`/`kind` in memory. Changes accumulate in a pending list; a cyan
-  **Save (n)** button (left of the update badge) writes them to the
-  section's index file (`index.json` / `index-pd.json` / `index-utils.json`)
-  and the per-entry meta under the screenshot-gen lock (a running
-  `shotgen.py` blocks the write). The status filter gains **`desktop text`**
-  and **`desktop black`** — strictly `status: desktop` entries whose kind is
-  `textscreen`/`darkscreen` (the plain `desktop` entry keeps showing every
-  kind).
-- **Degrades gracefully** — missing section indices or gameinfo data simply
-  shows empty states instead of crashing.
-- **Self-update** (release builds) — silent check against the GitHub
-  `desktop-v*` releases after startup; when a newer version exists, an amber
-  `⬆ <version>` button appears left of the Folders button. Click to download
-  the platform ZIP, swap it in place (user config, favorites and `TOS.IMG`
-  are never touched) and restart the app automatically. On Linux/macOS the
-  app starts the new binary detached and waits for the spawn before exiting;
-  if an update ever leaves no window, start the app once manually — the new
-  version is already installed. Failures show a dialog; leftover `*.old`
-  files are cleaned up on the next start. On Windows the swap runs in a
-  hidden helper after the app exits (the running
-  app locks its mapped libraries `data\app.so` / `flutter_windows.dll`). The
-  app runs inside a job object, so the helper is started through a one-shot
-  **Task Scheduler** task (a plain child process would be killed with the
-  app); both the app and the helper log their steps to `MarcerUpdater.log`
-  next to the app — a failed update always leaves that log, whose path is
-  also shown in the error dialog).
-  Dev runs (`run.sh`) never check.
+- **Gallery-style catalog grid** with section tabs (`games`, `pd`, `utils`,
+  `magazines`, `falcon`, `crews`), search, status/publisher/crew/cracker/
+  language/year/genre/developer filters, tri-state `raw`/`pasti`/`boxscan`,
+  `TOS/Bad` and a combined sort dropdown. Every dropdown is virtualized and
+  type-to-filter.
+- **Detail sidebar and full-screen lightbox** with the "This ZIP" table, release
+  variants, a variant filmstrip, candidate strip, integer-scaled images and
+  clickable previous/next navigation.
+- **Marcer's curated box scans & manuals** — see below.
+- **Optional AtariLegend metadata** (genre, developers/roles, boxscans,
+  screenshots, reviews, magazines, comments, community score) and the optional
+  **Pete Clarke PirateFinder catalog** (catalogue facts, crew histories,
+  menu-disk appearances, trivia), both downloaded on demand, never bundled
+  (CC BY-NC-SA 4.0).
+- **Crews tab** from `crews.json` with a release browser and PirateFinder crew
+  details.
+- **Local layer & missing ZIPs** resolved from the filesystem
+  (`ROOT`/`PATCH`/`BOTH`, `MISSING`), plus **Download folder** from the Marcer
+  FTP for absent game folders.
+- **Launch with Hatari** (`P`/`Space`/Play) with Standard/Mono/STE/Low-Res TOS
+  variants, Falcon 030 titles and GEMDOS magazine cover disks; optional
+  **Send to CosmosEx**.
+- **Favorites** per section, manual screenshot curation (`M`/`C` + Save),
+  on-demand **Hatari/TOS install**, **self-update**, and graceful degradation
+  when artifacts are missing.
+
+The complete behavior is specified in
+[`docs/specs/SPEC-desktop.md`](docs/specs/SPEC-desktop.md).
 
 ### 📸 Screenshots: actual ZIP boot state, not AtariLegend
 
@@ -303,24 +84,14 @@ CC BY-NC-SA 4.0 (see [License](#license)).
 
 ### 📦 Marcer's curated box scans & manuals
 
-The archive's hand-curated **`Boxscan/`** and **`Manual/`** folders are the
-collector-grade extras Marcer curated alongside the games — not derived
-screenshots or scraped metadata. The desktop app treats them as a first-class
-feature:
+The archive's hand-curated `Boxscan/` and `Manual/` folders are a first-class
+feature: `Box scans (N)` / `Manuals (N)` chips open a per-edition gallery and
+full-screen viewer, or the grouped manual list (scan/text PDFs, image-page
+manuals, `.msa` as info-only disk images). Assets are discovered lazily for the
+selected card, both layers are merged, and nothing is ever modified or bundled.
 
-- **Box scans:** grouped by edition (ZIP stem / edition folder) with bounded
-  thumbnails and a full-screen viewer (`←/→`, `Esc`, zoom); recursive in-ZIP
-  images are supported, PDFs/disk images inside `Boxscan/` are ignored. Clear
-  front/back pairs are ordered front-first; otherwise name order applies.
-- **Manuals:** grouped by stem; scan/text pairs (`<stem>.zip` /
-  `<stem>_text.zip`) are both offered. Image-page manuals open in the viewer,
-  PDFs and `.doc`/`.txt` open in the OS default application, and `.msa` files
-  are shown as info-only disk images (never opened as documents).
-- **Lazy & read-only:** discovered only for the selected card (both layers
-  merged, patch wins, case-only distinct paths preserved), no index and no
-  pre-extraction; the app never modifies these curated files and nothing is
-  bundled. Details:
-  [`docs/ANALYSIS-boxscan-manual-structure.md`](docs/ANALYSIS-boxscan-manual-structure.md).
+Details: [`docs/specs/SPEC-desktop.md`](docs/specs/SPEC-desktop.md#box-scans--manuals)
+and [`docs/analysis/ANALYSIS-boxscan-manual-assets.md`](docs/analysis/ANALYSIS-boxscan-manual-assets.md).
 
 ### 🚀 Quick start
 
@@ -342,7 +113,7 @@ hand before the first start.
 For the quick start and the complete release walkthrough — including macOS
 Gatekeeper/translocation notes, `ftp-sync` game/patch directories, FTP settings
 and the catalog-data downloads — see
-[`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md).
+[`docs/guides/GETTING-STARTED.md`](docs/guides/GETTING-STARTED.md).
 
 ### 📥 Download
 
@@ -380,81 +151,19 @@ demand).
 > The app is not sandboxed (it reads game folders you configure and launches
 > Hatari); protected folders like `~/Downloads` still trigger a one-time macOS
 > permission prompt. See
-> [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md#macos).
+> [`docs/specs/SPEC-desktop.md`](docs/specs/SPEC-desktop.md#macos).
 
 ### ⚙️ Configuration (`desktop.config.json`)
 
-The app looks for `desktop.config.json` in this order (first existing wins):
+The app searches the current directory, the executable directory and (macOS) the
+folder containing the `.app` plus `~/Library/Application Support/MarcerGameDVDLauncher`;
+a new config is written to the first writable location. Without a config the
+first-run setup page opens. The ⚙ settings editor edits all paths, FTP and
+CosmosEx fields, validates them live and reloads the catalog in place.
 
-1. current working directory
-2. the directory of the executable (portable ZIP release)
-3. macOS only: the folder containing the `.app` bundle
-4. macOS only: `~/Library/Application Support/MarcerGameDVDLauncher` (last-resort
-   writable fallback — a config is written to the first **writable** of these, so
-   a read-only/translocated `.app` still works)
-
-When no config is found the app opens the **first-run setup page** (it lists
-the searched locations and the candidate save locations). A config that exists
-but cannot be read shows an error page with a **Setup…** button. Template: [`apps/marcer_desktop/desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json).
-
-> **Upgrading:** `GameinfoDirectory` is now the **data directory**. On first
-> start the app moves root-level gameinfo files into `gameinfo/` and a legacy
-> `AtariLegendDirectory` into `atarilegend/`. Screenshots stay in
-> `ScreenshotDirectory`. The old config key `DataDirectory` is still not read.
-
-The ⚙ gear button in the top bar opens an in-app **settings editor** for all
-path fields (`RootDirectory`, `PatchDirectory`, `ScreenshotDirectory`,
-`GameinfoDirectory`, `Hatari.Executable`, `Hatari.ConfigFile`) with native
-directory/file pickers, plus the **FTP**
-fields for the downloads
-(`Ftp.Host`, `Ftp.User`, `Ftp.Password`, `Ftp.RemoteBase`,
-`Ftp.AssetsRemote` — free text, never block saving) and the **CosmosEx**
-settings (`CosmosEx.Mode` dropdown, `Host`, `Password`, `Mac`,
-`ShareDirectory`). The form is **tabbed**: **Library** (RootDirectory,
-PatchDirectory, FTP, ScreenshotDirectory / GameinfoDirectory + the
-AtariLegend/PirateFinder rows), **Hatari** (executable/config,
-**Hatari installation** and **TOS ROM** rows) and **CosmosEx** (its own tab
-after Hatari). A red dot on a tab marks an invalid field there, so Save can be
-disabled even when the active tab looks fine. The two catalog-data fields each carry a
-**Download from FTP** button next to *Browse…* that pulls the newest
-`screenshots-*.zip` / `gameinfo-*.zip` from `Ftp.AssetsRemote` and extracts it
-into the target directory (the gameinfo directory has **no** implicit
-fallback), the **AtariLegend data** row downloads into `<GameinfoDirectory>/atarilegend`, and the **Pete Clarke PirateFinder-Catalog** row offers **PirateFinder-Catalog** for the optional PirateFinder-Catalog JSON in `<GameinfoDirectory>/piratefinder` (GitHub, CC BY-NC-SA 4.0, see [License](#license)). The PirateFinder row is also part of the first-run setup. **Save** writes them back to the
-same `desktop.config.json` and reloads the catalog in place, so new paths apply
-without restarting the app; window settings and the remaining fields stay
-untouched.
-
-Every path field is validated live with a status icon: a green ✓ when the
-directory/file exists, a red ✗ when it does not (or a required field is empty),
-no icon for an empty optional field. **Save** is disabled until all fields are
-valid — an empty optional field is fine, but a filled-in wrong path blocks
-saving. `RootDirectory` is the only mandatory field; `Hatari.Executable` is
-optional (needed to launch, not to browse).
-
-| Field | Required | Notes |
-|---|---|---|
-| `RootDirectory` | yes | game root; navigation never leaves it |
-| `PatchDirectory` | no | empty/missing ⇒ no patch layer |
-| `ScreenshotDirectory` | no | screenshot archive (`index.json`/`index-pd.json`/`index-utils.json`, PNGs) |
-| `GameinfoDirectory` | no | **data directory**: `gameinfo/`, `atarilegend/`, `piratefinder/`; screenshots stay separate. No implicit fallback |
-| `AtariLegendDirectory` (legacy) | no | old separate AtariLegend path; migrated at startup into `<GameinfoDirectory>/atarilegend` and no longer shown in the settings form |
-| `PirateFinder-Catalog` | no | optional PirateFinder-Catalog-only catalogue JSON; **PirateFinder-Catalog** downloads it from GitHub into `<GameinfoDirectory>/piratefinder/` and links to the original PirateFinder project. Not a config path; CC BY-NC-SA 4.0, not part of the Marcer catalog |
-| `Hatari.Executable` | for launch | path to the Hatari binary (relative resolves against the app dir) |
-| `Hatari.ConfigFile` | no | Hatari config; empty ⇒ the bundled `MarcerGameDvd-Hatari.cfg` is used |
-| `Hatari.ArgsTemplate` | no | argument template; must contain `{cfg}` and `{zip}` (default `-c "{cfg}" --disk-a "{zip}"`) |
-| `Ftp.Host` | for download | FTP server for "Download missing" and the catalog assets; `host` or `host:port` (default port 21) |
-| `Ftp.User` / `Ftp.Password` | no | FTP credentials (empty user ⇒ `anonymous`; password stored in plaintext) |
-| `Ftp.RemoteBase` | no | remote directory prefix of the game folders (default `/GameDVD/`; empty ⇒ FTP login root) |
-| `Ftp.AssetsRemote` | no | remote dir of the catalog asset archives `screenshots-*.zip` / `gameinfo-*.zip` (default `/Uploads/MarcerGameDVDLauncher-assets/`) |
-| `CosmosEx.Mode` | no | `auto` (default; legacy first, then cosmo2ex), `legacy` (ce-atari ZIP upload) or `cosmo2ex` (path insert) |
-| `CosmosEx.Host` | for send | `host`, `host:port` or full `http(s)://…` URL; empty ⇒ the Send to CosmosEx action is hidden |
-| `CosmosEx.Password` | for cosmo2ex | cosmo2ex web-interface password (plaintext; legacy ignores it) |
-| `CosmosEx.Mac` | no | cosmo2ex device MAC (`aa:bb:…` or 12 hex chars); empty selects the only device |
-| `CosmosEx.ShareDirectory` | for cosmo2ex | local/mounted view of the device's `FLOPPY_IMAGES_DIR` (SMB/NFS/local); images are copied there before the path insert |
-| `ShowCandidates` | no | candidate thumb strip on grid cards (default `true`) |
-| `DefaultStatus` | no | initial status preset (default `with_screenshot`) |
-| `Window.width/height` | no | initial window size and restore size (default 1280×800) |
-| `Window.maximized` | no | start the window maximized (default `true`; `false` ⇒ `width`×`height`, centered) |
+Field reference and the complete setup walkthrough:
+[`docs/guides/GETTING-STARTED.md`](docs/guides/GETTING-STARTED.md). Template:
+[`apps/marcer_desktop/desktop.config.example.json`](apps/marcer_desktop/desktop.config.example.json).
 
 ### ⌨️ Keyboard shortcuts
 
@@ -545,16 +254,16 @@ Helper tools for maintaining and enriching the game archive (not part of either 
 
 | Tool | Purpose | Docs |
 |---|---|---|
-| [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR/gameinfo`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) |
-| [`tools/archive-sync`](tools/archive-sync/README.md) | Headless FTP archive sync into `MARCER_PATCH_DIR` (root is read-only): size-based change detection, parallel directory listing, atomic downloads, `changes.json`/`changes.txt` reports; no persistent state; never deletes local files. Replaces the interactive `ftp-sync` workflow for automation. | [`tools/archive-sync/README.md`](tools/archive-sync/README.md), [`PLAN-docker-pipeline.md`](docs/PLAN-docker-pipeline.md) |
-| [`tools/asset-publish`](tools/asset-publish/README.md) | Packages the catalog data into deterministic ZIPs. Currently gameinfo only: `<MARCER_DATA_DIR>/gameinfo` → `gameinfo-<yyyyMMdd-HHmmss>.zip` in `MARCER_DATA_DIR`, with a content signature that skips unchanged runs (`--force` repacks). Optional `--upload` stores the ZIP directly under its final name on `MARCER_FTP_ASSETS_REMOTE` with a size check (the Marcer FTP allows neither rename nor delete) and then updates `latest.json` via `tools/asset-manifest`; failed uploads/manifests are retried without repacking. | [`tools/asset-publish/README.md`](tools/asset-publish/README.md), [`PLAN-docker-pipeline.md`](docs/PLAN-docker-pipeline.md) |
-| [`tools/crew-analysis`](tools/crew-analysis/README.md) | Ranks cracked-game crews/scene groups by direct Disk-1 release ZIPs (crew view) by joining the `Crew Sorted` tree, the screenshot index (`index.json`) and `games-cracked.json`; disk-2+ entries (`skipped_disk_n`) are excluded. Writes ranking + audit files to `local/crew-analysis/` and suggests cracktro card images (`images`, pHash clusters seeded into `crew-images.json`). | [`tools/crew-analysis/README.md`](tools/crew-analysis/README.md), [`ANALYSIS-crews.md`](docs/ANALYSIS-crews.md) |
-| [`tools/piratefinder-gen`](tools/piratefinder-gen/README.md) | Fetches the weekly Pete Clarke Greaseweazle PirateFinder Catalog SQLite data, verifies its SHA-256, extracts the Atari ST subset and matches the cracked ZIPs by decoded image hashes (with a title fallback); writes match/crew/alias/gap reports to `local/piratefinder/`. Data is CC BY-NC-SA 4.0 and is never redistributed. | [`tools/piratefinder-gen/README.md`](tools/piratefinder-gen/README.md), [`ANALYSIS-piratefinder.md`](docs/ANALYSIS-piratefinder.md) |
-| [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR/gameinfo`), the Crews tab from optional `crews.json`/`crew-images.json`, and optional metadata-only boxscan/manual counts from `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR`. | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) |
+| [`tools/gameinfo-gen`](tools/gameinfo-gen/README.md) | Extracts game metadata (publisher, cracker, year, language, dump flags, …) from the GameDVD XLS workbooks into JSON under `MARCER_DATA_DIR/gameinfo`. | [`tools/gameinfo-gen/README.md`](tools/gameinfo-gen/README.md), [`ANALYSIS-game-data.md`](docs/analysis/ANALYSIS-game-data.md) |
+| [`tools/archive-sync`](tools/archive-sync/README.md) | Headless FTP archive sync into `MARCER_PATCH_DIR` (root is read-only): size-based change detection, parallel directory listing, atomic downloads, `changes.json`/`changes.txt` reports; no persistent state; never deletes local files. Replaces the interactive `ftp-sync` workflow for automation. | [`tools/archive-sync/README.md`](tools/archive-sync/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
+| [`tools/asset-publish`](tools/asset-publish/README.md) | Packages the catalog data into deterministic ZIPs. Currently gameinfo only: `<MARCER_DATA_DIR>/gameinfo` → `gameinfo-<yyyyMMdd-HHmmss>.zip` in `MARCER_DATA_DIR`, with a content signature that skips unchanged runs (`--force` repacks). Optional `--upload` stores the ZIP directly under its final name on `MARCER_FTP_ASSETS_REMOTE` with a size check (the Marcer FTP allows neither rename nor delete) and then updates `latest.json` via `tools/asset-manifest`; failed uploads/manifests are retried without repacking. | [`tools/asset-publish/README.md`](tools/asset-publish/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
+| [`tools/crew-analysis`](tools/crew-analysis/README.md) | Ranks cracked-game crews/scene groups by direct Disk-1 release ZIPs (crew view) by joining the `Crew Sorted` tree, the screenshot index (`index.json`) and `games-cracked.json`; disk-2+ entries (`skipped_disk_n`) are excluded. Writes ranking + audit files to `local/crew-analysis/` and suggests cracktro card images (`images`, pHash clusters seeded into `crew-images.json`). | [`tools/crew-analysis/README.md`](tools/crew-analysis/README.md), [`ANALYSIS-crews.md`](docs/analysis/ANALYSIS-crews.md) |
+| [`tools/piratefinder-gen`](tools/piratefinder-gen/README.md) | Fetches the weekly Pete Clarke Greaseweazle PirateFinder Catalog SQLite data, verifies its SHA-256, extracts the Atari ST subset and matches the cracked ZIPs by decoded image hashes (with a title fallback); writes match/crew/alias/gap reports to `local/piratefinder/`. Data is CC BY-NC-SA 4.0 and is never redistributed. | [`tools/piratefinder-gen/README.md`](tools/piratefinder-gen/README.md), [`ANALYSIS-piratefinder.md`](docs/analysis/ANALYSIS-piratefinder.md) |
+| [`tools/gallery`](tools/gallery/README.md) | Interactive gallery webapp over the screenshot archive (`MARCER_OUT_DIR`) joined with game metadata (`MARCER_DATA_DIR/gameinfo`), the Crews tab from optional `crews.json`/`crew-images.json`, and optional metadata-only boxscan/manual counts from `MARCER_ROOT_DIR`/`MARCER_PATCH_DIR`. | [`tools/gallery/README.md`](tools/gallery/README.md), [`SPEC-gallery-webapp.md`](docs/specs/SPEC-gallery-webapp.md) |
 | [`tools/asset-manifest`](tools/asset-manifest/README.md) | Lists the newest `screenshots-*.zip` / `gameinfo-*.zip` on the Marcer FTP (read-only: connect + list, never uploads) and publishes a `latest.json` pointer as a GitHub release asset on the fixed `catalog-latest` prerelease (used by the desktop update check). | [`tools/asset-manifest/README.md`](tools/asset-manifest/README.md) |
 | [`tools/screenshot-gen`](tools/screenshot-gen/README.md) | Boots every ZIP in Hatari on a virtual display and captures preview screenshots into `MARCER_OUT_DIR`; entry kinds are `game`, `desktop`, `textscreen`, `darkscreen`,
 `no_game_image` (offline `reclassify` pass; offline `cleanup-duplicates` pass removes pixel-exact duplicate candidates, updates index + metadata and prints a 10-second progress line; offline `promote-app-screens` pass scans `desktop` candidates backwards (skipping TTP dialogs, GEM file windows, blank screens and the plain desktop) and promotes the remaining app screen, resetting TTP-only entries to desktop/desktop; drive-LED resets re-captured via
-`run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview; old titles that hang on TOS 1.04 are re-captured via `run --retry-no-usable --tos 1.02` (a success records a sparse `tos: "1.02"` marker shown as a `TOS 1.02` badge in the gallery/desktop app, failed attempts go to `tos_tried`); the root/patch overlay merge is case-insensitive for file **and** folder names, so each directory has exactly one canonical output spelling; processing happens in named **scopes** — one scope per invocation via `--scope`, default `cracked` on `index.json`, the opt-in `utils` scope (`Title Sorted/Utilitys - Title Sorted`) on `index-utils.json`, the opt-in `pd` scope (`Title Sorted/PD Games - Title Sorted`) on `index-pd.json`, the opt-in `magazine` scope (`Bonus/Magazine Cover Disks`, scope-local `exclude_dirs: ["dupes"]`) on `index-magazine.json`, the opt-in `falcon` scope (`Falcon 030/Title Sorted`, own TOS 4.04 + Falcon profile, GEMDOS titles extracted and autostarted with `-d`/`--auto`; the static TOS 4.04 boot screens (Atari logo, plain green Videl stage) are detected/rejected before preview selection and removed from older shots via the offline `cleanup-boot-logo` pass) on `index-falcon.json`; monitor mode comes from the gameinfo `screen_format` rules (`MARCER_DATA_DIR/gameinfo/games-<scope>.json`: utils mono unless `Not Mono`/`Low`/`Mid`, including utils entries without a gameinfo match, pd mono only for all-`High` folders) with the `mono_dir_suffix` folder check as fallback; mono boots Hatari `--mono --tos-res high` (ST high res 640x400), and the rules affect future captures only). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) |
+`run --retry-drive-led`; entries ending as `no_usable_shots` keep the earlier captures as `_cNN` candidates — gated on `keep_candidates` — and use the last capture as preview; old titles that hang on TOS 1.04 are re-captured via `run --retry-no-usable --tos 1.02` (a success records a sparse `tos: "1.02"` marker shown as a `TOS 1.02` badge in the gallery/desktop app, failed attempts go to `tos_tried`); the root/patch overlay merge is case-insensitive for file **and** folder names, so each directory has exactly one canonical output spelling; processing happens in named **scopes** — one scope per invocation via `--scope`, default `cracked` on `index.json`, the opt-in `utils` scope (`Title Sorted/Utilitys - Title Sorted`) on `index-utils.json`, the opt-in `pd` scope (`Title Sorted/PD Games - Title Sorted`) on `index-pd.json`, the opt-in `magazine` scope (`Bonus/Magazine Cover Disks`, scope-local `exclude_dirs: ["dupes"]`) on `index-magazine.json`, the opt-in `falcon` scope (`Falcon 030/Title Sorted`, own TOS 4.04 + Falcon profile, GEMDOS titles extracted and autostarted with `-d`/`--auto`; the static TOS 4.04 boot screens (Atari logo, plain green Videl stage) are detected/rejected before preview selection and removed from older shots via the offline `cleanup-boot-logo` pass) on `index-falcon.json`; monitor mode comes from the gameinfo `screen_format` rules (`MARCER_DATA_DIR/gameinfo/games-<scope>.json`: utils mono unless `Not Mono`/`Low`/`Mid`, including utils entries without a gameinfo match, pd mono only for all-`High` folders) with the `mono_dir_suffix` folder check as fallback; mono boots Hatari `--mono --tos-res high` (ST high res 640x400), and the rules affect future captures only). | [`tools/screenshot-gen/README.md`](tools/screenshot-gen/README.md), [`SPEC-screenshot-generator.md`](docs/specs/SPEC-screenshot-generator.md) |
 
 
 **Catalog-data pipeline:** `tools/gameinfo-gen/run.sh extract` (normal
@@ -618,19 +327,19 @@ This command validates the version, checks for uncommitted changes, generates a 
 
 ## 📚 Documentation
 
-The design and specification documents live in [`docs/`](docs/README.md):
+The documents live in [`docs/`](docs/README.md), organised by type (SPEC,
+ANALYSIS, DECISION, PLAN, GUIDE, backlog):
 
 | Document | Contents |
 |---|---|
-| [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Release setup guide for users: first start, macOS notes, game/patch directories (`ftp-sync`), FTP settings, catalog-data downloads and troubleshooting. |
-| [`docs/IDEAS.md`](docs/IDEAS.md) | Living desktop-app backlog: planned, deferred and explicitly rejected ideas. |
-| [`docs/SPEC.md`](docs/SPEC.md) | Technology-neutral behavioral specification of the launcher (overlay rules, navigation, rendering, launch) — the basis for reimplementing it in any language. |
-| [`docs/ANALYSIS-game-data.md`](docs/ANALYSIS-game-data.md) | Analysis of the external game metadata sources (XLS workbooks, data model, matching, roadmap). |
-| [`docs/ANALYSIS-boxscan-manual-structure.md`](docs/ANALYSIS-boxscan-manual-structure.md) | Analysis of the `Boxscan/` and `Manual/` companion folders (location, naming, ZIP/loose-file structure, edge cases, consumer requirements). |
-| [`docs/DECISION-app-architecture.md`](docs/DECISION-app-architecture.md) | Why the desktop app is Flutter, the gallery webapp is Python + HTML, and the couch surface is planned. |
-| [`docs/SPEC-gallery-webapp.md`](docs/SPEC-gallery-webapp.md) | Behavioral spec of the gallery webapp (`tools/gallery`) — the design reference for the desktop catalog. |
-| [`docs/SPEC-screenshot-generator.md`](docs/SPEC-screenshot-generator.md) | Screenshot pipeline and the `index.json`/`index-pd.json`/`index-utils.json`/`index-magazine.json`/`index-falcon.json` artifacts consumed by both UIs. |
-| [`docs/BUGS.md`](docs/BUGS.md) | Known issues and their resolution status. |
+| [`docs/guides/GETTING-STARTED.md`](docs/guides/GETTING-STARTED.md) | User setup guide: first start, macOS, game/patch directories, `ftp-sync`, FTP/catalog-data downloads, troubleshooting. |
+| [`docs/specs/SPEC-desktop.md`](docs/specs/SPEC-desktop.md) | Desktop app behavior (catalog, filters, lightbox, launch, box scans, data downloads, self-update). |
+| [`docs/specs/SPEC-launcher.md`](docs/specs/SPEC-launcher.md) | Console launcher behavior and overlay rules. |
+| [`docs/specs/SPEC-gallery-webapp.md`](docs/specs/SPEC-gallery-webapp.md) | Gallery webapp behavior. |
+| [`docs/specs/SPEC-screenshot-generator.md`](docs/specs/SPEC-screenshot-generator.md) | Screenshot pipeline and index artifacts. |
+| [`docs/analysis/`](docs/analysis/) | External data sources and schemas (XLS/gameinfo, crews, AtariLegend, PirateFinder, box scans/manuals). |
+| [`docs/decisions/`](docs/decisions/) | Architecture and technology decisions. |
+| [`docs/IDEAS.md`](docs/IDEAS.md) | Planned, deferred and rejected ideas. |
 
 Per-app/per-tool docs stay next to their code: [`apps/marcer_desktop/README.md`](apps/marcer_desktop/README.md), [`apps/marcer_console/README.md`](apps/marcer_console/README.md), and each `tools/*/README.md`.
 

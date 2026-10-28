@@ -10,7 +10,7 @@ machine-readable change report for the catalog pipeline.
 files. Every run compares the current remote tree against the current local
 union (root + patch). There is **no persistent comparison state**.
 
-See [`docs/PLAN-docker-pipeline.md`](../../docs/PLAN-docker-pipeline.md) for the
+See [`docs/plans/PLAN-docker-pipeline.md`](../../docs/plans/PLAN-docker-pipeline.md) for the
 surrounding server pipeline.
 
 ## Requirements

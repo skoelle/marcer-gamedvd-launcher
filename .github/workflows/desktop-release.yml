@@ -164,7 +164,7 @@ jobs:
           echo "" >> release-notes.md
           echo "---" >> release-notes.md
           echo "" >> release-notes.md
-          echo "**Release setup guide:** https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/docs/GETTING-STARTED.md" >> release-notes.md
+          echo "**Release setup guide:** https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/docs/guides/GETTING-STARTED.md" >> release-notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

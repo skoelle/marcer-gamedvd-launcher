@@ -3,7 +3,7 @@
 Downloads the weekly [AtariLegend database dump](https://www.atarilegend.com/data/database-dumps/)
 (MariaDB, minus the `users` table), mirrors it into a queryable SQLite
 artifact and matches it against the on-disk Marcer GameDVD screenshot-index
-folders. See [`ANALYSIS-atarilegend.md`](../../docs/ANALYSIS-atarilegend.md).
+folders. See [`ANALYSIS-atarilegend.md`](../../docs/analysis/ANALYSIS-atarilegend.md).
 
 The dump is parsed with the Python standard library only (the SQLite build
 uses the bundled `sqlite3` module) — no extra dependencies. The tool never

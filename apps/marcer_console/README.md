@@ -166,7 +166,7 @@ Colors are fully configurable via the `Colors` section of `launcher.config.json`
 The community uses [ftp-sync](https://github.com/slippyex/ftp-sync) to keep the patch directory in sync with Marcer's FTP server. This downloads only changed or new files — fast and bandwidth-friendly.
 
 > Using the desktop app? The release setup guide
-> [`docs/GETTING-STARTED.md`](../../docs/GETTING-STARTED.md) covers the same
+> [`docs/guides/GETTING-STARTED.md`](../../docs/guides/GETTING-STARTED.md) covers the same
 > `ftp-sync` mapping plus the app's FTP and catalog-data downloads.
 
 **Setup:**
@@ -251,7 +251,7 @@ The console launcher is released independently via the `vX.Y.Z` tag scheme (`.gi
 ## 📝 Notes
 
 - Full technical requirements and build rules are in [`AGENTS.md`](../../AGENTS.md).
-- Technology-neutral behavioral specification (for reimplementation in other languages or as a desktop app) is in [`SPEC.md`](../../docs/SPEC.md).
+- Technology-neutral behavioral specification (for reimplementation in other languages or as a desktop app) is in [`SPEC-launcher.md`](../../docs/specs/SPEC-launcher.md).
 - After any functional change, both `README.md` and `AGENTS.md` must be updated.
 - Every release **must** include release notes listing all changes and bugfixes.
 

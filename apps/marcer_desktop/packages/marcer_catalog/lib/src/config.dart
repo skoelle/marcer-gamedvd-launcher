@@ -4,7 +4,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-/// Bundled Hatari config shipped next to the executable (SPEC.md §12.1):
+/// Bundled Hatari config shipped next to the executable (SPEC-launcher.md §12.1):
 /// used automatically when `Hatari.ConfigFile` is empty.
 const String kBundledHatariConfig = 'MarcerGameDvd-Hatari.cfg';
 
@@ -122,7 +122,7 @@ class DesktopConfig {
   final String cosmosExShareDirectory;
 
   /// Application directory (the executable's directory): base for resolving
-  /// relative Hatari paths and the bundled config (SPEC.md R10).
+  /// relative Hatari paths and the bundled config (SPEC-launcher.md R10).
   final String appDir;
 
   /// Runtime-only working directory Hatari is started in (and where the
@@ -450,12 +450,12 @@ class DesktopConfig {
   }
 
   /// Absolute Hatari executable (`Hatari.Executable`), resolved against
-  /// [appDir] when relative (SPEC.md R10); empty when not configured.
+  /// [appDir] when relative (SPEC-launcher.md R10); empty when not configured.
   String resolveHatariExecutable() => _resolveAgainstAppDir(hatariExecutable);
 
   /// Absolute Hatari config file: `Hatari.ConfigFile` when set, otherwise the
   /// bundled [kBundledHatariConfig] found in [searchDirs] (falling back to
-  /// next to the executable; SPEC.md §12.1).
+  /// next to the executable; SPEC-launcher.md §12.1).
   String resolveHatariConfigFile() {
     if (hatariConfigFile.trim().isNotEmpty) {
       return _resolveAgainstAppDir(hatariConfigFile);

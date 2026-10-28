@@ -10,10 +10,6 @@ sections, technology-neutral where possible, conformance checklist at the end).
 Paths to real data are never written down literally. They come exclusively from
 the git-ignored local file `local/paths.env` (see section 11).
 
-**Status of verified facts:** everything marked *(verified)* was tested on the
-development machine against Hatari 2.4.1. Everything else is marked
-*(untested)* and must be confirmed during implementation.
-
 ---
 
 ## 1. Goal and Non-Goals
@@ -44,7 +40,7 @@ For every ZIP entry in scope (section 4.4):
   within a run, `run --jobs N` is allowed, section 5).
 - No in-launcher screenshot display in this stage (section 12 is a future stage).
 - No keyboard key injection and no `--auto` autostart (still a future stage,
-  section 15 milestone M7). The implemented desktop click retry (section 7.4)
+  section 7.3). The implemented desktop click retry (section 7.4)
   covers exactly one icon double click, nothing more.
 - No screenshots outside the selected scope's trees (section 4.4): PD
   games, tools, Falcon titles, Bonus and everything else stay out of
@@ -53,83 +49,20 @@ For every ZIP entry in scope (section 4.4):
 
 ---
 
-## 2. Environment Check Results
+## 2. Environment and Tooling
 
-Checked on the development machine (read-only or with explicit approval):
+The tool targets a Linux host and requires:
 
-| Component | Status | Version / Detail | Action needed |
-|---|---|---|---|
-| OS | ok | Linux x86_64, kernel 7.0.0-38, 4 cores | none |
-| RAM | ok, tight | 9.5 GB total, about 2.7 GB available | run only one instance |
-| Free disk (local) | ok | about 10 GB on `/` | staging only, cleanup after each entry |
-| Desktop session | none | TTY only, no X11 or Wayland session | Xvfb is mandatory |
-| NAS | ok | mounted via NFS, both data paths reachable | keep timeouts, avoid volume-wide scans |
-| .NET SDK | ok | 10.0.112, `apps/marcer_console/build.sh` verified working | none (not used by this tool) |
-| Hatari | ok | 2.4.1 from apt | none |
-| Hatari options | verified | `--screenshot-dir`, `--crop`, `--statusbar`, `--cmd-fifo`, `--run-vbls`, `--benchmark`, `--disk-a` (accepts ZIP), `--tos`, `--machine`, `--sound off`, `--fast-boot`, `--confirm-quit`, `--zoom`, `--protect-floppy` all exist in 2.4.1 | none |
-| Hatari `--screenshot-format` | missing | option does not exist in 2.4.1 (format comes from config, default PNG verified) | do not use this flag |
-| Hatari `hatari-event mousemove` | missing | 2.4.1 supports only `doubleclick`, `rightdown`, `rightup`, `keypress/keydown/keyup` (control.c verified); `mousemove` exists in newer versions only | mouse positioning via xdotool instead |
-| TOS ROM | ok | TOS 1.04 German image, 196607 bytes, provided in `local/` (git-ignored) | reference via `MARCER_TOS_IMG` |
-| Xvfb | ok | installed, fixed display `:99` verified working | none |
-| xdotool | ok | installed, **required** for the desktop click retry (section 7.4) | none |
-| ImageMagick | ok | `import` and `convert` available | fallback grabs and analysis |
-| ffmpeg | ok | available | not required for MVP |
-| Python | ok | 3.12.3, repo `.venv` already exists | install Pillow, imagehash, numpy into `.venv` |
-| unzip | ok | available | ZIP content listing |
-| Smoke test | verified | see below | none |
+| Component | Purpose |
+|---|---|
+| Xvfb / X11 display | one virtual display per parallel worker |
+| Hatari | emulator; `--screenshot-dir`, `--statusbar`, `--crop`, `--cmd-fifo`, `--run-vbls`, `--disk-a` (accepts ZIP), `--tos`, `--machine`, `--sound off`, `--fast-boot`, `--confirm-quit`, `--zoom`, `--protect-floppy` |
+| xdotool | pointer positioning and the desktop click retry (Hatari has no `mousemove` control command) |
+| ImageMagick | fallback screen grabs and image analysis |
+| Python 3 + Pillow, imagehash, numpy | image analysis, cropping, duplicate detection, entropy/color statistics; installed in the repo `.venv` only |
 
-### 2.1 Smoke test result (verified)
-
-Setup: one small real ZIP (single `.msa` inside) copied from
-`MARCER_ROOT_DIR` to a local temp directory, Xvfb on fixed display `:99`,
-Hatari started with TOS from `MARCER_TOS_IMG`, options
-`--statusbar off --crop on --sound off --confirm-quit off --zoom 1
---machine st --fast-boot on`, `--screenshot-dir` pointing to a local output dir,
-`--cmd-fifo` for remote control.
-
-Results:
-
-- Hatari booted the ZIP from drive A directly. No unpacking needed for
-  single-image ZIPs.
-- Command `hatari-shortcut screenshot` written to the FIFO produced
-  `grab0001.png` in `--screenshot-dir`. Format PNG, size 832x552, about 4.5 KB.
-  Log line: `Screen dump saved to: ...` *(verified)*.
-- The captured image showed the TOS desktop (3 unique colors), because 14
-  seconds wall time were not enough for the game to load. This confirms:
-  time points must be configurable per profile and the desktop must be
-  detected (section 8.4).
-- Plain `screenshot` (without the `hatari-` prefix) is rejected by the FIFO in
-  2.4.1. Supported FIFO commands: `hatari-debug`, `hatari-event`,
-  `hatari-option`, `hatari-enable/disable/toggle`, `hatari-path`,
-  `hatari-shortcut`, `hatari-stop`, `hatari-cont` *(verified)*.
-
-### 2.1.1 Batch pilot (10 entries, verified)
-
-Ten random ZIPs from both scope trees were processed with the base profile and
-time points 10s, 25s, 45s (30 screenshots):
-
-- 10/10 entries booted Hatari and produced all three screenshots.
-- 4/10 showed game content (crack intros or loaders) within 45s:
-  one already at 10s, one between 10s and 25s, one between 25s and 45s,
-  one at 10s and staying.
-- 6/10 stayed on the TOS desktop for the full 45s. Visual check confirmed a
-  German TOS desktop with the drive A window open, showing the game PRGs
-  (for example `XEVIOUS.PRG`) without auto-start. More waiting does not help;
-  these entries need milestone M7 (key injection or `--auto`).
-- Desktop screenshots consistently had 3 unique colors, confirming the
-  classification heuristic of section 8.4 on real data.
-- Median runtime per entry was dominated by the fixed 45s schedule plus about
-  3s overhead (copy, start, kill).
-
-### 2.2 Missing packages (not yet installed, approval required)
-
-| Package | Purpose | Install command |
-|---|---|---|
-| Pillow | image analysis, cropping | `.venv/bin/pip install Pillow` |
-| imagehash | perceptual hash for duplicate detection | `.venv/bin/pip install imagehash` |
-| numpy | entropy and color statistics | `.venv/bin/pip install numpy` |
-
-All installs go into the repo virtual environment only, never global pip.
+Screenshot format comes from the Hatari config (PNG). One tool process runs per
+`MARCER_OUT_DIR`; parallel workers are allowed within a run (section 5).
 
 ---
 
@@ -607,11 +540,10 @@ Notes:
 
 - Default time points (wall-clock seconds after Hatari start): `10, 25, 45`.
   All configurable per profile.
-- Rationale: tuned in a 10-entry batch pilot (section 2.1) and confirmed by
-  the user. Fast titles (crack intros) already show content at 10s, slower
-  loaders appear between 25s and 45s. Titles that never auto-start stay on
-  the desktop regardless of waiting longer (user decision: accept and flag,
-  do not wait beyond 45s; auto-start handling is M7).
+- Rationale: tuned against real captures. Fast titles (crack intros) already
+  show content at 10s, slower loaders appear between 25s and 45s. Titles that
+  never auto-start stay on the desktop regardless of waiting longer (accept and
+  flag, do not wait beyond 45s; auto-start handling is M7).
 - Alternative considered: `--run-vbls` (exists in 2.4.1, *(verified)*) gives
   deterministic emulation-time exits, but only one end state per run and it is
   tied to `--benchmark` fast-forward behavior, which changes what the screen
@@ -1778,32 +1710,7 @@ Resolved decisions:
 
 ---
 
-## 15. Milestones
-
-Each milestone is small, independently checkable, and ends with a working
-state.
-
-- **M0** Environment check and smoke test: done (sections 2.1, 2.2).
-- **M1** This spec, reviewed and approved by the user.
-- **M2** Install Python packages into `.venv`, create `tools/screenshot-gen/`
-  skeleton with config example and profile files.
-- **M3** Index builder: bounded scan of the selected scope's trees, writes
-  the scope's index file, prints counts. Checkable against manual counts.
-- **M4** Single-entry pipeline: copy, run Hatari, capture via FIFO, classify,
-  write preview and metadata for one hard-coded entry.
-- **M5** Filters and selection: desktop detection, dedup, scoring, preview
-  choice. Checkable against the smoke test image and pilot entries.
-- **M6** Pilot run of 20 entries, evaluation, threshold tuning.
-- **M7** (much later) Remaining auto-start handling for desktop titles the
-  icon click retry cannot start: keyboard key injection or `--auto`
-  (section 7.3). The icon click retry itself (section 7.4) is implemented
-  and verified.
-- **M8** (later) Full run over the whole scope.
-- **M9** (later) Launcher or gallery integration (section 12).
-
----
-
-## 16. Conformance Checklist
+## 15. Conformance Checklist
 
 A conforming implementation satisfies all of the following.
 
@@ -1943,4 +1850,4 @@ A conforming implementation satisfies all of the following.
 
 ## License
 
-Licensed under the [MIT License](../LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+Licensed under the [MIT License](../../LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

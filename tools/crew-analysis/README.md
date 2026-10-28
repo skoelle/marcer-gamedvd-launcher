@@ -5,7 +5,7 @@ release ZIPs. Disk-2+ ZIPs (`status: skipped_disk_n`) are excluded. The result
 is the "crew view" used when looking at the cracked section the same way the
 catalog exposes `games`, `pd`, `utils`, `magazines` and `falcon`.
 
-See [`ANALYSIS-crews.md`](../../docs/ANALYSIS-crews.md) for the methodology,
+See [`ANALYSIS-crews.md`](../../docs/analysis/ANALYSIS-crews.md) for the methodology,
 the current tab selection (currently 128 groups) and the data-quality caveats.
 
 ## Data sources

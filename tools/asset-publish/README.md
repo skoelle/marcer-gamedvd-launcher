@@ -6,7 +6,7 @@ the desktop app and the `catalog-latest` release pointer.
 The current stage implements the **gameinfo** asset: local packaging, optional
 FTP upload and the automatic `latest.json` update. Screenshot packaging follows
 in later pipeline phases; see
-[`docs/PLAN-docker-pipeline.md`](../../docs/PLAN-docker-pipeline.md).
+[`docs/plans/PLAN-docker-pipeline.md`](../../docs/plans/PLAN-docker-pipeline.md).
 
 ## What it does
 

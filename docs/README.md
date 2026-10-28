@@ -1,53 +1,78 @@
 # Documentation
 
-Design and specification documents for the Marcer GameDVD project. These are the
-technology-neutral contracts and records that the apps and tools implement; the
-per-app/per-tool READMEs stay next to their code.
+Design, specification and analysis documents for the Marcer GameDVD project.
+The per-app/per-tool READMEs stay next to their code.
+
+## Document types
+
+Each document has exactly one job. Keep it that way:
+
+| Type | Answers | Must not contain |
+|---|---|---|
+| **SPEC** (`specs/`) | How does the shipped behavior work? The contract for reimplementation. | History, roadmaps, status logs. |
+| **ANALYSIS** (`analysis/`) | What is the external data reality (sources, schema, quirks)? | UI behavior, implementation status, done-lists. |
+| **DECISION** (`decisions/`) | Why was a technology/architecture chosen? | Deferred ideas (→ `IDEAS.md`), conformance checklists (→ SPEC). |
+| **PLAN** (`plans/`) | What work remains? | Completed phases, dated changelogs. |
+| **GUIDE** (`guides/`) | How does a user install and configure the app? | Internal design rationale. |
+| **Backlog** (`IDEAS.md`) | What is planned, deferred or rejected? | Implementation details. |
+
+Rules:
+- One fact has one home. Behavior lives in a SPEC, not in ANALYSIS or a
+  decision record.
+- No historical verification logs, dated snapshots or "done" checklists in
+  ANALYSIS/DECISION; Git history keeps the past.
+- Counts in ANALYSIS are order-of-magnitude, never a contract.
+- Conformance checklists belong only in SPECs. Behavior changes update the
+  relevant SPEC and the root `README.md` in the same change.
 
 ## Guides
 
 | File | What it covers |
 |---|---|
-| [`GETTING-STARTED.md`](GETTING-STARTED.md) | Quick start plus detailed release setup guide for users: first start, macOS (Gatekeeper/translocation/TCC), game and patch directories, `ftp-sync`, FTP settings, catalog-data downloads and troubleshooting. |
-| [`IDEAS.md`](IDEAS.md) | Living backlog: planned, deferred and explicitly rejected ideas for the desktop app (Surface B, Hatari stage 2, local index, filters, persistence). |
+| [`GETTING-STARTED.md`](guides/GETTING-STARTED.md) | First start, directories, `ftp-sync`, FTP settings, catalog-data downloads, Hatari/TOS, macOS, troubleshooting. |
+| [`IDEAS.md`](IDEAS.md) | Living backlog: planned, deferred and explicitly rejected ideas. |
 
 ## Plans
 
 | File | What it covers |
 |---|---|
-| [`PLAN-docker-pipeline.md`](PLAN-docker-pipeline.md) | Server automation plan: Docker container for archive sync, change detection, gameinfo/crews/index, asset packaging/upload and the `latest.json` pointer, with checkable implementation steps. |
+| [`PLAN-docker-pipeline.md`](plans/PLAN-docker-pipeline.md) | Server automation: archive sync, change detection, gameinfo/crews/index, asset packaging/upload and the `latest.json` pointer. |
 
 ## Specs
 
 | File | What it describes |
 |---|---|
-| [`SPEC.md`](SPEC.md) | **Launcher behavior** — overlay/patch rules, navigation, rendering, colors, launch, favorites. The contract for reimplementing the launcher in any language/UI. |
-| [`SPEC-gallery-webapp.md`](SPEC-gallery-webapp.md) | **Gallery webapp** (`tools/gallery`) — filter/sort/search model, API payloads, grid/lightbox UI. The design reference for the desktop catalog. |
-| [`SPEC-screenshot-generator.md`](SPEC-screenshot-generator.md) | **Screenshot pipeline** (`tools/screenshot-gen`) — Hatari automation and the per-scope `index.json` / `index-<name>.json` + PNG artifact (the default scope's `index.json` is the one consumed by both UIs). |
+| [`SPEC-launcher.md`](specs/SPEC-launcher.md) | **Console launcher** — overlay/patch rules, navigation, rendering, colors, launch, favorites. |
+| [`SPEC-desktop.md`](specs/SPEC-desktop.md) | **Desktop app** (`apps/marcer_desktop`) — catalog grid, filters, lightbox, favorites, launch, box scans/manuals, data downloads, self-update, macOS. |
+| [`SPEC-gallery-webapp.md`](specs/SPEC-gallery-webapp.md) | **Gallery webapp** (`tools/gallery`) — filter/sort/search model, API payloads, grid/lightbox UI. |
+| [`SPEC-screenshot-generator.md`](specs/SPEC-screenshot-generator.md) | **Screenshot pipeline** (`tools/screenshot-gen`) — Hatari automation and the per-scope `index.json` / `index-<name>.json` + PNG artifacts. |
 
-## Analysis & decisions
+## Analysis
 
 | File | What it contains |
 |---|---|
-| [`ANALYSIS-game-data.md`](ANALYSIS-game-data.md) | Analysis of the external game metadata (XLS workbooks): data model, matching rules, `games-*.json` schema, roadmap. |
-| [`ANALYSIS-crews.md`](ANALYSIS-crews.md) | Crew ranking for the cracked section: data sources, attribution/alias rules, current top crews and caveats (`tools/crew-analysis`). |
-| [`ANALYSIS-atarilegend.md`](ANALYSIS-atarilegend.md) | Analysis of the weekly AtariLegend database dumps: contents/coverage, folder↔game matching, asset/URL conventions, the runtime index + detail payload (app builds it from the gz; tool-side SQLite is analysis only) and roadmap. |
-| [`ANALYSIS-piratefinder.md`](ANALYSIS-piratefinder.md) | Analysis of the PirateFinder catalogue: SQLite schema/coverage, licence, the local `tools/piratefinder-gen` import, hash/title matching against the cracked ZIPs, measured match rates, crew/menu-disk metadata and limitations. |
-| [`ANALYSIS-boxscan-manual-structure.md`](ANALYSIS-boxscan-manual-structure.md) | Analysis of the `Boxscan/` and `Manual/` companion folders: location, naming variants, ZIP/loose-file structure, edge cases, requirements for a UI consumer (Flutter desktop). |
-| [`DECISION-app-architecture.md`](DECISION-app-architecture.md) | Why the desktop app is Flutter, the gallery webapp is Python + HTML, and the couch surface is planned. |
-| [`DECISION-catalog-data-source.md`](DECISION-catalog-data-source.md) | Why the catalog is built from the screenshot index + gameinfo without a filesystem scan; published vs. local layer, untracked ZIPs, and the deferred "local index" idea. |
-| [`DECISION-hatari-download.md`](DECISION-hatari-download.md) | How the desktop app downloads/installs Hatari when missing (prebuilt Windows/macOS from SourceForge), the Linux gap, and the deferred self-hosted mirror. |
-| [`DECISION-macos-distribution.md`](DECISION-macos-distribution.md) | Why the desktop app is not sandboxed on macOS, the entitlements/picker bootstrap, TCC-protected folders and the deferred notarization. |
+| [`ANALYSIS-game-data.md`](analysis/ANALYSIS-game-data.md) | XLS metadata sources, matching rules, `games-*.json` schema. |
+| [`ANALYSIS-crews.md`](analysis/ANALYSIS-crews.md) | Crew ranking: data sources, attribution/alias rules, `crews.json`/`crew-images.json`. |
+| [`ANALYSIS-atarilegend.md`](analysis/ANALYSIS-atarilegend.md) | Weekly AtariLegend dumps: contents, folder↔game matching, asset/URL conventions, runtime schema, licensing. |
+| [`ANALYSIS-piratefinder.md`](analysis/ANALYSIS-piratefinder.md) | PirateFinder catalogue: schema, import, hash/title matching, crew/menu-disk metadata, limitations. |
+| [`ANALYSIS-boxscan-manual-assets.md`](analysis/ANALYSIS-boxscan-manual-assets.md) | `Boxscan/` and `Manual/` folders: location, naming variants, ZIP/loose-file structure, edge cases. |
+
+## Decisions
+
+| File | What it records |
+|---|---|
+| [`DECISION-app-architecture.md`](decisions/DECISION-app-architecture.md) | Why the desktop app is Flutter and the gallery is Python + HTML. |
+| [`DECISION-catalog-data-source.md`](decisions/DECISION-catalog-data-source.md) | Why the catalog is index/gameinfo-only without a filesystem scan. |
+| [`DECISION-hatari-download.md`](decisions/DECISION-hatari-download.md) | How the desktop app downloads/installs Hatari. |
+| [`DECISION-macos-distribution.md`](decisions/DECISION-macos-distribution.md) | Why the app is not sandboxed and how translocation/notarization are handled. |
 
 ## Housekeeping
 
-| File | What it contains |
+| Path | What it contains |
 |---|---|
-| [`BUGS.md`](BUGS.md) | Known issues and their resolution status. |
-| `images/` | Screenshots embedded in the root `README.md` (`catalog.png`, `lightbox.png`). |
+| `images/` | Screenshots embedded in the root README (`catalog.png`, `lightbox.png`). |
 
 ---
 
 The user-facing overview is the root [`README.md`](../README.md); build rules and
-project policy are in [`AGENTS.md`](../AGENTS.md). Behavioral changes must be
-reflected in the relevant spec here.
+project policy are in [`AGENTS.md`](../AGENTS.md).

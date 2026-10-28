@@ -2,7 +2,7 @@
 
 Extracts game metadata from the Marcer GameDVD XLS workbooks into JSON files
 for the launcher and future tools. See
-[`ANALYSIS-game-data.md`](../../docs/ANALYSIS-game-data.md) for the full analysis
+[`ANALYSIS-game-data.md`](../../docs/analysis/ANALYSIS-game-data.md) for the full analysis
 and data model.
 
 ## Requirements
@@ -50,7 +50,7 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force  # 4) optiona
 
 `crew-analysis` only reads `games-cracked.json`; it never rewrites the
 `games-*.json` files. See
-[`ANALYSIS-crews.md`](../../docs/ANALYSIS-crews.md) and the
+[`ANALYSIS-crews.md`](../../docs/analysis/ANALYSIS-crews.md) and the
 [crew-analysis README](../crew-analysis/README.md).
 
 ## Config

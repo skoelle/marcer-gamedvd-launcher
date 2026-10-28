@@ -5,7 +5,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-/// Default favorites file name (SPEC.md §11.1; same as the console
+/// Default favorites file name (SPEC-launcher.md §11.1; same as the console
 /// launcher's `FavoritesService.DefaultFileName`).
 const String kFavoritesFileName = 'favorites.txt';
 
@@ -14,12 +14,12 @@ const String kFavoritesFileName = 'favorites.txt';
 const String kMiscFavoritesSection = 'misc';
 
 /// Per-section favorites file name used when no PatchDirectory is configured
-/// (SPEC.md §11.1 order: patch tree → application directory): one
+/// (SPEC-launcher.md §11.1 order: patch tree → application directory): one
 /// `favorites-<section>.txt` next to the executable.
 String favoritesSectionFileName(String section) => 'favorites-$section.txt';
 
 /// Resolves the legacy/unknown-section `favorites.txt` location used for
-/// paths outside every section tree (SPEC.md §11.1): the first existing file
+/// paths outside every section tree (SPEC-launcher.md §11.1): the first existing file
 /// in `[patchDir, appDir, cwd]` — so a `favorites.txt` written by an older
 /// desktop build or picked up from the console launcher is still read. When
 /// no file exists yet, the save target is `patchDir` (when configured) else
@@ -46,7 +46,7 @@ String resolveFavoritesPath({
       kFavoritesFileName);
 }
 
-/// Favorites persistence per `SPEC.md` §11.1/§11.2 — one file per section
+/// Favorites persistence per `SPEC-launcher.md` §11.1/§11.2 — one file per section
 /// tree (console layout: `…/<section tree>/favorites.txt`) plus a
 /// legacy/unknown-section file.
 ///

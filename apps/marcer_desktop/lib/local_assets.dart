@@ -125,7 +125,7 @@ class LocalGameAssets {
 }
 
 /// Lazily discovers and materializes the `Boxscan/` and `Manual/` assets of a
-/// game folder (see `docs/ANALYSIS-boxscan-manual-structure.md`).
+/// game folder (see `docs/analysis/ANALYSIS-boxscan-manual-assets.md`).
 ///
 /// Discovery runs in a background isolate and only lists paths / ZIP central
 /// directories; media is extracted to a session temp directory on demand.

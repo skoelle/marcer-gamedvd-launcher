@@ -679,4 +679,4 @@ A reimplementation is conforming when all statements hold.
 
 ## License
 
-Licensed under the [MIT License](../LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+Licensed under the [MIT License](../../LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

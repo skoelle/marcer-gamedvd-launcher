@@ -10,7 +10,7 @@ file in `MARCER_PIRATEFINDER_DIR` (default `local/piratefinder/`, git-ignored)
 and **never** redistributes it. Nothing is written to the game trees, the
 screenshot/gameinfo artifacts or the repository.
 
-See [`docs/ANALYSIS-piratefinder.md`](../../docs/ANALYSIS-piratefinder.md) for
+See [`docs/analysis/ANALYSIS-piratefinder.md`](../../docs/analysis/ANALYSIS-piratefinder.md) for
 the findings and measured results.
 
 ## Requirements

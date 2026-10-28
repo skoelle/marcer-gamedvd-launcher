@@ -113,7 +113,7 @@ class CatalogController extends ChangeNotifier {
   /// True while a Hatari process launched from the app is running.
   bool launching = false;
 
-  /// Last launch error (SPEC.md E3/E4/E7), shown as a modal and cleared on
+  /// Last launch error (SPEC-launcher.md E3/E4/E7), shown as a modal and cleared on
   /// acknowledgement.
   String? launchError;
 
@@ -907,7 +907,7 @@ class CatalogController extends ChangeNotifier {
   // ------------------------------------------------------------------ launch
 
   /// Absolute path of a catalog card's ZIP variant: the patch copy wins when
-  /// it exists (SPEC.md R14), otherwise the root copy. Driven by the local
+  /// it exists (SPEC-launcher.md R14), otherwise the root copy. Driven by the local
   /// filesystem (not the published index layer), so a ZIP moved between
   /// layers is still launched from wherever it actually lives.
   String zipPathForVariant(CardVariant v) => zipPathForRel(v.rel);

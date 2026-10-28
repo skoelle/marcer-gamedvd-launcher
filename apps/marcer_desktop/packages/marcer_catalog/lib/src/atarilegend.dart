@@ -9,7 +9,7 @@
 /// for the first feature step (games + release year/publisher + the
 /// developer/author/genre facets), writing a compact `atarilegend.json`.
 ///
-/// See `docs/ANALYSIS-atarilegend.md`.
+/// See `docs/analysis/ANALYSIS-atarilegend.md`.
 library;
 
 import 'dart:convert';

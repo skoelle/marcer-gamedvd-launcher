@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:marcer_catalog/marcer_catalog.dart';
 
-/// The 16 standard console color names of `SPEC.md` R19 (case-insensitive
+/// The 16 standard console color names of `SPEC-launcher.md` R19 (case-insensitive
 /// lookup via [consoleColor]).
 const Map<String, Color> kConsoleColors = {
   'Black': Color(0xFF000000),
@@ -32,14 +32,14 @@ Color consoleColor(String name, {Color fallback = const Color(0xFFFFFFFF)}) =>
             orElse: () => '')] ??
     fallback;
 
-/// Selection colors of `SPEC.md` §9.2 (`SelectedForeground` / `SelectedBackground`).
+/// Selection colors of `SPEC-launcher.md` §9.2 (`SelectedForeground` / `SelectedBackground`).
 const Color kSelectedForeground = Color(0xFF000000); // Black
 const Color kSelectedBackground = Color(0xFF008080); // DarkCyan
 
 /// Accent of the AtariLegend metadata button/dialog (`#00D3D3`).
 const Color kAtariLegendTeal = Color(0xFF00D3D3);
 
-/// Entry color per `SPEC.md` §9.3 defaults (layer + kind), virtual = White.
+/// Entry color per `SPEC-launcher.md` §9.3 defaults (layer + kind), virtual = White.
 Color colorForEntry(Entry e) {
   if (e.isVirtual) return kConsoleColors['White']!;
   final layer = e.layerStatus;
@@ -74,7 +74,7 @@ String layerLabel(Entry e) {
   }
 }
 
-/// 13-char prefix per `SPEC.md` §9.1.
+/// 13-char prefix per `SPEC-launcher.md` §9.1.
 String linePrefix(Entry e, {required bool favorite}) {
   final layer = e.isVirtual ? '[ROOT] ' : layerLabel(e);
   final type = e.kind == EntryKind.directory

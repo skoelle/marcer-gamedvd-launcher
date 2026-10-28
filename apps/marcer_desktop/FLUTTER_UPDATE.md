@@ -157,7 +157,6 @@ after Stage 2/3 and after any Flutter SDK upgrade. No action possible now.
 
 ## References
 
-- `apps/marcer_desktop/PLAN.md` — overall app plan
 - `apps/marcer_desktop/pubspec.yaml` — direct constraints
 - `apps/marcer_desktop/pubspec.lock` — resolved/pinned set
-- [`docs/SPEC.md`](../../docs/SPEC.md) §12 (launch), self-update is app-only
+- [`docs/specs/SPEC-desktop.md`](../../docs/specs/SPEC-desktop.md) — app behavior incl. self-update; [`SPEC-launcher.md`](../../docs/specs/SPEC-launcher.md) §12 — launch rules
