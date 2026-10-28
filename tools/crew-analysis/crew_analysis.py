@@ -41,7 +41,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-TOOL_VERSION = "0.1.2"
+TOOL_VERSION = "0.1.4"
 SCHEMA_VERSION = 1
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -159,48 +159,69 @@ def load_tab_selection(path: Path) -> dict:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         sys.exit(f"error: cannot read crew-tab selection {path}: {exc}")
+    keep_values = [clean_label(str(value)) for value in data.get("keep", []) if str(value).strip()]
+    exclude_values = [clean_label(str(value)) for value in data.get("exclude", []) if str(value).strip()]
     return {
         "include_until": norm(str(data.get("include_until") or "")),
-        "keep": {norm(str(value)) for value in data.get("keep", []) if str(value).strip()},
-        "exclude": {norm(str(value)) for value in data.get("exclude", []) if str(value).strip()},
+        "keep": {norm(value) for value in keep_values},
+        "keep_exact": set(keep_values),
+        "exclude": {norm(value) for value in exclude_values},
+        "exclude_exact": set(exclude_values),
     }
 
 
 def tab_selection_flags(names: list[str], selection: dict) -> dict[str, bool]:
-    """Map normalized group name -> excluded flag for the Crews tab.
+    """Map original group name -> excluded flag for the Crews tab.
 
-    Without `include_until` all groups are visible except explicit excludes.
-    With it, groups up to the cutoff are visible, and only the `keep` groups
-    after the cutoff remain.
+    Without ``include_until`` all groups are visible except explicit excludes.
+    With it, groups up to the cutoff are visible, and only the ``keep`` groups
+    after the cutoff remain. Matching uses normalized names, but the returned
+    flags are keyed by the original name so groups whose names normalize to
+    the same value (e.g. ``Replicants / Union`` and ``Replicants/Union``) keep
+    independent visibility. For a normalized collision, ``keep``/``exclude``
+    only apply to the configured original spelling.
     """
     include_until = selection["include_until"]
     keep = selection["keep"]
+    keep_exact = selection.get("keep_exact", set())
     exclude = selection["exclude"]
-    normalized = [norm(name) for name in names]
+    exclude_exact = selection.get("exclude_exact", set())
+    norm_counts = Counter(norm(name) for name in names)
+
+    def is_match(value: str, normalized_set: set[str], exact_set: set[str]) -> bool:
+        normalized = norm(value)
+        if normalized not in normalized_set:
+            return False
+        # A normalized collision (e.g. "Replicants / Masters" vs
+        # "Replicants/Masters") only matches when the original spelling was
+        # configured explicitly.
+        return norm_counts.get(normalized, 0) == 1 or value in exact_set
+
     if not include_until:
-        return {name: name in exclude for name in normalized}
+        return {name: is_match(name, exclude, exclude_exact) for name in names}
 
     flags: dict[str, bool] = {}
     reached = False
     found = False
-    for name in normalized:
-        if name == include_until:
+    for name in names:
+        normalized = norm(name)
+        if normalized == include_until:
             found = True
-        if name in exclude:
+        if is_match(name, exclude, exclude_exact):
             flags[name] = True
-            if name == include_until:
+            if normalized == include_until:
                 reached = True
             continue
         if not reached:
             flags[name] = False
-            if name == include_until:
+            if normalized == include_until:
                 reached = True
         else:
-            flags[name] = name not in keep
+            flags[name] = not is_match(name, keep, keep_exact)
     if not found:
         print(f"warning: include_until group not found: {include_until}",
               file=sys.stderr)
-        return {name: name in exclude for name in normalized}
+        return {name: is_match(name, exclude, exclude_exact) for name in names}
     return flags
 
 
@@ -970,7 +991,7 @@ def run_images(args) -> int:
         [group.get("name", "") for group in all_groups], tab_selection)
     groups = [
         group for group in all_groups
-        if not selection_flags.get(norm(group.get("name", "")), False)
+        if not selection_flags.get(group.get("name", ""), False)
     ]
     if args.top > 0:
         groups = groups[:args.top]
@@ -1294,7 +1315,7 @@ def main() -> int:
             "zips": count,
             "aliases": aliases,
             "image": None,
-            "excluded": selection_flags.get(norm(group), False),
+            "excluded": selection_flags.get(group, False),
             "releases": releases,
         })
 

@@ -43,7 +43,7 @@ Save, the manual screenshot curation described below.
   GEMDOS cover disks are extracted and launched via `-d`/`--auto`); the
   `falcon` tab shows `Falcon 030/Title Sorted` (index-falcon.json) and
   launches its titles as a Falcon 030 (TOS 4.04). The `crews` tab (last tab)
-  shows the curated crew selection (currently 62 groups, cap 128) by direct release ZIPs from `crews.json` (generated
+  shows the curated crew selection (currently 128 groups, cap 128) by direct release ZIPs from `crews.json` (generated
   by `tools/crew-analysis`); it prefers a curated cracktro image from
   `crew-images.json`, then the best release screenshot, then a group icon. Its
   detail panel lists all releases of the selected crew and a release click

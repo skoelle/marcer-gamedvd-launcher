@@ -95,5 +95,51 @@ class LoadZipsFromIndexTest(unittest.TestCase):
         self.assertTrue(direct)
 
 
+class TabSelectionFlagsTest(unittest.TestCase):
+    def test_normalized_name_collision_keeps_independent_visibility(self):
+        selection = {
+            "include_until": ca.norm("Arthur Dent"),
+            "keep": set(),
+            "exclude": set(),
+        }
+        names = ["Replicants / Union", "Arthur Dent", "Replicants/Union"]
+
+        flags = ca.tab_selection_flags(names, selection)
+
+        self.assertFalse(flags["Replicants / Union"])
+        self.assertFalse(flags["Arthur Dent"])
+        self.assertTrue(flags["Replicants/Union"])
+
+    def test_exclude_uses_normalized_names_but_returns_original_keys(self):
+        selection = {
+            "include_until": ca.norm("Arthur Dent"),
+            "keep": {ca.norm("Genesis Inc")},
+            "exclude": {ca.norm("A-HA")},
+        }
+        names = ["A-HA", "Arthur Dent", "Ator", "Genesis Inc"]
+
+        flags = ca.tab_selection_flags(names, selection)
+
+        self.assertTrue(flags["A-HA"])
+        self.assertFalse(flags["Arthur Dent"])
+        self.assertTrue(flags["Ator"])
+        self.assertFalse(flags["Genesis Inc"])
+
+    def test_keep_collision_only_keeps_configured_spelling(self):
+        selection = {
+            "include_until": ca.norm("Arthur Dent"),
+            "keep": {ca.norm("Replicants / Masters")},
+            "keep_exact": {"Replicants / Masters"},
+            "exclude": set(),
+            "exclude_exact": set(),
+        }
+        names = ["Arthur Dent", "Replicants / Masters", "Replicants/Masters"]
+
+        flags = ca.tab_selection_flags(names, selection)
+
+        self.assertFalse(flags["Replicants / Masters"])
+        self.assertTrue(flags["Replicants/Masters"])
+
+
 if __name__ == "__main__":
     unittest.main()

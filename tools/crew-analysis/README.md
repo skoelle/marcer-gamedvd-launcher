@@ -6,7 +6,7 @@ is the "crew view" used when looking at the cracked section the same way the
 catalog exposes `games`, `pd`, `utils`, `magazines` and `falcon`.
 
 See [`ANALYSIS-crews.md`](../../docs/ANALYSIS-crews.md) for the methodology,
-the current tab selection (currently 62 groups) and the data-quality caveats.
+the current tab selection (currently 128 groups) and the data-quality caveats.
 
 ## Data sources
 
@@ -108,7 +108,7 @@ The per-crew release list consumed by the desktop app's and gallery webapp's
 }
 ```
 
-It contains **all** groups; the UI shows the curated selection (currently 62, cap 128). The
+It contains **all** groups; the UI shows the curated selection (currently 128, cap 128). The
 `image` field is reserved for the later cracktro/logo curation phase.
 `--crews-out` overrides the path (default `<GameinfoDirectory>/crews.json`).
 

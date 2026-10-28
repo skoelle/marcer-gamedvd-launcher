@@ -34,7 +34,8 @@
       "Corporation",
       "TCR"
     ],
-    "Atari Cracking Service - ACS": [
+    "Atari ST Computer Studio": [
+      "Atari Cracking Service - ACS",
       "Atari Cracking Service",
       "ACS"
     ],
@@ -188,6 +189,13 @@
       "Invisible - French",
       "Invisibles",
       "The Invisibles"
+    ],
+    "007": [
+      "James Bond 007",
+      "Jame Bond 007"
+    ],
+    "Scottish Cracking Crew": [
+      "SCC"
     ]
   }
 }

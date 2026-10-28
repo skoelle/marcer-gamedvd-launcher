@@ -102,7 +102,7 @@ by prefixing the discovered cracked tree.
 The desktop app loads it as part of the catalog bundle:
 
 - a new **`crews`** section/tab (last tab) shows the curated selection
-  (currently 62 groups; `kCrewInitialLimit` caps it at 128), searchable by
+  (currently 128 groups; `kCrewInitialLimit` caps it at 128), searchable by
   crew name, aliases and release titles;
 - a crew card prefers a curated image from `crew-images.json`, then the best
   available release screenshot, then a group icon;
@@ -117,7 +117,7 @@ The desktop app loads it as part of the catalog bundle:
   Arrow keys/`PgUp`/`PgDn` move through the releases, `Enter`/double-click on a
   release opens the normal game lightbox, `P`/`Space` launches, `Esc` closes.
 
-The full data for all 888 groups is already in `crews.json`; the tab selection
+The full data for all 886 groups is already in `crews.json`; the tab selection
 is controlled by `tools/crew-analysis/crew-tab.json` (`include_until`, `keep`,
 `exclude`) and can be expanded up to the 128 cap without a data change.
 
@@ -182,9 +182,45 @@ missing, the release-screenshot fallback is used.
 
 ```json
 {
-  "include_until": "Fanatics",
-  "keep": ["MUG UK", "TDA", "Delta Force", "LSD", "ST Amigos", "..."],
-  "exclude": ["A-HA", "ICs Workshop", "..." ]
+  "include_until": "Arthur Dent",
+  "keep": [
+    "Bavarian Cracking Service - BCS",
+    "Overlanders",
+    "Rebeliants",
+    "ACF",
+    "Carebears - TCB",
+    "Climax",
+    "Fallen Angels",
+    "GMC Crackings",
+    "Joker",
+    "Nasty",
+    "RCAP",
+    "Awesome",
+    "Fairlight",
+    "Hobbits Brothers",
+    "Invisible",
+    "Kopa",
+    "Ramsess",
+    "Skinhead",
+    "Softrunner Group International - SRG",
+    "Zuul",
+    "Corporation - TMB and PP and SS",
+    "DMA",
+    "Hemoroids",
+    "Hofa",
+    "Maartau",
+    "No Limit",
+    "Replicants / Masters",
+    "Sharaz Jek",
+    "A-Team",
+    "Adrenalin UK",
+    "Atari ST Computer Studio",
+    "Conceptors",
+    "ST Bandits",
+    "Tex / Union",
+    "Genesis Inc"
+  ],
+  "exclude": []
 }
 ```
 
@@ -201,7 +237,7 @@ Generated from the local screenshot index (2026-10-26):
 - Assigned: **8,479**
 - Unmatched: **459**
 - Ambiguous exact matches: **4**
-- Groups with at least one ZIP: **888**
+- Groups with at least one ZIP: **886**
 - Match sources: exact 4,856 · gameinfo crew 2,352 · gameinfo cracker 586 ·
   alias/fuzzy 685
 
@@ -234,7 +270,7 @@ Generated from the local screenshot index (2026-10-26):
 | 23 | TEX - The Exceptions | 60 |
 | 24 | Was Not Was | 57 |
 
-The Crews tab currently shows 62 curated groups; the complete ranking is in
+The Crews tab currently shows 128 curated groups; the complete ranking is in
 `local/crew-analysis/crew-ranking.csv`, and groups outside the selection are
 marked `"excluded": true` in `crews.json`.
 
