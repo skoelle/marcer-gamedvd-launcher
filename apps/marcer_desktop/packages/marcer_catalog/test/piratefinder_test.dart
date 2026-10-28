@@ -71,6 +71,22 @@ PirateFinderIndex _index() => PirateFinderIndex.fromJson({
       'crew': 'Automation',
       'year': 1990,
     },
+    {
+      'id': 4,
+      'kind': 'menu',
+      'label': 'Replicants Menu 1',
+      'title': 'Replicants Menu 1',
+      'crew': 'Replicants',
+      'crew_id': 1,
+      'year': 1991,
+    },
+    {
+      'id': 5,
+      'kind': 'single',
+      'label': 'Arkanoid [cr Replicants]',
+      'crew': 'Replicants',
+      'year': 1986,
+    },
   ],
   'contents': [
     {
@@ -203,6 +219,15 @@ void main() {
     expect(index.crewByName('REPLICANTS')!.id, 1);
     expect(index.crewByName('nonexistent'), isNull);
     expect(index.crewByName(''), isNull);
+  });
+
+  test('disksForCrew collects credited singles and menus', () {
+    final index = _index();
+    final crew = index.crewByName('Replicants')!;
+    final disks = index.disksForCrew(crew);
+    expect(disks.map((disk) => disk.id), [5, 1, 4]);
+    expect(disks.where((disk) => disk.kind == 'single').length, 2);
+    expect(disks.where((disk) => disk.kind != 'single').length, 1);
   });
 
   test('title key and label normalization', () {

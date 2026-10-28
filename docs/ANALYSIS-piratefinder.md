@@ -184,12 +184,18 @@ settings form (below the data-directory field; no config path) and a third
 - Hash matching was validated in Dart against the real data: in a 120-ZIP
   SHA-1 sample all 120 matched, and all 31 SHA-512 (Atari Legend `.msa`) samples
   matched.
+- The crew view has a **More** action in the PirateFinder-Catalog block
+  (`lib/widgets/piratefinder_crew_dialog.dart`): crew history, members,
+  founded date and links plus all PF single releases, menus/packs, trivia and
+  sources. `PirateFinderIndex.disksForCrew` resolves the credited disks by
+  `crew_id` or normalised crew name.
 
 ## 4. What this enables (next phases)
 
-1. **Crew view / crew dialog.** Use `crews-st.json` for history, members,
-   founding date, URL and Wikipedia, keyed by the normalised crew name of the
-   selected card. Attribution and the CC BY-NC-SA notice are required.
+1. **Crew view / crew dialog.** Implemented: the crew overview's
+   PirateFinder-Catalog **More** action opens a crew lightbox with history,
+   members, founding date, URL/Wikipedia, PF releases, menus/packs, trivia and
+   sources. Attribution and the CC BY-NC-SA notice are included.
 2. **Alias curation.** Feed the reviewed `alias-candidates.csv` into
    `tools/crew-analysis/aliases.json`; do not merge automatically, because
    individual crackers and crews share names.

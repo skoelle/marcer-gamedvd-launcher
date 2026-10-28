@@ -40,6 +40,75 @@ PirateFinderIndex _alphaIndex() => PirateFinderIndex.fromJson({
   'images': [],
 });
 
+PirateFinderIndex _crewDialogIndex() => PirateFinderIndex.fromJson({
+  'generated_at': '2026-10-24T12:34:16Z',
+  'source': {'tag': 'catalogue-2026-10-19'},
+  'sources': [
+    {
+      'id': 'demozoo',
+      'name': 'Demozoo',
+      'url': 'https://demozoo.org',
+      'licence': 'CC BY-NC-SA 4.0',
+      'records': 2,
+    },
+  ],
+  'crews': [
+    {
+      'id': 1,
+      'name': 'Alpha Crew',
+      'platform': 'atari-st',
+      'members': 'Orion, Snake',
+      'founded': '1988',
+      'notes': 'An Alpha demo crew.',
+      'source': 'demozoo',
+      'url': 'https://demozoo.org/groups/1/',
+      'disk_count': 2,
+    },
+  ],
+  'disks': [
+    {
+      'id': 1,
+      'kind': 'single',
+      'label': 'Alpha release 1990',
+      'title': 'Alpha',
+      'publisher': 'Publisher A',
+      'crew': 'Alpha Crew',
+      'crew_id': 1,
+      'year': 1990,
+    },
+    {
+      'id': 2,
+      'kind': 'menu',
+      'label': 'Alpha Menu 1',
+      'title': 'Alpha Menu 1',
+      'crew': 'Alpha Crew',
+      'crew_id': 1,
+      'year': 1991,
+    },
+  ],
+  'contents': [
+    {'id': 10, 'disk_id': 2, 'position': 1, 'title': 'Alpha', 'kind': 'game'},
+  ],
+  'trivia': [
+    {
+      'id': 100,
+      'disk_id': 2,
+      'content_id': 10,
+      'kind': 'fact',
+      'text': 'Alpha trivia',
+      'source': 'demozoo',
+      'licence': 'CC BY-NC-SA 4.0',
+    },
+  ],
+  'links': [
+    {
+      'disk_id': 1,
+      'label': 'Atari Legend',
+      'url': 'https://atarilegend.com/games/x',
+    },
+  ],
+});
+
 /// Crews tab: `crews.json` loading, top-N cards, search and the release ->
 /// cracked-card lookup used to open the existing game lightbox.
 void main() {
@@ -509,6 +578,58 @@ void main() {
 
     expect(find.text('PirateFinder Crew Releases (1)'), findsOneWidget);
     expect(find.text('Crews'), findsOneWidget);
+  });
+
+  testWidgets('crew overview More opens the PirateFinder crew lightbox', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await c.init();
+    });
+    final crew = c.crews.groups.firstWhere(
+      (group) => group.name == 'Alpha Crew',
+    );
+    c.pirateFinderData = _FakePirateFinderData(_crewDialogIndex());
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CrewLightbox(controller: c, crew: crew),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('More'), findsOneWidget);
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Releases (1)'), findsOneWidget);
+    expect(find.text('Menus (1)'), findsOneWidget);
+    expect(find.text('Trivia (1)'), findsOneWidget);
+    expect(find.text('Orion, Snake'), findsOneWidget);
+    expect(find.text('An Alpha demo crew.'), findsWidgets);
+
+    await tester.tap(find.text('Releases (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha release 1990'), findsOneWidget);
+
+    await tester.tap(find.text('Menus (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha Menu 1'), findsOneWidget);
+
+    await tester.tap(find.text('Trivia (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha trivia'), findsOneWidget);
+
+    await tester.tap(find.text('Sources'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('CC BY-NC-SA 4.0'), findsWidgets);
   });
 
   testWidgets('crew detail lists releases and opens one on tap', (

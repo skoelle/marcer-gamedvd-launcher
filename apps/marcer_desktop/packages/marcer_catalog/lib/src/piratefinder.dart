@@ -568,6 +568,27 @@ class PirateFinderIndex {
     return null;
   }
 
+  /// All disks credited to [crew] (by crew id or normalised crew name),
+  /// sorted chronologically with unknown years last and label as tie-break.
+  List<PirateFinderDisk> disksForCrew(PirateFinderCrew crew) {
+    final nameKey = normalizeLabel(crew.name);
+    final result = <PirateFinderDisk>[];
+    for (final disk in _disks.values) {
+      final byId = disk.crewId == crew.id;
+      final byName = nameKey.isNotEmpty && normalizeLabel(disk.crew) == nameKey;
+      if (byId || byName) result.add(disk);
+    }
+    result.sort((a, b) {
+      final ay = a.year;
+      final by = b.year;
+      if (ay == null && by != null) return 1;
+      if (ay != null && by == null) return -1;
+      if (ay != null && by != null && ay != by) return ay.compareTo(by);
+      return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+    });
+    return result;
+  }
+
   PirateFinderSeries? seriesForDisk(PirateFinderDisk disk) =>
       disk.seriesId == null ? null : _series[disk.seriesId];
 

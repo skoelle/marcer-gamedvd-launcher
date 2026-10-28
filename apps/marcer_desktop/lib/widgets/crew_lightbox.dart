@@ -14,6 +14,7 @@ import 'crew_overview.dart';
 import 'game_info_panel.dart';
 import 'game_lightbox.dart';
 import 'local_assets_chips.dart';
+import 'piratefinder_crew_dialog.dart';
 import 'piratefinder_dialog.dart';
 import 'select_menu.dart';
 
@@ -642,6 +643,13 @@ class _CrewLightboxState extends State<CrewLightbox> {
             key: const ValueKey('crew-lightbox-overview'),
             crew: widget.crew,
             pirateFinderCrew: pirateFinderCrew,
+            onOpenPirateFinder: pirateFinderCrew == null
+                ? null
+                : () => showPirateFinderCrewDialog(
+                    context,
+                    controller: widget.controller,
+                    crew: widget.crew,
+                  ),
           ),
           const Divider(height: 1),
           Expanded(child: _sidePanel(context)),

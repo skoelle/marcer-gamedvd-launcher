@@ -55,7 +55,9 @@ Save, the manual screenshot curation described below.
   behind it on the left, the crew name centred and the close button at the
   right (name/year ascending/descending, default name asc; the
   `skipped_disk_n` status is hidden for crew releases); arrow keys navigate,
-  Enter opens the normal lightbox and P/Play launches.
+  Enter opens the normal lightbox and P/Play launches. The PirateFinder-Catalog
+  block in the crew overview has a **More** button that opens a crew-only PF
+  lightbox with `Overview`, `Releases`, `Menus`, `Trivia` and `Sources`.
 - **Type-to-filter dropdowns** — every filter dropdown (publisher, crew,
   cracker, language, year, genre/developers, status, sort, raw/pasti/boxscan,
   TOS/Bad) opens a searchable, virtualized menu (only the visible rows are
@@ -105,7 +107,9 @@ Save, the manual screenshot curation described below.
   variants only for a title/crew match; it lists the matching crews and has a
   right-aligned red `Crews` button. The dialog has `Release (N)`, `Menus (N)`,
   `Trivia (N)` and `Sources` tabs; the Release tab lists each candidate with
-  its crew and release date, and crew/contents details inline.
+  its crew and release date, and crew/contents details inline. A crew's
+  PirateFinder block has a **More** action with the crew history/members,
+  all PF single releases and menus/packs, crew trivia and catalogue sources.
 - **Crew / cracker focus** — pick a crew or cracker and each card jumps to
   *that group's* ZIP variant, even when it has no screenshot yet (fuzzy
   matching tolerates `&`/`and` and small typos).

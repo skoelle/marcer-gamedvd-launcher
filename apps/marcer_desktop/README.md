@@ -13,7 +13,9 @@ lists all releases and opens one in the existing lightbox. Double-clicking a
 crew card opens the release browser (main-style search field and sort at the
 top left, crew name centred in the header, close at the right, sidebar below
 the header with the crew overview above the selected ZIP info, name/year sort
-with `name asc` as default, `skipped_disk_n` hidden).
+with `name asc` as default, `skipped_disk_n` hidden). The crew overview's
+PirateFinder-Catalog block has a **More** button opening a crew-only PF
+lightbox (`Overview`, `Releases`, `Menus`, `Trivia`, `Sources`).
 (Game info + This ZIP + Release variants); an optional overlay folder
 browser (`T` / Folders button) per `SPEC.md` §7, plus a gallery-style
 lightbox (filmstrip + info panel). On desktop, **scrollbars stay visible**
@@ -424,7 +426,10 @@ The status dropdown (`with screenshot`, `any`, `done`, `desktop (only)`,
 utils, magazine, falcon); the Crews tab has no screenshot-status filter:
 When a crew matches a PirateFinder-Catalog crew (name or alias), its detail
 panel additionally shows the PF crew info (members, history, release count,
-source) above the release list.
+source) above the release list. The PF block has a **More** button that opens
+the crew PF lightbox with `Overview` (history/members/founded/links),
+`Releases` (single disks), `Menus` (menus/packs/compilations), `Trivia`
+(real facts/notes) and `Sources`.
 
 - `pending`, `desktop (any ZIP)` and `no usable shots (any ZIP)` match a
   game when **at least one** of its ZIPs has that status.

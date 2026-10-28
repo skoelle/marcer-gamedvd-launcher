@@ -14,6 +14,7 @@ class CrewDetailPanel extends StatelessWidget {
     super.key,
     required this.crew,
     this.pirateFinderCrew,
+    this.onOpenPirateFinder,
     this.onOpenRelease,
   });
 
@@ -22,6 +23,9 @@ class CrewDetailPanel extends StatelessWidget {
   /// Optional PirateFinder crew info of the same group (members, history,
   /// release count, source); shown above the release list when present.
   final PirateFinderCrew? pirateFinderCrew;
+
+  /// Opens the full PirateFinder-Catalog crew lightbox.
+  final VoidCallback? onOpenPirateFinder;
 
   /// Opens the cracked-game card + variant for a release `rel` path.
   final void Function(String rel)? onOpenRelease;
@@ -34,6 +38,7 @@ class CrewDetailPanel extends StatelessWidget {
         CrewOverview(
           crew: crew,
           pirateFinderCrew: pirateFinderCrew,
+          onOpenPirateFinder: onOpenPirateFinder,
           showHints: true,
         ),
         const Divider(height: 1),

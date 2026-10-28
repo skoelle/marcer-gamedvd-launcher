@@ -12,6 +12,7 @@ class CrewOverview extends StatelessWidget {
     super.key,
     required this.crew,
     this.pirateFinderCrew,
+    this.onOpenPirateFinder,
     this.showHints = false,
   });
 
@@ -20,6 +21,9 @@ class CrewOverview extends StatelessWidget {
   /// Optional PirateFinder crew info of the same group (members, history,
   /// release count, source); shown below the aliases when present.
   final PirateFinderCrew? pirateFinderCrew;
+
+  /// Opens the full PirateFinder-Catalog crew lightbox (the `More` action).
+  final VoidCallback? onOpenPirateFinder;
 
   /// Shows the crew-tab usage hints (release click / double-click).
   final bool showHints;
@@ -98,13 +102,33 @@ class CrewOverview extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'PirateFinder-Catalog',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF9E9E9E),
-            ),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'PirateFinder-Catalog',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF9E9E9E),
+                  ),
+                ),
+              ),
+              if (onOpenPirateFinder != null)
+                TextButton(
+                  onPressed: onOpenPirateFinder,
+                  style: TextButton.styleFrom(
+                    minimumSize: Size.zero,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: Colors.lightBlueAccent,
+                  ),
+                  child: const Text('More', style: TextStyle(fontSize: 10)),
+                ),
+            ],
           ),
           if (pf.members.isNotEmpty) ...[
             const SizedBox(height: 4),

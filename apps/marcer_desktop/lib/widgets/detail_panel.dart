@@ -12,6 +12,7 @@ import 'atari_legend_dialog.dart';
 import 'crew_detail_panel.dart';
 import 'game_info_panel.dart';
 import 'local_assets_chips.dart';
+import 'piratefinder_crew_dialog.dart';
 import 'piratefinder_dialog.dart';
 import 'open_folder_button.dart';
 import 'status_kind_dialog.dart';
@@ -126,6 +127,11 @@ class DetailPanel extends StatelessWidget {
             ? CrewDetailPanel(
                 crew: card.crew!,
                 pirateFinderCrew: c.pirateFinderCrewForGroup(card.crew!),
+                onOpenPirateFinder: () => showPirateFinderCrewDialog(
+                  context,
+                  controller: c,
+                  crew: card.crew!,
+                ),
                 onOpenRelease: onOpenCrewRelease,
               )
             : _cardInfo(context, c, card),
