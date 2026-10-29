@@ -32,7 +32,8 @@
     ],
     "Corporation - TCR": [
       "Corporation",
-      "TCR"
+      "TCR",
+      "Corpotation"
     ],
     "Atari ST Computer Studio": [
       "Atari Cracking Service - ACS",
@@ -41,7 +42,8 @@
     ],
     "Bad Brew Crew - BBC": [
       "Bad Brew Crew",
-      "BBC"
+      "BBC",
+      "Beverly Hills Cop - Hal"
     ],
     "Fantasy Crackers - TFC": [
       "Fantasy Cracker",
@@ -196,6 +198,44 @@
     ],
     "Scottish Cracking Crew": [
       "SCC"
+    ],
+    "Special FX": [
+      "SFX"
+    ],
+    "Klapauzius": [
+      "Klapauziuz"
+    ],
+    "Bergerdor Atari Clan - BAC": [
+      "Bergerdorf Atari Clan"
+    ],
+    "14th Julys Band": [
+      "14th July Band",
+      "14th July's Band"
+    ],
+    "Lemmings": [
+      "The Lemmings"
+    ],
+    "Flying Knights": [
+      "The Flying Knights"
+    ],
+    "Public Enemys": [
+      "The Public Enemies",
+      "Public Enemies"
+    ],
+    "Dirty Tricks": [
+      "Dirty Tricks Brigade"
+    ],
+    "Automation": [
+      "Auto 494"
+    ],
+    "D-Bug": [
+      "D_079_B"
+    ],
+    "Vectoryd": [
+      "Vectroyd"
+    ],
+    "SuperGAU": [
+      "Supergau"
     ]
   }
 }

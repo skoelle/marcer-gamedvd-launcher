@@ -192,6 +192,74 @@ class TabSelectionFlagsTest(unittest.TestCase):
         self.assertFalse(flags["Replicants / Masters"])
         self.assertTrue(flags["Replicants/Masters"])
 
+
+class RegistryAliasesTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.path = Path(ca.__file__).with_name("aliases.json")
+        cls.explicit = ca.load_aliases(cls.path)
+
+    def test_duplicate_group_alias_is_merged(self):
+        self.assertEqual(self.explicit[ca.norm("SFX")], "Special FX")
+
+    def test_typo_and_spelling_aliases_are_canonicalized(self):
+        expected = {
+            "Klapauziuz": "Klapauzius",
+            "Bergerdorf Atari Clan": "Bergerdor Atari Clan - BAC",
+            "14th July Band": "14th Julys Band",
+            "14th July's Band": "14th Julys Band",
+            "Corpotation": "Corporation - TCR",
+            "Auto 494": "Automation",
+            "D_079_B": "D-Bug",
+            "Vectroyd": "Vectoryd",
+            "Supergau": "SuperGAU",
+            "Beverly Hills Cop - Hal": "Bad Brew Crew - BBC",
+        }
+        for alias, canonical in expected.items():
+            self.assertEqual(self.explicit[ca.norm(alias)], canonical, alias)
+
+    def test_piratefinder_spelling_variants_are_aliases(self):
+        expected = {
+            "The Lemmings": "Lemmings",
+            "The Flying Knights": "Flying Knights",
+            "The Public Enemies": "Public Enemys",
+            "Public Enemies": "Public Enemys",
+            "Dirty Tricks Brigade": "Dirty Tricks",
+        }
+        for alias, canonical in expected.items():
+            self.assertEqual(self.explicit[ca.norm(alias)], canonical, alias)
+
+    def test_gameinfo_label_merges_into_crew_sorted_group(self):
+        raw, _aliases, _abbrev, labels = ca.build_registry(
+            ["Special FX"], {"SFX": {"crew"}}, self.explicit, set())
+        self.assertEqual(raw["Special FX"], "Special FX")
+        self.assertEqual(labels["SFX"], "Special FX")
+
+    def test_new_aliases_match_unmatched_zip_names(self):
+        _raw, aliases, abbrev, _labels = ca.build_registry(
+            [], {}, self.explicit, set())
+        expected = {
+            "Hotshot - 14th July Band.zip": "14th Julys Band",
+            "North and South - 68010 version - Klapauziuz.zip": "Klapauzius",
+            "Mickeys Runaway Zoo - Auto 494.zip": "Automation",
+            "Welltris - Corpotation.zip": "Corporation - TCR",
+            "Adventures of Snatch and Crunch - D_079_B.zip": "D-Bug",
+            "Crimson Crown - Supergau.zip": "SuperGAU",
+            "Transworld - German - Vectroyd.zip": "Vectoryd",
+            "Beverly Hills Cop - Hal.zip": "Bad Brew Crew - BBC",
+        }
+        for name, group in expected.items():
+            suffix = name.split(" - ", 1)[1] if " - " in name else name
+            hits = ca.alias_hits(
+                set(ca.tokens(name)),
+                ca.compact(name),
+                set(ca.tokens(suffix)),
+                aliases,
+                abbrev,
+            )
+            self.assertIn(group, {hit[2] for hit in hits}, name)
+
+
 class CrewsSourceSummaryTest(unittest.TestCase):
     def test_is_path_free_and_uses_logical_names(self):
         source = ca.crews_source_summary("/mnt/nas/x/Screenshots/index.json")

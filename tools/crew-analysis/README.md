@@ -169,7 +169,13 @@ so re-running the pipeline never silently replaces a curated pick.
 
 ## Registry
 
-- `aliases.json` — canonical group names and their aliases.
+- `aliases.json` — canonical group names and their aliases. Canonical spellings
+  follow the `Crew Sorted` folder names; curated abbreviations and typo
+  variants (`SFX` → `Special FX`, `Klapauziuz` → `Klapauzius`) also live here.
+  A canonical name listed here is added to the registry even when neither the
+  `Crew Sorted` tree nor the gameinfo labels contain it (e.g. `SuperGAU`).
+  Release-code suffixes (`A_###`, `dbug###`, `SERE##`, …) are not mapped
+  automatically and stay in `unmatched.txt` for review.
 - `exclude.txt` — labels that are not scene groups (placeholders, region/
   language notes, …).
 - `crew-tab.json` — tab selection: `include_until` (visible through this

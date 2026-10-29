@@ -57,14 +57,21 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
    `Original`, `Demo Version`, `RAW`, `IPF`) are excluded.
 2. **Group registry:** all Crew Sorted folder names are canonical groups. Every
    `crew` and `cracked_by` label from `games-cracked.json` is added; unknown
-   labels become their own group. Placeholders such as `Original`/`Unknown` are
+   labels become their own group. Canonical names listed in `aliases.json` are
+   added as well, so a group missing from both sources can be introduced
+   explicitly (e.g. `SuperGAU`). Placeholders such as `Original`/`Unknown` are
    excluded.
 3. **Alias normalization:** explicit aliases from
    [`tools/crew-analysis/aliases.json`](../../tools/crew-analysis/aliases.json)
    plus generic rules: leading `The`, region/language suffixes (`- USA`,
    `- French`, …), abbreviation suffixes (`- MCA`, `- TCR`, …), combined-credit
    normalization (`MCA & Hotline` → `Hotline and MCA`) and a strict fuzzy
-   fallback for typos.
+   fallback for typos. Canonical spellings follow the `Crew Sorted` folder
+   names; curated abbreviations and typo variants (`SFX` → `Special FX`,
+   `Klapauziuz` → `Klapauzius`, `Bergerdorf Atari Clan` →
+   `Bergerdor Atari Clan - BAC`) are part of the registry. Release-code
+   suffixes (`A_###`, `dbug###`, `SERE##`, …) are not mapped automatically;
+   unresolved ZIPs stay in `unmatched.txt` for review.
 4. **Attribution (crew view):**
    - exact ZIP basename match against Crew Sorted;
    - otherwise the folder's `crew`/`cracked_by`, with **`crew` preferred over
