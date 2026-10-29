@@ -24,6 +24,7 @@ class FilterBar extends StatefulWidget {
     required this.controller,
     required this.searchFocus,
     this.onExitSearch,
+    this.onOpenHelp,
     this.onOpenSettings,
     this.updater,
     this.assetUpdater,
@@ -40,6 +41,10 @@ class FilterBar extends StatefulWidget {
   /// Called when Escape leaves an empty search field (focus goes back to
   /// the grid/list).
   final VoidCallback? onExitSearch;
+
+  /// Opens the in-app help overlay; rendered as a question-mark button left of
+  /// the settings gear.
+  final VoidCallback? onOpenHelp;
 
   /// Opens the in-app settings editor (path fields of `desktop.config.json`);
   /// rendered as a gear button left of the Folders toggle.
@@ -248,6 +253,10 @@ class _FilterBarState extends State<FilterBar> {
                 ],
                 if (widget.assetUpdater != null) ...[
                   _catalogAssetsButton(widget.assetUpdater!),
+                  const SizedBox(width: 6),
+                ],
+                if (widget.onOpenHelp != null) ...[
+                  _helpButton(widget.onOpenHelp!),
                   const SizedBox(width: 6),
                 ],
                 if (widget.onOpenSettings != null) ...[
@@ -699,6 +708,29 @@ class _FilterBarState extends State<FilterBar> {
           child: button,
         );
       },
+    );
+  }
+
+  /// Question-mark button left of the settings gear: opens the help overlay
+  /// with keys and mouse controls.
+  Widget _helpButton(VoidCallback onTap) {
+    return SizedBox(
+      width: 32,
+      height: 28,
+      child: Tooltip(
+        message: 'Help — keys & controls (?)',
+        child: TextButton(
+          onPressed: onTap,
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.grey,
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(32, 28),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            alignment: Alignment.center,
+          ),
+          child: const Icon(Icons.help_outline, size: 16),
+        ),
+      ),
     );
   }
 

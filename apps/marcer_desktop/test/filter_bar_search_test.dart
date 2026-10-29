@@ -36,6 +36,7 @@ void main() {
   Future<CatalogController> pumpFilterBar(
     WidgetTester tester, {
     SelfUpdateController? updater,
+    VoidCallback? onOpenHelp,
   }) async {
     tester.view.physicalSize = const Size(1600, 1200);
     tester.view.devicePixelRatio = 1.0;
@@ -56,7 +57,12 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: FilterBar(controller: c, searchFocus: focus, updater: updater),
+        body: FilterBar(
+          controller: c,
+          searchFocus: focus,
+          updater: updater,
+          onOpenHelp: onOpenHelp,
+        ),
       ),
     ));
     await tester.pumpAndSettle();
@@ -176,6 +182,16 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(c.filter.status, 'skipped_disk_n');
+  });
+
+  testWidgets('help button opens the help overlay callback', (tester) async {
+    var opened = 0;
+    await pumpFilterBar(tester, onOpenHelp: () => opened++);
+
+    await tester.tap(find.byIcon(Icons.help_outline));
+    await tester.pumpAndSettle();
+
+    expect(opened, 1);
   });
 
   testWidgets('manual update check reports the latest version', (tester) async {

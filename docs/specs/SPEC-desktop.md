@@ -349,7 +349,9 @@ console launcher):
 
 ## Keyboard & mouse
 
-`?` opens the in-app help overlay from the catalog, folder list and lightbox.
+`?` opens the in-app help overlay from the catalog, folder list and lightbox;
+the question-mark button in the top-right toolbar (left of the settings gear)
+does the same with the mouse.
 The lightbox uses `←/→` for cards, `↑/↓` for variants, `PgUp/PgDn` for images,
 `Space`/`P` to launch, `*` to favorite, `M` to promote the shown candidate,
 `C` to edit status/kind, `Esc` to close and `?` for help. Every lightbox/dialog

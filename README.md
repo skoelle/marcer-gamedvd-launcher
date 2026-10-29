@@ -186,6 +186,9 @@ Field reference and the complete setup walkthrough:
 | `?` | Show the help overlay |
 | `ESC` / `q` | Exit (in the lightbox/dialogs, `ESC` closes that view) |
 
+The same help overlay opens via the question-mark button in the top-right
+toolbar, left of the settings gear.
+
 In the **lightbox**: `←`/`→` switch card (clickable arrows sit outside the
 lightbox at the left/right with the neighbour title when the window is wide
 enough; arrow only when space is tight, hidden at the first/last card and

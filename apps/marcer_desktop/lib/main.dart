@@ -1003,6 +1003,7 @@ class _HomePageState extends State<HomePage> {
             controller: c,
             searchFocus: _searchFocus,
             onExitSearch: () => _centerFocus.requestFocus(),
+            onOpenHelp: _toggleHelp,
             onOpenSettings: _openSettings,
             updater: _updater,
             assetUpdater: _assetUpdater,
