@@ -140,6 +140,12 @@ contiguous names (`Dead Eye` → Deadeye). High-confidence matches get
 all proposals are audited in `inferred-matches.csv`, and unknown names are only
 proposed in `new-groups-review.csv`.
 
+A **single-ZIP joint cracker group** is collapsed into the crew named in its
+release when that `crew` label resolves unambiguously to an existing crew
+group. This avoids tiny combined groups such as `Snake & NTM` masking a clear
+`Replicants` or `Masters` credit. Non-joint one-ZIP crackers and joint groups
+without a resolvable crew label stay unchanged.
+
 The Crew Sorted exact match retries after stripping trailing dump markers
 (`BAD`, `Cracked`, `Unknown`, `Demo`, `Tr`, `Disk N`, …), but only while the
 shortened basename still contains a credit segment: `TNT - SJ Crew - BAD.zip`

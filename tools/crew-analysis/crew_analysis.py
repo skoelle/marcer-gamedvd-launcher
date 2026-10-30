@@ -721,6 +721,65 @@ def _group_name_in_suffix(
     return False
 
 
+def collapse_single_zip_joint_crackers(
+    release_rows: dict[str, list[dict]],
+    primary: Counter[str],
+    source_counts: Counter[str],
+    crew_group_names: set[str],
+    alias_to_groups: dict[str, set[str]],
+    label_canon: dict[str, str],
+) -> list[dict]:
+    """Move one-ZIP joint cracker groups to the crew named in the release.
+
+    Joint groups are protected by default, which is too strong for a combined
+    credit that occurs only once: if its release carries an unambiguous crew
+    label that resolves to an existing crew group, that crew wins.
+    """
+    existing_crews = {group for group in primary if primary[group] > 0}
+
+    def resolve_crew(label: str) -> str | None:
+        label = clean_group_label(label)
+        if not label:
+            return None
+        canonical = label_canon.get(label)
+        if canonical:
+            return canonical
+        groups = alias_to_groups.get(norm(label))
+        if groups and len(groups) == 1:
+            return next(iter(groups))
+        return None
+
+    moves: list[dict] = []
+    for group, releases in list(release_rows.items()):
+        if len(releases) != 1 or group in crew_group_names:
+            continue
+        if not is_combined(group):
+            continue
+        release = releases[0]
+        target = resolve_crew(str(release.get("crew") or ""))
+        if (
+            not target
+            or target == group
+            or target not in crew_group_names
+            or target not in existing_crews
+        ):
+            continue
+        release_rows.setdefault(target, []).append(release)
+        release_rows.pop(group, None)
+        primary[target] += 1
+        primary[group] -= 1
+        if primary[group] <= 0:
+            del primary[group]
+        source_counts["weak_joint"] += 1
+        release["crew"] = target
+        moves.append({
+            "from": group,
+            "to": target,
+            "zip": release.get("zip", ""),
+        })
+    return moves
+
+
 def infer_release_labels(
     release_rows: dict[str, list[dict]],
     group_aliases: dict[str, set[str]],
@@ -1900,6 +1959,12 @@ def main() -> int:
     # Second pass (2/2): fill empty cracker/crew labels from the ZIP name.
     inferred_stats = infer_release_labels(
         release_rows, group_aliases, crew_group_names)
+
+    weak_joint_moves = collapse_single_zip_joint_crackers(
+        release_rows, primary, source_counts, crew_group_names,
+        alias_to_groups, label_canon)
+    if weak_joint_moves:
+        print(f"single-ZIP joint crackers collapsed: {len(weak_joint_moves)}", flush=True)
 
     ordered = sorted(primary.items(), key=lambda kv: (-kv[1], kv[0].casefold()))
     ranking = [

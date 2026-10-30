@@ -722,6 +722,84 @@ class ZipGroupOverridesTest(unittest.TestCase):
                 ca.load_zip_group_overrides(Path(tmp) / "missing.json"), {})
 
 
+class SingleZipJointCollapseTest(unittest.TestCase):
+    def _run(self, rows, primary, crew_names, aliases, labels):
+        return ca.collapse_single_zip_joint_crackers(
+            rows, primary, Counter(), crew_names, aliases, labels)
+
+    def test_moves_one_zip_joint_to_named_crew(self):
+        rows = {
+            "Snake & NTM": [{"zip": "Toyota - Snake - Replicants.zip",
+                             "crew": "Replicants"}],
+            "Replicants": [{"zip": "other.zip", "crew": "Replicants"}],
+        }
+        primary = Counter({"Snake & NTM": 1, "Replicants": 10})
+        moves = ca.collapse_single_zip_joint_crackers(
+            rows, primary, Counter(), {"Replicants"},
+            {"replicants": {"Replicants"}}, {})
+        self.assertEqual(len(moves), 1)
+        self.assertNotIn("Snake & NTM", rows)
+        self.assertEqual(primary["Replicants"], 11)
+        self.assertEqual(rows["Replicants"][-1]["crew"], "Replicants")
+
+    def test_resolves_alias_and_label_canon(self):
+        rows = {
+            "NTM & Replicants": [{"zip": "James Pond - NTM - Masters.zip",
+                                  "crew": "Masters"}],
+            "Masters": [{"zip": "other.zip"}],
+        }
+        primary = Counter({"NTM & Replicants": 1, "Masters": 5})
+        moves = self._run(rows, primary, {"Masters"}, {},
+                          {"Masters": "Masters"})
+        self.assertEqual(moves[0]["to"], "Masters")
+
+    def test_keeps_non_joint_single_cracker(self):
+        rows = {
+            "The Bad": [{"zip": "Floyd - The Bad.zip",
+                         "crew": "Digital Dream Team"}],
+            "Digital Dream Team": [{"zip": "other.zip"}],
+        }
+        primary = Counter({"The Bad": 1, "Digital Dream Team": 1})
+        moves = self._run(rows, primary, {"Digital Dream Team"}, {}, {})
+        self.assertEqual(moves, [])
+
+    def test_keeps_multi_zip_joint(self):
+        rows = {
+            "A & B": [{"crew": "Crew"}, {"crew": "Crew"}],
+            "Crew": [{"zip": "other.zip"}],
+        }
+        primary = Counter({"A & B": 2, "Crew": 1})
+        moves = self._run(rows, primary, {"Crew"}, {}, {})
+        self.assertEqual(moves, [])
+
+    def test_keeps_when_target_not_existing(self):
+        rows = {"A & B": [{"crew": "Crew"}]}
+        primary = Counter({"A & B": 1})
+        moves = self._run(rows, primary, {"Crew"}, {}, {})
+        self.assertEqual(moves, [])
+
+    def test_keeps_ambiguous_alias(self):
+        rows = {
+            "A & B": [{"crew": "Shared"}],
+            "Crew One": [{"zip": "one.zip"}],
+            "Crew Two": [{"zip": "two.zip"}],
+        }
+        primary = Counter({"A & B": 1, "Crew One": 1, "Crew Two": 1})
+        moves = self._run(
+            rows, primary, {"Crew One", "Crew Two"},
+            {"shared": {"Crew One", "Crew Two"}}, {})
+        self.assertEqual(moves, [])
+
+    def test_keeps_when_crew_label_empty(self):
+        rows = {
+            "A & B": [{"crew": ""}],
+            "Crew": [{"zip": "other.zip"}],
+        }
+        primary = Counter({"A & B": 1, "Crew": 1})
+        moves = self._run(rows, primary, {"Crew"}, {}, {})
+        self.assertEqual(moves, [])
+
+
 class CrewsSourceSummaryTest(unittest.TestCase):
     def test_is_path_free_and_uses_logical_names(self):
         source = ca.crews_source_summary("/mnt/nas/x/Screenshots/index.json")
