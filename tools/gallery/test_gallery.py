@@ -453,6 +453,38 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(store.meta["crews"]["visible_groups"], 130)
         self.assertEqual(store.meta["sections"]["crew"]["cards"], 130)
 
+    def test_kind_filter_applies_before_pagination(self):
+        groups = [
+            self._group("alpha-crew", "Alpha Crew", "crew", 2, []),
+            self._group("beta-cracker", "Beta Cracker", "cracker", 1, []),
+        ]
+        store = self._store(groups)
+
+        def fetch(kind):
+            handler = object.__new__(gallery.GalleryHandler)
+            query = "limit=1"
+            if kind:
+                query += f"&kind={kind}"
+            handler.path = "/api/crews?" + query
+            handler.store = store
+            handler.cfg = {"page_size": 60}
+            out = {}
+            handler._json = lambda obj, status=200: out.update(obj)
+            handler._error = lambda status, message: out.update(error=message)
+            handler._crews()
+            return out
+
+        self.assertEqual(fetch("crew")["total"], 1)
+        self.assertEqual([c["name"] for c in fetch("crew")["cards"]],
+                         ["Alpha Crew"])
+        self.assertEqual(fetch("cracker")["total"], 1)
+        self.assertEqual([c["name"] for c in fetch("cracker")["cards"]],
+                         ["Beta Cracker"])
+        # unknown/empty kind means "any" and still paginates
+        self.assertEqual(fetch("")["total"], 2)
+        self.assertEqual(fetch("nope")["total"], 2)
+        self.assertEqual(len(fetch("")["cards"]), 1)
+
 
 class DataDirPathTest(unittest.TestCase):
     """Gameinfo data is read only from <MARCER_DATA_DIR>/gameinfo (no fallback)."""

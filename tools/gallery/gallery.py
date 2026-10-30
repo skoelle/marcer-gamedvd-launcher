@@ -1572,6 +1572,25 @@ def _sort_cards(cards, sort, order):
     cards[:] = known + unknown
 
 
+CREW_KINDS = ("crew", "cracker")
+
+
+def filter_crew_cards(cards, q="", kind=""):
+    """Filter crew summaries by search text and kind (`""` = any)."""
+    query = (q or "").strip().lower()
+    wanted = (kind or "").strip().lower()
+    if wanted not in CREW_KINDS:
+        wanted = ""
+    out = []
+    for card in cards:
+        if wanted and str(card.get("kind") or "crew") != wanted:
+            continue
+        if query and query not in card.get("_search", ""):
+            continue
+        out.append(card)
+    return out
+
+
 def _public_crew_card(card):
     return {
         "id": card["id"],
@@ -1715,8 +1734,8 @@ class GalleryHandler(BaseHTTPRequestHandler):
                 return self._error(404, "crew not found")
             return self._json(self.store.crew_detail(group))
         q = (params.get("q") or "").strip().lower()
-        cards = [c for c in self.store.crews
-                 if not q or q in c.get("_search", "")]
+        kind = (params.get("kind") or "").strip().lower()
+        cards = filter_crew_cards(self.store.crews, q, kind)
         try:
             limit = int(params.get("limit", self.cfg["page_size"]))
         except ValueError:

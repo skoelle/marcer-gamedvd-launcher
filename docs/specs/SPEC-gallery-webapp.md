@@ -186,7 +186,8 @@ Rules:
   name by the second crew-analysis pass.
 - `excluded` is retained for the desktop app's curated Crews tab; the
   gallery ignores it and always shows every group.
-- The tab shows all groups sorted by ZIP count/name (no cap). Current real
+- The tab shows all groups sorted by ZIP count/name (no cap). The **Type**
+  dropdown filters groups by `kind` (`any`/`crew`/`cracker`). Current real
   data (2026-10-30): 885 groups, 8,508 releases.
 - `crew-images.json` (optional): curated card image per crew keyed by
   name/id, with `rel` (release ZIP index path) and `name` (image basename
@@ -708,10 +709,13 @@ Semantics:
 
 ### 5.6 `/api/crews`
 
-`GET /api/crews?q=&offset=&limit=` returns the Crews-tab card summaries.
+`GET /api/crews?q=&kind=&offset=&limit=` returns the Crews-tab card summaries.
 
 - `q` filters case-insensitively over the group name, `kind`, aliases and
   all release fields (title/folder/ZIP/year/publisher/cracked_by/crew).
+- `kind` filters by group kind (`crew`/`cracker`); an empty or unknown value
+  disables the filter. It is applied before `q`/pagination, so `total`
+  reflects the filtered set.
 - Cards are sorted by ZIP count descending, then name; no status/facet/
   letter filters apply.
 - `limit` default 60, max 200; `offset`/`total` follow `/api/entries`.
@@ -1098,10 +1102,10 @@ browser for that crew:
    parameters.
 6. **Letter navigation**: exact match on the card's `letter` facet value
    (`0-9` for the first bucket, `Any` disables the filter).
-7. **Crews (`section=crew`)**: only `q` applies (group name/kind/aliases and
-   all release fields); cards are pre-sorted by ZIP count then name. The
-   release browser filters/sorts one crew's releases client-side (section
-   6.11).
+7. **Crews (`section=crew`)**: only `q` and `kind` apply (group
+   name/kind/aliases and all release fields; `kind` = `any`/`crew`/
+   `cracker`); cards are pre-sorted by ZIP count then name. The release
+   browser filters/sorts one crew's releases client-side (section 6.11).
 
 ---
 

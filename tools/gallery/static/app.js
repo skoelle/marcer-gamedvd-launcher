@@ -56,6 +56,7 @@ const state = {
   pasti: "any",
   boxscan: "any",
   tos: "any",
+  crewKind: "any",
   sort: "name",
   order: "asc",
   offset: 0,
@@ -97,6 +98,10 @@ function readURL() {
   }
   if (u.has("offset")) state.offset = Math.max(0, parseInt(u.get("offset"), 10) || 0);
   if (u.has("entry")) state.entry = u.get("entry");
+  if (u.has("kind")) {
+    const kind = u.get("kind");
+    state.crewKind = ["crew", "cracker"].includes(kind) ? kind : "any";
+  }
   if (!SECTION_KEYS.includes(state.section)) {
     state.section = "cracked";
   }
@@ -117,6 +122,8 @@ function writeURL(push) {
       "raw", "pasti", "boxscan", "tos"]) keep(k, state[k], "any");
     keep("sort", state.sort, "name");
     keep("order", state.order, "asc");
+  } else {
+    keep("kind", state.crewKind, "any");
   }
   if (lb && !lb.standalone && lb.cards[lb.idx] &&
       lb.cards[lb.idx].variants[lb.variant]) {
@@ -163,6 +170,7 @@ function entriesQuery(extra) {
 function crewsQuery() {
   const p = new URLSearchParams();
   if (state.q) p.set("q", state.q);
+  if (state.crewKind !== "any") p.set("kind", state.crewKind);
   p.set("offset", String(state.offset));
   p.set("limit", String(state.limit));
   return "/api/crews?" + p;
@@ -193,11 +201,11 @@ function buildFacets() {
   // hide controls not available for this section / without gameinfo
   for (const id of ["status", "publisher", "crew", "cracker", "language",
     "year", "raw", "pasti", "boxscan", "tos", "sort", "clear",
-    "search"]) {
+    "search", "crew-kind"]) {
     const el = $(id);
     if (!el) continue;
     if (isCrew) {
-      el.hidden = id !== "search" && id !== "clear";
+      el.hidden = !["search", "clear", "crew-kind"].includes(id);
       continue;
     }
     if (id === "sort" || id === "clear" || id === "search") {
@@ -553,7 +561,9 @@ async function loadEntries() {
       const data = await api(crewsQuery());
       renderGrid(data.cards);
       renderPager(data.total);
-      $("result-count").textContent = `${data.total} crew${data.total === 1 ? "" : "s"}`;
+      const noun = state.crewKind === "cracker" ? "cracker" : "crew";
+      $("result-count").textContent =
+        `${data.total} ${noun}${data.total === 1 ? "" : "s"}`;
       writeURL(false);
       renderStats();
       renderFooter();
@@ -1652,6 +1662,11 @@ function wireEvents() {
       loadEntries();
     });
   }
+  $("crew-kind").addEventListener("change", () => {
+    state.crewKind = $("crew-kind").value;
+    state.offset = 0;
+    loadEntries();
+  });
   // combined sort + order dropdown, value `<key>:<order>` (desktop
   // `_sortDropdown`); the URL keeps the separate `sort`/`order` params
   $("sort").addEventListener("change", () => {
@@ -1666,7 +1681,7 @@ function wireEvents() {
       status: sectionDefaultStatus(), q: "", letter: "any",
       publisher: "any", crew: "any", cracker: "any", language: "any",
       year: "any", raw: "any", pasti: "any", boxscan: "any", tos: "any",
-      sort: "name", order: "asc", offset: 0,
+      crewKind: "any", sort: "name", order: "asc", offset: 0,
     });
     syncControls();
     loadEntries();
@@ -1690,6 +1705,7 @@ function wireEvents() {
     state.offset = 0;
     // reset incompatible filters; status falls back to the section default
     state.status = sectionDefaultStatus();
+    state.crewKind = "any";
     for (const k of ["raw", "pasti", "boxscan", "tos", "crew", "cracker"])
       state[k] = "any";
     if (state.section === "crew") {
@@ -1767,6 +1783,7 @@ function wireEvents() {
 
 function syncControls() {
   $("search").value = state.q;
+  $("crew-kind").value = state.crewKind;
   buildStatusOptions();
   buildFacets();
   buildLetters();
