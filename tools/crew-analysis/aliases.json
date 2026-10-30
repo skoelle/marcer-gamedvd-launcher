@@ -13,10 +13,6 @@
       "MCA & Hotline",
       "Hotline MCA"
     ],
-    "Medway Boys - TMB": [
-      "Medway Boys - TMB",
-      "Medway Boys"
-    ],
     "Menacing Cracking Alliance - MCA": [
       "Menacing Cracking Alliance - MCA",
       "MCA",
@@ -360,13 +356,6 @@
       "42 Crew",
       "42 Crew & Blade Runners"
     ],
-    "Replicants": [
-      "Replicants",
-      "R.AL & Snake",
-      "Snake & R.AL",
-      "Snake & Cameo",
-      "Cameo & Snake"
-    ],
     "V8": [
       "V8",
       "V8 & Fallen Angels & Revolutions",
@@ -380,11 +369,6 @@
       "Fuzion & Stranglers",
       "Orion & Fuzion",
       "Stranglers"
-    ],
-    "Equinox": [
-      "Equinox",
-      "Equinox & Rebels",
-      "Rebels & Equinox"
     ],
     "KrazyK": [
       "KrazyK",
@@ -414,6 +398,66 @@
       "Genesis Inc.",
       "Genesis",
       "Genesis Inc"
+    ],
+    "Replicants": [
+      "Replicants",
+      "R.AL & Snake",
+      "Snake & R.AL",
+      "Snake & Cameo",
+      "Cameo & Snake",
+      "Dom & Replicants",
+      "Replicants & Union"
+    ],
+    "Equinox": [
+      "Equinox",
+      "Equinox & Rebels",
+      "Rebels & Equinox",
+      "Rebels"
+    ],
+    "Ator": [
+      "Ator",
+      "Ator & Floyd"
+    ],
+    "Birdy": [
+      "Birdy",
+      "Birdy & Hoskas"
+    ],
+    "Boss": [
+      "Boss",
+      "Boss & Pet",
+      "Boss & STCS"
+    ],
+    "Captain Crook": [
+      "Captain Crook",
+      "Captain Crook & Worlok"
+    ],
+    "Conan": [
+      "Conan",
+      "Conan & BXC"
+    ],
+    "Joker": [
+      "Joker",
+      "Joker & RBS",
+      "Jacobs Cream Cracker",
+      "Hysteria"
+    ],
+    "Flame": [
+      "Flame",
+      "Flame & Anatsu Ronara",
+      "Anatsu Ronara"
+    ],
+    "Jao": [
+      "Jao",
+      "BCA & Jao"
+    ],
+    "Medway Boys - TMB": [
+      "Medway Boys - TMB",
+      "Medway Boys",
+      "Medway Boys & A-HA"
+    ],
+    "Syndicate & ESC": [
+      "Syndicate & ESC",
+      "Syndicate"
     ]
   }
 }

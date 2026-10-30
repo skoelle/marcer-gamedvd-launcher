@@ -438,6 +438,36 @@
       "name": "Rolling Thunder - Tr - A-Team.png",
       "source": "manual",
       "note": "user pick (curated)"
+    },
+    "Joker": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/D/Dynablaster/Dynablaster - Tr - The Joker.zip",
+      "name": "Dynablaster - Tr - The Joker.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Flame": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/T/Tai Pan/Tai Pan - Flame.zip",
+      "name": "Tai Pan - Flame.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Syndicate & ESC": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/R/Robotz/Robotz - Tr - Syndicate.zip",
+      "name": "Robotz - Tr - Syndicate.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Klapauzius": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/M/Mickey Mouse - The Computer Game/Mickey Mouse - Tr - Klapauzius.zip",
+      "name": "Mickey Mouse - Tr - Klapauzius.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "D-Bug": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/B/Bomb Jack/Bomb Jack - D-Bug.zip",
+      "name": "Bomb Jack - D-Bug.png",
+      "source": "manual",
+      "note": "user pick (curated)"
     }
   }
 }
