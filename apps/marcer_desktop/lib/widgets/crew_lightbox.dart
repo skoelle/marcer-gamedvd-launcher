@@ -726,6 +726,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
         Expanded(
           child: GameInfoPanel(
             info: card.info,
+            releaseFallback: release,
             variant: ZipVariantView(
               name: variant.name,
               status: variant.status,
@@ -860,8 +861,13 @@ class _CrewLightboxState extends State<CrewLightbox> {
       if (release.title.isNotEmpty) ('Title', release.title),
       if (release.year.isNotEmpty) ('Release', release.year),
       if (release.publisher.isNotEmpty) ('Publisher', release.publisher),
-      if (release.crackedBy.isNotEmpty) ('Cracked by', release.crackedBy),
-      if (release.crew.isNotEmpty) ('Crew', release.crew),
+      if (release.crackedBy.isNotEmpty)
+        (
+          'Cracked by',
+          '${release.crackedBy}${release.inferredCrackedBy ? ' (inferred)' : ''}',
+        ),
+      if (release.crew.isNotEmpty)
+        ('Crew', '${release.crew}${release.inferredCrew ? ' (inferred)' : ''}'),
       if (release.language.isNotEmpty) ('Language', release.language),
       if (release.disks > 0) ('Disks', '${release.disks}'),
       if (release.tosBad.isNotEmpty) ('TOS/BAD', release.tosBad),

@@ -118,6 +118,33 @@ class GameInfoIndex {
   }
 }
 
+/// XLS placeholder values that are not scene groups (normalized).
+const Set<String> kPlaceholderGroupLabels = {
+  'original',
+  'unknown',
+  'no 1 and no 2',
+};
+
+String _normalizeGroupLabel(String value) {
+  var out = value.toLowerCase().replaceAll(RegExp(r'[&+]'), ' and ');
+  out = out.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+  return out.replaceAll(RegExp(r'\s+'), ' ');
+}
+
+/// True for empty-ish XLS labels such as `Original`, `Unknown`, `????`.
+bool isPlaceholderGroupLabel(String? value) {
+  final label = (value ?? '').trim();
+  if (label.isEmpty) return false;
+  final normalized = _normalizeGroupLabel(label);
+  return normalized.isEmpty || kPlaceholderGroupLabels.contains(normalized);
+}
+
+/// A real cracker/crew label, or `''` for placeholders.
+String groupLabelOrEmpty(String? value) {
+  final label = (value ?? '').trim();
+  return isPlaceholderGroupLabel(label) ? '' : label;
+}
+
 /// One matched game folder from `games-*.json`.
 class GameInfo {
   GameInfo({
@@ -126,9 +153,20 @@ class GameInfo {
     required this.layers,
     required this.matchedVia,
     required this.matchedTitle,
-    required this.variants,
+    required List<Map<String, dynamic>> variants,
     required this.kind,
-  });
+  }) : variants = [
+          for (final variant in variants)
+            {
+              ...variant,
+              if (variant.containsKey('cracked_by'))
+                'cracked_by': groupLabelOrEmpty(
+                  variant['cracked_by']?.toString(),
+                ),
+              if (variant.containsKey('crew'))
+                'crew': groupLabelOrEmpty(variant['crew']?.toString()),
+            },
+        ];
 
   factory GameInfo.fromJson(Map<String, dynamic> json, String kind) {
     return GameInfo(

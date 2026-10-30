@@ -70,6 +70,28 @@ DESCRIPTORS = {
     "nordic", "canada", "canadian",
 }
 
+# Values in the XLS `cracked_by`/`crew` columns that are not scene groups.
+# Compared after `norm()`; never rendered as a cracker/crew.
+PLACEHOLDER_LABELS = {"original", "unknown", "no 1 and no 2"}
+
+# Tokens that are never part of a cracker/crew credit suffix.
+SUFFIX_NOISE = {
+    "zip", "disk", "disks", "version", "cracked", "unknown", "original",
+    "demo", "preview", "modified", "fixed", "beta", "alpha", "bad", "tos",
+    "tr", "hack", "trainer", "cheat", "patched", "release", "only", "mb",
+    "kb", "msa", "stx", "ipf", "edition", "crack", "eng", "ger", "fre",
+    "fra", "spa", "ita", "pol", "rus", "dut", "nor", "swe", "dan", "fin",
+}
+
+# Additional tokens that make a novel-name proposal noise (publishers,
+# languages, display modes, …). Used only for new-groups-review.csv.
+NOVEL_NOISE = SUFFIX_NOISE | {
+    "polish", "mono", "unkown", "publisher", "pressimage", "atari", "corp",
+    "ferde", "data", "pw", "ado", "kar", "ltd", "gmbh", "systems",
+    "entertainment", "productions", "mag", "magazine", "magazin", "action",
+    "log", "news", "international", "german", "french", "english",
+}
+
 ABBREV_RE = re.compile(r"[A-Z0-9&+\-]{2,7}")
 
 
@@ -102,6 +124,46 @@ def compact(value: str) -> str:
 
 def clean_label(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def is_placeholder_label(value: str) -> bool:
+    """True for XLS placeholders that must never be shown as cracker/crew."""
+    label = clean_label(value)
+    if not label:
+        return False
+    normalized = norm(label)
+    return not normalized or normalized in PLACEHOLDER_LABELS
+
+
+def clean_group_label(value: str) -> str:
+    """Return a real cracker/crew label or ``""`` for placeholders."""
+    label = clean_label(value)
+    return "" if is_placeholder_label(label) else label
+
+
+def is_suffix_noise(token: str) -> bool:
+    if token in SUFFIX_NOISE or token in DESCRIPTORS:
+        return True
+    return bool(re.fullmatch(r"v?\d+", token))
+
+
+def credit_suffix(zip_name: str, title: str) -> list[str]:
+    """Tokens of a ZIP filename after removing the game title/noise."""
+    title_tokens = set(tokens(title))
+    out: list[str] = []
+    for token in tokens(zip_name):
+        if token in title_tokens or is_suffix_noise(token):
+            continue
+        out.append(token)
+    return out
+
+
+def label_tokens(value: str) -> frozenset[str]:
+    """Distinctive token set of a cracker/crew label (or empty)."""
+    toks = tokens(clean_group_label(value))
+    if not toks or not any(len(t) >= 3 for t in toks):
+        return frozenset()
+    return frozenset(toks)
 
 
 def abbrev_like(value: str) -> bool:
@@ -400,6 +462,47 @@ def scan_crew_sorted(root: Path) -> tuple[list[str], dict[str, list[tuple[str, i
     return sorted(set(groups)), exact
 
 
+def _is_trailing_marker(segment: str) -> bool:
+    """True for dump/version markers such as BAD, Cracked, Disk 1, Tr."""
+    label = clean_label(segment)
+    if not label:
+        return True
+    words = tokens(label)
+    if not words:
+        # Pure numbering/punctuation (e.g. "1.0"), never a stopword like Crew.
+        return all(not ch.isalpha() for ch in label)
+    return all(word in SUFFIX_NOISE or word in DESCRIPTORS for word in words)
+
+
+def exact_crew_entries(
+    name: str,
+    exact: dict[str, list[tuple[str, int]]],
+) -> list[tuple[str, int]]:
+    """Exact Crew Sorted lookup with trailing dump markers stripped.
+
+    ``TNT - SJ Crew - BAD.zip`` falls back to ``TNT - SJ Crew.zip``; the base
+    name must exist exactly in Crew Sorted, so this cannot invent matches.
+    """
+    hit = exact.get(name.lower())
+    if hit:
+        return hit
+    stem, dot, extension = name.rpartition(".")
+    if not dot:
+        stem, extension = name, ""
+    suffix = f".{extension}" if extension else ""
+    parts = [clean_label(part) for part in stem.split(" - ")]
+    while len(parts) > 1 and _is_trailing_marker(parts[-1]):
+        parts.pop()
+        # Never fall back to a bare game title: that matches unrelated ZIPs
+        # from another crew folder (e.g. "Predator - Unknown" -> "Predator").
+        if " - " not in " - ".join(parts):
+            break
+        hit = exact.get(f"{' - '.join(parts)}{suffix}".lower())
+        if hit:
+            return hit
+    return []
+
+
 def load_gameinfo(path: Path) -> tuple[dict[tuple[str, str], list[dict]], dict[str, set[str]]]:
     if not path.exists():
         sys.exit(f"error: gameinfo file not found: {path}")
@@ -409,8 +512,8 @@ def load_gameinfo(path: Path) -> tuple[dict[tuple[str, str], list[dict]], dict[s
     for game in data.get("games", []):
         variants: list[dict] = []
         for variant in game.get("variants", []):
-            crew = clean_label(str(variant.get("crew") or ""))
-            cracked_by = clean_label(str(variant.get("cracked_by") or ""))
+            crew = clean_group_label(str(variant.get("crew") or ""))
+            cracked_by = clean_group_label(str(variant.get("cracked_by") or ""))
             try:
                 disks = int(variant.get("disks") or 0)
             except (TypeError, ValueError):
@@ -447,12 +550,41 @@ def extract_year(value: str) -> str:
     return match.group(0) if match else ""
 
 
-def pick_variant(variants: list[dict], group: str, label_canon: dict[str, str]) -> dict:
+def pick_variant(
+    variants: list[dict],
+    group: str,
+    label_canon: dict[str, str],
+    zip_name: str,
+) -> dict | None:
+    """Return the XLS variant that belongs to this ZIP/group, or None.
+
+    The group label wins when it is present in the gameinfo variants. Otherwise
+    the variant whose crew/cracker label matches the ZIP filename is used. With
+    several variants and no confident match the release metadata stays empty
+    instead of falling back to the first (often ``Original``) variant, which
+    used to show a wrong cracker/crew in the crew view.
+    """
     for variant in variants:
         for label in (variant.get("crew", ""), variant.get("cracked_by", "")):
             if label and label_canon.get(label) == group:
                 return variant
-    return variants[0] if variants else {}
+    zip_tokens = set(tokens(zip_name))
+    zip_compact = compact(zip_name)
+    best: tuple[int, dict] | None = None
+    for variant in variants:
+        for label in (variant.get("crew", ""), variant.get("cracked_by", "")):
+            if not label:
+                continue
+            score = label_score(zip_tokens, zip_compact, label)
+            if score < 2:
+                continue
+            if best is None or score > best[0]:
+                best = (score, variant)
+    if best is not None:
+        return best[1]
+    if len(variants) == 1:
+        return variants[0]
+    return None
 
 
 def make_release(
@@ -467,7 +599,9 @@ def make_release(
     ambiguous: bool,
     label_canon: dict[str, str],
 ) -> dict:
-    variant = pick_variant(variants, group, label_canon)
+    variant = pick_variant(variants, group, label_canon, name)
+    base = variant or (variants[0] if variants else {})
+
     full_rel = rel if rel.startswith(f"{DEFAULT_TREE}/") else f"{DEFAULT_TREE}/{rel}"
     return {
         "rel": full_rel,
@@ -477,20 +611,309 @@ def make_release(
         "size": size,
         "source": source,
         "ambiguous": ambiguous,
-        "title": variant.get("title") or folder,
-        "year": extract_year(variant.get("release", "")),
-        "publisher": variant.get("publisher", ""),
-        "cracked_by": variant.get("cracked_by", ""),
-        "crew": variant.get("crew", ""),
-        "language": variant.get("language", ""),
-        "disks": variant.get("disks", 0),
-        "raw_dump": bool(variant.get("raw_dump")),
-        "pasti_dump": bool(variant.get("pasti_dump")),
-        "boxscan": bool(variant.get("boxscan")),
-        "tos_bad": variant.get("tos_bad", ""),
-        "special_flag": variant.get("special_flag", ""),
-        "special_note": variant.get("special_note", ""),
+        "title": base.get("title") or folder,
+        "year": extract_year(base.get("release", "")),
+        "publisher": base.get("publisher", ""),
+        # Release-specific labels are only emitted when the variant was
+        # identified; generic fields may still come from the first variant.
+        "cracked_by": clean_group_label(
+            variant.get("cracked_by", "") if variant else ""),
+        "crew": clean_group_label(
+            variant.get("crew", "") if variant else ""),
+        "language": base.get("language", ""),
+        "disks": base.get("disks", 0),
+        "raw_dump": bool(base.get("raw_dump")),
+        "pasti_dump": bool(base.get("pasti_dump")),
+        "boxscan": bool(base.get("boxscan")),
+        "tos_bad": base.get("tos_bad", ""),
+        "special_flag": base.get("special_flag", ""),
+        "special_note": base.get("special_note", ""),
     }
+
+
+def _match_label(
+    vocab: dict[frozenset[str], str], suffix: set[str]
+) -> str | None:
+    """Longest label whose tokens all occur in the credit suffix."""
+    matches = [
+        (len(key), len(label), label)
+        for key, label in vocab.items()
+        if key and key <= suffix
+    ]
+    if not matches:
+        return None
+    matches.sort(reverse=True)
+    best = matches[0]
+    if len(matches) > 1 and matches[1][0] == best[0] and matches[1][2] != best[2]:
+        return None  # two equally specific labels -> do not guess
+    return best[2]
+
+
+def _group_name_in_suffix(
+    group: str, aliases: set[str], suffix: set[str]
+) -> bool:
+    keys = [label_tokens(group)] + [label_tokens(a) for a in aliases]
+    return any(key and key <= suffix for key in keys)
+
+
+def infer_release_labels(
+    release_rows: dict[str, list[dict]],
+    group_aliases: dict[str, set[str]],
+    crew_group_names: set[str],
+) -> dict[str, int]:
+    """Fill empty cracker/crew labels from the ZIP credit suffix.
+
+    Only groups with at least two releases contribute label vocabulary; a
+    folder with a single release still gets its own group name when that name
+    occurs in the ZIP. Returns counters for the run report.
+    """
+    cracker_vocab: dict[str, dict[frozenset[str], str]] = defaultdict(dict)
+    crew_vocab: dict[str, dict[frozenset[str], str]] = defaultdict(dict)
+    global_cracker: dict[frozenset[str], str] = {}
+    global_crew: dict[frozenset[str], str] = {}
+    for group, releases in release_rows.items():
+        for release in releases:
+            for field, vocab in (("cracked_by", cracker_vocab),
+                                 ("crew", crew_vocab)):
+                label = clean_group_label(str(release.get(field) or ""))
+                key = label_tokens(label)
+                if key:
+                    vocab[group][key] = label
+        if len(releases) >= 2:
+            target = global_crew if group in crew_group_names else global_cracker
+            for alias in group_aliases.get(group, set()) | {group}:
+                key = label_tokens(alias)
+                if key:
+                    target.setdefault(key, group)
+
+    stats = Counter()
+    for group, releases in release_rows.items():
+        multi = len(releases) >= 2
+        aliases = group_aliases.get(group, set()) | {group}
+        is_crew_group = group in crew_group_names
+        # Do not re-use a token that is already part of the assigned group
+        # name (e.g. "Empire" in "Dr Trap / Empire" must not mask crew "Elite").
+        group_key = label_tokens(group)
+        other_cracker = {
+            key: label for key, label in global_cracker.items()
+            if not (group_key and key <= group_key)
+        }
+        other_crew = {
+            key: label for key, label in global_crew.items()
+            if not (group_key and key <= group_key)
+        }
+        for release in releases:
+            cracked_by = clean_group_label(
+                str(release.get("cracked_by") or ""))
+            crew = clean_group_label(str(release.get("crew") or ""))
+            inferred: list[str] = []
+            # An exact Crew Sorted match is authoritative; short names such
+            # as "SJ Crew" would otherwise lose their distinctive token.
+            if release.get("source") == "exact":
+                if is_crew_group and not crew:
+                    crew = group
+                    inferred.append("crew")
+                elif not is_crew_group and not cracked_by:
+                    cracked_by = group
+                    inferred.append("cracked_by")
+            suffix = set(credit_suffix(
+                str(release.get("zip") or ""),
+                str(release.get("title") or release.get("folder") or ""),
+            ))
+            if suffix:
+                if is_crew_group:
+                    if not crew and _group_name_in_suffix(group, aliases, suffix):
+                        crew = group
+                        inferred.append("crew")
+                elif not cracked_by and _group_name_in_suffix(
+                        group, aliases, suffix):
+                    cracked_by = group
+                    inferred.append("cracked_by")
+                if multi:
+                    if not cracked_by:
+                        label = _match_label(cracker_vocab.get(group, {}), suffix)
+                        if label:
+                            cracked_by = label
+                            inferred.append("cracked_by")
+                    if not crew:
+                        label = _match_label(crew_vocab.get(group, {}), suffix)
+                        if label:
+                            crew = label
+                            inferred.append("crew")
+                # Global group registry (other crews/crackers in the credit).
+                if not cracked_by:
+                    label = _match_label(other_cracker, suffix)
+                    if label and label != group:
+                        cracked_by = label
+                        inferred.append("cracked_by")
+                if not crew:
+                    label = _match_label(other_crew, suffix)
+                    if label and label != group:
+                        crew = label
+                        inferred.append("crew")
+            release["cracked_by"] = cracked_by
+            release["crew"] = crew
+            if inferred:
+                release["inferred_fields"] = sorted(set(inferred))
+                stats["releases"] += 1
+                for field in release["inferred_fields"]:
+                    stats[field] += 1
+            else:
+                release.pop("inferred_fields", None)
+    return dict(stats)
+
+
+def infer_unmatched_candidates(
+    unmatched: list[tuple[str, str, str, str, int | None]],
+    release_rows: dict[str, list[dict]],
+    group_aliases: dict[str, set[str]],
+) -> list[dict]:
+    """Propose groups for unmatched ZIPs from their credit suffix.
+
+    Matching tiers (strongest first): full group name/alias tokens, release-code
+    prefix (``dbug192a`` -> D-Bug), compact contiguous name (``Dead Eye`` ->
+    Deadeye), then tokens learned from assigned releases. Only one unique
+    strong candidate is auto-applied; everything stays in the review CSV.
+    """
+    # Learned distinctive suffix tokens (mostly release codes such as SERE17).
+    token_groups: dict[str, Counter[str]] = defaultdict(Counter)
+    for group, releases in release_rows.items():
+        if len(releases) < 2:
+            continue
+        for release in releases:
+            suffix = credit_suffix(
+                str(release.get("zip") or ""),
+                str(release.get("title") or release.get("folder") or ""),
+            )
+            for token in set(suffix):
+                if len(token) >= 4 or (len(token) >= 3 and any(
+                        ch.isdigit() for ch in token)):
+                    token_groups[token][group] += 1
+
+    # Compact name/alias registry for code prefixes and joined names.
+    compact_alias: dict[str, set[str]] = defaultdict(set)
+    initials: dict[str, set[str]] = defaultdict(set)
+    for group, aliases in group_aliases.items():
+        if len(release_rows.get(group, [])) < 2:
+            continue
+        for alias in aliases | {group}:
+            comp = compact(alias)
+            if len(comp) >= 3:
+                compact_alias[comp].add(group)
+            words = tokens(alias)
+            if len(words) >= 2:
+                initials["".join(w[0] for w in words)].add(group)
+
+    def code_groups(prefix: str) -> set[str]:
+        exact = set(compact_alias.get(prefix, set()))
+        if exact:
+            return exact
+        prefixed = {
+            group for comp, groups in compact_alias.items()
+            if len(comp) >= 4 and comp.startswith(prefix)
+            for group in groups
+        }
+        if prefixed:
+            return prefixed
+        return set(initials.get(prefix, set()))
+
+    out: list[dict] = []
+    for rel, letter, folder, name, size in unmatched:
+        suffix_list = credit_suffix(name, folder)
+        suffix = set(suffix_list)
+        high: dict[str, str] = {}
+        code: dict[str, str] = {}
+        compact_hits: dict[str, str] = {}
+        medium: dict[str, str] = {}
+        scores: dict[str, int] = {}
+        for group, aliases in group_aliases.items():
+            if len(release_rows.get(group, [])) < 2:
+                continue
+            keys = [label_tokens(group)] + [
+                label_tokens(alias) for alias in aliases
+            ]
+            best: int | None = None
+            for key in keys:
+                if not key or not key <= suffix:
+                    continue
+                if best is None or len(key) > best:
+                    best = len(key)
+            if best is not None:
+                scores[group] = best
+        if scores:
+            top_score = max(scores.values())
+            top = sorted(g for g, score in scores.items() if score == top_score)
+            if len(top) == 1:
+                high[top[0]] = "group name"
+            else:
+                for group in top:
+                    medium.setdefault(group, "group name (ambiguous)")
+            for group in scores:
+                if group not in high:
+                    medium.setdefault(group, "group name (partial)")
+
+        # Release-code prefixes: dbug192a -> D-Bug, SERE17 -> Serenade, …
+        for token in suffix:
+            match = re.match(r"^([a-z]{2,})(?=\d)", token)
+            if not match:
+                continue
+            prefix = match.group(1)
+            groups = code_groups(prefix)
+            if len(groups) == 1:
+                code[next(iter(groups))] = f"code:{prefix}"
+            else:
+                for group in groups:
+                    medium.setdefault(group, f"code:{prefix} (ambiguous)")
+        # Compact contiguous names: "dead eye" -> Deadeye, "rocky one" -> Rockyone.
+        # Single tokens are already covered by the exact group-name tier.
+        for i in range(len(suffix_list)):
+            joined = suffix_list[i]
+            for j in range(i + 1, min(len(suffix_list), i + 4)):
+                joined += suffix_list[j]
+                if len(joined) < 4:
+                    continue
+                groups = compact_alias.get(joined, set())
+                if len(groups) == 1:
+                    compact_hits[next(iter(groups))] = f"name:{joined}"
+        for token in suffix:
+            counts = token_groups.get(token) or {}
+            owners = [g for g, n in counts.items() if n >= 2]
+            if len(owners) == 1:
+                medium.setdefault(owners[0], token)
+
+        strong = set(high) | set(code) | set(compact_hits)
+        candidates = sorted(strong | set(medium))
+        if len(strong) == 1:
+            group = next(iter(strong))
+            confidence = "high"
+            if group in high:
+                match_type, evidence = "group_name", high[group]
+            elif group in code:
+                match_type, evidence = "code_prefix", code[group]
+            else:
+                match_type, evidence = "compact_name", compact_hits[group]
+        elif len(strong) > 1:
+            group, confidence, match_type, evidence = "", "ambiguous", "", ""
+        elif len(candidates) == 1:
+            group = candidates[0]
+            confidence, match_type = "medium", "token"
+            evidence = medium[group]
+        else:
+            group, confidence, match_type, evidence = "", "ambiguous", "", ""
+        out.append({
+            "rel": rel,
+            "letter": letter,
+            "folder": folder,
+            "zip": name,
+            "size": size,
+            "group": group,
+            "confidence": confidence,
+            "match_type": match_type,
+            "evidence": evidence,
+            "candidates": ", ".join(candidates),
+            "tokens": suffix_list,
+        })
+    return out
 
 
 def slugify(value: str) -> str:
@@ -998,9 +1421,12 @@ def alias_hits(
         ca = compact(alias_norm)
         candidate = False
         if alias_tokens and all(t in zip_tokens for t in alias_tokens):
-            candidate = at_len >= 2 or alias_norm in abbrev_aliases or (
-                at_len == 1 and len(alias_tokens[0]) >= 4 and alias_tokens[0] in suffix_tokens
-            )
+            if at_len >= 2:
+                candidate = True
+            elif alias_norm in abbrev_aliases or len(alias_tokens[0]) >= 4:
+                # Single-token/abbreviation aliases must be in the credit
+                # suffix; a game title must never satisfy them.
+                candidate = alias_tokens[0] in suffix_tokens
             if candidate:
                 for group in groups:
                     prev = hits.get(group, (0, 0))
@@ -1009,8 +1435,9 @@ def alias_hits(
             for group in groups:
                 prev = hits.get(group, (0, 0))
                 hits[group] = max(prev, (at_len, len(ca)))
-        elif alias_norm in abbrev_aliases and ca in zip_tokens:
-            # compact abbreviation (e.g. "A-HA" -> "aha"), whole token only
+        elif alias_norm in abbrev_aliases and ca in suffix_tokens:
+            # Compact abbreviation (e.g. "A-HA" -> "aha") only counts in the
+            # credit suffix, never in the game title ("TNT - SJ Crew").
             for group in groups:
                 prev = hits.get(group, (0, 0))
                 hits[group] = max(prev, (at_len, len(ca)))
@@ -1206,7 +1633,7 @@ def main() -> int:
 
     primary: Counter[str] = Counter()
     source_counts: Counter[str] = Counter()
-    unmatched: list[tuple[str, str]] = []
+    unmatched: list[tuple[str, str, str, str, int | None]] = []
     ambiguous: list[tuple[str, str, str]] = []
 
     release_rows: dict[str, list[dict]] = defaultdict(list)
@@ -1216,7 +1643,7 @@ def main() -> int:
         variants = folders.get((letter.casefold(), folder.casefold()), [])
 
         # 1) exact basename match against Crew Sorted
-        exact_crews = exact_name.get(name.lower(), [])
+        exact_crews = exact_crew_entries(name, exact_name)
         canonical_crews = {
             raw_crew_canon[raw]
             for raw, _raw_size in exact_crews
@@ -1297,7 +1724,52 @@ def main() -> int:
                 variants, rel in ambiguous_rels, label_canon))
             continue
 
-        unmatched.append((rel, name))
+        unmatched.append((rel, letter, folder, name, size))
+
+    crew_group_names = set(raw_crew_canon.values())
+    for label, sources in gameinfo_labels.items():
+        canonical = label_canon.get(label)
+        if canonical and "crew" in sources:
+            crew_group_names.add(canonical)
+
+    group_aliases: dict[str, set[str]] = defaultdict(set)
+    for raw, canonical in raw_crew_canon.items():
+        group_aliases[canonical].add(raw)
+        if " - " in raw:
+            base, suffix = [clean_label(part) for part in raw.split(" - ", 1)]
+            if not is_combined(suffix):
+                group_aliases[canonical].add(base)
+                group_aliases[canonical].add(suffix)
+    for label, canonical in label_canon.items():
+        group_aliases[canonical].add(label)
+
+    # Second pass (1/2): assign high-confidence unmatched ZIPs by name.
+    unmatched_proposals = infer_unmatched_candidates(
+        unmatched, release_rows, group_aliases)
+    applied_rels: set[str] = set()
+    for proposal in unmatched_proposals:
+        if proposal["confidence"] != "high" or not proposal["group"]:
+            continue
+        group = proposal["group"]
+        rel = proposal["rel"]
+        letter = proposal["letter"]
+        folder = proposal["folder"]
+        name = proposal["zip"]
+        size = proposal["size"]
+        variants = folders.get((letter.casefold(), folder.casefold()), [])
+        primary[group] += 1
+        source_counts["inferred_name"] += 1
+        release_rows[group].append(make_release(
+            rel, letter, folder, name, size, "inferred_name", group,
+            variants, False, label_canon))
+        applied_rels.add(rel)
+    if applied_rels:
+        unmatched = [entry for entry in unmatched
+                     if entry[0] not in applied_rels]
+
+    # Second pass (2/2): fill empty cracker/crew labels from the ZIP name.
+    inferred_stats = infer_release_labels(
+        release_rows, group_aliases, crew_group_names)
 
     ordered = sorted(primary.items(), key=lambda kv: (-kv[1], kv[0].casefold()))
     ranking = [
@@ -1330,28 +1802,14 @@ def main() -> int:
             "skipped_disks": skipped_disks,
             "assigned": sum(primary.values()),
             "unmatched": len(unmatched),
+            "unmatched_inferred": len(applied_rels),
             "ambiguous": len(ambiguous),
             "groups": len(primary),
             "sources": dict(source_counts),
+            "labels_inferred": inferred_stats,
         },
         "ranking": ranking,
     }
-    crew_group_names = set(raw_crew_canon.values())
-    for label, sources in gameinfo_labels.items():
-        canonical = label_canon.get(label)
-        if canonical and "crew" in sources:
-            crew_group_names.add(canonical)
-
-    group_aliases: dict[str, set[str]] = defaultdict(set)
-    for raw, canonical in raw_crew_canon.items():
-        group_aliases[canonical].add(raw)
-        if " - " in raw:
-            base, suffix = [clean_label(part) for part in raw.split(" - ", 1)]
-            if not is_combined(suffix):
-                group_aliases[canonical].add(base)
-                group_aliases[canonical].add(suffix)
-    for label, canonical in label_canon.items():
-        group_aliases[canonical].add(label)
 
     def dedupe_aliases(values: set[str]) -> list[str]:
         seen: set[str] = set()
@@ -1407,7 +1865,9 @@ def main() -> int:
             "direct_zips": len(zips),
             "skipped_disks": skipped_disks,
             "unmatched": len(unmatched),
+            "unmatched_inferred": len(applied_rels),
             "ambiguous": len(ambiguous),
+            "labels_inferred": inferred_stats,
         },
         "groups": crew_groups,
     }
@@ -1431,17 +1891,41 @@ def main() -> int:
     label_occurrences: Counter[tuple[str, str]] = Counter()
     for game in json.loads((gameinfo_dir / "games-cracked.json").read_text(encoding="utf-8")).get("games", []):
         for variant in game.get("variants", []):
-            crew = clean_label(str(variant.get("crew") or ""))
-            cracked_by = clean_label(str(variant.get("cracked_by") or ""))
+            crew = clean_group_label(str(variant.get("crew") or ""))
+            cracked_by = clean_group_label(str(variant.get("cracked_by") or ""))
             if crew:
                 label_occurrences[(crew, "crew")] += 1
             if cracked_by:
                 label_occurrences[(cracked_by, "cracked_by")] += 1
+    # Final release-side counts for every XLS label (groups-review.csv). One XLS
+    # variant can cover several ZIPs, so these deliberately differ from the
+    # xls_variant_rows count.
+    release_stats: dict[tuple[str, str], dict] = defaultdict(
+        lambda: {"zips": 0, "groups": Counter(), "inferred": 0})
+    for group, releases in release_rows.items():
+        for release in releases:
+            inferred_fields = set(release.get("inferred_fields") or [])
+            for field in ("cracked_by", "crew"):
+                value = clean_group_label(str(release.get(field) or ""))
+                if not value:
+                    continue
+                stats = release_stats[(value, field)]
+                stats["zips"] += 1
+                stats["groups"][group] += 1
+                if field in inferred_fields:
+                    stats["inferred"] += 1
+
     known_canonicals = set(raw_crew_canon.values()) | set(explicit.values())
     with (outdir / "groups-review.csv").open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["label", "normalized", "source", "variants", "mapped_group", "status"])
-        for (label, source), count in sorted(label_occurrences.items(), key=lambda kv: (-kv[1], kv[0][0].lower())):
+        writer.writerow([
+            "xls_label", "normalized", "xls_column", "xls_variant_rows",
+            "canonical_group", "alias_status", "release_zips",
+            "release_groups", "inferred_releases",
+        ])
+        for (label, source), count in sorted(
+                label_occurrences.items(),
+                key=lambda kv: (-kv[1], kv[0][0].lower())):
             normalized = norm(label)
             canonical = label_canon.get(label)
             if normalized in exclude:
@@ -1454,10 +1938,80 @@ def main() -> int:
                 status = "canonical"
             else:
                 status = "aliased"
-            writer.writerow([label, normalized, source, count, canonical or "", status])
+            stats = release_stats.get(
+                (label, source),
+                {"zips": 0, "groups": Counter(), "inferred": 0},
+            )
+            release_groups = "; ".join(
+                group for group, _ in stats["groups"].most_common())
+            writer.writerow([
+                label, normalized, source, count, canonical or "", status,
+                stats["zips"], release_groups, stats["inferred"],
+            ])
 
+    with (outdir / "label-inference.csv").open(
+            "w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow([
+            "group", "rel", "zip", "cracked_by", "crew", "inferred_fields",
+        ])
+        for group, releases in release_rows.items():
+            for release in releases:
+                fields = release.get("inferred_fields") or []
+                if not fields:
+                    continue
+                writer.writerow([
+                    group,
+                    release.get("rel", ""),
+                    release.get("zip", ""),
+                    release.get("cracked_by", ""),
+                    release.get("crew", ""),
+                    ",".join(fields),
+                ])
+    with (outdir / "inferred-matches.csv").open(
+            "w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow([
+            "rel", "zip", "group", "confidence", "match_type", "evidence",
+            "candidates", "tokens", "applied",
+        ])
+        for proposal in unmatched_proposals:
+            writer.writerow([
+                proposal["rel"],
+                proposal["zip"],
+                proposal["group"],
+                proposal["confidence"],
+                proposal["match_type"],
+                proposal["evidence"],
+                proposal["candidates"],
+                " ".join(proposal.get("tokens") or []),
+                "yes" if proposal["rel"] in applied_rels else "no",
+            ])
+
+    # Unknown cracker names are only proposed for review, never auto-created.
+    novel: dict[str, dict] = {}
+    for proposal in unmatched_proposals:
+        if proposal["group"]:
+            continue
+        tokens_ = proposal.get("tokens") or []
+        if not tokens_ or all(t in NOVEL_NOISE for t in tokens_):
+            continue
+        key = " ".join(tokens_)
+        entry = novel.setdefault(key, {"count": 0, "examples": []})
+        entry["count"] += 1
+        if len(entry["examples"]) < 5:
+            entry["examples"].append(proposal["zip"])
+    with (outdir / "new-groups-review.csv").open(
+            "w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["candidate", "count", "examples"])
+        for candidate, data in sorted(
+                novel.items(), key=lambda kv: (-kv[1]["count"], kv[0])):
+            writer.writerow([
+                candidate, data["count"], " | ".join(data["examples"]),
+            ])
     with (outdir / "unmatched.txt").open("w", encoding="utf-8") as fh:
-        for rel, name in unmatched:
+        for rel, _letter, _folder, name, _size in unmatched:
             fh.write(f"{rel}\t{name}\n")
     with (outdir / "ambiguous.txt").open("w", encoding="utf-8") as fh:
         for rel, name, groups in ambiguous:
@@ -1470,6 +2024,10 @@ def main() -> int:
         f"- Disk 2+ excluded (`skipped_disk_n`): **{skipped_disks}**",
         f"- Assigned: **{sum(primary.values())}** ({', '.join(f'{k} {v}' for k, v in sorted(source_counts.items()))})",
         f"- Unmatched: **{len(unmatched)}**; ambiguous exact matches: **{len(ambiguous)}**",
+        f"- Unmatched assigned by name (high confidence): **{len(applied_rels)}**",
+        f"- Release labels inferred: **{inferred_stats.get('releases', 0)}** "
+        f"({inferred_stats.get('cracked_by', 0)} cracker, "
+        f"{inferred_stats.get('crew', 0)} crew)",
         f"- Groups with at least one ZIP: **{len(primary)}**",
         f"- ZIP source: `{zip_source}`",
         "",
@@ -1484,6 +2042,8 @@ def main() -> int:
 
     print(f"direct release ZIPs: {len(zips)}  (disk 2+ excluded: {skipped_disks})")
     print(f"assigned: {sum(primary.values())}  unmatched: {len(unmatched)}  groups: {len(primary)}")
+    print(f"inferred: {len(applied_rels)} unmatched ZIPs, "
+          f"{inferred_stats.get('releases', 0)} release label sets")
     print(f"output: {outdir}")
     print(f"crews:  {crews_path}")
     print()

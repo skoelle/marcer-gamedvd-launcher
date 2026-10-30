@@ -4,6 +4,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'gameinfo.dart';
+import 'section_trees.dart';
+
 /// UI milestone: the data artifact contains all groups, but the Crews tab
 /// starts with the top N by release count.
 const int kCrewInitialLimit = 128;
@@ -31,6 +34,7 @@ class CrewRelease {
     required this.tosBad,
     required this.specialFlag,
     required this.specialNote,
+    this.inferredFields = const {},
     this.size,
   });
 
@@ -46,8 +50,8 @@ class CrewRelease {
       title: str('title'),
       year: str('year'),
       publisher: str('publisher'),
-      crackedBy: str('cracked_by'),
-      crew: str('crew'),
+      crackedBy: groupLabelOrEmpty(str('cracked_by')),
+      crew: groupLabelOrEmpty(str('crew')),
       language: str('language'),
       source: str('source'),
       disks: integer('disks'),
@@ -58,6 +62,10 @@ class CrewRelease {
       tosBad: str('tos_bad'),
       specialFlag: str('special_flag'),
       specialNote: str('special_note'),
+      inferredFields: ((json['inferred_fields'] as List<dynamic>?) ?? const [])
+          .map((e) => e.toString())
+          .where((e) => e == 'cracked_by' || e == 'crew')
+          .toSet(),
       size: (json['size'] as num?)?.toInt(),
     );
   }
@@ -81,7 +89,13 @@ class CrewRelease {
   final String tosBad;
   final String specialFlag;
   final String specialNote;
+
+  /// Fields whose value was inferred from the ZIP name by crew-analysis.
+  final Set<String> inferredFields;
   final int? size;
+
+  bool get inferredCrackedBy => inferredFields.contains('cracked_by');
+  bool get inferredCrew => inferredFields.contains('crew');
 }
 
 /// One crew/scene group from `crews.json`.
@@ -217,40 +231,60 @@ class CrewImageIndex {
 /// with [loadError] set (the Crews tab then shows a hint instead of failing
 /// the whole catalog load).
 class CrewIndex {
-  CrewIndex._(this.groups, this.loadError, this.generatedAt);
+  CrewIndex._(
+    this.groups,
+    this._byRel,
+    this.loadError,
+    this.generatedAt,
+  );
 
   factory CrewIndex.load(String gameinfoDir) {
     if (gameinfoDir.trim().isEmpty) {
-      return CrewIndex._(const [], 'GameinfoDirectory not configured', '');
+      return CrewIndex._(
+          const [], const {}, 'GameinfoDirectory not configured', '');
     }
     final file = File('$gameinfoDir/crews.json');
     if (!file.existsSync()) {
-      return CrewIndex._(const [], 'crews.json not found', '');
+      return CrewIndex._(const [], const {}, 'crews.json not found', '');
     }
     try {
       final map = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      final groups =
+      final allGroups =
           ((map['groups'] as List<dynamic>?) ?? const [])
               .whereType<Map<String, dynamic>>()
               .map(CrewGroup.fromJson)
-              .where((g) => g.name.isNotEmpty && !g.excluded)
-              .toList()
-            ..sort((a, b) {
-              final byZips = b.zips.compareTo(a.zips);
-              if (byZips != 0) return byZips;
-              return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-            });
-      return CrewIndex._(groups, null, (map['generated_at'] ?? '').toString());
+              .where((g) => g.name.isNotEmpty)
+              .toList();
+      final byRel = <String, CrewRelease>{};
+      for (final group in allGroups) {
+        for (final release in group.releases) {
+          byRel[normalizeRelSeparators(release.rel)] = release;
+        }
+      }
+      final groups = allGroups.where((g) => !g.excluded).toList()
+        ..sort((a, b) {
+          final byZips = b.zips.compareTo(a.zips);
+          if (byZips != 0) return byZips;
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
+      return CrewIndex._(
+          groups, byRel, null, (map['generated_at'] ?? '').toString());
     } catch (e) {
-      return CrewIndex._(const [], 'parse error: $e', '');
+      return CrewIndex._(const [], const {}, 'parse error: $e', '');
     }
   }
 
-  static CrewIndex empty(String reason) => CrewIndex._(const [], reason, '');
+  static CrewIndex empty(String reason) =>
+      CrewIndex._(const [], const {}, reason, '');
 
   final List<CrewGroup> groups;
+  final Map<String, CrewRelease> _byRel;
   final String? loadError;
   final String generatedAt;
+
+  /// Release for a ZIP rel path (POSIX-normalized), or null.
+  CrewRelease? releaseForRel(String rel) =>
+      _byRel[normalizeRelSeparators(rel)];
 
   int get length => groups.length;
   int get totalReleases =>

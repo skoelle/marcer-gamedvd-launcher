@@ -161,6 +161,169 @@ void main() {
     expect(thisZip.dy, lessThan(release.dy));
   });
 
+  testWidgets('Cracked by/Crew are release-specific and live in This ZIP', (
+    tester,
+  ) async {
+    final info = InfoSummary.fromGame(
+      GameInfo(
+        folder: 'F15 Strike Eagle 2',
+        letter: 'F',
+        layers: const ['ROOT'],
+        matchedVia: 'exact',
+        matchedTitle: 'F15 Strike Eagle 2',
+        variants: const [
+          {'title': 'F15 Strike Eagle 2', 'cracked_by': 'Original'},
+          {
+            'title': 'F15 Strike Eagle 2 v2.07.1991',
+            'cracked_by': 'Dr Trap / Empire',
+            'crew': 'Elite',
+          },
+        ],
+        kind: 'cracked',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            height: 900,
+            child: GameInfoPanel(
+              info: info,
+              variant: const ZipVariantView(
+                name:
+                    'F15 Strike Eagle 2 v2.7.91 - Dr Trap - Empire - Elite '
+                    '- Disk 1.zip',
+                status: 'done',
+                layer: 'ROOT',
+                rel: 'F/F15/F15 - Dr Trap.zip',
+              ),
+              onPlay: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cracked by'), findsOneWidget);
+    // This ZIP row + Release variants table.
+    expect(find.text('Dr Trap / Empire'), findsNWidgets(2));
+    expect(find.text('Elite'), findsNWidgets(2));
+    // Placeholder labels never reach the UI, not even in the variants table.
+    expect(find.text('Original'), findsNothing);
+    final gameInfoY = tester.getTopLeft(find.text('Game info')).dy;
+    final thisZipY = tester.getTopLeft(find.text('This ZIP')).dy;
+    final crackedByY = tester.getTopLeft(find.text('Cracked by')).dy;
+    expect(crackedByY, greaterThan(gameInfoY));
+    expect(crackedByY, greaterThan(thisZipY));
+  });
+
+  testWidgets('ambiguous ZIP shows no Cracked by/Crew rows', (tester) async {
+    final info = InfoSummary.fromGame(
+      GameInfo(
+        folder: 'Alpha',
+        letter: 'A',
+        layers: const ['ROOT'],
+        matchedVia: 'exact',
+        matchedTitle: 'Alpha',
+        variants: const [
+          {'title': 'Alpha', 'cracked_by': 'Original'},
+          {'title': 'Alpha', 'cracked_by': 'Dr Trap / Empire', 'crew': 'Elite'},
+        ],
+        kind: 'cracked',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            height: 900,
+            child: GameInfoPanel(
+              info: info,
+              variant: const ZipVariantView(
+                name: 'Alpha.zip',
+                status: 'done',
+                layer: 'ROOT',
+                rel: 'A/Alpha/Alpha.zip',
+              ),
+              onPlay: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cracked by'), findsNothing);
+  });
+
+  testWidgets('release fallback fills missing labels and marks inferred', (
+    tester,
+  ) async {
+    final info = InfoSummary.fromGame(
+      GameInfo(
+        folder: 'Alpha',
+        letter: 'A',
+        layers: const ['ROOT'],
+        matchedVia: 'exact',
+        matchedTitle: 'Alpha',
+        variants: const [
+          {'title': 'Alpha'},
+        ],
+        kind: 'cracked',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            height: 800,
+            child: GameInfoPanel(
+              info: info,
+              variant: const ZipVariantView(
+                name: 'Alpha - Cameo - Replicants.zip',
+                status: 'done',
+                layer: 'ROOT',
+                rel: 'A/Alpha/Alpha - Cameo - Replicants.zip',
+              ),
+              releaseFallback: const CrewRelease(
+                rel: 'A/Alpha/Alpha - Cameo - Replicants.zip',
+                letter: 'A',
+                folder: 'Alpha',
+                zip: 'Alpha - Cameo - Replicants.zip',
+                title: 'Alpha',
+                year: '1990',
+                publisher: '',
+                crackedBy: 'Cameo',
+                crew: 'Replicants',
+                language: '',
+                source: 'alias',
+                disks: 1,
+                rawDump: false,
+                pastiDump: false,
+                boxscan: false,
+                ambiguous: false,
+                tosBad: '',
+                specialFlag: '',
+                specialNote: '',
+                inferredFields: {'crew'},
+              ),
+              onPlay: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cameo', findRichText: true), findsOneWidget);
+    expect(find.text('Crew'), findsOneWidget);
+    expect(find.textContaining('inferred', findRichText: true), findsOneWidget);
+  });
+
   testWidgets('no game info leaves a gap between AtariLegend and PLAY', (
     tester,
   ) async {

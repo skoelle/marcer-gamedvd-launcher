@@ -278,7 +278,7 @@ class CrewDataTest(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data), encoding="utf-8")
 
-    def _store(self, groups):
+    def _store(self, groups, cracked_variants=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         out = os.path.join(self.tmp.name, "out")
@@ -305,7 +305,9 @@ class CrewDataTest(unittest.TestCase):
         self._write_json(os.path.join(data, "games-cracked.json"), {
             "games": [
                 {"letter": "A", "folder": "Alpha", "layers": ["ROOT"],
-                 "variants": [{"title": "Alpha", "release": "1990"}]},
+                 "variants": cracked_variants or [
+                     {"title": "Alpha", "release": "1990"},
+                 ]},
                 {"letter": "B", "folder": "Beta", "layers": ["ROOT"],
                  "variants": [{"title": "Beta", "release": "1991"}]},
             ],
@@ -404,6 +406,41 @@ class CrewDataTest(unittest.TestCase):
         legacy = detail["releases"][1]
         self.assertEqual(legacy["index_rel"], self.rel_a2)
         self.assertIsNone(legacy["preview"])
+
+    def test_gameinfo_placeholders_are_removed_everywhere(self):
+        store = self._store([], cracked_variants=[
+            {"title": "Alpha", "cracked_by": "Original"},
+            {"title": "Alpha", "cracked_by": "Unknown", "crew": "Unknown"},
+            {"title": "Alpha", "cracked_by": "Cameo", "crew": "Replicants"},
+        ])
+        card = next(c for c in store.cards["cracked"]
+                    if c["letter"] == "A" and c["folder"] == "Alpha")
+        self.assertEqual(card["info"]["variants"][0]["cracked_by"], "")
+        self.assertEqual(card["info"]["variants"][1]["cracked_by"], "")
+        self.assertEqual(card["info"]["variants"][1]["crew"], "")
+        self.assertEqual(card["info"]["variants"][2]["cracked_by"], "Cameo")
+        self.assertNotIn("original", card["_search"])
+        self.assertNotIn("Unknown", store.facets["cracked"]["crackers"])
+        self.assertNotIn("Unknown", store.facets["cracked"]["crews"])
+
+    def test_release_labels_are_attached_to_cards(self):
+        store = self._store([
+            self._group("alpha-crew", "Alpha Crew", "crew", 1, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha",
+                 "cracked_by": "Cameo", "crew": "Replicants",
+                 "inferred_fields": ["crew"]},
+            ]),
+        ], cracked_variants=[{"title": "Alpha", "release": "1990"}])
+        card = next(c for c in store.cards["cracked"]
+                    if c["letter"] == "A" and c["folder"] == "Alpha")
+        self.assertEqual(
+            card["release_labels"][self.rel_a]["crew"], "Replicants")
+        self.assertEqual(
+            card["release_labels"][self.rel_a]["inferred_fields"], ["crew"])
+        public = gallery._public_card(card, "cracked")
+        self.assertIn("release_labels", public)
+        detail = store.crew_detail(store.crew_groups["alpha-crew"])
+        self.assertEqual(detail["releases"][0]["inferred_fields"], ["crew"])
 
     def test_all_groups_without_limit(self):
         groups = [

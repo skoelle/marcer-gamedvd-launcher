@@ -499,4 +499,35 @@ void main() {
       expect(g.year, '');
     });
   });
+
+  group('CrewIndex', () {
+    test('releaseForRel normalizes separators and keeps inferred fields', () {
+      final dir = Directory('${tmp.path}/crews-data')..createSync();
+      File('${dir.path}/crews.json').writeAsStringSync('''
+      {
+        "generated_at": "2026-10-30T00:00:00Z",
+        "groups": [
+          {
+            "id": "replicants", "name": "Replicants", "kind": "crew",
+            "zips": 1, "aliases": ["Replicants"],
+            "releases": [
+              {
+                "rel": "A/Alpha/a.zip", "zip": "a.zip", "title": "Alpha",
+                "cracked_by": "Cameo", "crew": "Unknown",
+                "inferred_fields": ["cracked_by"]
+              }
+            ]
+          }
+        ]
+      }
+      ''');
+      final index = CrewIndex.load(dir.path);
+      final release = index.releaseForRel('A\\Alpha\\a.zip');
+      expect(release, isNotNull);
+      expect(release!.crackedBy, 'Cameo');
+      expect(release.crew, '');
+      expect(release.inferredFields, {'cracked_by'});
+      expect(release.inferredCrackedBy, isTrue);
+    });
+  });
 }

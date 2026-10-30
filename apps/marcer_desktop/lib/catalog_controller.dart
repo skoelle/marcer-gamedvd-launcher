@@ -429,6 +429,18 @@ class CatalogController extends ChangeNotifier {
     return null;
   }
 
+  /// `crews.json` release metadata (incl. inferred labels) for a ZIP rel path.
+  /// Accepts the same legacy section-relative form as [releaseCardFor].
+  CrewRelease? crewReleaseForRel(String rel) {
+    final direct = crews.releaseForRel(rel);
+    if (direct != null) return direct;
+    final tree = sectionTrees['cracked'];
+    if (tree != null && !rel.startsWith('$tree/')) {
+      return crews.releaseForRel('$tree/$rel');
+    }
+    return null;
+  }
+
   /// Synthetic catalog cards for the Crews tab (top [kCrewInitialLimit] groups
   /// by ZIP count; `crews.json` still contains every group).
   List<GameCard> get _crewCards => _crewCardsBase ??= _buildCrewCards();

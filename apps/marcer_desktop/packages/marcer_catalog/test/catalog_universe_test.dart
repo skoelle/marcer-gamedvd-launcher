@@ -1155,4 +1155,116 @@ void main() {
       expect(u.allCards, contains(u.falcon.first));
     });
   });
+
+  group('InfoSummary.variantIndexForZip', () {
+    InfoSummary summary(List<Map<String, dynamic>> variants) =>
+        InfoSummary.fromGame(GameInfo(
+          folder: 'F15 Strike Eagle 2',
+          letter: 'F',
+          layers: const ['ROOT'],
+          matchedVia: 'exact',
+          matchedTitle: 'F15 Strike Eagle 2',
+          variants: variants,
+          kind: 'cracked',
+        ));
+
+    test('matches multi-part labels across /, - and & separators', () {
+      final info = summary(const [
+        {'cracked_by': 'Original'},
+        {'cracked_by': 'Dr Trap / Empire', 'crew': 'Elite'},
+      ]);
+      const zip =
+          'F15 Strike Eagle 2 v2.7.91 - Dr Trap - Empire - Elite - Disk 1.zip';
+      expect(info.variantIndexForZip(zip), 1);
+      expect(info.variantForZip(zip)?['cracked_by'], 'Dr Trap / Empire');
+    });
+
+    test('normalizes & and + to "and" in labels and ZIP names', () {
+      final info = summary(const [
+        {'cracked_by': 'Original'},
+        {'cracked_by': 'Hotline & MCA'},
+      ]);
+      expect(info.variantIndexForZip('Game - Hotline and MCA.zip'), 1);
+    });
+
+    test('single variant always maps', () {
+      final info = summary(const [
+        {'cracked_by': 'Original'},
+      ]);
+      expect(info.variantIndexForZip('anything.zip'), 0);
+    });
+
+    test('ambiguous ZIP yields -1 instead of the first variant', () {
+      final info = summary(const [
+        {'cracked_by': 'Original'},
+        {'cracked_by': 'Dr Trap / Empire', 'crew': 'Elite'},
+      ]);
+      expect(info.variantIndexForZip('F15 Strike Eagle 2.zip'), -1);
+    });
+
+    test('no variants yields -1', () {
+      expect(summary(const []).variantIndexForZip('x.zip'), -1);
+    });
+  });
+
+  group('placeholder labels', () {
+    test('GameInfo blanks Original/Unknown in every variant', () {
+      final info = GameInfo.fromJson({
+        'folder': 'Alpha',
+        'letter': 'A',
+        'matched_title': 'Alpha',
+        'variants': [
+          {'cracked_by': 'Original'},
+          {'cracked_by': 'Unknown', 'crew': 'Unknown'},
+          {'cracked_by': 'Cameo', 'crew': 'Replicants'},
+        ],
+      }, 'cracked');
+      expect(info.variants[0]['cracked_by'], '');
+      expect(info.variants[1]['cracked_by'], '');
+      expect(info.variants[1]['crew'], '');
+      expect(info.variants[2]['cracked_by'], 'Cameo');
+      // The summary mirrors the first XLS variant; release-specific labels
+      // are resolved per ZIP by the UI instead.
+      final summary = InfoSummary.fromGame(info);
+      expect(summary.crackedBy, '');
+      expect(summary.crew, '');
+    });
+
+    test('facets exclude placeholder labels', () {
+      final u = buildUniverse(
+        {relA: entryJson(relA, 'done', 'ROOT')},
+        crackedGames: jsonEncode([
+          {
+            'folder': 'Alpha',
+            'letter': 'A',
+            'matched_title': 'Alpha',
+            'variants': [
+              {'title': 'Alpha', 'cracked_by': 'Original'},
+              {'title': 'Alpha', 'cracked_by': 'Unknown', 'crew': 'Unknown'},
+              {'title': 'Alpha', 'cracked_by': 'Cameo', 'crew': 'Replicants'},
+            ],
+          },
+        ]),
+      );
+      expect(u.crackedFacets.crackers, isNot(contains('Original')));
+      expect(u.crackedFacets.crackers, isNot(contains('Unknown')));
+      expect(u.crackedFacets.crackers, contains('Cameo'));
+      expect(u.crackedFacets.crews, isNot(contains('Unknown')));
+      expect(u.crackedFacets.crews, contains('Replicants'));
+    });
+
+    test('CrewRelease blanks placeholders and keeps inferred fields', () {
+      final release = CrewRelease.fromJson({
+        'rel': 'A/Alpha/a.zip',
+        'cracked_by': 'Original',
+        'crew': 'Unknown',
+        'inferred_fields': ['crew', 'bogus'],
+      });
+      expect(release.crackedBy, '');
+      expect(release.crew, '');
+      expect(release.inferredFields, {'crew'});
+      expect(release.inferredCrew, isTrue);
+      expect(release.inferredCrackedBy, isFalse);
+    });
+  });
 }

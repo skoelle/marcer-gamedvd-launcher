@@ -223,6 +223,9 @@ class DetailPanel extends StatelessWidget {
           child: GameInfoPanel(
             info: card.info,
             variant: primary,
+            releaseFallback: primary == null
+                ? null
+                : c.crewReleaseForRel(primary.rel),
             filter: c.filter,
             variants: card.kind == 'falcon' ? kFalconVariants : kHatariVariants,
             atariLegend: al,
@@ -467,7 +470,13 @@ class DetailPanel extends StatelessWidget {
             style: TextStyle(color: Colors.grey, fontSize: 12),
           )
         else
-          ..._metadataRows(c, info, shots),
+          ..._metadataRows(
+            c,
+            info,
+            shots,
+            zipName: e.name,
+            releaseFallback: c.crewReleaseForRel(c.relOf(e)),
+          ),
         const SizedBox(height: 12),
         _kv('Layer', e.layerStatus.name.toUpperCase()),
         _kv('Path', e.effectivePath ?? ''),
@@ -530,12 +539,23 @@ class DetailPanel extends StatelessWidget {
   List<Widget> _metadataRows(
     CatalogController c,
     GameInfo info,
-    ScreenshotEntry? shots,
-  ) {
+    ScreenshotEntry? shots, {
+    String? zipName,
+    CrewRelease? releaseFallback,
+  }) {
+    final selected = zipName == null
+        ? null
+        : InfoSummary.fromGame(info).variantForZip(zipName);
     final rows = <Widget>[
       _kv('Matched via', info.matchedVia),
       if (info.variants.length > 1) _kv('Variants', '${info.variants.length}'),
-      ..._metadataRowsFromVariants(info.variants, skipVariantsCount: true),
+      ..._metadataRowsFromVariants(
+        info.variants,
+        skipVariantsCount: true,
+        selected: selected,
+        omitGroup: zipName != null && selected == null,
+        releaseFallback: releaseFallback,
+      ),
     ];
     if (shots != null && shots.zipContents.isNotEmpty) {
       rows.add(_kv('ZIP contents', '${shots.zipContents.length} files'));
@@ -546,8 +566,13 @@ class DetailPanel extends StatelessWidget {
   List<Widget> _metadataRowsFromVariants(
     List<Map<String, dynamic>> variants, {
     bool skipVariantsCount = false,
+    Map<String, dynamic>? selected,
+    bool omitGroup = false,
+    CrewRelease? releaseFallback,
   }) {
-    final v = variants.isEmpty ? const <String, dynamic>{} : variants.first;
+    final v =
+        selected ??
+        (variants.isEmpty ? const <String, dynamic>{} : variants.first);
     final rows = <Widget>[];
     if (!skipVariantsCount && variants.length > 1) {
       rows.add(_kv('Variants', '${variants.length}'));
@@ -571,10 +596,30 @@ class DetailPanel extends StatelessWidget {
     };
     fields.forEach((key, label) {
       final value = v[key];
-      if (value == null) return;
-      final text = value is bool ? (value ? 'yes' : 'no') : '$value';
-      if (text.isEmpty || text == 'false') return;
-      rows.add(_kv(label, text, flagYes: value == true));
+      var text = value == null
+          ? ''
+          : (value is bool ? (value ? 'yes' : 'no') : '$value');
+      if (text == 'false') text = '';
+      String? note;
+      var fromFallback = false;
+      if (text.isEmpty && releaseFallback != null) {
+        if (key == 'cracked_by' && releaseFallback.crackedBy.isNotEmpty) {
+          text = releaseFallback.crackedBy;
+          fromFallback = true;
+          note = releaseFallback.inferredCrackedBy ? 'inferred' : null;
+        } else if (key == 'crew' && releaseFallback.crew.isNotEmpty) {
+          text = releaseFallback.crew;
+          fromFallback = true;
+          note = releaseFallback.inferredCrew ? 'inferred' : null;
+        }
+      }
+      if (omitGroup &&
+          (key == 'cracked_by' || key == 'crew') &&
+          !fromFallback) {
+        return;
+      }
+      if (text.isEmpty) return;
+      rows.add(_kv(label, text, flagYes: value == true, note: note));
     });
     final flags = <String>[
       if (v['raw_dump'] == true) 'RAW dump',
@@ -587,7 +632,12 @@ class DetailPanel extends StatelessWidget {
     return rows;
   }
 
-  Widget _kv(String label, String value, {bool flagYes = false}) {
+  Widget _kv(
+    String label,
+    String value, {
+    bool flagYes = false,
+    String? note,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -601,8 +651,20 @@ class DetailPanel extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(
-              value,
+            child: Text.rich(
+              TextSpan(
+                text: value,
+                children: [
+                  if (note != null)
+                    TextSpan(
+                      text: '  $note',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.orangeAccent,
+                      ),
+                    ),
+                ],
+              ),
               style: TextStyle(
                 fontSize: 12,
                 color: flagYes ? Colors.greenAccent : Colors.white70,

@@ -81,6 +81,39 @@ GAMEINFO_SUBDIR = "gameinfo"
 CREW_FILE = "crews.json"
 CREW_IMAGES_FILE = "crew-images.json"
 
+# XLS placeholders that are not scene groups (normalized).
+PLACEHOLDER_GROUPS = frozenset({"original", "unknown", "no 1 and no 2"})
+
+
+def normalize_group_label(value):
+    s = str(value or "").strip().lower()
+    s = re.sub(r"[&+]", " and ", s)
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def clean_group_label(value):
+    """Return a real cracker/crew label, or ``""`` for XLS placeholders."""
+    label = str(value or "").strip()
+    if not label:
+        return ""
+    normalized = normalize_group_label(label)
+    if not normalized or normalized in PLACEHOLDER_GROUPS:
+        return ""
+    return label
+
+
+def clean_gameinfo_variants(games):
+    """Normalize placeholder labels in-place for every XLS variant."""
+    for game in games or []:
+        for variant in game.get("variants") or []:
+            if "cracked_by" in variant:
+                variant["cracked_by"] = clean_group_label(
+                    variant.get("cracked_by"))
+            if "crew" in variant:
+                variant["crew"] = clean_group_label(variant.get("crew"))
+    return games
+
 
 def log(msg):
     print(msg, flush=True)
@@ -932,6 +965,7 @@ class DataStore:
         self._crew_release_count = 0
         self._crew_images = {}
         self._release_lookup = {}
+        self._release_labels = {}
         self._cracked_tree = ""
         self.assets = LocalAssetsService(
             root_dir, patch_dir, assets_cache_seconds)
@@ -1005,7 +1039,8 @@ class DataStore:
                 p = self.data / f"games-{kind}.json"
                 try:
                     with open(p, encoding="utf-8") as f:
-                        games[kind] = json.load(f).get("games", [])
+                        games[kind] = clean_gameinfo_variants(
+                            json.load(f).get("games", []))
                     self.kinds_loaded.add(kind)
                 except Exception as exc:  # noqa: BLE001
                     log(f"[warn] {p.name}: {exc}")
@@ -1047,6 +1082,7 @@ class DataStore:
                        for kind in SECTION_INDEX_NAMES}
         self._cracked_tree = section_trees.get("cracked", "")
         self._load_crews()
+        self._attach_release_labels()
 
         coverage = {}
         for src in self.manifest.get("sources") or []:
@@ -1149,6 +1185,7 @@ class DataStore:
         self._crew_release_count = 0
         self._crew_images = {}
         self._release_lookup = {}
+        self._release_labels = {}
         if not self.data:
             self.crew_error = "gameinfo unavailable"
             return
@@ -1173,6 +1210,7 @@ class DataStore:
         ))
         self._load_crew_images()
         self._release_lookup = {}
+        self._release_labels = {}
         for card in self.cards["cracked"]:
             for index, variant in enumerate(card["variants"]):
                 self._release_lookup[variant["rel"]] = (card, index)
@@ -1185,6 +1223,12 @@ class DataStore:
                 r for r in (group.get("releases") or [])
                 if isinstance(r, dict) and str(r.get("rel") or "").strip()
             ]
+            for release in releases:
+                release["cracked_by"] = clean_group_label(
+                    release.get("cracked_by"))
+                release["crew"] = clean_group_label(release.get("crew"))
+                if not isinstance(release.get("inferred_fields"), list):
+                    release.pop("inferred_fields", None)
             normalized = dict(group)
             normalized["id"] = group_id
             normalized["name"] = name
@@ -1208,6 +1252,37 @@ class DataStore:
         self._crew_visible_groups = len(self.crew_groups)
         self._crew_release_count = sum(
             len(g.get("releases") or []) for g in self.crew_groups.values())
+        for group in self.crew_groups.values():
+            for release in group.get("releases") or []:
+                rel = str(release.get("rel") or "").replace("\\", "/")
+                if not rel:
+                    continue
+                label = {
+                    "cracked_by": str(release.get("cracked_by") or ""),
+                    "crew": str(release.get("crew") or ""),
+                    "inferred_fields": list(
+                        release.get("inferred_fields") or []),
+                }
+                keys = {rel}
+                if self._cracked_tree:
+                    prefix = self._cracked_tree + "/"
+                    keys.add(rel[len(prefix):] if rel.startswith(prefix)
+                             else prefix + rel)
+                for key in keys:
+                    self._release_labels[key] = label
+
+    def _attach_release_labels(self):
+        """Attach inferred release labels (from crews.json) to cracked cards."""
+        for card in self.cards["cracked"]:
+            labels = {}
+            for variant in card.get("variants") or []:
+                entry = self._release_labels.get(variant.get("rel"))
+                if entry:
+                    labels[variant["rel"]] = entry
+            if labels:
+                card["release_labels"] = labels
+            else:
+                card.pop("release_labels", None)
 
     def _load_crew_images(self):
         self._crew_images = {}
@@ -1335,6 +1410,8 @@ class DataStore:
                 "publisher": str(release.get("publisher") or ""),
                 "cracked_by": str(release.get("cracked_by") or ""),
                 "crew": str(release.get("crew") or ""),
+                "inferred_fields": list(
+                    release.get("inferred_fields") or []),
                 "language": str(release.get("language") or ""),
                 "disks": int(release.get("disks") or 0),
                 "raw_dump": release.get("raw_dump") is True,
@@ -1525,6 +1602,8 @@ def _public_card(card, section):
     }
     if "focus_variant" in card:
         out["focus_variant"] = card["focus_variant"]
+    if card.get("release_labels"):
+        out["release_labels"] = card["release_labels"]
     if card.get("info"):
         out["info"] = card["info"]
     return out

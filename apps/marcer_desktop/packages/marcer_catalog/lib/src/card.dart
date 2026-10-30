@@ -129,8 +129,8 @@ class InfoSummary {
     return InfoSummary(
       title: s('title').isNotEmpty ? s('title') : g.matchedTitle,
       publisher: s('publisher'),
-      crackedBy: s('cracked_by'),
-      crew: s('crew'),
+      crackedBy: groupLabelOrEmpty(s('cracked_by')),
+      crew: groupLabelOrEmpty(s('crew')),
       introCode: s('intro_code'),
       language: s('language'),
       disks: v0['disks'],
@@ -172,6 +172,41 @@ class InfoSummary {
   final String cracktro;
   final String screenFormat;
   final List<Map<String, dynamic>> variants;
+
+  /// Index of the XLS variant that belongs to [zipName], or -1.
+  ///
+  /// Release-specific fields (`cracked_by`/`crew`) are not shown at folder
+  /// level: a ZIP is matched against a variant when all of the variant's
+  /// cracker/crew tokens appear in the ZIP name (separators such as `/`,
+  /// `-`, `&` and `+` are ignored). A folder with a single XLS variant always
+  /// maps to it; otherwise an ambiguous ZIP yields -1 instead of silently
+  /// falling back to the first (often `Original`) variant.
+  int variantIndexForZip(String zipName) {
+    if (variants.isEmpty) return -1;
+    if (variants.length == 1) return 0;
+    final nameTokens = crewTokens(zipName).toSet();
+    if (nameTokens.isEmpty) return -1;
+    for (var i = 0; i < variants.length; i++) {
+      final v = variants[i];
+      if (_variantLabelMatchesZip(v['cracked_by'], nameTokens) ||
+          _variantLabelMatchesZip(v['crew'], nameTokens)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /// The XLS variant that belongs to [zipName], or null when ambiguous.
+  Map<String, dynamic>? variantForZip(String zipName) {
+    final i = variantIndexForZip(zipName);
+    return i >= 0 ? variants[i] : null;
+  }
+}
+
+bool _variantLabelMatchesZip(Object? label, Set<String> zipTokens) {
+  final tokens = crewTokens(label as String?);
+  if (tokens.isEmpty || !tokens.any((t) => t.length >= 3)) return false;
+  return tokens.every(zipTokens.contains);
 }
 
 /// One catalog card (= game folder for cracked/pd/utils), equivalent to a

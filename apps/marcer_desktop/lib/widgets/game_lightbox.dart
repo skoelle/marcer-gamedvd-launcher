@@ -1143,6 +1143,9 @@ class _GameLightboxState extends State<GameLightbox> {
             : null;
         return GameInfoPanel(
           info: _info,
+          releaseFallback: v == null
+              ? null
+              : widget.controller.crewReleaseForRel(v.rel),
           atariLegend: al,
           pirateFinderMatch: pfMatch,
           onAtariLegend: al == null

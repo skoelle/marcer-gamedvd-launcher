@@ -595,8 +595,6 @@ function hoverHTML(card) {
     const i = card.info;
     add("Title", i.title);
     add("Publisher", i.publisher);
-    add("Cracked by", i.cracked_by);
-    add("Crew", i.crew);
     add("Intro", i.intro_code);
     add("Language", i.language);
     add("Year", i.release);
@@ -728,6 +726,26 @@ const CREW_STOPWORDS = new Set(["and", "the", "co", "crew", "inc", "ltd",
 function crewTokens(s) {
   return (String(s == null ? "" : s).toLowerCase().match(/[a-z0-9]+/g) || [])
     .filter((t) => !CREW_STOPWORDS.has(t) && t.length >= 2);
+}
+
+// Index of the XLS variant that belongs to `zipName`, or -1 (desktop
+// `InfoSummary.variantIndexForZip`). `cracked_by`/`crew` are release-specific
+// and must not be shown for an ambiguous ZIP (first variant would often be
+// the `Original` release).
+function infoVariantIndex(info, zipName) {
+  const variants = (info && info.variants) || [];
+  if (!variants.length) return -1;
+  if (variants.length === 1) return 0;
+  const zipTokens = new Set(crewTokens(zipName));
+  if (!zipTokens.size) return -1;
+  return variants.findIndex((rv) => {
+    for (const label of [rv.cracked_by, rv.crew]) {
+      const lt = crewTokens(label);
+      if (!lt.length || !lt.some((t) => t.length >= 3)) continue;
+      if (lt.every((t) => zipTokens.has(t))) return true;
+    }
+    return false;
+  });
 }
 
 function firstWithPreview(card, idxs) {
@@ -990,8 +1008,6 @@ function renderLightbox() {
     };
     add("Title", i.title);
     add("Publisher", i.publisher);
-    add("Cracked by", i.cracked_by, "cracker");
-    add("Crew", i.crew, "crew");
     add("Intro code", i.intro_code);
     add("Language", i.language);
     add("Release", i.release);
@@ -1007,29 +1023,47 @@ function renderLightbox() {
     if (i.pasti_dump) flags.push("PASTI dump");
     if (i.boxscan) flags.push("Boxscan");
     add("Flags", flags.join(", "));
+    // The selected ZIP's XLS row: `Cracked by`/`Crew` are release-specific
+    // and shown in "This ZIP" only (desktop parity). Ambiguous ZIPs get no
+    // group rows instead of the first (often `Original`) variant.
+    let selIdx = v ? infoVariantIndex(i, v.name) : -1;
+    const sel = selIdx >= 0 ? i.variants[selIdx] : null;
+    const fallback = (card.release_labels && v && v.rel)
+      ? card.release_labels[v.rel] : null;
+    const fallbackInferred = (fallback && Array.isArray(fallback.inferred_fields))
+      ? fallback.inferred_fields : [];
+    let cracker = sel ? String(sel.cracked_by || "").trim() : "";
+    let crew = sel ? String(sel.crew || "").trim() : "";
+    let crackerInferred = false;
+    let crewInferred = false;
+    if (!cracker && fallback) {
+      cracker = String(fallback.cracked_by || "").trim();
+      crackerInferred = fallbackInferred.includes("cracked_by");
+    }
+    if (!crew && fallback) {
+      crew = String(fallback.crew || "").trim();
+      crewInferred = fallbackInferred.includes("crew");
+    }
     let html = `<div id="lb-assets"></div>` +
       `<h3>Game info</h3><table>${rows.join("")}</table>`;
     if (v) {
+      const groupRow = (label, value, kind, inferred) =>
+        `<tr><td>${label}</td><td>` +
+        `<a class="lb-link" href="#" data-group="${kind}" data-group-val="${esc(value)}">${esc(value)}</a>` +
+        (inferred ? ` <span class="inferred">inferred</span>` : "") +
+        `</td></tr>`;
       html += `<h3>This ZIP</h3><table>` +
         `<tr><td>File</td><td>${esc(v.name)}</td></tr>` +
         `<tr><td>Status</td><td>${esc(v.status)}</td></tr>` +
         `<tr><td>Kind</td><td>${esc(v.kind || "—")}</td></tr>` +
+        (cracker ? groupRow("Cracked by", cracker, "cracker", crackerInferred) : "") +
+        (crew ? groupRow("Crew", crew, "crew", crewInferred) : "") +
         (v.tos ? `<tr><td>TOS</td><td>${esc(v.tos)}</td></tr>` : "") +
         (v.layer ? `<tr><td>Layer</td><td>${esc(v.layer)}</td></tr>` : "") +
         (v.size ? `<tr><td>Size</td><td>${(v.size / 1024).toFixed(0)} KB</td></tr>` : "") +
         `<tr><td>Path</td><td>${esc(v.rel)}</td></tr></table>`;
     }
     if (i.variants && i.variants.length > 1) {
-      // mark the gameinfo variant that matches the currently selected ZIP
-      let selIdx = -1;
-      if (v) {
-        const zl = (v.name || "").toLowerCase();
-        selIdx = i.variants.findIndex((rv) => {
-          const cr = (rv.cracked_by || "").trim().toLowerCase();
-          const crw = (rv.crew || "").trim().toLowerCase();
-          return (cr && zl.includes(cr)) || (crw && zl.includes(crw));
-        });
-      }
       // no ZIP matched (crew/cracker focus): mark the group's variant
       if (selIdx === -1 && state.cracker !== "any") {
         selIdx = i.variants.findIndex((rv) =>
@@ -1060,9 +1094,23 @@ function renderLightbox() {
   } else {
     let html = `<div id="lb-assets"></div><h3>No game info</h3>`;
     if (v) {
+      const fallback = (card.release_labels && v.rel)
+        ? card.release_labels[v.rel] : null;
+      const inferred = (fallback && Array.isArray(fallback.inferred_fields))
+        ? fallback.inferred_fields : [];
+      const cracker = fallback ? String(fallback.cracked_by || "").trim() : "";
+      const crew = fallback ? String(fallback.crew || "").trim() : "";
+      const groupRow = (label, value, kind, isInferred) =>
+        `<tr><td>${label}</td><td>` +
+        `<a class="lb-link" href="#" data-group="${kind}" data-group-val="${esc(value)}">${esc(value)}</a>` +
+        (isInferred ? ` <span class="inferred">inferred</span>` : "") +
+        `</td></tr>`;
       html += `<table><tr><td>File</td><td>${esc(v.name)}</td></tr>` +
         `<tr><td>Status</td><td>${esc(v.status)}</td></tr>` +
         `<tr><td>Kind</td><td>${esc(v.kind || "—")}</td></tr>` +
+        (cracker ? groupRow("Cracked by", cracker, "cracker",
+                            inferred.includes("cracked_by")) : "") +
+        (crew ? groupRow("Crew", crew, "crew", inferred.includes("crew")) : "") +
         (v.tos ? `<tr><td>TOS</td><td>${esc(v.tos)}</td></tr>` : "") +
         (v.layer ? `<tr><td>Layer</td><td>${esc(v.layer)}</td></tr>` : "") +
         `<tr><td>Path</td><td>${esc(v.rel)}</td></tr></table>`;
@@ -1159,6 +1207,8 @@ function crewRenderGrid() {
     ].join("");
     const credits = [release.cracked_by, release.crew]
       .filter(Boolean).join(" · ");
+    const creditInferred = Array.isArray(release.inferred_fields)
+      && release.inferred_fields.length > 0;
     return `<div class="crew-release ${index === crewView.selected ? "selected" : ""}" ` +
       `data-idx="${index}" tabindex="-1">` +
       `<div class="crew-thumb">${preview}</div>` +
@@ -1167,7 +1217,8 @@ function crewRenderGrid() {
       `<div class="crew-release-title">${esc(release.title || release.zip || release.rel)}</div>` +
       `<div class="crew-release-meta">` +
       `${release.year ? esc(release.year) : ""}` +
-      `${release.year && credits ? " · " : ""}${esc(credits)}</div>` +
+      `${release.year && credits ? " · " : ""}${esc(credits)}` +
+      `${credits && creditInferred ? " (inferred)" : ""}</div>` +
       `</div></div>`;
   }).join("");
 }
@@ -1181,17 +1232,21 @@ function crewRenderSide() {
   crewView.selected = Math.max(0, Math.min(
     crewView.selected, crewView.filtered.length - 1));
   const release = crewView.filtered[crewView.selected];
+  const inferred = Array.isArray(release.inferred_fields)
+    ? release.inferred_fields : [];
   const rows = [];
-  const add = (label, value) => {
+  const add = (label, value, isInferred) => {
     if (value !== "" && value != null && value !== false) {
-      rows.push(`<tr><td>${esc(label)}</td><td>${esc(value)}</td></tr>`);
+      rows.push(`<tr><td>${esc(label)}</td><td>${esc(value)}` +
+        (isInferred ? ` <span class="inferred">inferred</span>` : "") +
+        `</td></tr>`);
     }
   };
   add("Title", release.title);
   add("Year", release.year);
   add("Publisher", release.publisher);
-  add("Cracked by", release.cracked_by);
-  add("Crew", release.crew);
+  add("Cracked by", release.cracked_by, inferred.includes("cracked_by"));
+  add("Crew", release.crew, inferred.includes("crew"));
   add("Language", release.language);
   add("Disks", release.disks || "");
   const flags = [];

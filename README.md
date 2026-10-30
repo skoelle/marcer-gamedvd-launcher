@@ -37,9 +37,13 @@ Save, the manual screenshot curation described below.
   language/year/genre/developer filters, tri-state `raw`/`pasti`/`boxscan`,
   `TOS/Bad` and a combined sort dropdown. Every dropdown is virtualized and
   type-to-filter.
-- **Detail sidebar and full-screen lightbox** with the "This ZIP" table, release
-  variants, a variant filmstrip, candidate strip, integer-scaled images and
-  clickable previous/next navigation.
+- **Detail sidebar and full-screen lightbox** with the "This ZIP" table
+  (including the release-specific `Cracked by`/`Crew` taken from the XLS row
+  that matches the selected ZIP; missing labels fall back to the ZIP-name
+  inference in `crews.json` and are marked `inferred`), release variants, a
+  variant filmstrip, candidate strip, integer-scaled images and clickable
+  previous/next navigation. XLS placeholders (`Original`, `Unknown`, …) are
+  never shown as a cracker/crew.
 - **Marcer's curated box scans & manuals** — see below.
 - **Optional AtariLegend metadata** (genre, developers/roles, boxscans,
   screenshots, reviews, magazines, comments, community score) and the optional

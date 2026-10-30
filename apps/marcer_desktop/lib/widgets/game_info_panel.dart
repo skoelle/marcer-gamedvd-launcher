@@ -67,6 +67,7 @@ class GameInfoPanel extends StatelessWidget {
     this.pirateFinderMatch,
     this.onPirateFinder,
     this.extras,
+    this.releaseFallback,
   });
 
   final InfoSummary? info;
@@ -94,7 +95,7 @@ class GameInfoPanel extends StatelessWidget {
   /// Variants offered by the Play dropdown (hidden when empty).
   final List<HatariVariant> variants;
 
-  /// Click on a crew/cracker group (release-variant row or the Game info
+  /// Click on a crew/cracker group (release-variant row or the This ZIP
   /// Crew/Cracked-by values): selects that group's image. [kind] is
   /// `'crew'` or `'cracker'`; hidden/no-op when null.
   final void Function(String value, String kind)? onSelectGroup;
@@ -116,6 +117,11 @@ class GameInfoPanel extends StatelessWidget {
   /// `Box scans`/`Manuals` chips). Shown only when non-null.
   final Widget? extras;
 
+  /// `crews.json` metadata for the shown ZIP. Used as a fallback for
+  /// `Cracked by`/`Crew` when the XLS variant has no real label; values
+  /// flagged as inferred are marked in the table.
+  final CrewRelease? releaseFallback;
+
   @override
   Widget build(BuildContext context) {
     final info = this.info;
@@ -128,16 +134,20 @@ class GameInfoPanel extends StatelessWidget {
           if (variant != null) ...[
             const SizedBox(height: 8),
             _headingRow('This ZIP', trailing: _playButtonOrNull()),
-            ..._zipTable(variant!),
+            ..._zipTable(variant!, null, onSelectGroup),
           ],
           ..._pirateFinderSection(),
         ] else ...[
           _headingRow('Game info', trailing: _actionButtonsOrNull()),
-          ..._infoRows(info, onSelectGroup),
+          ..._infoRows(info),
           if (variant != null) ...[
             const SizedBox(height: 8),
             _headingRow('This ZIP', trailing: _playButtonOrNull()),
-            ..._zipTable(variant!),
+            ..._zipTable(
+              variant!,
+              info.variantForZip(variant!.name),
+              onSelectGroup,
+            ),
           ],
           ..._pirateFinderSection(),
           if (info.variants.length > 1) ...[
@@ -383,15 +393,10 @@ class GameInfoPanel extends StatelessWidget {
     ),
   );
 
-  List<Widget> _infoRows(
-    InfoSummary info,
-    void Function(String value, String kind)? onSelectGroup,
-  ) {
+  List<Widget> _infoRows(InfoSummary info) {
     final rows = <Widget>[];
     const fields = <String, String>{
       'publisher': 'Publisher',
-      'cracked_by': 'Cracked by',
-      'crew': 'Crew',
       'language': 'Language',
       'disks': 'Disks',
       'release': 'Release',
@@ -407,8 +412,6 @@ class GameInfoPanel extends StatelessWidget {
     if (info.title.isNotEmpty) rows.add(_kv('Title', info.title));
     final values = <String, String>{
       'publisher': info.publisher,
-      'cracked_by': info.crackedBy,
-      'crew': info.crew,
       'language': info.language,
       'disks': info.disks?.toString() ?? '',
       'release': info.release,
@@ -424,18 +427,7 @@ class GameInfoPanel extends StatelessWidget {
     fields.forEach((key, label) {
       final val = values[key] ?? '';
       if (val.isEmpty) return;
-      final groupKind = key == 'crew'
-          ? 'crew'
-          : (key == 'cracked_by' ? 'cracker' : null);
-      rows.add(
-        _kv(
-          label,
-          val,
-          onTap: (groupKind != null && onSelectGroup != null)
-              ? () => onSelectGroup(val, groupKind)
-              : null,
-        ),
-      );
+      rows.add(_kv(label, val));
     });
     final flags = <String>[
       if (info.rawDump) 'RAW dump',
@@ -447,11 +439,11 @@ class GameInfoPanel extends StatelessWidget {
     return rows;
   }
 
-  /// Release-variants table; the row matching the selected ZIP (cracker or
-  /// crew name contained in the ZIP filename) is highlighted. With an active
-  /// crew/cracker filter whose ZIP could not be identified, the group's row
-  /// is highlighted instead (cracker first). Rows are clickable when
-  /// [onSelectGroup] is set (crew first, else cracker).
+  /// Release-variants table; the row matching the selected ZIP (all
+  /// cracker/crew label tokens contained in the ZIP filename) is highlighted.
+  /// With an active crew/cracker filter whose ZIP could not be identified,
+  /// the group's row is highlighted instead (cracker first). Rows are
+  /// clickable when [onSelectGroup] is set (crew first, else cracker).
   Widget _variantsTable(
     InfoSummary info,
     ZipVariantView? v,
@@ -459,20 +451,7 @@ class GameInfoPanel extends StatelessWidget {
     void Function(String value, String kind)? onSelectGroup,
   ) {
     final f = filter;
-    var selIdx = -1;
-    if (v != null) {
-      final zl = v.name.toLowerCase();
-      for (var i = 0; i < info.variants.length; i++) {
-        final rv = info.variants[i];
-        final cr = ((rv['cracked_by'] ?? '') as String).trim().toLowerCase();
-        final crw = ((rv['crew'] ?? '') as String).trim().toLowerCase();
-        if ((cr.isNotEmpty && zl.contains(cr)) ||
-            (crw.isNotEmpty && zl.contains(crw))) {
-          selIdx = i;
-          break;
-        }
-      }
-    }
+    var selIdx = v == null ? -1 : info.variantIndexForZip(v.name);
     if (selIdx == -1 && f != null && f.cracker != 'any') {
       final target = normCrew(f.cracker);
       final idx = info.variants.indexWhere(
@@ -596,12 +575,47 @@ class GameInfoPanel extends StatelessWidget {
     return InkWell(onTap: onTap, child: row);
   }
 
-  List<Widget> _zipTable(ZipVariantView v) {
+  List<Widget> _zipTable(
+    ZipVariantView v,
+    Map<String, dynamic>? release,
+    void Function(String value, String kind)? onSelectGroup,
+  ) {
     final kind = (v.kind == null || v.kind!.isEmpty) ? '—' : v.kind!;
+    var cracker = (release?['cracked_by'] ?? '').toString().trim();
+    var crew = (release?['crew'] ?? '').toString().trim();
+    var crackerInferred = false;
+    var crewInferred = false;
+    final fallback = releaseFallback;
+    if (cracker.isEmpty && fallback != null && fallback.crackedBy.isNotEmpty) {
+      cracker = fallback.crackedBy;
+      crackerInferred = fallback.inferredCrackedBy;
+    }
+    if (crew.isEmpty && fallback != null && fallback.crew.isNotEmpty) {
+      crew = fallback.crew;
+      crewInferred = fallback.inferredCrew;
+    }
     return [
       _kv('File', v.name),
       if (!v.hideStatus) _kv('Status', v.status),
       _kv('Kind', kind),
+      if (cracker.isNotEmpty)
+        _kv(
+          'Cracked by',
+          cracker,
+          note: crackerInferred ? 'inferred' : null,
+          onTap: onSelectGroup == null
+              ? null
+              : () => onSelectGroup(cracker, 'cracker'),
+        ),
+      if (crew.isNotEmpty)
+        _kv(
+          'Crew',
+          crew,
+          note: crewInferred ? 'inferred' : null,
+          onTap: onSelectGroup == null
+              ? null
+              : () => onSelectGroup(crew, 'crew'),
+        ),
       if (v.tos != null && v.tos!.isNotEmpty) _kv('TOS', v.tos!),
       if (v.missing) _kv('Missing', 'yes — not present locally'),
       if (v.layer.isNotEmpty) _kv('Layer', v.layer),
@@ -611,7 +625,12 @@ class GameInfoPanel extends StatelessWidget {
     ];
   }
 
-  Widget _kv(String label, String value, {VoidCallback? onTap}) {
+  Widget _kv(
+    String label,
+    String value, {
+    VoidCallback? onTap,
+    String? note,
+  }) {
     final row = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -623,8 +642,20 @@ class GameInfoPanel extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Text(
-            value,
+          child: Text.rich(
+            TextSpan(
+              text: value,
+              children: [
+                if (note != null)
+                  TextSpan(
+                    text: '  $note',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.orangeAccent,
+                    ),
+                  ),
+              ],
+            ),
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
         ),

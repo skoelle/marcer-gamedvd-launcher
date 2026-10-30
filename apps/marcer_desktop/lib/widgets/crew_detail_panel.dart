@@ -77,8 +77,11 @@ class CrewDetailPanel extends StatelessWidget {
   Widget _releaseRow(BuildContext context, CrewRelease release) {
     final meta = <String>[
       if (release.publisher.isNotEmpty) release.publisher,
-      if (release.crackedBy.isNotEmpty) 'cracker: ${release.crackedBy}',
-      if (release.crew.isNotEmpty) 'crew: ${release.crew}',
+      if (release.crackedBy.isNotEmpty)
+        'cracker: ${release.crackedBy}'
+            '${release.inferredCrackedBy ? ' (inferred)' : ''}',
+      if (release.crew.isNotEmpty)
+        'crew: ${release.crew}${release.inferredCrew ? ' (inferred)' : ''}',
       if (release.language.isNotEmpty) release.language,
     ].join(' · ');
     final flags = <Widget>[

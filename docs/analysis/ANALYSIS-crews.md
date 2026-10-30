@@ -70,23 +70,51 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
    names; curated abbreviations and typo variants (`SFX` → `Special FX`,
    `Klapauziuz` → `Klapauzius`, `Bergerdorf Atari Clan` →
    `Bergerdor Atari Clan - BAC`) are part of the registry. Release-code
-   suffixes (`A_###`, `dbug###`, `SERE##`, …) are not mapped automatically;
-   unresolved ZIPs stay in `unmatched.txt` for review.
+   prefixes (`dbug###`, `SERE##`, `GFOR##`, `FOFT##`, `SFX###`, `auto###`, …)
+   are matched against group names/aliases in the second pass (exact compact
+   name, unique compact prefix, initials); ambiguous codes stay in
+   `unmatched.txt` for review.
 4. **Attribution (crew view):**
-   - exact ZIP basename match against Crew Sorted;
+   - exact ZIP basename match against Crew Sorted; if that fails, retry after
+     stripping trailing dump markers (`BAD`, `Cracked`, `Unknown`, `Demo`,
+     `Tr`, `Disk N`, …) **only while a credit segment remains** (so a bare
+     game title is never matched);
    - otherwise the folder's `crew`/`cracked_by`, with **`crew` preferred over
      `cracked_by`**;
-   - otherwise a global alias/fuzzy match over the registry.
-5. **Joint credits** such as `Hotline and MCA`, `Replicants/Union` or
+   - otherwise a global alias/fuzzy match over the registry. Single-token
+     abbreviation aliases only count in the credit suffix, never in the game
+     title.
+   The per-release `cracked_by`/`crew` shown in the crew view come from the XLS
+   variant that matches the group label, else from the variant whose label
+   tokens match the ZIP filename. When several variants exist and none can be
+   identified, both fields stay empty instead of inheriting the first
+   (often `Original`) variant.
+5. **Second pass (label inference):** for releases with an empty/placeholder
+   label, the game title is stripped from the ZIP filename and the remaining
+   credit suffix is matched against (a) the assigned group's name/aliases,
+   (b) cracker/crew labels already seen in that group's releases (only for
+   groups with ≥ 2 ZIPs) and (c) the group registry (unique crew/cracker names
+   in the credit). Filled fields are marked `inferred_fields` and written to
+   `crews.json`; `label-inference.csv` keeps the evidence. XLS placeholders
+   (`Original`, `Unknown`, `????`, `No 1 & No 2`) are always treated as empty.
+6. **Unmatched ZIPs:** unique group-name matches, release-code prefixes
+   (`dbug###` → D-Bug, `SERE##` → Serenade, …) and compact contiguous names
+   (`Dead Eye` → Deadeye) in the credit suffix are assigned with
+   `source: "inferred_name"`; all candidates (including medium/ambiguous) are
+   written to `inferred-matches.csv` for review. Unknown names are only
+   proposed in `new-groups-review.csv` (never auto-created).
+7. **Joint credits** such as `Hotline and MCA`, `Replicants/Union` or
    `Lethal / Hotline` stay their own group; they are not split into members.
-6. **Audit:** every ZIP records its match source; unmatched/ambiguous ZIPs go
+8. **Audit:** every ZIP records its match source; unmatched/ambiguous ZIPs go
    to `unmatched.txt`/`ambiguous.txt`, all labels and their mapping to
    `groups-review.csv`.
 
 ## Runtime artifacts
 
 `crews.json` contains every canonical group plus its per-release list (year,
-publisher, cracker, crew, disks, flags, TOS notes and the ZIP rel path). Its
+publisher, cracker, crew, disks, flags, TOS notes and the ZIP rel path).
+`inferred_fields` lists labels completed from the ZIP name by the second pass;
+the apps mark those values as `inferred`. Its
 top-level `source` block uses logical names only (`crew_tree`,
 `games-cracked.json`, `full-index.json.gz`/`index.json`, `crews.json`); absolute
 local paths stay in the git-ignored `local/crew-analysis/` audits. The
@@ -136,6 +164,37 @@ repeated screens per crew from the existing per-ZIP screenshot sidecars
   (`source: "auto"`); review/replace manually. Curated overrides in
   `tools/crew-analysis/manual-images.json` are merged over the automatic picks,
   so a pipeline run does not revert them.
+
+## Audit files and review status
+
+The git-ignored `local/crew-analysis/` directory holds the review artifacts;
+`crews.json`/`crew-images.json` in the gameinfo directory are the published
+outputs. `groups-review.csv` is a **label audit**, not a release report:
+
+- `xls_variant_rows` counts XLS variant rows; `release_zips` counts the final
+  release ZIPs in `crews.json` carrying that label.
+- `canonical_group` is the label's group mapping, not the crew group of its
+  releases.
+- `alias_status=new` means the label is not registered in the Crew
+  Sorted/`aliases.json` registry yet; it does not require a new group.
+
+Review decisions for the 2026-10-30 run (TNT/SJ follow-up):
+
+- `inferred-matches.csv`: the applied rows were manually checked and accepted.
+  The current run has **22 `applied=yes`** matches; `First Samurai … - BAD`
+  moved to an exact Crew Sorted match. The remaining 430 candidates (419
+  ambiguous, 11 medium) intentionally stay unmatched.
+- `new-groups-review.csv`: all **112** candidates were reviewed; **none**
+  becomes a new group.
+- The exact Crew Sorted fallback now strips trailing markers only while a
+  credit segment remains (`TNT - SJ Crew - BAD` → SJ Crew). `TNT` is an alias
+  of **TNT Crew**; title-only abbreviation matches (`Ice`, `Me`) no longer
+  create false group assignments.
+- Current counts: **885 groups, 8.508 releases, 430 unmatched**.
+- `alias-review.csv` is a legacy leftover and is not generated by the current
+  tool.
+- `crew-image-suggestions.*` come from the separate `images` command and can
+  be older than the ranking run.
 
 ## Caveats
 

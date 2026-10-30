@@ -417,6 +417,12 @@ footer {
   cursor: pointer;
   font-size: 0.9em;
 }
+.inferred {
+  color: #ffb74d;
+  font-size: 0.78em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .lb-body {
   display: flex;
   gap: 14px;

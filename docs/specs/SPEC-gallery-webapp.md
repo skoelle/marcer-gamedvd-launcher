@@ -178,13 +178,16 @@ Rules:
   `aliases[]`, `excluded`, optional `image`, and `releases[]` with `rel`,
   `letter`, `folder`, `zip`, `title`, `year`, `publisher`, `cracked_by`,
   `crew`, `language`, `disks`, `raw_dump`, `pasti_dump`, `boxscan`,
-  `tos_bad`, `special_flag`, `special_note`, `source`, `ambiguous`.
-  `rel` is normally the full index path; legacy section-relative paths are
-  resolved through the cracked tree prefix.
+  `tos_bad`, `special_flag`, `special_note`, `source`, `ambiguous`, optional
+  `inferred_fields[]`. `rel` is normally the full index path; legacy
+  section-relative paths are resolved through the cracked tree prefix.
+  `cracked_by`/`crew` are empty for XLS placeholders (`Original`, `Unknown`,
+  `????`, `No 1 & No 2`); `inferred_fields` marks labels filled from the ZIP
+  name by the second crew-analysis pass.
 - `excluded` is retained for the desktop app's curated Crews tab; the
   gallery ignores it and always shows every group.
 - The tab shows all groups sorted by ZIP count/name (no cap). Current real
-  data (2026-10-28): 886 groups, 8,479 releases.
+  data (2026-10-30): 885 groups, 8,508 releases.
 - `crew-images.json` (optional): curated card image per crew keyed by
   name/id, with `rel` (release ZIP index path) and `name` (image basename
   below the screenshot archive). Missing files fall back to the best release
@@ -893,27 +896,39 @@ Opened by clicking a card or pressing Enter/Space on the focused card:
   and is fetched lazily from `/api/local-assets`; it has **no links,
   images, PDFs or download/open controls**. Without assets or without
   `MARCER_ROOT_DIR` the block is omitted.
-- **Metadata table** (right-hand side panel, fixed width ~380 px): all
-  fields of the selected variant's gameinfo entry, then the **This ZIP**
-  table (File, Status, **Kind**, TOS, Layer, Size, Path) and finally all
-  XLS variants of the folder in a compact table (title, cracker, crew,
-  year). The `Kind` row shows the variant's preview classification
-  (`game`/`desktop`/`textscreen`/`darkscreen`/…) or `—` when absent
-  (desktop-app parity). The
+- **Metadata table** (right-hand side panel, fixed width ~380 px): a
+  **Game info** table with the folder-level fields (title, publisher,
+  intro code, language, release, disks, version, company, licence,
+  special/note, TOS/Bad, flags), then the **This ZIP** table (File,
+  Status, **Kind**, `Cracked by`, `Crew`, TOS, Layer, Size, Path) and
+  finally all XLS variants of the folder in a compact table (title,
+  cracker, crew, year). `Cracked by`/`Crew` are release-specific and
+  therefore appear only in **This ZIP**, taken from the XLS variant whose
+  cracker/crew label tokens all occur in the selected ZIP filename
+  (separators `/`, `-`, `&`, `+`; `&`/`+` equal `and`). A folder with a
+  single XLS variant always maps to it; with several variants and no ZIP
+  match both rows are omitted instead of silently showing the first
+  (often `Original`) variant. XLS placeholders (`Original`, `Unknown`,
+  `????`, `No 1 & No 2`) are treated as empty and never shown; if the XLS
+  variant has no real label, the lightbox falls back to the release labels
+  from `crews.json` and marks inferred values with an `inferred` note. The
+  `Kind` row shows the variant's preview
+  classification (`game`/`desktop`/`textscreen`/`darkscreen`/…) or `—`
+  when absent (desktop-app parity). The
   **Year column never wraps** (`white-space: nowrap`). The release
-  variant that matches the currently selected ZIP (by cracker or crew
-  name contained in the ZIP filename) is **highlighted** with a subtle
-  background and bold text so the user always sees which XLS row the
-  open ZIP corresponds to. With an active crew filter whose ZIP could not
-  be identified (`focus_variant === -1`), the subtitle is prefixed with
-  `crew ZIP not found — ` and the XLS row matching the crew (normalized
-  `&`/`and` comparison) is highlighted instead.
+  variant that matches the currently selected ZIP (same token match) is
+  **highlighted** with a subtle background and bold text so the user
+  always sees which XLS row the open ZIP corresponds to. With an active
+  crew filter whose ZIP could not be identified (`focus_variant === -1`),
+  the subtitle is prefixed with `crew ZIP not found — ` and the XLS row
+  matching the crew (normalized `&`/`and` comparison) is highlighted
+  instead.
   - **Clickable crew/cracker groups**: the `Cracked by`/`Crew` values of
-    the Game info table and the release-variant rows are links; clicking
-    one switches the lightbox to **that group's ZIP** of the current card
-    (same fuzzy matcher as the crew/cracker focus, section 5.3, applied
-    client-side). No matching ZIP → variant 0. Clicking a group does
-    **not** change the list filters.
+    the **This ZIP** table and the release-variant rows are links;
+    clicking one switches the lightbox to **that group's ZIP** of the
+    current card (same fuzzy matcher as the crew/cracker focus, section
+    5.3, applied client-side). No matching ZIP → variant 0. Clicking a
+    group does **not** change the list filters.
 - Navigation: `←`/`→` move to the previous/next **card of the current page**
   (v1 limit: within the loaded page; the next card opens on its first
   filmstrip entry), `↑`/`↓` switch variant **in filmstrip order**, `PgUp`/
@@ -1041,7 +1056,8 @@ browser for that crew:
   size to ~0 and the cards would collapse (stretch) or overlap (`start`).
 - Right: compact release side panel with title/year/publisher/cracked by/
   crew/language/disks, RAW/PASTI/Boxscan/TOS flags, ZIP, status, kind,
-  layer and ambiguity. A **Open game lightbox** button (not a launch/play
+  layer and ambiguity. Inferred `cracked_by`/`crew` values carry an
+  `inferred` marker. A **Open game lightbox** button (not a launch/play
   button) and double-click/Enter open the existing game lightbox for that
   release; a release not present in the cracked screenshot index shows a
   note and no open action.

@@ -83,9 +83,12 @@ Backend filter/card helpers use stdlib `unittest` only:
   it does not fit the available area), variant filmstrip (click or
   `↑`/`↓`; variants with a screenshot are listed first), candidate images,
   header badges (layer, status histogram, year), metadata with **This ZIP**
-  (including the `Kind` row) before the release-variant table, the open ZIP
-  highlighted, and **clickable crew/cracker groups** (Game info values and
+  (including the `Kind`, `Cracked by` and `Crew` rows from the XLS variant that
+  matches the selected ZIP; missing labels fall back to `crews.json` and are
+  marked `inferred`) before the release-variant table, the open ZIP
+  highlighted, and **clickable crew/cracker groups** (This ZIP values and
   release-variant rows jump to that group's ZIP), deep link `?entry=<rel>`.
+  XLS placeholders (`Original`, `Unknown`, …) are never rendered.
 - **Crews**: the last tab lists all groups from `crews.json` (the gallery
   ignores `excluded` and has no cap) with curated/release previews and a
   `crew`/`cracker` badge;
@@ -93,7 +96,7 @@ Backend filter/card helpers use stdlib `unittest` only:
   card opens the release browser: screenshot grid + compact release panel,
   search/sort, arrow/PgUp/PgDn/Home/End navigation, and `Enter`/double-click
   opens the selected release in the normal game lightbox (no launch/play
-  button).
+  button). Labels inferred from the ZIP name are marked `inferred`.
 - **Local asset metadata**: the lightbox side panel shows boxscan/manual
   counts and edition/manual labels for the selected card when
   `MARCER_ROOT_DIR` is configured. It reads directory listings and ZIP

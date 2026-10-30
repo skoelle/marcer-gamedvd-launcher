@@ -196,6 +196,13 @@ the kinds it needs.
 
 - `games[]` is keyed by the **matched on-disk folder**; `variants[]` holds all
   XLS rows for that title.
+- `cracked_by: "Original"` is real source data (non-cracked original release),
+  but it is **not a cracker name**. Consumers treat `Original`, `Unknown`,
+  `????` and `No 1 & No 2` as empty/placeholders and never render them as
+  `Cracked by`/`Crew`. Because a folder usually has several XLS variants, the
+  apps must not flatten the first one for release-specific fields: labels are
+  resolved per selected ZIP (by token match), with `crews.json` inference as
+  fallback; ambiguous ZIPs omit them instead of showing the first row.
 - `release` is normalized to a string, either `"YYYY"` or `"DD-MM-YYYY"` (the
   source is mixed).
 - `pd`/`utils` use the same envelope with kind-specific variant fields

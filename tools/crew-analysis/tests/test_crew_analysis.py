@@ -214,9 +214,20 @@ class RegistryAliasesTest(unittest.TestCase):
             "Vectroyd": "Vectoryd",
             "Supergau": "SuperGAU",
             "Beverly Hills Cop - Hal": "Bad Brew Crew - BBC",
+            "TNT": "TNT Crew",
+            "SJ": "SJ Crew",
         }
         for alias, canonical in expected.items():
             self.assertEqual(self.explicit[ca.norm(alias)], canonical, alias)
+
+    def test_tnt_label_merges_into_tnt_crew(self):
+        raw, aliases, _abbrev, labels = ca.build_registry(
+            ["TNT Crew", "SJ Crew"], {"TNT": {"crew"}},
+            self.explicit, set())
+        self.assertEqual(raw["TNT Crew"], "TNT Crew")
+        self.assertEqual(labels["TNT"], "TNT Crew")
+        self.assertIn("TNT Crew", aliases[ca.norm("TNT")])
+        self.assertIn("SJ Crew", aliases[ca.norm("SJ")])
 
     def test_piratefinder_spelling_variants_are_aliases(self):
         expected = {
@@ -258,6 +269,354 @@ class RegistryAliasesTest(unittest.TestCase):
                 abbrev,
             )
             self.assertIn(group, {hit[2] for hit in hits}, name)
+
+
+class ExactCrewLookupTest(unittest.TestCase):
+    def test_strips_trailing_bad_marker(self):
+        exact = {"tnt - sj crew.zip": [("SJ Crew", 155471)]}
+        self.assertEqual(
+            ca.exact_crew_entries("TNT - SJ Crew - BAD.zip", exact),
+            [("SJ Crew", 155471)],
+        )
+
+    def test_does_not_strip_stopword_or_real_segments(self):
+        exact = {"game": [("Wrong Crew", 1)]}
+        self.assertEqual(
+            ca.exact_crew_entries("Game - Crew - BAD.zip", exact), [])
+        self.assertEqual(
+            ca.exact_crew_entries("TNT - SJ Crew - Extra.zip", exact), [])
+
+    def test_never_falls_back_to_a_bare_title(self):
+        exact = {"predator.zip": [("Galaxy Rangers", 1)]}
+        self.assertEqual(
+            ca.exact_crew_entries("Predator - Unknown.zip", exact), [])
+
+    def test_strips_marker_after_a_credit_segment(self):
+        exact = {
+            "space shuttle v1.0 - rottweiller crew.zip": [
+                ("Rottenweiller Crew", 1),
+            ],
+        }
+        self.assertEqual(
+            ca.exact_crew_entries(
+                "Space Shuttle v1.0 - Rottweiller Crew - Disk 1.zip", exact),
+            [("Rottenweiller Crew", 1)],
+        )
+
+
+class AliasSuffixTest(unittest.TestCase):
+    def test_title_abbreviation_does_not_beat_credit_suffix(self):
+        aliases = {"tnt": {"TNT Crew"}, "sj": {"SJ Crew"}}
+        hits = ca.alias_hits(
+            set(ca.tokens("TNT - SJ Crew - BAD.zip")),
+            ca.compact("TNT - SJ Crew - BAD.zip"),
+            set(ca.tokens("SJ Crew - BAD")),
+            aliases,
+            {"tnt", "sj"},
+        )
+        self.assertEqual({hit[2] for hit in hits}, {"SJ Crew"})
+
+    def test_credit_abbreviation_still_matches(self):
+        aliases = {"tnt": {"TNT Crew"}, "sj": {"SJ Crew"}}
+        hits = ca.alias_hits(
+            set(ca.tokens("In Eighty Days - TNT Crew.zip")),
+            ca.compact("In Eighty Days - TNT Crew.zip"),
+            set(ca.tokens("TNT Crew")),
+            aliases,
+            {"tnt", "sj"},
+        )
+        self.assertEqual({hit[2] for hit in hits}, {"TNT Crew"})
+
+
+class PickVariantTest(unittest.TestCase):
+    """The release row must not silently inherit the first (Original) variant."""
+
+    ZIPS = [
+        {"title": "F15 Strike Eagle 2", "cracked_by": "Cyrano Jones",
+         "crew": "D-Bug", "release": "1990"},
+        {"title": "F15 Strike Eagle 2", "cracked_by": "Cameo",
+         "crew": "Replicants", "release": ""},
+        {"title": "F15 Strike Eagle 2 v2.07.1991",
+         "cracked_by": "Dr Trap / Empire", "crew": "Elite", "release": ""},
+    ]
+    ZIP_NAME = ("F15 Strike Eagle 2 v2.7.91 - Dr Trap - Empire - Elite "
+                "- Disk 1.zip")
+
+    def test_group_label_wins(self):
+        canon = {"Dr Trap / Empire": "Dr Trap / Empire"}
+        self.assertIs(
+            ca.pick_variant(self.ZIPS, "Dr Trap / Empire", canon, "other.zip"),
+            self.ZIPS[2],
+        )
+
+    def test_zip_name_fallback_matches_label_tokens(self):
+        self.assertIs(
+            ca.pick_variant(self.ZIPS, "Dr Trap / Empire", {}, self.ZIP_NAME),
+            self.ZIPS[2],
+        )
+
+    def test_ambiguous_zip_returns_none(self):
+        variants = self.ZIPS[:2]
+        self.assertIsNone(
+            ca.pick_variant(variants, "Dr Trap / Empire", {}, self.ZIP_NAME)
+        )
+
+    def test_single_variant_is_used(self):
+        self.assertIs(
+            ca.pick_variant(self.ZIPS[:1], "Unknown", {}, "anything.zip"),
+            self.ZIPS[0],
+        )
+
+    def test_make_release_omits_group_fields_when_unresolved(self):
+        release = ca.make_release(
+            "F/F15/F15 - Dr Trap.zip", "F", "F15", self.ZIP_NAME,
+            1, "exact", "Dr Trap / Empire", self.ZIPS[:2], False, {},
+        )
+        self.assertEqual(release["cracked_by"], "")
+        self.assertEqual(release["crew"], "")
+        self.assertEqual(release["title"], "F15 Strike Eagle 2")
+
+
+class PlaceholderLabelTest(unittest.TestCase):
+    def test_placeholders_are_cleaned(self):
+        for value in ("Original", "unknown", "????", "No 1 & No 2"):
+            self.assertEqual(ca.clean_group_label(value), "", value)
+        self.assertEqual(ca.clean_group_label("Unknown Man"), "Unknown Man")
+        self.assertEqual(ca.clean_group_label("Dr Trap / Empire"),
+                         "Dr Trap / Empire")
+
+
+class LabelInferenceTest(unittest.TestCase):
+    @staticmethod
+    def release(zip_name, title, cracked_by="", crew=""):
+        return {
+            "zip": zip_name,
+            "title": title,
+            "folder": title,
+            "cracked_by": cracked_by,
+            "crew": crew,
+        }
+
+    def test_title_words_are_not_used_as_labels(self):
+        rows = {"Elite": [
+            self.release("Gauntlet - Elite.zip", "Gauntlet"),
+            self.release("Hotshots - Elite.zip", "Hotshots"),
+            self.release("Elite v1.01 - Cracked.zip", "Elite v1.01"),
+        ]}
+        ca.infer_release_labels(rows, {"Elite": {"Elite"}}, {"Elite"})
+        self.assertEqual(rows["Elite"][2]["cracked_by"], "")
+        self.assertEqual(rows["Elite"][2]["crew"], "")
+        self.assertEqual(rows["Elite"][0]["crew"], "Elite")
+
+    def test_group_side_and_known_cracker_are_filled(self):
+        rows = {
+            "Replicants": [
+                self.release("AGE - Cameo - Replicants.zip", "AGE",
+                             cracked_by="Cameo", crew="Replicants"),
+                self.release("Sensible - Snake - Replicants.zip", "Sensible",
+                             cracked_by="Snake", crew="Replicants"),
+                self.release("Rodland - Snake - Replicants.zip", "Rodland"),
+            ],
+        }
+        ca.infer_release_labels(
+            rows, {"Replicants": {"Replicants"}}, {"Replicants"})
+        release = rows["Replicants"][2]
+        self.assertEqual(release["cracked_by"], "Snake")
+        self.assertEqual(release["crew"], "Replicants")
+        self.assertEqual(release["inferred_fields"], ["cracked_by", "crew"])
+
+    def test_joint_group_does_not_mask_its_own_crew(self):
+        rows = {
+            "Dr Trap / Empire": [
+                self.release(
+                    "F15 Strike Eagle 2 v2.7.91 - Dr Trap - Empire - Elite "
+                    "- Disk 1.zip",
+                    "F15 Strike Eagle 2",
+                ),
+            ],
+            "Elite": [
+                self.release("Gauntlet - Elite.zip", "Gauntlet"),
+                self.release("Hotshots - Elite.zip", "Hotshots"),
+            ],
+            "Empire": [
+                self.release("Gods - Empire.zip", "Gods"),
+                self.release("Elf - Empire.zip", "Elf"),
+            ],
+        }
+        ca.infer_release_labels(
+            rows,
+            {
+                "Dr Trap / Empire": {"Dr Trap / Empire"},
+                "Elite": {"Elite"},
+                "Empire": {"Empire"},
+            },
+            {"Elite", "Empire"},
+        )
+        release = rows["Dr Trap / Empire"][0]
+        self.assertEqual(release["cracked_by"], "Dr Trap / Empire")
+        self.assertEqual(release["crew"], "Elite")
+
+    def test_exact_match_fills_short_group_name(self):
+        rows = {"SJ Crew": [{
+            "zip": "TNT - SJ Crew - BAD.zip",
+            "title": "TNT",
+            "folder": "TNT",
+            "cracked_by": "",
+            "crew": "",
+            "source": "exact",
+        }]}
+        ca.infer_release_labels(rows, {"SJ Crew": {"SJ Crew"}}, {"SJ Crew"})
+        release = rows["SJ Crew"][0]
+        self.assertEqual(release["crew"], "SJ Crew")
+        self.assertEqual(release["inferred_fields"], ["crew"])
+
+    def test_ambiguous_credit_is_not_guessed(self):
+        rows = {
+            "Foo": [
+                self.release("Game A - Empire - Elite.zip", "Game A"),
+                self.release("Game B - Empire - Elite.zip", "Game B"),
+            ],
+            "Elite": [
+                self.release("Gauntlet - Elite.zip", "Gauntlet"),
+                self.release("Hotshots - Elite.zip", "Hotshots"),
+            ],
+            "Empire": [
+                self.release("Gods - Empire.zip", "Gods"),
+                self.release("Elf - Empire.zip", "Elf"),
+            ],
+        }
+        ca.infer_release_labels(
+            rows,
+            {"Foo": {"Foo"}, "Elite": {"Elite"}, "Empire": {"Empire"}},
+            {"Foo", "Elite", "Empire"},
+        )
+        for release in rows["Foo"]:
+            self.assertEqual(release["crew"], "")
+
+
+class UnmatchedInferenceTest(unittest.TestCase):
+    @staticmethod
+    def release(zip_name, title):
+        return {
+            "zip": zip_name,
+            "title": title,
+            "folder": title,
+            "cracked_by": "",
+            "crew": "",
+        }
+
+    def setUp(self):
+        self.rows = {
+            "Jao": [
+                self.release("Game A - Jao.zip", "Game A"),
+                self.release("Game B - Jao.zip", "Game B"),
+            ],
+            "Elite": [
+                self.release("Game C - Elite.zip", "Game C"),
+                self.release("Game D - Elite.zip", "Game D"),
+            ],
+        }
+        self.aliases = {"Jao": {"Jao"}, "Elite": {"Elite"}}
+
+    def test_unique_group_name_is_high_confidence(self):
+        proposals = ca.infer_unmatched_candidates(
+            [("A/Arkanoid/a.zip", "A", "Arkanoid",
+              "Arkanoid - Tr - Jao Poland.zip", 1)],
+            self.rows, self.aliases,
+        )
+        self.assertEqual(proposals[0]["group"], "Jao")
+        self.assertEqual(proposals[0]["confidence"], "high")
+
+    def test_game_title_word_does_not_match_group(self):
+        proposals = ca.infer_unmatched_candidates(
+            [("E/Elite/e.zip", "E", "Elite v1.01",
+              "Elite v1.01 - Cracked.zip", 1)],
+            self.rows, self.aliases,
+        )
+        self.assertEqual(proposals[0]["group"], "")
+
+    def test_two_equally_specific_groups_are_ambiguous(self):
+        proposals = ca.infer_unmatched_candidates(
+            [("A/Alpha/a.zip", "A", "Alpha", "Alpha - Elite - Jao.zip", 1)],
+            self.rows, self.aliases,
+        )
+        self.assertEqual(proposals[0]["group"], "")
+        self.assertEqual(proposals[0]["confidence"], "ambiguous")
+
+
+class CodeAndNameInferenceTest(unittest.TestCase):
+    @staticmethod
+    def release(zip_name, title):
+        return {
+            "zip": zip_name,
+            "title": title,
+            "folder": title,
+            "cracked_by": "",
+            "crew": "",
+        }
+
+    def setUp(self):
+        specs = {
+            "D-Bug": ["D-Bug"],
+            "Serenade": ["Serenade"],
+            "G Force": ["G Force"],
+            "FOFT": ["FOFT"],
+            "Special FX": ["Special FX", "SFX"],
+            "Automation": ["Automation"],
+            "Deadeye": ["Deadeye"],
+            "Rockyone": ["Rockyone"],
+            "Euroconnectors": ["Euroconnectors"],
+            "Euroswap": ["Euroswap"],
+        }
+        self.rows, self.aliases = {}, {}
+        for group, aliases in specs.items():
+            self.rows[group] = [
+                self.release(f"{group} A.zip", f"{group} A"),
+                self.release(f"{group} B.zip", f"{group} B"),
+            ]
+            self.aliases[group] = set(aliases)
+
+    def _proposal(self, folder, name):
+        return ca.infer_unmatched_candidates(
+            [(f"A/{folder}/x.zip", "A", folder, name, 1)],
+            self.rows, self.aliases,
+        )[0]
+
+    def test_release_code_prefixes(self):
+        cases = {
+            "Dragonflight - dbug192a.zip": ("D-Bug", "code:dbug"),
+            "Anarchy Academy - SERE17.zip": ("Serenade", "code:sere"),
+            "Backgammon - GFOR30.zip": ("G Force", "code:gfor"),
+            "Bridge - FOFT11.zip": ("FOFT", "code:foft"),
+            "Eaglestar - SFX098.zip": ("Special FX", "code:sfx"),
+            "To Be on Top - auto306v3.zip": ("Automation", "code:auto"),
+        }
+        for name, (group, evidence) in cases.items():
+            proposal = self._proposal("Game", name)
+            self.assertEqual(proposal["group"], group, name)
+            self.assertEqual(proposal["confidence"], "high", name)
+            self.assertEqual(proposal["match_type"], "code_prefix", name)
+            self.assertEqual(proposal["evidence"], evidence, name)
+
+    def test_compact_contiguous_names(self):
+        deadeye = self._proposal("Dark Castle", "Dark Castle - Dead Eye.zip")
+        self.assertEqual(deadeye["group"], "Deadeye")
+        self.assertEqual(deadeye["match_type"], "compact_name")
+        rocky = self._proposal(
+            "Cougar Force", "Gougar Force+Loader - Rocky One.zip")
+        self.assertEqual(rocky["group"], "Rockyone")
+        self.assertEqual(rocky["match_type"], "compact_name")
+
+    def test_ambiguous_code_stays_unmatched(self):
+        proposal = self._proposal("Moonlord", "Moonlord - EURO0981.zip")
+        self.assertEqual(proposal["group"], "")
+        self.assertEqual(proposal["confidence"], "ambiguous")
+
+    def test_novel_tokens_are_kept_for_review(self):
+        proposal = self._proposal(
+            "Arkanoid 2", "Arkanoid 2 - Revenge of Doh - Sob.zip")
+        self.assertEqual(proposal["group"], "")
+        self.assertIn("sob", proposal["tokens"])
 
 
 class CrewsSourceSummaryTest(unittest.TestCase):
