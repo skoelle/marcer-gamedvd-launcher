@@ -3,7 +3,9 @@
   "groups": {
     "Empire": [
       "Empire",
-      "The Empire"
+      "The Empire",
+      "The Light & Lightman",
+      "Angel Face & Arioch"
     ],
     "Hotline & MCA": [
       "Hotline & MCA",
@@ -17,7 +19,8 @@
     "Menacing Cracking Alliance - MCA": [
       "Menacing Cracking Alliance - MCA",
       "MCA",
-      "Menacing Cracking Alliance"
+      "Menacing Cracking Alliance",
+      "Banzai & MCA"
     ],
     "International Cracking Service - ICS": [
       "International Cracking Service - ICS",
@@ -67,7 +70,8 @@
     "Carebears - TCB": [
       "Carebears - TCB",
       "Carebears",
-      "TCB"
+      "TCB",
+      "TCB & Union"
     ],
     "Casualty Department - TCD": [
       "Casualty Department - TCD",
@@ -321,6 +325,39 @@
       "Supreme & Skywalker",
       "Skywalker & Absu",
       "Cynix & Sooty"
+    ],
+    "Elite": [
+      "Elite",
+      "Zorvack & Empire",
+      "WtP & SCSI",
+      "Shen & Empire",
+      "Mercenary & Teknix",
+      "Illegal & GGN",
+      "Elite Vectronix",
+      "Ruthless & Hotline"
+    ],
+    "Delight": [
+      "Delight",
+      "Jabba & Delight"
+    ],
+    "Blade Runners": [
+      "Blade Runners",
+      "Scientist & Blue System",
+      "Mr. ? & Blue System",
+      "Scientist & Blue Systems",
+      "The Scientist & Blue System"
+    ],
+    "STCS & Blade Runners": [
+      "STCS & Blade Runners",
+      "STCS & Bladerunners",
+      "Actarus & STCS",
+      "The Lord & STCS",
+      "Ratboy & Banzai",
+      "Ratboy & STCS"
+    ],
+    "42 Crew": [
+      "42 Crew",
+      "42 Crew & Blade Runners"
     ]
   }
 }
