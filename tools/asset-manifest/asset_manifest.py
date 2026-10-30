@@ -125,6 +125,7 @@ def split_host_port(raw: str, default_port: int = 21):
 def ftp_list(settings: dict, verbose: bool = False):
     host, port = split_host_port(settings["host"])
     ftp = FTP()
+    ftp.encoding = env("MARCER_FTP_ENCODING") or "utf-8"
     if verbose:
         print(f"connecting to {host}:{port} …", file=sys.stderr)
     ftp.connect(host, port, timeout=60)

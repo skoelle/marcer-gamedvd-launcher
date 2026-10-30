@@ -55,6 +55,7 @@ Everything secret lives in the git-ignored `local/paths.env`:
 | `MARCER_FTP_HOST` | FTP server, `host` or `host:port` |
 | `MARCER_FTP_USER` / `MARCER_FTP_PASS` | FTP credentials (empty user ⇒ `anonymous`) |
 | `MARCER_FTP_ASSETS_REMOTE` | asset directory (default `/Uploads/MarcerGameDVDLauncher-assets/`) |
+| `MARCER_FTP_ENCODING` | FTP filename encoding (default `utf-8`, as used by the Marcer server) |
 | `MARCER_RELEASE_TAG` | fixed release/tag holding the pointer (default `catalog-latest`) |
 | `MARCER_REPO` | optional `owner/repo`; otherwise `gh` uses the current git remote |
 

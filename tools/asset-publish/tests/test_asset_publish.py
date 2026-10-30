@@ -126,6 +126,11 @@ class GameinfoPublishTests(unittest.TestCase):
     def archives(self) -> list[Path]:
         return sorted(self.data.glob("gameinfo-*.zip"))
 
+    def test_ftp_settings_default_encoding_is_utf8(self) -> None:
+        with self.ftp_env(MARCER_FTP_ENCODING=""):
+            settings = ap.ftp_settings()
+        self.assertEqual(settings["encoding"], "utf-8")
+
     def test_deterministic_archive_and_signature(self) -> None:
         first = ap.collect_entries(self.source)
         sig1 = ap.content_signature(first)

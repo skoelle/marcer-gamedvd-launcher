@@ -627,6 +627,19 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.retries, 1)
         self.assertEqual(cfg.workers, 2)
 
+    def test_default_encoding_is_utf8(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            env = {
+                "MARCER_PATCH_DIR": str(tmp_path / "patch"),
+                "MARCER_FTP_HOST": "ftp.example:2121",
+            }
+            parser = a.build_parser()
+            args = parser.parse_args(["plan"])
+            with mock.patch.dict(os.environ, env, clear=True):
+                cfg = a.build_config(args)
+        self.assertEqual(cfg.encoding, "utf-8")
+
     def test_missing_patch_or_host_is_a_config_error(self):
         parser = a.build_parser()
         args = parser.parse_args(["plan"])

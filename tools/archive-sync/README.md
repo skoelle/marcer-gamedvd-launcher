@@ -135,7 +135,7 @@ the file is still `new` or `changed` in the current comparison.
 | `MARCER_FTP_HOST` | required | `host` or `host:port` |
 | `MARCER_FTP_USER` / `MARCER_FTP_PASS` | `anonymous` / empty | FTP credentials |
 | `MARCER_FTP_REMOTE` | `/GameDVD/` | remote base directory |
-| `MARCER_FTP_ENCODING` | `latin-1` | FTP filename encoding (use `utf-8` if the server needs it) |
+| `MARCER_FTP_ENCODING` | `utf-8` | FTP filename encoding (the Marcer server uses UTF-8; override only for other servers) |
 | `MARCER_FTP_TIMEOUT` | `60` | socket timeout in seconds |
 | `MARCER_FTP_PASSIVE` | `1` | set `0`/`false` to disable passive mode |
 | `MARCER_SYNC_RETRIES` | `3` | retry count per operation |

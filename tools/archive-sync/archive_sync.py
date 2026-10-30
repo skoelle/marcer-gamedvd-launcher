@@ -1263,7 +1263,7 @@ def build_config(args) -> Config:
         password=(
             args.ftp_pass if args.ftp_pass is not None else env("MARCER_FTP_PASS")
         ),
-        encoding=args.encoding or env("MARCER_FTP_ENCODING") or "latin-1",
+        encoding=args.encoding or env("MARCER_FTP_ENCODING") or "utf-8",
         timeout=parse_int(
             args.timeout or env("MARCER_FTP_TIMEOUT"), 60, minimum=1
         ),
@@ -1300,7 +1300,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--port", help="FTP port (overrides host:port)")
     parser.add_argument("--user", help="FTP user (default: MARCER_FTP_USER)")
     parser.add_argument("--ftp-pass", help="FTP password (default: MARCER_FTP_PASS)")
-    parser.add_argument("--encoding", help="FTP encoding (default: latin-1)")
+    parser.add_argument("--encoding", help="FTP encoding (default: utf-8)")
     parser.add_argument("--timeout", help="FTP timeout in seconds (default: 60)")
     parser.add_argument("--retries", help="retry count (default: 3)")
     parser.add_argument(

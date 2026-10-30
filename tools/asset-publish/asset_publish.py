@@ -247,7 +247,7 @@ def ftp_settings() -> dict:
         "user": env("MARCER_FTP_USER"),
         "password": env("MARCER_FTP_PASS"),
         "remote": remote,
-        "encoding": env("MARCER_FTP_ENCODING") or "latin-1",
+        "encoding": env("MARCER_FTP_ENCODING") or "utf-8",
     }
 
 
