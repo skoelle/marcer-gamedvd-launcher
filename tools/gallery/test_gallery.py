@@ -370,6 +370,8 @@ class CrewDataTest(unittest.TestCase):
         self.assertIn("beta crackers", store.crews[1]["_search"])
         self.assertEqual(store.meta["crews"]["groups"], 3)
         self.assertEqual(store.meta["crews"]["visible_groups"], 3)
+        self.assertEqual(store.meta["crews"]["kinds"],
+                         {"crew": 2, "cracker": 1})
         self.assertEqual(store.meta["crews"]["releases"], 3)
         self.assertEqual(store.meta["sections"]["crew"]["cards"], 3)
 
@@ -475,14 +477,23 @@ class CrewDataTest(unittest.TestCase):
             return out
 
         self.assertEqual(fetch("crew")["total"], 1)
+        self.assertEqual(fetch("crew")["kinds"],
+                         {"crew": 1, "cracker": 0})
         self.assertEqual([c["name"] for c in fetch("crew")["cards"]],
                          ["Alpha Crew"])
         self.assertEqual(fetch("cracker")["total"], 1)
+        self.assertEqual(fetch("cracker")["kinds"],
+                         {"crew": 0, "cracker": 1})
         self.assertEqual([c["name"] for c in fetch("cracker")["cards"]],
                          ["Beta Cracker"])
-        # unknown/empty kind means "any" and still paginates
+        # unknown/empty kind means "any" and still paginates; the kinds
+        # breakdown covers all matches, not just the current page
         self.assertEqual(fetch("")["total"], 2)
+        self.assertEqual(fetch("")["kinds"],
+                         {"crew": 1, "cracker": 1})
         self.assertEqual(fetch("nope")["total"], 2)
+        self.assertEqual(fetch("nope")["kinds"],
+                         {"crew": 1, "cracker": 1})
         self.assertEqual(len(fetch("")["cards"]), 1)
 
 

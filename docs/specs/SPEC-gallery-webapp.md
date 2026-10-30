@@ -457,6 +457,7 @@ error body `{ "error": "<message>" }`.
     "groups": 60,
     "visible_groups": 60,
     "total_groups": 888,
+    "kinds": { "crew": 45, "cracker": 15 },
     "releases": 7786,
     "generated_at": "2026-10-24T14:08:32Z",
     "error": null
@@ -492,7 +493,8 @@ error body `{ "error": "<message>" }`.
   carries the visible crew-card count instead (no index/status counts).
 - `crews` describes the optional Crews tab: `available`, the number of
   shown `groups` (all groups), `visible_groups` (all groups; `excluded` is
-  ignored by the gallery), `total_groups` (all artifact groups), `releases`
+  ignored by the gallery), `total_groups` (all artifact groups), `kinds`
+  (`crew`/`cracker` group counts; sum equals `groups`), `releases`
   (all releases), `generated_at` and an optional `error`.
 - `coverage` comes from `manifest.json` if available.
 - `show_candidates` / `default_status` mirror the effective config
@@ -714,11 +716,13 @@ Semantics:
 - `q` filters case-insensitively over the group name, `kind`, aliases and
   all release fields (title/folder/ZIP/year/publisher/cracked_by/crew).
 - `kind` filters by group kind (`crew`/`cracker`); an empty or unknown value
-  disables the filter. It is applied before `q`/pagination, so `total`
-  reflects the filtered set.
+  disables the filter. It is applied before pagination together with `q`,
+  so `total` reflects the filtered set.
 - Cards are sorted by ZIP count descending, then name; no status/facet/
   letter filters apply.
 - `limit` default 60, max 200; `offset`/`total` follow `/api/entries`.
+- The response includes `kinds` (`crew`/`cracker` counts of all matches, not
+  just the current page); the UI uses it for the hit counter.
 - Card payload: `id` (group id), `name`, `kind`, `rank`, `zips`,
   `releases`, `aliases`, `preview` (screenshot path below `MARCER_OUT_DIR`
   or `null`) and `crew: true`.
@@ -986,9 +990,11 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
   end of the statistics bar; the footer line keeps only the data
   freshness (the active section's index mtime, gameinfo `generated_at`).
 - Current result count of the active filters (`total` of the last
-  `/api/entries` response) is shown next to the controls.
-- In the **crews** tab the bar shows `N crews`, `M releases` and
-  `crews: <generated_at>`; there are no status/ZIP segments.
+  `/api/entries` response) is shown next to the controls. In the **crews**
+  tab it splits into the non-zero `kinds` counts of the last `/api/crews`
+  response (e.g. `42 crews · 13 crackers`; no `0` segments).
+- In the **crews** tab the bar shows `N crews`, `M crackers`, `K releases`
+  and `crews: <generated_at>`; there are no status/ZIP segments.
 
 ### 6.8 Section views
 

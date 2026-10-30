@@ -264,8 +264,9 @@ function renderStats(extra) {
     if (crew.error) {
       parts.push(`<span class="st">crew data: ${esc(crew.error)}</span>`);
     } else {
-      const groups = crew.visible_groups || 0;
-      parts.push(`<span class="st"><b>${groups}</b> crews</span>`);
+      const kinds = crew.kinds || {};
+      parts.push(`<span class="st"><b>${kinds.crew || 0}</b> crews</span>`);
+      parts.push(`<span class="st"><b>${kinds.cracker || 0}</b> crackers</span>`);
       parts.push(`<span class="st"><b>${crew.releases || 0}</b> releases</span>`);
       if (crew.generated_at) {
         parts.push(`<span class="st">crews: ${esc(crew.generated_at)}</span>`);
@@ -561,9 +562,21 @@ async function loadEntries() {
       const data = await api(crewsQuery());
       renderGrid(data.cards);
       renderPager(data.total);
-      const noun = state.crewKind === "cracker" ? "cracker" : "crew";
-      $("result-count").textContent =
-        `${data.total} ${noun}${data.total === 1 ? "" : "s"}`;
+      const kinds = data.kinds || {};
+      const bits = [];
+      if (kinds.crew) {
+        bits.push(`${kinds.crew} crew${kinds.crew === 1 ? "" : "s"}`);
+      }
+      if (kinds.cracker) {
+        bits.push(`${kinds.cracker} cracker${kinds.cracker === 1 ? "" : "s"}`);
+      }
+      if (!bits.length) {
+        const noun = state.crewKind === "cracker" ? "cracker" : "crew";
+        bits.push(data.total
+          ? `${data.total} ${noun}${data.total === 1 ? "" : "s"}`
+          : "0 results");
+      }
+      $("result-count").textContent = bits.join(" · ");
       writeURL(false);
       renderStats();
       renderFooter();

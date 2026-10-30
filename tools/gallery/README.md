@@ -92,12 +92,13 @@ Backend filter/card helpers use stdlib `unittest` only:
 - **Crews**: the last tab lists all groups from `crews.json` (the gallery
   ignores `excluded` and has no cap) with curated/release previews and a
   `crew`/`cracker` badge; a **Type** dropdown switches between `any`, `crew`
-  and `cracker`, and search covers group names, aliases and all release
-  fields. Clicking a crew card opens the release browser: screenshot grid +
-  compact release panel, search/sort, arrow/PgUp/PgDn/Home/End navigation,
-  and `Enter`/double-click opens the selected release in the normal game
-  lightbox (no launch/play button). Labels inferred from the ZIP name are
-  marked `inferred`.
+  and `cracker`, the statistics bar shows separate crew/cracker counts, the
+  hit counter splits search matches into crews/crackers, and search covers
+  group names, aliases and all release fields. Clicking a crew
+  card opens the release browser: screenshot grid + compact release panel,
+  search/sort, arrow/PgUp/PgDn/Home/End navigation, and `Enter`/double-click
+  opens the selected release in the normal game lightbox (no launch/play
+  button). Labels inferred from the ZIP name are marked `inferred`.
 - **Local asset metadata**: the lightbox side panel shows boxscan/manual
   counts and edition/manual labels for the selected card when
   `MARCER_ROOT_DIR` is configured. It reads directory listings and ZIP

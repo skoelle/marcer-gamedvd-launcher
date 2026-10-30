@@ -1170,6 +1170,7 @@ class DataStore:
             "groups": len(self.crews),
             "visible_groups": self._crew_visible_groups,
             "total_groups": self._crew_total_groups,
+            "kinds": crew_kind_counts(self.crews),
             "releases": self._crew_release_count,
             "generated_at": self.crew_generated_at,
             "error": self.crew_error,
@@ -1575,6 +1576,14 @@ def _sort_cards(cards, sort, order):
 CREW_KINDS = ("crew", "cracker")
 
 
+def crew_kind_counts(cards):
+    """Count crew summaries per kind (`crew`/`cracker`)."""
+    return {
+        "crew": sum(1 for c in cards if c.get("kind") != "cracker"),
+        "cracker": sum(1 for c in cards if c.get("kind") == "cracker"),
+    }
+
+
 def filter_crew_cards(cards, q="", kind=""):
     """Filter crew summaries by search text and kind (`""` = any)."""
     query = (q or "").strip().lower()
@@ -1748,6 +1757,7 @@ class GalleryHandler(BaseHTTPRequestHandler):
         page = cards[offset:offset + limit]
         return self._json({
             "total": len(cards),
+            "kinds": crew_kind_counts(cards),
             "offset": offset,
             "limit": limit,
             "cards": [_public_crew_card(c) for c in page],
