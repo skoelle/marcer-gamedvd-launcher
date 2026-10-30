@@ -259,12 +259,6 @@
       "source": "manual",
       "note": "user pick (curated)"
     },
-    "Genesis": {
-      "rel": "Title Sorted/Cracked Games - Title Sorted/T/Technocop/Technocop - Genesis.zip",
-      "name": "Technocop - Genesis.png",
-      "source": "manual",
-      "note": "user pick (curated)"
-    },
     "Replicants / Union": {
       "rel": "Title Sorted/Cracked Games - Title Sorted/I/IK+/IK+ - Replicants.zip",
       "name": "IK+ - Replicants.png",
@@ -430,6 +424,18 @@
     "French Ice": {
       "rel": "Title Sorted/Cracked Games - Title Sorted/T/Turbo Cup/Turbo Cup - French - French Ice.zip",
       "name": "Turbo Cup - French - French Ice.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Genesis Inc.": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/R/Railroad Tycoon/Railroad Tycoon v755.01 - Genesis Inc.zip",
+      "name": "Railroad Tycoon v755.01 - Genesis Inc.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "A-Team": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/R/Rolling Thunder/Rolling Thunder - Tr - A-Team.zip",
+      "name": "Rolling Thunder - Tr - A-Team.png",
       "source": "manual",
       "note": "user pick (curated)"
     }
