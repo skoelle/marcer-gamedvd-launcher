@@ -362,7 +362,8 @@
       "V8 & Fallen Angels",
       "V8 & Delight & Nokturnal & Equinox",
       "V8 & Fallen Angles & Delight & Nokturnal",
-      "V8 & Fallen Angels & Nokturnal"
+      "V8 & Fallen Angels & Nokturnal",
+      "V8 & Fallen Angels & Highlanders"
     ],
     "Fuzion": [
       "Fuzion",
@@ -458,6 +459,10 @@
     "Syndicate & ESC": [
       "Syndicate & ESC",
       "Syndicate"
+    ],
+    "Illegal & Replicants": [
+      "Illegal & Replicants",
+      "Illegal"
     ]
   }
 }

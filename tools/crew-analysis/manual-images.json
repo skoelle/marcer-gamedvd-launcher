@@ -295,12 +295,6 @@
       "source": "manual",
       "note": "user pick (curated)"
     },
-    "V8 & Fallen Angels & Highlanders": {
-      "rel": "Title Sorted/Cracked Games - Title Sorted/C/California Games/California Games - V8.zip",
-      "name": "California Games - V8.png",
-      "source": "manual",
-      "note": "user pick (curated)"
-    },
     "Alliance Crew - TAC": {
       "rel": "Title Sorted/Cracked Games - Title Sorted/F/Free Climbing/Free Climbing - Spanish - TAC.zip",
       "name": "Free Climbing - Spanish - TAC.png",
@@ -466,6 +460,18 @@
     "D-Bug": {
       "rel": "Title Sorted/Cracked Games - Title Sorted/B/Bomb Jack/Bomb Jack - D-Bug.zip",
       "name": "Bomb Jack - D-Bug.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "42 Crew": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/M/Manhattan Dealers/Manhattan Dealers - French - Pogy Soft - 42 Crew - BAD.zip",
+      "name": "Manhattan Dealers - French - Pogy Soft - 42 Crew - BAD.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Masters": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/E/Exterminator/Exterminator - Tr - Masters.zip",
+      "name": "Exterminator - Tr - Masters.png",
       "source": "manual",
       "note": "user pick (curated)"
     }
