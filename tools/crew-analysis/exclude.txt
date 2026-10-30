@@ -27,3 +27,7 @@ eu release
 english
 german
 french
+
+game
+guide
+me

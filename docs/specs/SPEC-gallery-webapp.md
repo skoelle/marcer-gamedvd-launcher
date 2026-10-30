@@ -183,12 +183,14 @@ Rules:
   section-relative paths are resolved through the cracked tree prefix.
   `cracked_by`/`crew` are empty for XLS placeholders (`Original`, `Unknown`,
   `????`, `No 1 & No 2`); `inferred_fields` marks labels filled from the ZIP
-  name by the second crew-analysis pass.
+  name by the second crew-analysis pass. Joint credits are normalized to
+  `A & B` (e.g. `Replicants & Union`) and kept as their own group unless
+  listed in `tools/crew-analysis/joint-groups.json`.
 - `excluded` is retained for the desktop app's curated Crews tab; the
   gallery ignores it and always shows every group.
 - The tab shows all groups sorted by ZIP count/name (no cap). The **Type**
   dropdown filters groups by `kind` (`any`/`crew`/`cracker`). Current real
-  data (2026-10-30): 885 groups, 8,508 releases.
+  data (2026-10-30): 877 groups, 8,499 releases.
 - `crew-images.json` (optional): curated card image per crew keyed by
   name/id, with `rel` (release ZIP index path) and `name` (image basename
   below the screenshot archive). Missing files fall back to the best release

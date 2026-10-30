@@ -64,9 +64,9 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
 3. **Alias normalization:** explicit aliases from
    [`tools/crew-analysis/aliases.json`](../../tools/crew-analysis/aliases.json)
    plus generic rules: leading `The`, region/language suffixes (`- USA`,
-   `- French`, …), abbreviation suffixes (`- MCA`, `- TCR`, …), combined-credit
-   normalization (`MCA & Hotline` → `Hotline and MCA`) and a strict fuzzy
-   fallback for typos. Canonical spellings follow the `Crew Sorted` folder
+   `- French`, …), abbreviation suffixes (`- MCA`, `- TCR`, …), joint-credit
+   unification to `A & B` (`Replicants / Union` → `Replicants & Union`,
+   `Banzai + MCA` → `Banzai & MCA`) and a strict fuzzy fallback for typos. Canonical spellings follow the `Crew Sorted` folder
    names; curated abbreviations and typo variants (`SFX` → `Special FX`,
    `Klapauziuz` → `Klapauzius`, `Bergerdorf Atari Clan` →
    `Bergerdor Atari Clan - BAC`) are part of the registry. Release-code
@@ -84,6 +84,11 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
    - otherwise a global alias/fuzzy match over the registry. Single-token
      abbreviation aliases only count in the credit suffix, never in the game
      title.
+   - **Main-crew preference:** joint groups are protected by default (see
+     `joint-groups.json` for the small dissolve allowlist). Other candidates
+     prefer crew over cracker, then the higher Crew-Sorted ZIP count; this
+     keeps the main crew over individual/derived labels (`Delight` over
+     `Steve C`, `Vmax` over `Mikou`/`Robocamp`).
    The per-release `cracked_by`/`crew` shown in the crew view come from the XLS
    variant that matches the group label, else from the variant whose label
    tokens match the ZIP filename. When several variants exist and none can be
@@ -94,17 +99,23 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
    credit suffix is matched against (a) the assigned group's name/aliases,
    (b) cracker/crew labels already seen in that group's releases (only for
    groups with ≥ 2 ZIPs) and (c) the group registry (unique crew/cracker names
-   in the credit). Filled fields are marked `inferred_fields` and written to
-   `crews.json`; `label-inference.csv` keeps the evidence. XLS placeholders
-   (`Original`, `Unknown`, `????`, `No 1 & No 2`) are always treated as empty.
+   in the credit). If the chosen group occurs in the ZIP credit, the matching
+   release field is set to the canonical group (also overriding a different
+   XLS variant label). Filled/changed fields are marked `inferred_fields` and
+   written to `crews.json`; `label-inference.csv` keeps the evidence. XLS
+   placeholders (`Original`, `Unknown`, `????`, `No 1 & No 2`) are always
+   treated as empty.
 6. **Unmatched ZIPs:** unique group-name matches, release-code prefixes
    (`dbug###` → D-Bug, `SERE##` → Serenade, …) and compact contiguous names
    (`Dead Eye` → Deadeye) in the credit suffix are assigned with
    `source: "inferred_name"`; all candidates (including medium/ambiguous) are
    written to `inferred-matches.csv` for review. Unknown names are only
    proposed in `new-groups-review.csv` (never auto-created).
-7. **Joint credits** such as `Hotline and MCA`, `Replicants/Union` or
-   `Lethal / Hotline` stay their own group; they are not split into members.
+7. **Joint credits** are unified to `A & B` (e.g. `Replicants & Union`,
+   `Hotline & MCA`) and stay their own group by default. Only the explicit
+   allowlist in `tools/crew-analysis/joint-groups.json` (currently
+   `Lethal & Hotline`, `Yoda & Arioch`, `Yoda & V8`, `Arioch & V8`,
+   `Yoda & Arioch & V8`) may be dissolved into the main crew.
 8. **Audit:** every ZIP records its match source; unmatched/ambiguous ZIPs go
    to `unmatched.txt`/`ambiguous.txt`, all labels and their mapping to
    `groups-review.csv`.
@@ -178,19 +189,20 @@ outputs. `groups-review.csv` is a **label audit**, not a release report:
 - `alias_status=new` means the label is not registered in the Crew
   Sorted/`aliases.json` registry yet; it does not require a new group.
 
-Review decisions for the 2026-10-30 run (TNT/SJ follow-up):
+Review decisions for the 2026-10-30 run (joint-credit follow-up):
 
 - `inferred-matches.csv`: the applied rows were manually checked and accepted.
   The current run has **22 `applied=yes`** matches; `First Samurai … - BAD`
-  moved to an exact Crew Sorted match. The remaining 430 candidates (419
+  moved to an exact Crew Sorted match. The remaining 439 candidates (428
   ambiguous, 11 medium) intentionally stay unmatched.
-- `new-groups-review.csv`: all **112** candidates were reviewed; **none**
-  becomes a new group.
-- The exact Crew Sorted fallback now strips trailing markers only while a
-  credit segment remains (`TNT - SJ Crew - BAD` → SJ Crew). `TNT` is an alias
-  of **TNT Crew**; title-only abbreviation matches (`Ice`, `Me`) no longer
-  create false group assignments.
-- Current counts: **885 groups, 8.508 releases, 430 unmatched**.
+- `new-groups-review.csv`: the earlier 112 candidates were reviewed and none
+  was promoted; the current list has **116** review-only candidates and still
+  never auto-creates groups.
+- Joint names are unified to `A & B` and protected. Only the explicit
+  `joint-groups.json` allowlist is dissolved. `Game`, `Guide` and `Me` are
+  excluded as non-groups; `Delta Force & Union` and `Vmax Impact` merge into
+  their main crews.
+- Current counts: **877 groups, 8.499 releases, 439 unmatched**.
 - `alias-review.csv` is a legacy leftover and is not generated by the current
   tool.
 - `crew-image-suggestions.*` come from the separate `images` command and can

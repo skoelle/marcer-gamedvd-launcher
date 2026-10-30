@@ -53,7 +53,8 @@ Save, the manual screenshot curation described below.
   hashes from `full-index.json.gz` (exact) with a title fallback.
 - **Crews tab** from `crews.json` with a release browser (game title, folder
   buttons and lightbox-style badges for the selected release) and PirateFinder
-  crew details.
+  crew details. Joint credits use the unified `A & B` spelling and stay their
+  own group unless explicitly allowlisted for merging.
 - **Local layer & missing ZIPs** resolved from the filesystem
   (`ROOT`/`PATCH`/`BOTH`, `MISSING`), plus **Download folder** from the Marcer
   FTP for absent game folders.

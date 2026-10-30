@@ -9,6 +9,7 @@ import json
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -456,6 +457,17 @@ class LabelInferenceTest(unittest.TestCase):
         self.assertEqual(release["cracked_by"], "Dr Trap / Empire")
         self.assertEqual(release["crew"], "Elite")
 
+    def test_short_group_crew_alignment(self):
+        rows = {"V8": [{
+            "zip": "Falcon v1.1 - Mission Disk 1 v1.0 - V8.zip",
+            "title": "Falcon",
+            "folder": "Falcon",
+            "cracked_by": "",
+            "crew": "",
+        }]}
+        ca.infer_release_labels(rows, {"V8": {"V8"}}, {"V8"})
+        self.assertEqual(rows["V8"][0]["crew"], "V8")
+
     def test_exact_match_fills_short_group_name(self):
         rows = {"SJ Crew": [{
             "zip": "TNT - SJ Crew - BAD.zip",
@@ -617,6 +629,74 @@ class CodeAndNameInferenceTest(unittest.TestCase):
             "Arkanoid 2", "Arkanoid 2 - Revenge of Doh - Sob.zip")
         self.assertEqual(proposal["group"], "")
         self.assertIn("sob", proposal["tokens"])
+
+
+class GroupNormalizationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = Path(ca.__file__).resolve().parent
+
+    def test_joint_names_use_ampersand(self):
+        cases = {
+            "Hotline and MCA": "Hotline & MCA",
+            "Replicants / Union": "Replicants & Union",
+            "Replicants/Union": "Replicants & Union",
+            "Banzai + MCA": "Banzai & MCA",
+            "Dr Trap / Empire": "Dr Trap & Empire",
+            "V8": "V8",
+        }
+        for value, expected in cases.items():
+            self.assertEqual(ca.unify_group_name(value), expected, value)
+
+    def test_joint_overrides_are_loaded(self):
+        overrides = ca.load_joint_overrides(
+            self.dir / "joint-groups.json")
+        self.assertIn("Lethal & Hotline", overrides)
+        self.assertIn("Yoda & Arioch", overrides)
+
+    def test_delta_force_and_vmax_merges(self):
+        explicit = ca.load_aliases(self.dir / "aliases.json")
+        self.assertEqual(
+            explicit[ca.norm("Delta Force & Union")], "Delta Force")
+        self.assertEqual(explicit[ca.norm("Vmax Impact")], "Vmax")
+
+    def test_non_joint_main_crew_wins_by_strength(self):
+        names = {"Delight", "Steve C"}
+        strengths = Counter({"Delight": 130, "Steve C": 1})
+        delight = ca.candidate_rank(
+            "Delight", "alias", 1, 7, names, strengths, set())
+        steve = ca.candidate_rank(
+            "Steve C", "alias", 1, 7, names, strengths, set())
+        self.assertGreater(delight, steve)
+
+    def test_protected_joint_wins_over_main_crew(self):
+        names = {"Elite"}
+        strengths = Counter({"Elite": 1085})
+        joint = ca.candidate_rank(
+            "Dr Trap & Empire", "alias", 3, 15, names, strengths, set())
+        crew = ca.candidate_rank(
+            "Elite", "alias", 1, 5, names, strengths, set())
+        self.assertGreater(joint, crew)
+
+    def test_allowlisted_joint_loses_to_crew(self):
+        overrides = {"Lethal & Hotline"}
+        names = {"Hotline"}
+        strengths = Counter({"Hotline": 96})
+        joint = ca.candidate_rank(
+            "Lethal & Hotline", "alias", 2, 16, names, strengths, overrides)
+        crew = ca.candidate_rank(
+            "Hotline", "alias", 1, 7, names, strengths, overrides)
+        self.assertGreater(crew, joint)
+
+    def test_non_groups_are_excluded(self):
+        exclude = ca.load_exclude(self.dir / "exclude.txt")
+        raw, _aliases, _abbrev, _labels = ca.build_registry(
+            ["Game", "Delight"], {}, ca.load_aliases(self.dir / "aliases.json"),
+            exclude)
+        self.assertNotIn("Game", raw)
+        self.assertIn("Delight", raw)
+        for value in ("Game", "Guide", "Me"):
+            self.assertIn(ca.norm(value), exclude)
 
 
 class CrewsSourceSummaryTest(unittest.TestCase):

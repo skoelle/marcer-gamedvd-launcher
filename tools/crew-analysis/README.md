@@ -127,10 +127,12 @@ instead of inheriting the first (often `Original`) variant. XLS placeholders
 
 A **second pass** fills missing labels from the ZIP credit suffix (game title
 removed) using the assigned group name/aliases, labels already seen in the same
-group (groups with ≥ 2 ZIPs) and the group registry. `inferred_fields` lists
-the affected fields so the apps can mark them. Unmatched ZIPs are additionally
-matched by release-code prefix (`dbug###` → D-Bug, `SERE##` → Serenade, …) and
-compact contiguous names (`Dead Eye` → Deadeye). High-confidence matches get
+group (groups with ≥ 2 ZIPs) and the group registry. The chosen group's
+`crew`/`cracked_by` label is applied when the group occurs in the credit, even
+if the XLS variant said something else; `inferred_fields` lists the affected
+fields so the apps can mark them. Unmatched ZIPs are additionally matched by
+release-code prefix (`dbug###` → D-Bug, `SERE##` → Serenade, …) and compact
+contiguous names (`Dead Eye` → Deadeye). High-confidence matches get
 `source: "inferred_name"` (the exact rule is in the `match_type` audit column);
 all proposals are audited in `inferred-matches.csv`, and unknown names are only
 proposed in `new-groups-review.csv`.
@@ -140,7 +142,10 @@ The Crew Sorted exact match retries after stripping trailing dump markers
 shortened basename still contains a credit segment: `TNT - SJ Crew - BAD.zip`
 → `TNT - SJ Crew.zip` → **SJ Crew**; `Predator - Unknown.zip` is not reduced to
 the bare title. Single-token abbreviation aliases (`TNT`, `V8`, `A-HA`, …) only
-count in the credit suffix, never in the game title.
+count in the credit suffix, never in the game title. For non-joint candidates,
+crew groups beat cracker groups and the higher Crew-Sorted ZIP count wins
+(`Delight` over `Steve C`, `Vmax` over `Mikou`); protected joint groups keep
+their specificity instead.
 
 It contains **all** groups; the desktop UI shows the curated selection (currently 128, cap 128), while the gallery always shows all groups. The
 `image` field is reserved for the later cracktro/logo curation phase.
@@ -226,7 +231,9 @@ from the ranking run and can be older than `crews.json`.
   `auto###`, …) are matched against the registry in a second pass; unique
   matches are assigned, ambiguous ones stay in `unmatched.txt` for review.
 - `exclude.txt` — labels that are not scene groups (placeholders, region/
-  language notes, …).
+  language notes, `Game`, `Guide`, `Me`, …).
+- `joint-groups.json` — joint-credit allowlist that may be dissolved into a
+  main crew. All other joint groups are protected and unify to `A & B`.
 - `crew-tab.json` — tab selection: `include_until` (visible through this
   group), `keep` (visible after the cutoff), `exclude` (always hidden). The
   group stays in `crews.json` (with `"excluded": true`) and in the ranking
@@ -235,9 +242,9 @@ from the ranking run and can be older than `crews.json`.
   `images --write-images`.
 
 The tool applies the registry plus generic rules (leading `The`, region
-descriptors such as `- USA`, combined-credit normalization, abbreviations and a
-strict fuzzy fallback). New gameinfo labels become their own canonical groups,
-so `groups-review.csv` is the audit trail for curating `aliases.json`.
+descriptors such as `- USA`, joint-credit unification to `A & B`, abbreviations
+and a strict fuzzy fallback). New gameinfo labels become their own canonical
+groups, so `groups-review.csv` is the audit trail for curating `aliases.json`.
 
 The `images` command additionally reads the per-ZIP screenshot sidecars
 (`shots[].phash`) and clusters repeated screens per crew. A screen that appears
@@ -254,8 +261,9 @@ menu) and ranked lower; the plain-desktop hash is filtered outright.
   only the primary group when the release has no matching crew label. Crackers
   whose releases are credited to a crew (e.g. `Snake`, `CB`, `Cameo`) therefore
   do not appear in the primary top list; they remain in `groups-review.csv`.
-- Joint credits such as `Hotline and MCA` stay separate groups; they are not
-  split into their members.
+- Joint credits are unified to `A & B` (e.g. `Replicants & Union`,
+  `Hotline & MCA`) and stay separate groups by default. Only the explicit
+  `joint-groups.json` allowlist may be dissolved into the main crew.
 
 ## License
 

@@ -2,246 +2,310 @@
   "schema": 1,
   "groups": {
     "Empire": [
+      "Empire",
       "The Empire"
     ],
-    "Hotline and MCA": [
-      "MCA & Hotline",
-      "MCA and Hotline",
+    "Hotline & MCA": [
       "Hotline & MCA",
+      "MCA & Hotline",
       "Hotline MCA"
     ],
     "Medway Boys - TMB": [
+      "Medway Boys - TMB",
       "Medway Boys"
     ],
     "Menacing Cracking Alliance - MCA": [
+      "Menacing Cracking Alliance - MCA",
       "MCA",
       "Menacing Cracking Alliance"
     ],
     "International Cracking Service - ICS": [
+      "International Cracking Service - ICS",
       "ICS",
       "International Cracking Service"
     ],
     "ST Computer Service - STCS": [
+      "ST Computer Service - STCS",
       "STCS",
       "ST Computer Service"
     ],
     "Bavarian Cracking Service - BCS": [
+      "Bavarian Cracking Service - BCS",
       "Bavarian Cracking Service",
       "Bevarian Cracking Service",
       "BCS"
     ],
     "Corporation - TCR": [
+      "Corporation - TCR",
       "Corporation",
       "TCR",
       "Corpotation"
     ],
     "Atari ST Computer Studio": [
+      "Atari ST Computer Studio",
       "Atari Cracking Service - ACS",
       "Atari Cracking Service",
       "ACS"
     ],
     "Bad Brew Crew - BBC": [
+      "Bad Brew Crew - BBC",
       "Bad Brew Crew",
       "BBC",
       "Beverly Hills Cop - Hal"
     ],
     "Fantasy Crackers - TFC": [
+      "Fantasy Crackers - TFC",
       "Fantasy Cracker",
       "Fantasy Crackers",
       "TFC"
     ],
     "Lethal Weapons - TLW": [
+      "Lethal Weapons - TLW",
       "Lethal Weapons",
       "TLW"
     ],
     "Carebears - TCB": [
+      "Carebears - TCB",
       "Carebears",
       "TCB"
     ],
     "Casualty Department - TCD": [
+      "Casualty Department - TCD",
       "Casualty Department",
       "TCD"
     ],
     "East Cracking Group - ECG": [
+      "East Cracking Group - ECG",
       "East Cracking Group",
       "ECG"
     ],
     "Great Alliance - TGA": [
+      "Great Alliance - TGA",
       "Great Alliance",
       "TGA"
     ],
     "Pirates Inc - PI": [
+      "Pirates Inc - PI",
       "Pirates Inc",
       "PI"
     ],
     "Pirates of the Seven Seas - POTSS": [
+      "Pirates of the Seven Seas - POTSS",
       "Pirates of the Seven Seas",
       "POTSS"
     ],
     "Softrunner Group International - SRG": [
+      "Softrunner Group International - SRG",
       "Softrunner Group International",
       "SRG"
     ],
     "We Are Leading Lamers - WALL": [
+      "We Are Leading Lamers - WALL",
       "We Are Leading Lamers",
       "WALL"
     ],
     "Un Nameables - TUN": [
+      "Un Nameables - TUN",
       "Un Nameables",
       "TUN"
     ],
     "TNC - The Noname Crew": [
+      "TNC - The Noname Crew",
       "TNC",
       "The Noname Crew"
     ],
     "TEX - The Exceptions": [
+      "TEX - The Exceptions",
       "TEX",
       "The Exceptions"
     ],
     "Alliance Crew - TAC": [
+      "Alliance Crew - TAC",
       "Alliance Crew",
       "TAC"
     ],
     "Angels of Death - AOD": [
+      "Angels of Death - AOD",
       "Angels of Death",
       "AOD"
     ],
     "Black Monolith Team - BMT": [
+      "Black Monolith Team - BMT",
       "Black Monolith Team",
       "BMT"
     ],
     "Bergerdor Atari Clan - BAC": [
-      "Bergerdor Atari Clan",
-      "BAC"
+      "Bergerdor Atari Clan - BAC",
+      "Bergerdorf Atari Clan"
     ],
     "Crunchy Cracking Crew - CCC": [
+      "Crunchy Cracking Crew - CCC",
       "Crunchy Cracking Crew",
       "CCC"
     ],
     "Cracking Service Bielefeld - CSB": [
+      "Cracking Service Bielefeld - CSB",
       "Cracking Service Bielefeld",
       "CSB"
     ],
     "Cracking Service Munich - CSM": [
+      "Cracking Service Munich - CSM",
       "Cracking Service Munich",
       "CSM"
     ],
     "Cracking Service Havrais - CSH": [
+      "Cracking Service Havrais - CSH",
       "Cracking Service Havrais",
       "CSH"
     ],
     "Copy Service Stuttgart - CSS": [
+      "Copy Service Stuttgart - CSS",
       "Copy Service Stuttgart",
       "Cracking Service Stuttgarth",
       "CS Stuttgart",
       "CSS"
     ],
     "Fuck Me Software International - FMSI": [
+      "Fuck Me Software International - FMSI",
       "Fuck Me Software International",
       "FMSI"
     ],
     "German Cracking Artists - GCA": [
+      "German Cracking Artists - GCA",
       "German Cracking Artists",
       "GCA"
     ],
     "Hackers Associated Crew - HAC": [
+      "Hackers Associated Crew - HAC",
       "Hackers Associated Crew",
       "HAC"
     ],
     "Hella Rad Fuckin Hackers - HRFH": [
+      "Hella Rad Fuckin Hackers - HRFH",
       "Hella Rad Fuckin Hackers",
       "HRFH"
     ],
     "Light Team - TLT": [
+      "Light Team - TLT",
       "Light Team",
       "TLT"
     ],
     "Mad Max Corporation - MMC": [
+      "Mad Max Corporation - MMC",
       "Mad Max Corporation",
       "MMC"
     ],
     "Royal Crack Band - RCB": [
+      "Royal Crack Band - RCB",
       "Royal Crack Band",
       "RCB"
     ],
     "Samurai Crack Band - SCB": [
+      "Samurai Crack Band - SCB",
       "Samurai Crack Band",
       "SCB"
     ],
     "Soft Work Station - SWS": [
+      "Soft Work Station - SWS",
       "Soft Work Station",
       "SWS"
     ],
     "Douai Main Association - DMA": [
+      "Douai Main Association - DMA",
       "Douai Main Association"
     ],
     "Dutch Muggers Association - DMA": [
+      "Dutch Muggers Association - DMA",
       "Dutch Muggers Association"
     ],
     "No Limit": [
+      "No Limit",
       "No Limits"
     ],
     "Masters": [
+      "Masters",
       "Masters - swedish"
     ],
     "Mario": [
+      "Mario",
       "Mario - Australia"
     ],
     "Invisible": [
+      "Invisible",
       "Invisible - French",
       "Invisibles",
       "The Invisibles"
     ],
     "007": [
+      "007",
       "James Bond 007",
       "Jame Bond 007"
     ],
     "Scottish Cracking Crew": [
+      "Scottish Cracking Crew",
       "SCC"
     ],
     "Special FX": [
+      "Special FX",
       "SFX"
     ],
     "Klapauzius": [
+      "Klapauzius",
       "Klapauziuz"
     ],
-    "Bergerdor Atari Clan - BAC": [
-      "Bergerdorf Atari Clan"
-    ],
     "14th Julys Band": [
+      "14th Julys Band",
       "14th July Band",
       "14th July's Band"
     ],
     "Lemmings": [
+      "Lemmings",
       "The Lemmings"
     ],
     "Flying Knights": [
+      "Flying Knights",
       "The Flying Knights"
     ],
     "Public Enemys": [
+      "Public Enemys",
       "The Public Enemies",
       "Public Enemies"
     ],
     "Dirty Tricks": [
+      "Dirty Tricks",
       "Dirty Tricks Brigade"
     ],
     "Automation": [
+      "Automation",
       "Auto 494"
     ],
     "D-Bug": [
+      "D-Bug",
       "D_079_B"
     ],
     "Vectoryd": [
+      "Vectoryd",
       "Vectroyd"
     ],
     "SuperGAU": [
+      "SuperGAU",
       "Supergau"
     ],
     "TNT Crew": [
+      "TNT Crew",
       "TNT"
     ],
     "SJ Crew": [
+      "SJ Crew",
       "SJ"
+    ],
+    "Delta Force": [
+      "Delta Force",
+      "Delta Force & Union"
+    ],
+    "Vmax": [
+      "Vmax",
+      "Vmax Impact"
     ]
   }
 }

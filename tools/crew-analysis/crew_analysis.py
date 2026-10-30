@@ -141,6 +141,16 @@ def clean_group_label(value: str) -> str:
     return "" if is_placeholder_label(label) else label
 
 
+def unify_group_name(value: str) -> str:
+    """Unify joint credits to the canonical ``A & B`` spelling."""
+    label = clean_label(value)
+    if not label:
+        return ""
+    label = re.sub(r"\s*(?:/|\+|&)\s*", " & ", label)
+    label = re.sub(r"\s+\band\b\s+", " & ", label, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", label).strip()
+
+
 def is_suffix_noise(token: str) -> bool:
     if token in SUFFIX_NOISE or token in DESCRIPTORS:
         return True
@@ -201,9 +211,11 @@ def load_aliases(path: Path) -> dict[str, str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     explicit: dict[str, str] = {}
     for canonical, aliases in data.get("groups", {}).items():
-        canonical = clean_label(canonical)
+        canonical = unify_group_name(clean_label(canonical))
+        if not canonical:
+            continue
         for alias in [canonical, *aliases]:
-            alias = clean_label(alias)
+            alias = unify_group_name(clean_label(alias))
             if alias:
                 explicit[norm(alias)] = canonical
     return explicit
@@ -219,6 +231,21 @@ def load_exclude(path: Path) -> set[str]:
             continue
         out.add(norm(line))
     return out
+
+
+def load_joint_overrides(path: Path) -> set[str]:
+    """Joint groups that may be dissolved into their main crew (exceptions)."""
+    if not path.is_file():
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        sys.exit(f"error: cannot read joint-group config {path}: {exc}")
+    return {
+        unify_group_name(clean_label(str(value)))
+        for value in data.get("dissolve", [])
+        if str(value).strip()
+    }
 
 
 def load_tab_selection(path: Path) -> dict:
@@ -428,6 +455,18 @@ def build_registry(
     for canonical in canonical_groups:
         add_alias(canonical, canonical)
 
+    raw_crew_canon = {
+        raw: unify_group_name(canonical)
+        for raw, canonical in raw_crew_canon.items()
+    }
+    label_canon = {
+        label: unify_group_name(canonical)
+        for label, canonical in label_canon.items()
+    }
+    alias_to_groups = {
+        alias: {unify_group_name(canonical) for canonical in groups}
+        for alias, groups in alias_to_groups.items()
+    }
     return raw_crew_canon, alias_to_groups, abbrev_aliases, label_canon
 
 
@@ -446,10 +485,10 @@ def scan_crew_sorted(root: Path) -> tuple[list[str], dict[str, list[tuple[str, i
         rel = os.path.relpath(dirpath, root)
         parts = [] if rel == "." else rel.split(os.sep)
         if len(parts) == 2 and parts[0] != "!Unknown":
-            groups.append(parts[1])
+            groups.append(unify_group_name(parts[1]))
         if len(parts) < 2:
             continue
-        crew = "!Unknown" if parts[0] == "!Unknown" else parts[1]
+        crew = "!Unknown" if parts[0] == "!Unknown" else unify_group_name(parts[1])
         for filename in filenames:
             if not filename.lower().endswith(".zip"):
                 continue
@@ -512,8 +551,10 @@ def load_gameinfo(path: Path) -> tuple[dict[tuple[str, str], list[dict]], dict[s
     for game in data.get("games", []):
         variants: list[dict] = []
         for variant in game.get("variants", []):
-            crew = clean_group_label(str(variant.get("crew") or ""))
-            cracked_by = clean_group_label(str(variant.get("cracked_by") or ""))
+            crew = unify_group_name(
+                clean_group_label(str(variant.get("crew") or "")))
+            cracked_by = unify_group_name(
+                clean_group_label(str(variant.get("cracked_by") or "")))
             try:
                 disks = int(variant.get("disks") or 0)
             except (TypeError, ValueError):
@@ -653,7 +694,14 @@ def _group_name_in_suffix(
     group: str, aliases: set[str], suffix: set[str]
 ) -> bool:
     keys = [label_tokens(group)] + [label_tokens(a) for a in aliases]
-    return any(key and key <= suffix for key in keys)
+    if any(key and key <= suffix for key in keys):
+        return True
+    suffix_compact = {compact(token) for token in suffix}
+    for value in [group, *aliases]:
+        value_compact = compact(value)
+        if len(value_compact) >= 2 and value_compact in suffix_compact:
+            return True
+    return False
 
 
 def infer_release_labels(
@@ -716,19 +764,25 @@ def infer_release_labels(
                 elif not is_crew_group and not cracked_by:
                     cracked_by = group
                     inferred.append("cracked_by")
+            zip_tokens = set(tokens(str(release.get("zip") or "")))
             suffix = set(credit_suffix(
                 str(release.get("zip") or ""),
                 str(release.get("title") or release.get("folder") or ""),
             ))
-            if suffix:
+            group_in_zip = _group_name_in_suffix(group, aliases, suffix)
+            if not group_in_zip and (
+                    abbrev_like(group) or len(compact(group)) <= 3):
+                # Short brands such as V8 can be stripped as version noise.
+                group_in_zip = _group_name_in_suffix(group, aliases, zip_tokens)
+            if group_in_zip:
                 if is_crew_group:
-                    if not crew and _group_name_in_suffix(group, aliases, suffix):
+                    if crew != group:
                         crew = group
                         inferred.append("crew")
-                elif not cracked_by and _group_name_in_suffix(
-                        group, aliases, suffix):
+                elif cracked_by != group:
                     cracked_by = group
                     inferred.append("cracked_by")
+            if suffix:
                 if multi:
                     if not cracked_by:
                         label = _match_label(cracker_vocab.get(group, {}), suffix)
@@ -1405,6 +1459,28 @@ def label_score(zip_tokens: set[str], zip_compact: str, label: str) -> int:
     return score
 
 
+def candidate_rank(
+    group: str,
+    source: str,
+    score: int,
+    width: int,
+    crew_group_names: set[str],
+    crew_strength: Counter[str],
+    joint_overrides: set[str],
+) -> tuple:
+    """Rank one group candidate for the first-pass attribution."""
+    protected_joint = 1 if (
+        is_combined(group) and group not in joint_overrides
+    ) else 0
+    is_crew = 1 if group in crew_group_names else 0
+    strength = crew_strength.get(group, 0)
+    source_rank = 2 if source.startswith("gameinfo") else 1
+    if protected_joint:
+        # Preserve joint credits; among them the most specific match wins.
+        return (1, score, width, is_crew, strength, source_rank)
+    return (0, is_crew, strength, source_rank, score, width)
+
+
 def alias_hits(
     zip_tokens: set[str],
     zip_compact: str,
@@ -1602,9 +1678,25 @@ def main() -> int:
     explicit = load_aliases(Path(args.aliases))
     exclude = load_exclude(Path(args.exclude))
     tab_selection = load_tab_selection(Path(args.crew_tab))
+    joint_overrides = load_joint_overrides(
+        Path(__file__).with_name("joint-groups.json"))
     raw_crew_canon, alias_to_groups, abbrev_aliases, label_canon = build_registry(
         raw_crew_groups, gameinfo_labels, explicit, exclude
     )
+    crew_group_names = set(raw_crew_canon.values())
+    for label, sources in gameinfo_labels.items():
+        canonical = label_canon.get(label)
+        if canonical and "crew" in sources:
+            crew_group_names.add(canonical)
+    raw_strength: Counter[str] = Counter()
+    for entries in exact_name.values():
+        for raw, _raw_size in entries:
+            raw_strength[raw] += 1
+    crew_strength: Counter[str] = Counter()
+    for raw, count in raw_strength.items():
+        canonical = raw_crew_canon.get(raw)
+        if canonical:
+            crew_strength[canonical] += count
 
     full_index_path = (
         Path(args.full_index).expanduser()
@@ -1671,15 +1763,29 @@ def main() -> int:
 
         zip_tokens = set(tokens(name))
         zip_compact = compact(name)
-        suffix_tokens = set(tokens(name.split(" - ", 1)[1])) if " - " in name else set(tokens(name))
+        suffix_tokens = (
+            set(tokens(name.split(" - ", 1)[1]))
+            if " - " in name else set(tokens(name))
+        )
 
-        # 2) gameinfo crew/cracker labels of the folder (crew wins over cracker)
-        crew_best: tuple[int, int, str] | None = None
-        cracker_best: tuple[int, int, str] | None = None
+        # 2) unified candidate selection: gameinfo labels + alias registry
+        candidates: dict[str, tuple[tuple, str]] = {}
+
+        def add_candidate(group: str, source: str, score: int,
+                          width: int) -> None:
+            if not group:
+                return
+            rank = candidate_rank(
+                group, source, score, width,
+                crew_group_names, crew_strength, joint_overrides,
+            )
+            prev = candidates.get(group)
+            if prev is None or rank > prev[0]:
+                candidates[group] = (rank, source)
+
         for variant in variants:
-            crew = variant.get("crew", "")
-            cracked_by = variant.get("cracked_by", "")
-            for label, is_crew in ((crew, True), (cracked_by, False)):
+            for field, is_crew in (("crew", True), ("cracked_by", False)):
+                label = variant.get(field, "")
                 if not label:
                     continue
                 canonical = label_canon.get(label)
@@ -1688,55 +1794,35 @@ def main() -> int:
                 score = label_score(zip_tokens, zip_compact, label)
                 if score < 2:
                     continue
-                candidate = (score, len(label), canonical)
-                target = crew_best if is_crew else cracker_best
-                if target is None or candidate[:2] > target[:2]:
-                    if is_crew:
-                        crew_best = candidate
-                    else:
-                        cracker_best = candidate
-        if crew_best is not None:
-            group = crew_best[2]
-            primary[group] += 1
-            source_counts["gameinfo_crew"] += 1
-            release_rows[group].append(make_release(
-                rel, letter, folder, name, size, "gameinfo_crew", group,
-                variants, rel in ambiguous_rels, label_canon))
-            continue
-        if cracker_best is not None:
-            group = cracker_best[2]
-            primary[group] += 1
-            source_counts["gameinfo_cracker"] += 1
-            release_rows[group].append(make_release(
-                rel, letter, folder, name, size, "gameinfo_cracker", group,
-                variants, rel in ambiguous_rels, label_canon))
-            continue
+                add_candidate(
+                    canonical,
+                    "gameinfo_crew" if is_crew else "gameinfo_cracker",
+                    score, len(label),
+                )
+        for at_len, width, group in alias_hits(
+                zip_tokens, zip_compact, suffix_tokens,
+                alias_to_groups, abbrev_aliases):
+            add_candidate(group, "alias", at_len, width)
 
-        # 3) global alias/fuzzy fallback
-        hits = alias_hits(zip_tokens, zip_compact, suffix_tokens, alias_to_groups, abbrev_aliases)
-        if hits:
-            hits.sort(key=lambda h: (h[0], h[1], h[2]), reverse=True)
-            group = hits[0][2]
-            primary[group] += 1
-            source_counts["alias"] += 1
-            release_rows[group].append(make_release(
-                rel, letter, folder, name, size, "alias", group,
-                variants, rel in ambiguous_rels, label_canon))
+        if not candidates:
+            unmatched.append((rel, letter, folder, name, size))
             continue
-
-        unmatched.append((rel, letter, folder, name, size))
-
-    crew_group_names = set(raw_crew_canon.values())
-    for label, sources in gameinfo_labels.items():
-        canonical = label_canon.get(label)
-        if canonical and "crew" in sources:
-            crew_group_names.add(canonical)
+        group, (rank, source) = max(
+            candidates.items(), key=lambda kv: kv[1][0])
+        primary[group] += 1
+        source_counts[source] += 1
+        release_rows[group].append(make_release(
+            rel, letter, folder, name, size, source, group,
+            variants, rel in ambiguous_rels, label_canon))
 
     group_aliases: dict[str, set[str]] = defaultdict(set)
     for raw, canonical in raw_crew_canon.items():
         group_aliases[canonical].add(raw)
         if " - " in raw:
-            base, suffix = [clean_label(part) for part in raw.split(" - ", 1)]
+            base, suffix = [
+                unify_group_name(clean_label(part))
+                for part in raw.split(" - ", 1)
+            ]
             if not is_combined(suffix):
                 group_aliases[canonical].add(base)
                 group_aliases[canonical].add(suffix)
