@@ -1585,15 +1585,27 @@ def crew_kind_counts(cards):
     }
 
 
-def filter_crew_cards(cards, q="", kind=""):
-    """Filter crew summaries by search text and kind (`""` = any)."""
+def filter_crew_cards(cards, q="", kind="", top=""):
+    """Filter crew summaries by search text, kind and TOP selection.
+
+    ``kind``/``top`` accept ``""``/``any`` for no filter; ``top`` also
+    accepts ``only`` (curated groups) and ``none`` (non-curated groups).
+    """
     query = (q or "").strip().lower()
     wanted = (kind or "").strip().lower()
     if wanted not in CREW_KINDS:
         wanted = ""
+    wanted_top = (top or "").strip().lower()
+    if wanted_top not in ("only", "none"):
+        wanted_top = ""
     out = []
     for card in cards:
         if wanted and str(card.get("kind") or "crew") != wanted:
+            continue
+        is_top = bool(card.get("top"))
+        if wanted_top == "only" and not is_top:
+            continue
+        if wanted_top == "none" and is_top:
             continue
         if query and query not in card.get("_search", ""):
             continue
@@ -1746,7 +1758,8 @@ class GalleryHandler(BaseHTTPRequestHandler):
             return self._json(self.store.crew_detail(group))
         q = (params.get("q") or "").strip().lower()
         kind = (params.get("kind") or "").strip().lower()
-        cards = filter_crew_cards(self.store.crews, q, kind)
+        top = (params.get("top") or "").strip().lower()
+        cards = filter_crew_cards(self.store.crews, q, kind, top)
         try:
             limit = int(params.get("limit", self.cfg["page_size"]))
         except ValueError:

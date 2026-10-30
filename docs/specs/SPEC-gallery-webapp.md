@@ -190,8 +190,9 @@ Rules:
   gallery still shows every group but marks non-excluded groups with a
   green `TOP` badge.
 - The tab shows all groups sorted by ZIP count/name (no cap). The **Type**
-  dropdown filters groups by `kind` (`any`/`crew`/`cracker`). Current real
-  data (2026-10-30): 877 groups, 8,499 releases.
+  dropdown filters groups by `kind` (`any`/`crew`/`cracker`), the
+  **Ranking** dropdown by the curated TOP selection (`any`, `TOP only`,
+  `No TOP`). Current real data (2026-10-30): 877 groups, 8,499 releases.
 - `crew-images.json` (optional): curated card image per crew keyed by
   name/id, with `rel` (release ZIP index path) and `name` (image basename
   below the screenshot archive). Missing files fall back to the best release
@@ -714,13 +715,17 @@ Semantics:
 
 ### 5.6 `/api/crews`
 
-`GET /api/crews?q=&kind=&offset=&limit=` returns the Crews-tab card summaries.
+`GET /api/crews?q=&kind=&top=&offset=&limit=` returns the Crews-tab card summaries.
 
 - `q` filters case-insensitively over the group name, `kind`, aliases and
   all release fields (title/folder/ZIP/year/publisher/cracked_by/crew).
 - `kind` filters by group kind (`crew`/`cracker`); an empty or unknown value
   disables the filter. It is applied before pagination together with `q`,
   so `total` reflects the filtered set.
+- `top` filters the curated TOP selection (`excluded == false`): `only`
+  keeps TOP groups, `none` keeps non-TOP groups; an empty or unknown value
+  disables the filter. It is applied before pagination together with `q`
+  and `kind`, so `total`/`kinds` reflect the filtered set.
 - Cards are sorted by ZIP count descending, then name; no status/facet/
   letter filters apply.
 - `limit` default 60, max 200; `offset`/`total` follow `/api/entries`.
@@ -789,8 +794,9 @@ lightbox, whose side panel carries the same metadata.
    sort+order dropdown** with the ten entries `<key> asc|desc`
    (`name`/`year`/`publisher`/`cracker`/`crew`, e.g. `year desc` — the
    URL keeps the separate `sort`/`order` parameters), letter navigation
-   row (A–Z + `0-9` + `Any`). In the `crews` tab only search and clear are
-   shown; the crew cards are already ordered by ZIP count.
+   row (A–Z + `0-9` + `Any`). In the `crews` tab only search, clear, the
+   **Type** dropdown and the **Ranking** dropdown are shown; the crew cards
+   are already ordered by ZIP count.
 4. **Grid**: grouped cards (section 6.4), paginated.
 5. **Pagination**: page indicator + prev/next + page-size-constant
    (`offset/limit`); keyboard PageUp/PageDown works on the grid (6.6).
@@ -1040,7 +1046,8 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
   Closing keeps the user on the default list state (filters are untouched).
   If the card is not part of the current filter view, it is injected into
   the grid as a fallback so the lightbox still opens.
-- `?q=…&status=…&section=…&letter=…&sort=…&order=…`: restored list state.
+- `?q=…&status=…&section=…&letter=…&sort=…&order=…` (crews additionally
+  `kind`/`top`): restored list state.
 - Every filter change updates the query string via `history.replaceState`;
   opening/closing the lightbox uses `pushState` so browser Back closes the
   lightbox first *(untested, best effort)*.
@@ -1113,9 +1120,10 @@ browser for that crew:
    parameters.
 6. **Letter navigation**: exact match on the card's `letter` facet value
    (`0-9` for the first bucket, `Any` disables the filter).
-7. **Crews (`section=crew`)**: only `q` and `kind` apply (group
+7. **Crews (`section=crew`)**: only `q`, `kind` and `top` apply (group
    name/kind/aliases and all release fields; `kind` = `any`/`crew`/
-   `cracker`); cards are pre-sorted by ZIP count then name. The release
+   `cracker`, `top` = `any`/`only`/`none` for the curated TOP selection);
+   cards are pre-sorted by ZIP count then name. The release
    browser filters/sorts one crew's releases client-side (section 6.11).
 
 ---

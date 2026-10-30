@@ -499,6 +499,47 @@ class CrewDataTest(unittest.TestCase):
                          {"crew": 1, "cracker": 1})
         self.assertEqual(len(fetch("")["cards"]), 1)
 
+    def test_top_filter_applies_before_pagination(self):
+        groups = [
+            self._group("alpha-crew", "Alpha Crew", "crew", 3, []),
+            self._group("beta-crew", "Beta Crew", "crew", 2, []),
+            self._group("hidden", "Hidden", "crew", 1, [], excluded=True),
+        ]
+        store = self._store(groups)
+
+        def fetch(top):
+            handler = object.__new__(gallery.GalleryHandler)
+            query = "limit=1"
+            if top:
+                query += f"&top={top}"
+            handler.path = "/api/crews?" + query
+            handler.store = store
+            handler.cfg = {"page_size": 60}
+            out = {}
+            handler._json = lambda obj, status=200: out.update(obj)
+            handler._error = lambda status, message: out.update(error=message)
+            handler._crews()
+            return out
+
+        self.assertEqual(fetch("only")["total"], 2)
+        self.assertEqual(fetch("only")["kinds"], {"crew": 2, "cracker": 0})
+        self.assertEqual([c["name"] for c in fetch("only")["cards"]],
+                         ["Alpha Crew"])
+        self.assertEqual(fetch("none")["total"], 1)
+        self.assertEqual(fetch("none")["kinds"], {"crew": 1, "cracker": 0})
+        self.assertEqual([c["name"] for c in fetch("none")["cards"]],
+                         ["Hidden"])
+        # unknown/empty top means "any" and still paginates
+        for value in ("", "nope"):
+            self.assertEqual(fetch(value)["total"], 3)
+            self.assertEqual(fetch(value)["kinds"],
+                             {"crew": 3, "cracker": 0})
+            self.assertEqual(len(fetch(value)["cards"]), 1)
+        self.assertEqual(
+            [c["name"] for c in gallery.filter_crew_cards(
+                store.crews, top="only")],
+            ["Alpha Crew", "Beta Crew"])
+
 
 class DataDirPathTest(unittest.TestCase):
     """Gameinfo data is read only from <MARCER_DATA_DIR>/gameinfo (no fallback)."""

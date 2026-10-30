@@ -57,6 +57,7 @@ const state = {
   boxscan: "any",
   tos: "any",
   crewKind: "any",
+  crewTop: "any",
   sort: "name",
   order: "asc",
   offset: 0,
@@ -102,6 +103,10 @@ function readURL() {
     const kind = u.get("kind");
     state.crewKind = ["crew", "cracker"].includes(kind) ? kind : "any";
   }
+  if (u.has("top")) {
+    const top = u.get("top");
+    state.crewTop = ["only", "none"].includes(top) ? top : "any";
+  }
   if (!SECTION_KEYS.includes(state.section)) {
     state.section = "cracked";
   }
@@ -124,6 +129,7 @@ function writeURL(push) {
     keep("order", state.order, "asc");
   } else {
     keep("kind", state.crewKind, "any");
+    keep("top", state.crewTop, "any");
   }
   if (lb && !lb.standalone && lb.cards[lb.idx] &&
       lb.cards[lb.idx].variants[lb.variant]) {
@@ -171,6 +177,7 @@ function crewsQuery() {
   const p = new URLSearchParams();
   if (state.q) p.set("q", state.q);
   if (state.crewKind !== "any") p.set("kind", state.crewKind);
+  if (state.crewTop !== "any") p.set("top", state.crewTop);
   p.set("offset", String(state.offset));
   p.set("limit", String(state.limit));
   return "/api/crews?" + p;
@@ -201,11 +208,11 @@ function buildFacets() {
   // hide controls not available for this section / without gameinfo
   for (const id of ["status", "publisher", "crew", "cracker", "language",
     "year", "raw", "pasti", "boxscan", "tos", "sort", "clear",
-    "search", "crew-kind"]) {
+    "search", "crew-kind", "crew-top"]) {
     const el = $(id);
     if (!el) continue;
     if (isCrew) {
-      el.hidden = !["search", "clear", "crew-kind"].includes(id);
+      el.hidden = !["search", "clear", "crew-kind", "crew-top"].includes(id);
       continue;
     }
     if (id === "sort" || id === "clear" || id === "search") {
@@ -1681,6 +1688,11 @@ function wireEvents() {
     state.offset = 0;
     loadEntries();
   });
+  $("crew-top").addEventListener("change", () => {
+    state.crewTop = $("crew-top").value;
+    state.offset = 0;
+    loadEntries();
+  });
   // combined sort + order dropdown, value `<key>:<order>` (desktop
   // `_sortDropdown`); the URL keeps the separate `sort`/`order` params
   $("sort").addEventListener("change", () => {
@@ -1695,7 +1707,7 @@ function wireEvents() {
       status: sectionDefaultStatus(), q: "", letter: "any",
       publisher: "any", crew: "any", cracker: "any", language: "any",
       year: "any", raw: "any", pasti: "any", boxscan: "any", tos: "any",
-      crewKind: "any", sort: "name", order: "asc", offset: 0,
+      crewKind: "any", crewTop: "any", sort: "name", order: "asc", offset: 0,
     });
     syncControls();
     loadEntries();
@@ -1720,6 +1732,7 @@ function wireEvents() {
     // reset incompatible filters; status falls back to the section default
     state.status = sectionDefaultStatus();
     state.crewKind = "any";
+    state.crewTop = "any";
     for (const k of ["raw", "pasti", "boxscan", "tos", "crew", "cracker"])
       state[k] = "any";
     if (state.section === "crew") {
@@ -1798,6 +1811,7 @@ function wireEvents() {
 function syncControls() {
   $("search").value = state.q;
   $("crew-kind").value = state.crewKind;
+  $("crew-top").value = state.crewTop;
   buildStatusOptions();
   buildFacets();
   buildLetters();
