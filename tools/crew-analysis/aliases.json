@@ -363,7 +363,9 @@
     "Replicants": [
       "Replicants",
       "R.AL & Snake",
-      "Snake & R.AL"
+      "Snake & R.AL",
+      "Snake & Cameo",
+      "Cameo & Snake"
     ],
     "V8": [
       "V8",
@@ -378,6 +380,11 @@
       "Fuzion & Stranglers",
       "Orion & Fuzion",
       "Stranglers"
+    ],
+    "Equinox": [
+      "Equinox",
+      "Equinox & Rebels",
+      "Rebels & Equinox"
     ]
   }
 }
