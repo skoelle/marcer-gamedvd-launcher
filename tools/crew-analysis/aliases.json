@@ -5,7 +5,8 @@
       "Empire",
       "The Empire",
       "The Light & Lightman",
-      "Angel Face & Arioch"
+      "Angel Face & Arioch",
+      "Lightman & V8"
     ],
     "Hotline & MCA": [
       "Hotline & MCA",
@@ -358,6 +359,25 @@
     "42 Crew": [
       "42 Crew",
       "42 Crew & Blade Runners"
+    ],
+    "Replicants": [
+      "Replicants",
+      "R.AL & Snake",
+      "Snake & R.AL"
+    ],
+    "V8": [
+      "V8",
+      "V8 & Fallen Angels & Revolutions",
+      "V8 & Fallen Angels",
+      "V8 & Delight & Nokturnal & Equinox",
+      "V8 & Fallen Angles & Delight & Nokturnal",
+      "V8 & Fallen Angels & Nokturnal"
+    ],
+    "Fuzion": [
+      "Fuzion",
+      "Fuzion & Stranglers",
+      "Orion & Fuzion",
+      "Stranglers"
     ]
   }
 }
