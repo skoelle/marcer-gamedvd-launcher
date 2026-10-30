@@ -1244,6 +1244,7 @@ class DataStore:
                 "releases": len(releases),
                 "aliases": self._crew_aliases(group),
                 "preview": preview,
+                "top": not bool(group.get("excluded")),
                 "crew": True,
                 "_search": self._crew_search_text(normalized),
             }
@@ -1610,6 +1611,7 @@ def _public_crew_card(card):
         "releases": card["releases"],
         "aliases": card["aliases"],
         "preview": card["preview"],
+        "top": card.get("top", True),
         "crew": True,
     }
 

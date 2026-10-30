@@ -231,6 +231,7 @@ header { margin-bottom: 8px; }
 .b-other { background: #333; color: #aaa; }
 .b-crew { background: #1d2b4a; color: #9cc3ff; }
 .b-cracker { background: #3a2b4a; color: #d0b3ff; }
+.b-top { background: #173; color: #cfc; }
 .b-amb { background: #4a3208; color: #ffc46b; }
 /* lightbox header badges (desktop `_header`: layer green, status
    histogram blueGrey, year teal) */

@@ -389,6 +389,7 @@ function renderGrid(cards) {
         : `<div class="ph crew-ph">CREW</div>`;
       return `<div class="card crew-card" data-idx="${i}" data-v="0" tabindex="-1">` +
         `<span class="badge ${kind === "cracker" ? "b-cracker" : "b-crew"}">${kind}</span>` +
+        (c.top ? `<span class="badge b-top">TOP</span>` : "") +
         `<span class="chip">${c.zips} ZIPs</span>` +
         `<div class="name">${esc(c.name)}</div>` +
         `<div class="crew-release-count">${c.releases} releases</div>${preview}</div>`;

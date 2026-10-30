@@ -187,7 +187,8 @@ Rules:
   `A & B` (e.g. `Replicants & Union`) and kept as their own group unless
   listed in `tools/crew-analysis/joint-groups.json`.
 - `excluded` is retained for the desktop app's curated Crews tab; the
-  gallery ignores it and always shows every group.
+  gallery still shows every group but marks non-excluded groups with a
+  green `TOP` badge.
 - The tab shows all groups sorted by ZIP count/name (no cap). The **Type**
   dropdown filters groups by `kind` (`any`/`crew`/`cracker`). Current real
   data (2026-10-30): 877 groups, 8,499 releases.
@@ -727,7 +728,8 @@ Semantics:
   just the current page); the UI uses it for the hit counter.
 - Card payload: `id` (group id), `name`, `kind`, `rank`, `zips`,
   `releases`, `aliases`, `preview` (screenshot path below `MARCER_OUT_DIR`
-  or `null`) and `crew: true`.
+  or `null`), `top` (`excluded == false`, i.e. the desktop Crews-tab
+  selection) and `crew: true`.
 
 `GET /api/crews?id=<group id>` returns one crew with all releases:
 
@@ -857,7 +859,8 @@ Filter/search/sort state is reflected in the URL query string
   special flag/note — the fields of ANALYSIS-game-data.md §5.3.
 - Without gameinfo: panel shows relative path, status, layer and file size.
 - Crew cards show kind (`crew`/individual cracker), ZIP count, release
-  count and aliases.
+  count and aliases; groups in the desktop Crews-tab selection
+  (`excluded == false`) carry a green `TOP` badge.
 - Panels never cover the whole grid; they disappear on mouse leave, key
   press and when the grid scrolls under them. Full details always live in
   the lightbox.
@@ -1295,7 +1298,8 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     release opens the game lightbox as a standalone single card (closing
     returns to the crew browser). Legacy section-relative release paths
     resolve; groups marked `excluded` are still shown (the gallery ignores
-    the desktop selection); no launch/play control exists. Without
+    the desktop selection for visibility) but only non-excluded groups get
+    the green `TOP` badge; no launch/play control exists. Without
     `crews.json` the tab is hidden and the other sections are unaffected.
 
 ---
@@ -1333,7 +1337,8 @@ A conforming implementation satisfies all of the following.
       central directories only (`ZipFile.infolist()`); no ZIP member is
       opened and no temp extraction exists.
 - [x] D7 All `crews.json` groups are shown (including `excluded: true`;
-      the gallery ignores the desktop selection), sorted by ZIP count/name
+      the gallery ignores the desktop selection for visibility) with a
+      green `TOP` badge on non-excluded groups, sorted by ZIP count/name
       with no cap, and their releases join the cracked index
       preview/status/kind fields (legacy section-relative `rel` paths
       resolve through the cracked tree).

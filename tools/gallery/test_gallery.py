@@ -367,6 +367,9 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(store.crews[1]["preview"],
                          f"{self.tree}/B/Beta/b.png")
         self.assertEqual(store.crews[2]["name"], "Hidden")
+        self.assertTrue(store.crews[0]["top"])
+        self.assertFalse(store.crews[2]["top"])
+        self.assertFalse(gallery._public_crew_card(store.crews[2])["top"])
         self.assertIn("beta crackers", store.crews[1]["_search"])
         self.assertEqual(store.meta["crews"]["groups"], 3)
         self.assertEqual(store.meta["crews"]["visible_groups"], 3)
