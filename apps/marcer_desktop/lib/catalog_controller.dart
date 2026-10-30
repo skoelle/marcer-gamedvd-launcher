@@ -441,13 +441,13 @@ class CatalogController extends ChangeNotifier {
     return null;
   }
 
-  /// Synthetic catalog cards for the Crews tab (top [kCrewInitialLimit] groups
-  /// by ZIP count; `crews.json` still contains every group).
+  /// Synthetic catalog cards for the Crews tab: every curated (non-excluded)
+  /// group from `crews.json`, sorted by ZIP count.
   List<GameCard> get _crewCards => _crewCardsBase ??= _buildCrewCards();
 
   List<GameCard> _buildCrewCards() {
     final cards = <GameCard>[];
-    for (final group in crews.top(kCrewInitialLimit)) {
+    for (final group in crews.groups) {
       final preview = _crewPreview(group);
       final searchParts = <String>[group.name, group.kind, ...group.aliases];
       for (final release in group.releases) {
@@ -2050,8 +2050,7 @@ class CatalogController extends ChangeNotifier {
       if (err != null) return List<String>.unmodifiable(['crew data: $err']);
       return List<String>.unmodifiable([
         '${crews.totalReleases} releases',
-        if (crews.length > kCrewInitialLimit)
-          'top $kCrewInitialLimit of ${crews.length}',
+        '${crews.length} groups',
         if (crews.generatedAt.isNotEmpty) 'crews: ${crews.generatedAt}',
       ]);
     }

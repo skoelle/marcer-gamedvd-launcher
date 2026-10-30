@@ -6,7 +6,7 @@ is the "crew view" used when looking at the cracked section the same way the
 catalog exposes `games`, `pd`, `utils`, `magazines` and `falcon`.
 
 See [`ANALYSIS-crews.md`](../../docs/analysis/ANALYSIS-crews.md) for the methodology,
-the current tab selection (currently 128 groups) and the data-quality caveats.
+the current tab selection and the data-quality caveats.
 
 ## Data sources
 
@@ -147,7 +147,10 @@ crew groups beat cracker groups and the higher Crew-Sorted ZIP count wins
 (`Delight` over `Steve C`, `Vmax` over `Mikou`); protected joint groups keep
 their specificity instead.
 
-It contains **all** groups; the desktop UI shows the curated selection (currently 128, cap 128), while the gallery always shows all groups. The
+It contains **all** groups; the desktop UI shows every curated (non-excluded)
+group (currently 130), while the gallery always shows all groups. There is no
+top-N cap in the desktop Crews tab; `crew-tab.json` is the only curating
+mechanism. The
 `image` field is reserved for the later cracktro/logo curation phase.
 `source` uses logical names only; absolute local paths are never written into
 the published gameinfo asset (the local `crew-ranking.json` audit keeps them).

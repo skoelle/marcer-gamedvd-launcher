@@ -323,7 +323,7 @@ class _FilterBarState extends State<FilterBar> {
                       child: Text(
                         c.crews.length == 0
                             ? 'No crew data'
-                            : 'Top ${c.crews.length < kCrewInitialLimit ? c.crews.length : kCrewInitialLimit} by ZIPs',
+                            : '${c.crews.length} groups',
                         style: const TextStyle(
                           fontSize: 11,
                           color: Colors.grey,

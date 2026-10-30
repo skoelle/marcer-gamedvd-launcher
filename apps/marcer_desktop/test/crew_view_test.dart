@@ -349,7 +349,7 @@ void main() {
     expect(c.catalogCards.every((card) => card.crew == null), isTrue);
   });
 
-  test('crews tab shows the top 128 groups after exclusions', () async {
+  test('crews tab shows all non-excluded groups', () async {
     final groups = [
       for (var i = 1; i <= 130; i++)
         {
@@ -377,10 +377,11 @@ void main() {
     await c2.init();
     c2.setSection('crew');
     expect(c2.crews.length, 129);
-    expect(c2.catalogCards, hasLength(128));
+    expect(c2.catalogCards, hasLength(129));
     expect(c2.catalogCards.first.crew?.name, 'Crew 01');
+    expect(c2.catalogCards.last.crew?.name, 'Crew 130');
     expect(c2.crews.groups.any((g) => g.name == 'Crew 10'), isFalse);
-    expect(c2.statusLine, contains('top 128 of 129'));
+    expect(c2.statusLine, contains('129 groups'));
   });
 
   testWidgets('crew lightbox lists releases and navigates with arrows', (
