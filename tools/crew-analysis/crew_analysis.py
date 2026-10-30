@@ -831,19 +831,23 @@ def infer_release_labels(
                 str(release.get("cracked_by") or ""))
             crew = clean_group_label(str(release.get("crew") or ""))
             inferred: list[str] = []
-            # An exact Crew Sorted match and an explicit ZIP override are
-            # authoritative; short names such as "SJ Crew" would otherwise
-            # lose their distinctive token. Overrides are curated, so the
-            # filled label is not marked as inferred.
-            if release.get("source") in ("exact", "override"):
+            # An exact Crew Sorted match is authoritative; short names such
+            # as "SJ Crew" would otherwise lose their distinctive token.
+            # Explicit ZIP overrides are curated: the target kind's label is
+            # replaced (not just filled) and never marked as inferred.
+            source = release.get("source")
+            if source == "override":
+                if is_crew_group:
+                    crew = group
+                else:
+                    cracked_by = group
+            elif source == "exact":
                 if is_crew_group and not crew:
                     crew = group
-                    if release.get("source") != "override":
-                        inferred.append("crew")
+                    inferred.append("crew")
                 elif not is_crew_group and not cracked_by:
                     cracked_by = group
-                    if release.get("source") != "override":
-                        inferred.append("cracked_by")
+                    inferred.append("cracked_by")
             zip_tokens = set(tokens(str(release.get("zip") or "")))
             suffix = set(credit_suffix(
                 str(release.get("zip") or ""),

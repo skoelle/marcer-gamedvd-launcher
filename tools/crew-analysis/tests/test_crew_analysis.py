@@ -482,18 +482,35 @@ class LabelInferenceTest(unittest.TestCase):
         self.assertEqual(release["crew"], "SJ Crew")
         self.assertEqual(release["inferred_fields"], ["crew"])
 
-    def test_override_fills_crew_without_inferred_flag(self):
+    def test_override_replaces_crew_without_inferred_flag(self):
         rows = {"ACF": [{
-            "zip": "Albedo - Jacky.zip",
-            "title": "Albedo",
-            "folder": "Albedo",
-            "cracked_by": "Jacky",
-            "crew": "",
+            "zip": "Deflektor - Big Bird.zip",
+            "title": "Deflektor",
+            "folder": "Deflektor",
+            "cracked_by": "Big Bird",
+            "crew": "Big Bird",
             "source": "override",
         }]}
         ca.infer_release_labels(rows, {"ACF": {"ACF"}}, {"ACF"})
         release = rows["ACF"][0]
         self.assertEqual(release["crew"], "ACF")
+        self.assertEqual(release["cracked_by"], "Big Bird")
+        self.assertNotIn("inferred_fields", release)
+
+    def test_override_replaces_cracker_without_inferred_flag(self):
+        rows = {"Some Cracker": [{
+            "zip": "Game - Some Cracker.zip",
+            "title": "Game",
+            "folder": "Game",
+            "cracked_by": "Old Cracker",
+            "crew": "Old Crew",
+            "source": "override",
+        }]}
+        ca.infer_release_labels(
+            rows, {"Some Cracker": {"Some Cracker"}}, set())
+        release = rows["Some Cracker"][0]
+        self.assertEqual(release["cracked_by"], "Some Cracker")
+        self.assertEqual(release["crew"], "Old Crew")
         self.assertNotIn("inferred_fields", release)
 
     def test_ambiguous_credit_is_not_guessed(self):
