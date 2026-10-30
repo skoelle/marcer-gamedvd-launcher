@@ -92,6 +92,9 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
    - **Exact ZIP overrides:** `zip-groups.json` maps a ZIP `rel` directly to a
      group. These win over Crew-Sorted/label/alias matching and use
      `source: "override"` (used for e.g. splitting a joint group per ZIP).
+     When the override target is a crew and the release has no `crew` label
+     (or the target is a cracker and `cracked_by` is empty), the group name is
+     written to that field as a curated value, not as an inferred one.
    - **Single-ZIP joint crackers:** a joint cracker group with exactly one ZIP
      is collapsed into the crew named in its release when the `crew` label
      resolves unambiguously to an existing crew group. Non-joint one-ZIP

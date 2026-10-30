@@ -248,7 +248,10 @@ from the ranking run and can be older than `crews.json`.
   main crew. All other joint groups are protected and unify to `A & B`.
 - `zip-groups.json` — exact ZIP `rel` → group overrides (e.g. split a joint
   group per release). These win over exact Crew-Sorted, label and alias
-  matching and are reported with `source: "override"`.
+  matching and are reported with `source: "override"`. When the override
+  target is a crew and the matched release has no `crew` label (or the target
+  is a cracker group and `cracked_by` is empty), the group name is written to
+  that field without marking it as inferred; the override is curated.
 - `crew-tab.json` — tab selection: `include_until` (visible through this
   group), `keep` (visible after the cutoff), `exclude` (always hidden). The
   group stays in `crews.json` (with `"excluded": true`) and in the ranking

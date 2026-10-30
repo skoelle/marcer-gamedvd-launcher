@@ -482,6 +482,20 @@ class LabelInferenceTest(unittest.TestCase):
         self.assertEqual(release["crew"], "SJ Crew")
         self.assertEqual(release["inferred_fields"], ["crew"])
 
+    def test_override_fills_crew_without_inferred_flag(self):
+        rows = {"ACF": [{
+            "zip": "Albedo - Jacky.zip",
+            "title": "Albedo",
+            "folder": "Albedo",
+            "cracked_by": "Jacky",
+            "crew": "",
+            "source": "override",
+        }]}
+        ca.infer_release_labels(rows, {"ACF": {"ACF"}}, {"ACF"})
+        release = rows["ACF"][0]
+        self.assertEqual(release["crew"], "ACF")
+        self.assertNotIn("inferred_fields", release)
+
     def test_ambiguous_credit_is_not_guessed(self):
         rows = {
             "Foo": [
