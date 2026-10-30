@@ -39,13 +39,19 @@ Rerun `extract` whenever the XLS files change (`check` detects staleness); rerun
 
 ## Build order
 
-This tool is step 1 of the catalog-data pipeline (no screenshots required):
+Run the whole local pipeline once (recommended):
+
+```sh
+tools/catalog-update/run.sh                # sync + all steps, when needed
+```
+
+Manual equivalent (no screenshots required):
 
 ```sh
 tools/gameinfo-gen/run.sh extract          # 1) games-*.json
 tools/full-index-gen/run.sh run            # 2) gameinfo/full-index.json.gz
 tools/crew-analysis/run.sh                 # 3) crews.json
-tools/asset-publish/run.sh publish --only gameinfo
+tools/asset-publish/run.sh publish --only gameinfo --upload
 
 # optional, after screenshots were captured on the dev machine:
 tools/screenshot-gen/run.sh run --scope cracked     # index.json + PNGs

@@ -43,14 +43,24 @@ tools/full-index-gen/run.sh run --only Mazewar --out /tmp/full-index.json.gz
 
 ## Build order
 
-The pipeline before the screenshot step:
+Run the whole local pipeline once (recommended):
+
+```sh
+tools/catalog-update/run.sh
+```
+
+It syncs the FTP, refreshes only the steps whose inputs changed, and publishes
+gameinfo only when the content signature changed or an upload/manifest update
+is pending.
+
+Manual equivalent:
 
 ```sh
 tools/archive-sync/run.sh sync
 tools/gameinfo-gen/run.sh extract
 tools/full-index-gen/run.sh run
 tools/crew-analysis/run.sh
-tools/asset-publish/run.sh publish --only gameinfo
+tools/asset-publish/run.sh publish --only gameinfo --upload
 ```
 
 `shotgen` and the screenshot archive run later on the dev machine; they are

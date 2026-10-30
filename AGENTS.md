@@ -20,6 +20,7 @@ added or removed. The documentation taxonomy is described in
 | Crew analysis | `tools/crew-analysis/` | [`ANALYSIS-crews.md`](docs/analysis/ANALYSIS-crews.md) |
 | AtariLegend import | `tools/atarilegend-gen/` | [`ANALYSIS-atarilegend.md`](docs/analysis/ANALYSIS-atarilegend.md) |
 | Full catalog index | `tools/full-index-gen/` | [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md), [`ANALYSIS-piratefinder.md`](docs/analysis/ANALYSIS-piratefinder.md) |
+| One-shot catalog update | `tools/catalog-update/` | [`tools/catalog-update/README.md`](tools/catalog-update/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | Shared pipeline helpers | `tools/_lib/` | Section trees/overlay scan (`catalog_sections.py`) + disk-image hashing (`zip_hashes.py`) |
 | Archive sync / asset publish / manifest | `tools/archive-sync/`, `tools/asset-publish/`, `tools/asset-manifest/` | [`docs/plans/PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) + each tool README |
 
@@ -30,6 +31,9 @@ new ZIPs appear in the desktop app immediately (without screenshots). The
 screenshot index (`index*.json`) remains the screenshot-state authority and is
 merged into the full index by the app. `tools/piratefinder-gen` was retired;
 its reusable ZIP hashing moved to `tools/_lib/zip_hashes.py`.
+`tools/catalog-update` runs this local sequence once: FTP sync, then
+gameinfo/full-index/crew only when needed, then a signature-gated gameinfo
+publish (no root changes, no rename detection, no deletion).
 
 **No absolute local paths in published artifacts.** Gameinfo/screenshot assets
 must only contain relative rel paths and logical names. Absolute paths belong

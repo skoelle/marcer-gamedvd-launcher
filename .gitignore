@@ -43,6 +43,8 @@ desktop.config.json
 /tools/archive-sync/tests/__pycache__/
 /tools/asset-publish/__pycache__/
 /tools/asset-publish/tests/__pycache__/
+/tools/catalog-update/__pycache__/
+/tools/catalog-update/tests/__pycache__/
 /tools/crew-analysis/__pycache__/
 /tools/crew-analysis/tests/__pycache__/
 /tools/gallery/__pycache__

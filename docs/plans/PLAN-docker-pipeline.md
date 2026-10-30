@@ -142,6 +142,10 @@ Neues Uploader-Tool, bewusst getrennt von `asset-manifest`.
 
 Orchestrator, HTTP-Service und Scheduler in einem Prozess.
 
+Der lokale One-Shot-Lauf ist bereits als `tools/catalog-update/` umgesetzt
+(gleiche Reihenfolge, ohne HTTP/Scheduler); `catalog-pipeline` baut darauf für
+den Container auf.
+
 - Dateien: `pipeline.py`, `run.sh`, `README.md`, Tests.
 - Ein Worker, globaler Lock (`/state/pipeline.lock`), keine parallelen Läufe.
 - HTTP (stdlib, ohne Auth, nur internes Netz):
