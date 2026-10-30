@@ -384,6 +384,48 @@
       "name": "Moon Letters - SFX.png",
       "source": "manual",
       "note": "user pick (curated; SFX preview)"
+    },
+    "HCC": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/L/Leviathan/Leviathan - HCC.zip",
+      "name": "Leviathan - HCC.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Maxi & Replicants": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/F/Final Battle/Final Battle - Maxi - Replicants.zip",
+      "name": "Final Battle - Maxi - Replicants.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Replicants & Masters": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/P/Panza Kick Boxing/Panza Kick Boxing - French - Masters - Disk 1.zip",
+      "name": "Panza Kick Boxing - French - Masters - Disk 1.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "TNT Crew": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/I/In Eighty Days Around The World/In Eighty Days Around The World - TNT Crew.zip",
+      "name": "In Eighty Days Around The World - TNT Crew.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "STCS & Blade Runners": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/O/Operation Jupiter/Operation Jupiter - French - STCS - Blade runners.zip",
+      "name": "Operation Jupiter - French - STCS - Blade runners.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Trash Section": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/T/Teenage Queen/Teenage Queen - Trash Section.zip",
+      "name": "Teenage Queen - Trash Section.png",
+      "source": "manual",
+      "note": "user pick (curated)"
+    },
+    "Flexible Front": {
+      "rel": "Title Sorted/Cracked Games - Title Sorted/L/Led Storm/Led Storm - Tr - Flexible Front.zip",
+      "name": "Led Storm - Tr - Flexible Front.png",
+      "source": "manual",
+      "note": "user pick (curated)"
     }
   }
 }
