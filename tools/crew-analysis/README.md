@@ -25,8 +25,11 @@ here and `PatchDirectory` is already part of the merge.
 
 ## Build order / prerequisites
 
-`crew-analysis` reads the normal game metadata; it does not create it. Run the
-pipeline in this order:
+`crew-analysis` reads the normal game metadata; it does not create it.
+`tools/catalog-update/run.sh` runs the whole local pipeline once and executes
+`crew-analysis` only when gameinfo was rebuilt or the cracked tree changed.
+
+Manual order:
 
 ```sh
 # 1) normal gameinfo (required input)
@@ -237,6 +240,9 @@ from the ranking run and can be older than `crews.json`.
   language notes, `Game`, `Guide`, `Me`, …).
 - `joint-groups.json` — joint-credit allowlist that may be dissolved into a
   main crew. All other joint groups are protected and unify to `A & B`.
+- `zip-groups.json` — exact ZIP `rel` → group overrides (e.g. split a joint
+  group per release). These win over exact Crew-Sorted, label and alias
+  matching and are reported with `source: "override"`.
 - `crew-tab.json` — tab selection: `include_until` (visible through this
   group), `keep` (visible after the cutoff), `exclude` (always hidden). The
   group stays in `crews.json` (with `"excluded": true`) and in the ranking

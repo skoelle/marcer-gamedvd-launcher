@@ -89,6 +89,9 @@ tools/crew-analysis/run.sh images --top 128 --write-images --force
      prefer crew over cracker, then the higher Crew-Sorted ZIP count; this
      keeps the main crew over individual/derived labels (`Delight` over
      `Steve C`, `Vmax` over `Mikou`/`Robocamp`).
+   - **Exact ZIP overrides:** `zip-groups.json` maps a ZIP `rel` directly to a
+     group. These win over Crew-Sorted/label/alias matching and use
+     `source: "override"` (used for e.g. splitting a joint group per ZIP).
    The per-release `cracked_by`/`crew` shown in the crew view come from the XLS
    variant that matches the group label, else from the variant whose label
    tokens match the ZIP filename. When several variants exist and none can be

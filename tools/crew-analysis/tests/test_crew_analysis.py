@@ -699,6 +699,29 @@ class GroupNormalizationTest(unittest.TestCase):
             self.assertIn(ca.norm(value), exclude)
 
 
+class ZipGroupOverridesTest(unittest.TestCase):
+    def test_loads_exact_rel_assignments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "zip-groups.json"
+            path.write_text(json.dumps({
+                "assign": {
+                    "A/B/one.zip": "Cynix",
+                    "A/B/two.zip": "International / Cracking Service",
+                },
+            }), encoding="utf-8")
+            overrides = ca.load_zip_group_overrides(path)
+        self.assertEqual(overrides["A/B/one.zip"], "Cynix")
+        self.assertEqual(
+            overrides["A/B/two.zip"],
+            "International & Cracking Service",
+        )
+
+    def test_missing_file_is_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                ca.load_zip_group_overrides(Path(tmp) / "missing.json"), {})
+
+
 class CrewsSourceSummaryTest(unittest.TestCase):
     def test_is_path_free_and_uses_logical_names(self):
         source = ca.crews_source_summary("/mnt/nas/x/Screenshots/index.json")

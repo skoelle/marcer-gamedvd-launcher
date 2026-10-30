@@ -248,6 +248,23 @@ def load_joint_overrides(path: Path) -> set[str]:
     }
 
 
+def load_zip_group_overrides(path: Path) -> dict[str, str]:
+    """Exact ZIP rel -> group assignments that win over every matching step."""
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        sys.exit(f"error: cannot read zip-group config {path}: {exc}")
+    out: dict[str, str] = {}
+    for rel, group in (data.get("assign") or {}).items():
+        rel = str(rel).replace("\\", "/").strip()
+        group = unify_group_name(clean_group_label(str(group)))
+        if rel and group:
+            out[rel] = group
+    return out
+
+
 def load_tab_selection(path: Path) -> dict:
     if not path.is_file():
         return {"include_until": "", "keep": set(), "exclude": set()}
@@ -1680,9 +1697,21 @@ def main() -> int:
     tab_selection = load_tab_selection(Path(args.crew_tab))
     joint_overrides = load_joint_overrides(
         Path(__file__).with_name("joint-groups.json"))
+    zip_group_overrides = load_zip_group_overrides(
+        Path(__file__).with_name("zip-groups.json"))
     raw_crew_canon, alias_to_groups, abbrev_aliases, label_canon = build_registry(
         raw_crew_groups, gameinfo_labels, explicit, exclude
     )
+    known_groups = (
+        set(raw_crew_canon.values())
+        | set(label_canon.values())
+        | set(explicit.values())
+    )
+    for rel, group in zip_group_overrides.items():
+        if group not in known_groups:
+            sys.exit(
+                f"error: zip-groups.json target {group!r} is not a known group "
+                f"({rel})")
     crew_group_names = set(raw_crew_canon.values())
     for label, sources in gameinfo_labels.items():
         canonical = label_canon.get(label)
@@ -1723,6 +1752,11 @@ def main() -> int:
             index_path, args.include_subdirs)
         zip_source = str(index_path)
 
+    indexed_rels = {rel.replace("\\", "/") for rel, *_ in zips}
+    for rel in zip_group_overrides:
+        if rel not in indexed_rels:
+            sys.exit(f"error: zip-groups.json rel not found in ZIP index: {rel}")
+
     primary: Counter[str] = Counter()
     source_counts: Counter[str] = Counter()
     unmatched: list[tuple[str, str, str, str, int | None]] = []
@@ -1733,6 +1767,16 @@ def main() -> int:
 
     for rel, letter, folder, name, size, _direct in zips:
         variants = folders.get((letter.casefold(), folder.casefold()), [])
+
+        # 0) explicit ZIP rel overrides win over every matching step
+        override = zip_group_overrides.get(rel.replace("\\", "/"))
+        if override:
+            primary[override] += 1
+            source_counts["override"] += 1
+            release_rows[override].append(make_release(
+                rel, letter, folder, name, size, "override", override,
+                variants, False, label_canon))
+            continue
 
         # 1) exact basename match against Crew Sorted
         exact_crews = exact_crew_entries(name, exact_name)
