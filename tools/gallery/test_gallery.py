@@ -561,7 +561,8 @@ class CrewDataTest(unittest.TestCase):
                 "id": "alpha",
                 "name": "Alpha Cluster",
                 "roots": [{"name": "Alpha Crew"}],
-                "counts": {"groups": 3, "top": 1, "excluded": 1,
+                "counts": {"groups": 3, "zips": 167, "group_zips": 2,
+                           "member_zips": 165, "top": 1, "excluded": 1,
                            "ambiguous": 0, "external": 1},
                 "groups": [
                     {"name": "Alpha Crew", "local_id": "alpha-crew",
@@ -607,6 +608,9 @@ class CrewDataTest(unittest.TestCase):
         summary = store.clusters[0]
         self.assertEqual(summary["id"], "alpha")
         self.assertEqual(summary["groups"], 3)
+        self.assertEqual(summary["counts"]["zips"], 167)
+        self.assertEqual(summary["counts"]["group_zips"], 2)
+        self.assertEqual(summary["counts"]["member_zips"], 165)
         self.assertEqual(summary["cross_edges"], 1)
         self.assertEqual(summary["preview"],
                          f"{self.tree}/A/Alpha/curated.png")
@@ -617,6 +621,7 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(store.meta["clusters"]["cross_edges"], 1)
         self.assertEqual(store.meta["sections"]["cluster"]["cards"], 1)
         cluster = store.cluster_by_id["alpha"]
+        self.assertEqual(cluster["counts"]["zips"], 167)
         self.assertEqual(cluster["tree"]["name"], "Alpha Crew")
         self.assertEqual(cluster["tree"]["members"][0]["name"], "Bust")
         self.assertEqual(cluster["tree"]["members"][0]["preview"],

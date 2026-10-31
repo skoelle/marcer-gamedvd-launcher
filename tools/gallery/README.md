@@ -108,11 +108,13 @@ Backend filter/card helpers use stdlib `unittest` only:
   built only from the crackers known in that crew's releases (with counts;
   hidden below two distinct crackers). Labels inferred from the ZIP name are
   marked `inferred`.
-- **Clusters**: the `clusters` tab lists the ten seeded crew clusters from
+- **Clusters**: the `clusters` tab lists the seeded crew clusters from
   `crew-cluster.json` (Elite/Empire, Blade Runners, The Corporation (UK),
   Syndicate & ESC, Union, Aenigmatica, Anti Lame Association, Automation,
-  FOFT, The Alliance) with
-  group/link/cross-link counts and a root preview. Clicking a cluster opens
+  FOFT, The Alliance (DE), The Alliance (FR), The British Alliance,
+  Offensive System, The Guild, The Stranglers, The Heavy Killers,
+  The Collaboration, Atari Legend) with
+  group/ZIP/link/cross-link counts and a root preview. Clicking a cluster opens
   an indented tree with `TOP`/`excluded`/`external` badges, subgroup links,
   overlaps and cross-cluster edges. External branches without any local
   group behind them are hidden by default; the header toggle (or
@@ -120,13 +122,15 @@ Backend filter/card helpers use stdlib `unittest` only:
   hidden. Local groups show a 100×62 preview thumbnail (from
   `crews.json`/`crew-images.json`); external groups use an `EXT` placeholder.
 - **Cracker memberships**: `crew-cluster.json` also carries neutral
-  `entities` data for all TOP groups, all crackers and explicit overrides.
+  `entities` data for all TOP groups, all crackers, explicit overrides and
+  excluded crews with an unambiguous person membership.
   Crew cards show a Memberships/Parent-groups/Subgroups line on hover; the
   crew release browser header shows it too. Resolved entries list crew names,
   ambiguous entries show a match count, joint labels and unknown entries are
   labelled as such. Person members are also rendered as clickable `member`
-  rows with 100×62 previews inside the cluster tree. No internal matching
-  IDs are published in gameinfo.
+  rows with 100×62 previews inside the cluster tree. Manually placed joint
+  crews appear as normal local crew nodes with a `TOP` badge. No internal
+  matching IDs are published in gameinfo.
   Clicking a local thumbnail or name opens the existing crew release browser;
   external groups are static. Missing or unreadable `crew-cluster.json` only
   hides the Clusters tab.

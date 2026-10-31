@@ -230,9 +230,15 @@ internal matching IDs)*
 - `crew-cluster.json` (required for the Clusters tab): `schema`,
   `generated_at`, `clusters[]`, `edges[]`, `trees{}` and `entities{}`.
 - Each cluster carries `id`, `name`, `roots[]` (objects with `name`),
-  `counts` (`groups`, `top`, `excluded`, `ambiguous`, `external`, `members`),
-  optional `preview_local_id` (preferred local preview) and `groups[]` with `name`, optional `local_id`/`zips`/`preview`, `status`
+  `counts` (`groups`, `zips`, `group_zips`, `member_zips`, `top`, `excluded`,
+  `ambiguous`, `external`, `members`), optional `preview_local_id` (preferred
+  local preview) and `groups[]` with `name`, optional
+  `local_id`/`zips`/`preview`, `status`
   (`top`/`excluded`/`external`/`ambiguous`) and `clusters[]` (overlap).
+  `zips` is the sum of distinct local group and member ZIP counts in the
+  cluster; `group_zips` covers group nodes, `member_zips` the additional
+  member contribution. Overlapping groups count once per cluster; external
+  groups have no local ZIP data.
   `preview` is joined server-side from `crews.json`/`crew-images.json` and is
   `null` for external groups.
 - `edges[]` are global: `from` (subgroup), `to` (parent),
@@ -241,9 +247,13 @@ internal matching IDs)*
   UI; multiple parent links remain in `edges[]`. Tree nodes additionally
   carry `members[]` (`name`, `local_id`, `zips`, `current`) for person
   labels that belong to the crew; members are not subgroup edges and do not
-  appear in `children`.
+  appear in `children`. Manually placed local crew nodes may appear in
+  `children` with `manual: true`/`kind: "joint"`; they use the same `TOP`
+  badge, are clickable/previewed like normal local groups, and have no
+  internal matching IDs or subgroup edge.
 - `entities{}` is keyed by local crew id and covers all TOP groups, all
-  crackers and explicit overrides: `name`, `kind`
+  crackers, explicit overrides and excluded crews with an unambiguous
+  resolved person membership: `name`, `kind`
   (`person`/`group`/`joint`/`unknown`), `status`
   (`resolved`/`ambiguous`/`none`/`joint`), `memberships[]` for persons,
   `parents[]` plus `subgroup_count`/`descendant_count` for groups, and
@@ -521,11 +531,11 @@ error body `{ "error": "<message>" }`.
   },
   "clusters": {
     "available": true,
-    "count": 10,
-    "groups": 155,
-    "edges": 147,
-    "cross_edges": 18,
-    "generated_at": "2026-10-31T13:59:03Z",
+    "count": 18,
+    "groups": 245,
+    "edges": 220,
+    "cross_edges": 37,
+    "generated_at": "2026-10-31T16:48:51Z",
     "error": null
   }
 }
@@ -903,7 +913,7 @@ lightbox, whose side panel carries the same metadata.
    row (A–Z + `0-9` + `Any`). In the `crews` tab only search, clear, the
    **Type** dropdown and the **Ranking** dropdown are shown; the crew cards
    are already ordered by ZIP count. In the `clusters` tab only search and
-   clear are shown; the ten cluster cards keep the file order.
+   clear are shown; the cluster cards keep the file order.
 4. **Grid**: grouped cards (section 6.4), paginated.
 5. **Pagination**: page indicator + prev/next + page-size-constant
    (`offset/limit`); keyboard PageUp/PageDown works on the grid (6.6).
@@ -921,8 +931,8 @@ Filter/search/sort state is reflected in the URL query string
   status label).
 - Name: game folder name (`folder`), below the badge (as today). Crew
   cards use the group name; cluster cards use the cluster name plus the
-  root names, group/link/cross-link counts and a `CLUSTER` placeholder or
-  root preview.
+  root names, group/ZIP/link/cross-link counts and a `CLUSTER` placeholder
+  or root preview.
 - Variant count chip when a folder has more than one ZIP (e.g. `×3`).
 - Preview image, or placeholder block when `screenshots` is false.
 - **Multi-variant grid** (no focus): when no crew/cracker filter is active
@@ -978,7 +988,7 @@ Filter/search/sort state is reflected in the URL query string
   count, aliases and, for crackers, their optional Memberships/Parent groups
   line; groups in the desktop Crews-tab selection (`excluded == false`)
   carry a green `TOP` badge.
-- Cluster cards show roots, group/link/cross-link counts and the
+- Cluster cards show roots, group/ZIP/link/cross-link counts and the
   `TOP`/excluded/external breakdown.
 - Panels never cover the whole grid; they disappear on mouse leave, key
   press and when the grid scrolls under them. Full details always live in
@@ -1135,7 +1145,7 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `with_screenshot`); `letter` = magazine name, `year` from the file name |
 | falcon | `index-falcon.json` (index-only, no gameinfo) | grouped by `(letter, folder)` like the cracked view | status filter (default `with_screenshot`); Falcon titles launch with the Falcon machine/TOS 4.04 (desktop) |
 | crews | `crews.json` (+ optional `crew-images.json`) | synthetic crew/cracker cards from all groups (`excluded` is ignored; no cap) | search only; fixed ZIP-count order; click opens the crew release browser (6.11); no status/facets/letter |
-| clusters | `crew-cluster.json` | ten seeded clusters with counts, root preview and cross-link count | search only; click opens the cluster browser (6.12); no status/facets/letter/pager |
+| clusters | `crew-cluster.json` | seeded clusters with ZIP/group/link counts, root preview and cross-link count | search only; click opens the cluster browser (6.12); no status/facets/letter/pager |
 
 - Letter navigation, search, sorting, the status filter and the
   publisher/language/year facets work in all game sections; the remaining
@@ -1229,8 +1239,8 @@ browser for that crew:
 Clicking a cluster card (or pressing Enter/Space on it) opens a modal cluster
 browser:
 
-- Header: cluster name, group count, TOP count, link count, the external
-  toggle (only when hidden groups exist) and close. While groups are hidden
+- Header: cluster name, group count, ZIP count, TOP count, link count, the
+  external toggle (only when hidden groups exist) and close. While groups are hidden
   the sub line appends `<N> external hidden`.
 - Left: the nested `tree` of the selected cluster. If the cluster carries
   `preview_local_id`, the cluster card uses that local crew preview before
@@ -1250,11 +1260,13 @@ browser:
 - Person members (`members[]`) are rendered as additional rows under their
   crew with a **100×62 px** preview thumbnail, a `member` badge, name, ZIP
   count and optional `current` marker. They are clickable like local groups
-  but are not part of the subgroup hierarchy.
+  but are not part of the subgroup hierarchy. Manually placed crew nodes
+  (`manual: true`) render like normal local crew nodes with a `TOP` badge.
 - Extra parent links from `edges[]` that are not the tree parent are shown
   as `also subgroup of …` under the respective node.
-- Right: cluster counts, root, overlap list (groups in more than one
-  cluster), cross-cluster edges and the status legend. When branches are
+- Right: cluster counts (ZIP total plus group/member split), root, overlap
+  list (groups in more than one cluster), cross-cluster edges and the status
+  legend. When branches are
   hidden, the counts add a `Hidden` row and the legend explains why.
 - `Esc` or the close button closes the modal; clicking the backdrop closes
   it. Opening a crew from the tree navigates to that crew's release browser.
@@ -1490,7 +1502,7 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     the green `TOP` badge; no launch/play control exists. Without
     `crews.json` the tab is hidden and the other sections are unaffected.
 19. **Clusters**: with `crew-cluster.json` present, the `clusters` tab shows
-    the ten cluster cards with counts/root preview; clicking one opens the
+    the cluster cards with counts/root preview; clicking one opens the
     tree with `TOP`/`excluded`/`external` badges, overlap and cross-cluster
     links; clicking a local group opens the crew release browser while
     external groups stay static; missing/unreadable `crew-cluster.json`
@@ -1553,7 +1565,7 @@ A conforming implementation satisfies all of the following.
 - [x] A6 `/api/crews` lists all crew cards with `q`/pagination and
       returns one crew's releases (with joined screenshot fields) by id;
       unknown crews → 404.
-- [x] A7 `/api/clusters` lists the ten cluster cards and returns one
+- [x] A7 `/api/clusters` lists the cluster cards and returns one
       cluster with groups, relevant edges, tree and overlaps by id; unknown
       clusters → 404.
 

@@ -447,6 +447,7 @@ function renderGrid(cards) {
       const counts = c.counts || {};
       const details = [
         `${c.groups || 0} groups`,
+        `${counts.zips || 0} ZIPs`,
         `${c.edges || 0} links`,
         `${c.cross_edges || 0} cross`,
       ].join(" · ");
@@ -1678,6 +1679,9 @@ function clusterRenderSide(cluster, hiddenExternal) {
   const counts = cluster.counts || {};
   const rows = [
     ["Groups", counts.groups],
+    ["ZIPs", counts.zips],
+    ["Group ZIPs", counts.group_zips],
+    ["Member ZIPs", counts.member_zips],
     ["TOP", counts.top],
     ["Excluded", counts.excluded],
     ["Ambiguous", counts.ambiguous],
@@ -1741,7 +1745,8 @@ function renderClusterBrowser() {
     : "";
   $("cluster-title").textContent = cluster.name;
   $("cluster-sub").textContent =
-    `${groupCount} groups · ${counts.top || 0} TOP · ` +
+    `${groupCount} groups · ${counts.zips || 0} ZIPs · ` +
+    `${counts.top || 0} TOP · ` +
     `${(cluster.edges || []).length} links${externalHint}`;
   $("cluster-tree").innerHTML = cluster.tree
     ? clusterNodeHtml(cluster.tree, groups, extraParents, showExternal)
