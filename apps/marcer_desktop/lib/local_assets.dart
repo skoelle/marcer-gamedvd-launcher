@@ -7,7 +7,6 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive.dart';
-import 'package:archive/archive_io.dart' show InputFileStream;
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
@@ -665,7 +664,7 @@ List<_ZipEntry> _listZipFiles(String zipPath) {
     // Stream the central directory instead of loading the whole archive into
     // memory (box scans/manuals can be very large).
     input = InputFileStream(zipPath);
-    final archive = ZipDecoder().decodeBuffer(input);
+    final archive = ZipDecoder().decodeStream(input);
     return [
       for (final f in archive.files)
         if (f.isFile) _ZipEntry(f.name, f.size),
@@ -687,7 +686,7 @@ Map<String, String> _extractZipEntries(
     // Only the requested entries are decompressed; the archive itself is read
     // from disk lazily instead of holding the whole ZIP in memory.
     input = InputFileStream(zipPath);
-    final archive = ZipDecoder().decodeBuffer(input);
+    final archive = ZipDecoder().decodeStream(input);
     final wanted = {for (final (entry, _) in items) entry};
     final byName = <String, ArchiveFile>{};
     for (final f in archive.files) {
@@ -697,7 +696,6 @@ Map<String, String> _extractZipEntries(
       final f = byName[entry];
       if (f == null) continue;
       final content = f.content;
-      if (content is! List<int>) continue;
       if (f.size > 0 && content.length != f.size) continue;
       try {
         File(outPath).parent.createSync(recursive: true);

@@ -44,7 +44,7 @@ int _diskIndex(String name) {
 /// True for Atari STZip self-extracting archives (they only unpack files).
 bool _isStzip(ArchiveFile f) {
   final c = f.content;
-  if (c == null || c.length < 5) return false;
+  if (c.length < 5) return false;
   return String.fromCharCodes(c.take(5)).toLowerCase() == 'stzip';
 }
 
@@ -118,7 +118,7 @@ class BootMedia {
 /// into a session temp directory). Throws on unreadable archives.
 BootMedia prepareBoot(String zipPath) {
   final stem = p.basenameWithoutExtension(zipPath);
-  final archive = ZipDecoder().decodeBuffer(InputFileStream(zipPath));
+  final archive = ZipDecoder().decodeStream(InputFileStream(zipPath));
   final files = archive.files.where((f) => f.isFile).toList();
   final images = files
       .where((f) => _floppyExts.contains(p.extension(f.name).toLowerCase()))

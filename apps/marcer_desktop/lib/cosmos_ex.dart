@@ -520,8 +520,7 @@ class HttpCosmosExUploader implements CosmosExUploader {
       return a.name.toLowerCase().compareTo(b.name.toLowerCase());
     });
     final entry = images.first;
-    final content = entry.content;
-    final bytes = content is List<int> ? content : const <int>[];
+    final bytes = entry.content;
     if (bytes.isEmpty) {
       throw CosmosExException('Floppy image ${entry.name} is empty.');
     }

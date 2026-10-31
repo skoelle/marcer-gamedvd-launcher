@@ -218,6 +218,12 @@ String installHatariFromZip(List<int> zipBytes, String targetDir,
     throw HatariInstallException(
         'Downloaded file is not a valid ZIP archive: $e');
   }
+  // archive 4 decodes some malformed inputs to an empty archive instead of
+  // throwing; restore the explicit invalid-archive error.
+  if (archive.isEmpty) {
+    throw const HatariInstallException(
+        'Downloaded file is not a valid ZIP archive.');
+  }
   Directory(targetDir).createSync(recursive: true);
   for (final entry in archive) {
     if (!entry.isFile) continue;

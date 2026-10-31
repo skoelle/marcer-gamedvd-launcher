@@ -1070,9 +1070,11 @@ void extractArchiveToDir(Archive archive, Directory into) {
       // (`App` -> `Versions/Current/App`, `Versions/Current` -> `A`).
       // Recreate them as real links; turning them into files breaks the
       // framework resources and the app fails to launch after an update.
+      final target = entry.symbolicLink;
+      if (target == null || target.isEmpty) continue;
       File(outPath).parent.createSync(recursive: true);
       _deletePathBestEffort(outPath);
-      Link(outPath).createSync(entry.nameOfLinkedFile);
+      Link(outPath).createSync(target);
     } else if (entry.isFile) {
       File(outPath).parent.createSync(recursive: true);
       File(outPath).writeAsBytesSync(entry.content as List<int>);

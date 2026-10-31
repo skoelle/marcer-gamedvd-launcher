@@ -15,7 +15,7 @@ List<int> _zipWith(Map<String, List<int>> entries) {
   entries.forEach((name, bytes) {
     archive.addFile(ArchiveFile(name, bytes.length, bytes));
   });
-  return ZipEncoder().encode(archive)!;
+  return ZipEncoder().encode(archive);
 }
 
 void main() {
@@ -155,7 +155,11 @@ void main() {
   });
 
   test('installHatariFromZip throws on an invalid ZIP', () {
-    expect(() => installHatariFromZip([1, 2, 3], '/tmp'),
+    final dir = Directory.systemTemp.createTempSync('hatari_invalid');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    expect(() => installHatariFromZip([1, 2, 3], dir.path),
         throwsA(isA<HatariInstallException>()));
   });
 

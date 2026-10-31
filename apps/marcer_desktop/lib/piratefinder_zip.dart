@@ -48,7 +48,7 @@ Future<List<Map<String, dynamic>>> pirateFinderHashesForZip(
 String pirateFinderZipFingerprint(String zipPath) {
   final input = InputFileStream(zipPath);
   try {
-    final archive = ZipDecoder().decodeBuffer(input);
+    final archive = ZipDecoder().decodeStream(input);
     final values = <String>{};
     for (final file in archive.files) {
       if (!file.isFile) continue;

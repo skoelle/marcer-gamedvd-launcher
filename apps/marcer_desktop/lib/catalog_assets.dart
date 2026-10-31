@@ -468,7 +468,7 @@ Future<void> _extractZipEntry(_ExtractRequest request) async {
     Directory(root).createSync(recursive: true);
 
     input = InputFileStream(request.archivePath);
-    final archive = ZipDecoder().decodeBuffer(input);
+    final archive = ZipDecoder().decodeStream(input);
 
     // Create the explicit directory entries first (empty dirs in the archive).
     for (final entry in archive.files) {

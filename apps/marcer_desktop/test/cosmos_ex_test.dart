@@ -60,7 +60,7 @@ File _zipWith(
   files.forEach((path, bytes) {
     archive.addFile(ArchiveFile(path, bytes.length, bytes));
   });
-  final zipBytes = ZipEncoder().encode(archive)!;
+  final zipBytes = ZipEncoder().encode(archive);
   return File(p.join(dir.path, name))..writeAsBytesSync(zipBytes);
 }
 

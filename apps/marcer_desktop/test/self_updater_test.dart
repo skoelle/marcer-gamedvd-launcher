@@ -259,7 +259,7 @@ void main() {
       addFile('__MACOSX/MarcerGameDVDLauncher._bin', 'junk');
       addFile('data/._blob.bin', 'junk');
 
-      final zipBytes = ZipEncoder().encode(archive)!;
+      final zipBytes = ZipEncoder().encode(archive);
       final zipFile = File(p.join(sandbox.path, 'update.zip'))
         ..writeAsBytesSync(zipBytes);
       final out = Directory(p.join(sandbox.path, 'out'))..createSync();
@@ -284,18 +284,12 @@ void main() {
 
       addFile('App.framework/Versions/A/App', 'binary');
       // Symlink entries as produced by macOS `ditto` (S_IFLNK, target string
-      // as content), decoded into isSymbolicLink/nameOfLinkedFile.
+      // as content), decoded into symbolicLink.
       archive.addFile(
-        ArchiveFile('App.framework/App', 20, 'Versions/Current/App'.codeUnits)
-          ..isFile = false
-          ..isSymbolicLink = true
-          ..nameOfLinkedFile = 'Versions/Current/App',
+        ArchiveFile.symlink('App.framework/App', 'Versions/Current/App'),
       );
       archive.addFile(
-        ArchiveFile('App.framework/Versions/Current', 1, 'A'.codeUnits)
-          ..isFile = false
-          ..isSymbolicLink = true
-          ..nameOfLinkedFile = 'A',
+        ArchiveFile.symlink('App.framework/Versions/Current', 'A'),
       );
 
       final out = Directory(p.join(sandbox.path, 'links'))..createSync();

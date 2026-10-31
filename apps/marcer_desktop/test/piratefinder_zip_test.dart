@@ -87,7 +87,7 @@ void main() {
     final archive = Archive()
       ..addFile(ArchiveFile('game.msa', msa.length, msa))
       ..addFile(ArchiveFile('game.st', raw.length, raw));
-    final zip = ZipEncoder().encode(archive)!;
+    final zip = ZipEncoder().encode(archive);
     final tmp = Directory.systemTemp.createTempSync('pf_zip_test');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final path = '${tmp.path}/game.zip';
@@ -110,7 +110,7 @@ void main() {
     final archive = Archive()
       ..addFile(ArchiveFile('game.msa', msa.length, msa))
       ..addFile(ArchiveFile('game.st', raw.length, raw));
-    final zip = ZipEncoder().encode(archive)!;
+    final zip = ZipEncoder().encode(archive);
     final tmp = Directory.systemTemp.createTempSync('pf_zip_fp');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final path = '${tmp.path}/game.zip';

@@ -35,7 +35,7 @@ void main() {
       final bytes = utf8.encode(content);
       archive.addFile(ArchiveFile(path, bytes.length, bytes));
     });
-    final data = ZipEncoder().encode(archive)!;
+    final data = ZipEncoder().encode(archive);
     return (File('${tmp.path}/$name')..writeAsBytesSync(data)).path;
   }
 

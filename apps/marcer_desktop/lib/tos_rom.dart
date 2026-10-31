@@ -117,8 +117,7 @@ typedef TosRomProgress = void Function(String message, int done, int total);
   final pool = roms.isNotEmpty ? roms : files;
   pool.sort((a, b) => b.size.compareTo(a.size));
   final entry = pool.first;
-  final content = entry.content;
-  final bytes = content is List<int> ? content : const <int>[];
+  final bytes = entry.content;
   return (name: entry.name, bytes: bytes);
 }
 
