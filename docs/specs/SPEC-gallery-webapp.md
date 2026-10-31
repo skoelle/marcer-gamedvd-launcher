@@ -533,11 +533,11 @@ error body `{ "error": "<message>" }`.
   },
   "clusters": {
     "available": true,
-    "count": 29,
-    "groups": 280,
+    "count": 32,
+    "groups": 283,
     "edges": 243,
     "cross_edges": 40,
-    "generated_at": "2026-10-31T18:22:05Z",
+    "generated_at": "2026-10-31T18:47:37Z",
     "error": null
   }
 }
@@ -933,10 +933,10 @@ Filter/search/sort state is reflected in the URL query string
   desktop→`desktop`, everything else→`failed`-style badge showing the
   status label).
 - Name: game folder name (`folder`), below the badge (as today). Crew
-  cards use the group name; cluster cards use the cluster name plus the
-  root names, an `umbrella`/`independent` type badge,
-  group/ZIP/link/cross-link counts and a `CLUSTER` placeholder or root
-  preview.
+  cards use the group name; cluster cards use the cluster name plus an
+  `umbrella`/`independent` type badge, group/ZIP/link/cross-link counts and
+  a `CLUSTER` placeholder or root preview. Root crew names stay in the
+  hover/detail views rather than the card face.
 - Variant count chip when a folder has more than one ZIP (e.g. `×3`).
 - Preview image, or placeholder block when `screenshots` is false.
 - **Multi-variant grid** (no focus): when no crew/cracker filter is active

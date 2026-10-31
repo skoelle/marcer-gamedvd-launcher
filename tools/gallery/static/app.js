@@ -443,7 +443,6 @@ function renderGrid(cards) {
       const preview = c.preview
         ? `<img loading="lazy" src="${imgSrc(c.preview)}" alt="">`
         : `<div class="ph cluster-ph">CLUSTER</div>`;
-      const roots = (c.roots || []).map((r) => r.name).filter(Boolean).join(" · ");
       const counts = c.counts || {};
       const kind = c.kind === "independent" ? "independent"
         : (c.kind === "umbrella" ? "umbrella" : "cluster");
@@ -458,8 +457,7 @@ function renderGrid(cards) {
       return `<div class="card cluster-card" data-idx="${i}" data-v="0" tabindex="-1">` +
         `<span class="${kindClass}">${esc(kind)}</span>` +
         `<span class="chip">${counts.top || 0} TOP</span>` +
-        `<div class="name">${esc(c.name)}</div>` +
-        `<div class="crew-release-count">${esc(roots)}</div>` +
+        `<div class="name cluster-name">${esc(c.name)}</div>` +
         `<div class="cluster-meta">${esc(details)}</div>${preview}</div>`;
     }
     if (isCrewCard(c)) {

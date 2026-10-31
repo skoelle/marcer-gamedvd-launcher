@@ -109,13 +109,14 @@ Backend filter/card helpers use stdlib `unittest` only:
   hidden below two distinct crackers). Labels inferred from the ZIP name are
   marked `inferred`.
 - **Clusters**: the `clusters` tab lists the seeded crew clusters from
-  `crew-cluster.json` (Elite/Empire, Union, Atari Legend, Blade Runners,
-  D-Bug, The Corporation (UK), ICS, Automation, Aenigmatica,
-  Syndicate & ESC, Cynix, FOFT, Offensive System, Atariforce, Inner Circle,
-  Boss, The Alliance (DE), The Alliance (FR), Revolution,
-  The British Alliance, The Stranglers, Anti Lame Association, Euroswap,
-  The Collaboration, The Guild, The Heavy Killers, B.E.S.T., Phalanx,
-  The Confederation) with
+  `crew-cluster.json` (Elite/Empire, The Union, Atari Legend,
+  The Blade Runners, D-Bug, The Corporation (UK), ICS, Automation,
+  Aenigmatica, The Syndicate & ESC, Cynix, Federation of Free Traders,
+  Offensive System,
+  Atariforce, Inner Circle, B.O.S.S., The Alliance (DE), The Alliance (FR),
+  Revolution, The British Alliance, Vectronix, The Stranglers, CSS, Factory,
+  Anti Lame Association, Euroswap, The Collaboration, The Guild,
+  The Heavy Killers, B.E.S.T., Phalanx, The Confederation) with
   group/ZIP/link/cross-link counts, an `umbrella`/`independent` type badge
   and a root preview. Clicking a cluster opens an indented tree with
   `TOP`/`Non-TOP`/`external` badges, subgroup links,

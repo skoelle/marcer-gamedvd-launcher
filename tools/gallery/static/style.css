@@ -821,7 +821,6 @@ footer {
 }
 
 /* ---- crew clusters ---- */
-.cluster-card .crew-release-count { margin-bottom: 2px; }
 .cluster-card .cluster-meta {
   color: #789;
   font-size: 0.65em;
