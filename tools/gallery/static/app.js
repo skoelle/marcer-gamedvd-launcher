@@ -1159,11 +1159,43 @@ function crewSearchText(release) {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
+function crewCrackerOptions(releases) {
+  const byKey = new Map();
+  for (const release of releases) {
+    const label = String(release.cracked_by || "").trim();
+    if (!label) continue;
+    const key = label.toLowerCase();
+    const item = byKey.get(key);
+    if (item) item.count += 1;
+    else byKey.set(key, { value: label, count: 1 });
+  }
+  return [...byKey.values()]
+    .sort((a, b) => a.value.localeCompare(b.value));
+}
+
+function crewRenderCrackerOptions() {
+  const sel = $("crew-cracker");
+  const options = (crewView && crewView.crackerOptions) || [];
+  sel.hidden = options.length < 2;
+  sel.innerHTML = `<option value="any">Cracker: any</option>` +
+    options.map((option) =>
+      `<option value="${esc(option.value)}">${esc(
+        `Cracker: ${option.value} (${option.count})`)}</option>`).join("");
+  const wanted = crewView && crewView.cracker !== "any" &&
+    options.some((option) => option.value === crewView.cracker)
+    ? crewView.cracker : "any";
+  if (crewView) crewView.cracker = wanted;
+  sel.value = wanted;
+}
+
 function crewApplyFilter() {
   if (!crewView) return [];
   const query = crewView.query.trim().toLowerCase();
+  const wantedCracker = (crewView.cracker || "any").toLowerCase();
   const list = crewView.releases.filter((release) =>
-    !query || crewSearchText(release).includes(query));
+    (!query || crewSearchText(release).includes(query)) &&
+    (wantedCracker === "any" ||
+      String(release.cracked_by || "").trim().toLowerCase() === wantedCracker));
   switch (crewView.sort) {
     case "name_desc":
       list.sort((a, b) => crewTitleCompare(b, a));
@@ -1334,6 +1366,7 @@ function renderCrewBrowser() {
   if ($("crew-search").value !== crewView.query) {
     $("crew-search").value = crewView.query;
   }
+  crewRenderCrackerOptions();
   $("crew-sort").value = crewView.sort;
   crewView.filtered = crewApplyFilter();
   if (crewView.selected >= crewView.filtered.length) {
@@ -1357,6 +1390,8 @@ function showCrewBrowser(crew) {
     filtered: [],
     selected: 0,
     query: "",
+    cracker: "any",
+    crackerOptions: crewCrackerOptions(crew.releases || []),
     sort: "name_asc",
   };
   crewView.filtered = crewApplyFilter();
@@ -1803,6 +1838,13 @@ function wireEvents() {
       crewView.selected = 0;
       renderCrewBrowser();
     }, 120);
+  });
+  $("crew-cracker").addEventListener("change", () => {
+    if (!crewView) return;
+    crewView.cracker = $("crew-cracker").value;
+    crewView.selected = 0;
+    renderCrewBrowser();
+    $("crew-grid").focus();
   });
   $("crew-sort").addEventListener("change", () => {
     if (!crewView) return;

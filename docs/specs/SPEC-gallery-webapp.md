@@ -1090,6 +1090,11 @@ browser for that crew:
 - Header: crew name, `crew`/`individual cracker`, ZIP count, release count,
   aliases, release search, sort (`name asc` default, `name desc`, `year asc`,
   `year desc`), position indicator and close.
+- Cracker filter: a dropdown derived from the crew's releases (`cracked_by`
+  values, case-insensitive deduplication) with per-cracker release counts
+  (`Cracker: any`, `Cracker: Snake (170)`). It is hidden when fewer than two
+  distinct crackers are known. Joint credits (`Arioch & V8`) stay one entry;
+  selecting a value filters together with search and sort.
 - Left: responsive release screenshot grid (up to four columns) with
   status/kind/layer/ambiguous badges, title, year and credits; missing
   screenshots show a placeholder. `skipped_disk_n` releases keep their place
@@ -1416,10 +1421,12 @@ A conforming implementation satisfies all of the following.
       (boxscan editions/counts and manual labels/formats) when assets
       exist; it has no links, media or download/open controls.
 - [x] U11 The last `crews` tab shows crew cards/previews and opens the
-      release browser with search, `name asc` default sort (`name`/`year`
-      asc/desc) and keyboard navigation; `skipped_disk_n` hides its status
-      badge/row; a release opens the game lightbox as a standalone card and
-      closing returns to the browser. No launch/play control is present.
+      release browser with search, a cracker filter derived from the crew's
+      releases (hidden below two distinct crackers, with counts), `name asc`
+      default sort (`name`/`year` asc/desc) and keyboard navigation;
+      `skipped_disk_n` hides its status badge/row; a release opens the game
+      lightbox as a standalone card and closing returns to the browser. No
+      launch/play control is present.
 
 **Process**
 - [x] P1 Zero new packages in the repo `.venv` (stdlib only).
