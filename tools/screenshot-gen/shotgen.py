@@ -26,6 +26,7 @@ Paths come exclusively from environment variables (see run.sh and
 local/paths.env). This file contains no real data paths.
 """
 import argparse
+import fnmatch
 import gc
 import hashlib
 import json
@@ -68,6 +69,10 @@ DEFAULT_CONFIG = {
     # against the entry's game folder, e.g. "Abalone - Mono") are booted
     # with --mono --tos-res high (ST high res, 640x400). Empty = disabled.
     "mono_dir_suffix": "Mono",
+    # Highest-priority per-scope monitor overrides. Keys are
+    # "<scope>:<game folder>" or "<scope>:<path below the scope tree>" and
+    # may use shell globs; values are "mono" or "color".
+    "monitor_overrides": {},
     # Monitor selection from the gameinfo XLS export (MARCER_DATA_DIR/
     # gameinfo/games-<scope>.json, read-only). Rules are per scope:
     #   mono_if_all   - mono when every variant's screen_format equals one
@@ -290,6 +295,15 @@ def entry_card_key(rel: str, scope: dict):
     return None
 
 
+def entry_path_key(rel: str, scope: dict) -> str:
+    """Return the path below the scope tree (posix spelling)."""
+    for tree in scope.get("trees") or []:
+        prefix = tree.rstrip("/") + "/"
+        if rel[:len(prefix)].lower() == prefix.lower():
+            return rel[len(prefix):]
+    return rel
+
+
 def load_screen_formats(P: dict, scope_name: str):
     """Load ``games-<scope>.json`` into a ``(letter, folder)`` mapping.
 
@@ -343,6 +357,25 @@ def resolve_monitor(cfg: dict, scope: dict, rel: str, screen_formats: dict):
     folder = key[1] if key else Path(rel).parent.name
     fmt_vals = screen_formats.get(key) if key else None
 
+    overrides = cfg.get("monitor_overrides") or {}
+    if isinstance(overrides, dict) and overrides:
+        below = entry_path_key(rel, scope)
+        values = [
+            f"{scope_name}:{folder}",
+            f"{scope_name}:{below}",
+            f"{scope_name}:{rel}",
+        ]
+        parts = below.split("/", 1)
+        if len(parts) == 2:
+            values.append(f"{scope_name}:{parts[1]}")
+        for pattern, value in overrides.items():
+            mode = str(value or "").strip().lower()
+            if mode not in ("mono", "color"):
+                continue
+            pat = str(pattern or "").strip().casefold()
+            if any(fnmatch.fnmatchcase(v.casefold(), pat) for v in values):
+                return mode, "override"
+
     if fmt_vals is not None and rules:
         mono_if_all = [_norm_screen_format(v)
                        for v in (rules.get("mono_if_all") or [])]
@@ -386,27 +419,34 @@ def build_monitor_map(cfg: dict, P: dict, scope: dict, entries):
     if has_rules:
         formats, source = load_screen_formats(P, scope["name"])
     mapping = {}
-    counts = {"mono": 0, "color": 0, "rules": 0, "suffix": 0, "default": 0}
+    counts = {"mono": 0, "color": 0, "rules": 0, "suffix": 0,
+              "override": 0, "default": 0}
     for entry in entries:
         mode, why = resolve_monitor(cfg, scope, entry["rel"], formats)
         mapping[entry["rel"]] = (mode, why)
         counts[mode] += 1
-        if why.startswith("screen_format"):
+        if why == "override":
+            counts["override"] += 1
+        elif why.startswith("screen_format"):
             counts["rules"] += 1
         elif why == "folder-suffix":
             counts["suffix"] += 1
         else:
             counts["default"] += 1
-    if not has_rules:
+    if not has_rules and not counts["override"]:
         return mapping, ""
     if not formats:
-        return mapping, (f"screen_format monitor[{scope['name']}]: {source}; "
-                         f"using folder suffix only")
+        return mapping, (
+            f"monitor[{scope['name']}]: {counts['mono']} mono, "
+            f"{counts['color']} color (overrides {counts['override']}; "
+            f"gameinfo {source or 'not loaded'}, suffix "
+            f"{counts['suffix']}, default {counts['default']})"
+        )
     return mapping, (
         f"screen_format monitor[{scope['name']}] from {source}: "
         f"{counts['mono']} mono, {counts['color']} color "
-        f"(rules {counts['rules']}, suffix {counts['suffix']}, "
-        f"default {counts['default']})")
+        f"(overrides {counts['override']}, rules {counts['rules']}, "
+        f"suffix {counts['suffix']}, default {counts['default']})")
 
 
 # --------------------------------------------------------------------------
@@ -823,8 +863,8 @@ def _fat12_files(raw: bytes):
             attr = e[11]
             if attr & 0x08:
                 continue
-            name = e[0:8].decode("latin1").rstrip()
-            ext = e[8:11].decode("latin1").rstrip()
+            name = e[0:8].decode("cp437").rstrip()
+            ext = e[8:11].decode("cp437").rstrip()
             if not name or name in (".", ".."):
                 continue
             full = name + ("." + ext if ext else "")
@@ -872,6 +912,16 @@ def _floppy_program(raw: bytes):
     return pool[0][0]
 
 
+def _atari_cli_path(name: str) -> str:
+    """Encode an Atari filename for the Hatari ``--auto`` argument.
+
+    FAT names are decoded from code page 437. The Atari character for e.g.
+    ``Ä`` is a single byte (0x8E); ``surrogateescape`` makes subprocess pass
+    that raw byte instead of its UTF-8 sequence.
+    """
+    return name.encode("cp437", "replace").decode("utf-8", "surrogateescape")
+
+
 def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str):
     """Return ``(mode, args, program)`` for ``--retry-desktop-auto``.
 
@@ -912,7 +962,11 @@ def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str):
             _extract_member(zf, name, dest)
             args += [f"--disk-{label}", str(dest)]
     atari_path = "A:\\" + program.replace("/", "\\")
-    return "floppy", args + ["--auto", atari_path], atari_path
+    return (
+        "floppy",
+        args + ["--auto", _atari_cli_path(atari_path)],
+        atari_path,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -3021,7 +3075,10 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                 log("auto retry: no launchable program found")
                 return
             boot_kind, boot_args = auto_mode, auto_args
-            log(f"auto retry: {boot_kind} {boot_args}")
+            display_args = list(boot_args)
+            if auto_program and "--auto" in display_args:
+                display_args[display_args.index("--auto") + 1] = auto_program
+            log(f"auto retry: {boot_kind} {display_args}")
         elif machine == "falcon" or boot_mode in ("auto", "gemdos"):
             boot_kind, boot_args = prepare_boot(
                 stage, staged, Path(rel).stem)

@@ -43,6 +43,14 @@
     }
   },
   "mono_dir_suffix": "Mono",
+  "monitor_overrides": {
+    "pd:Tartan - Col and Mon": "mono",
+    "pd:Ti Shoot - Col and Mon": "mono",
+    "pd:Tic Tac Toe Game": "mono",
+    "pd:Turme von Hanoi - Col and Mon": "mono",
+    "pd:Tuerme von Hanoi - Col and Mon": "mono",
+    "pd:Turme von Hanoi - Fantisoft": "mono"
+  },
   "screen_format_monitor": {
     "utils": {
       "default": "mono",

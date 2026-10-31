@@ -657,6 +657,16 @@ leftover logs and empty output directories.
 
 Monitor mode is resolved per entry, in this order:
 
+0. **Explicit monitor overrides** (`monitor_overrides`, highest priority).
+   Keys are `"<scope>:<game folder>"`, `"<scope>:<path below the scope
+   tree>"` or `"<scope>:<path without the letter directory>"` and may use
+   shell globs; values are `"mono"` or `"color"`. Example:
+   ```json
+   "monitor_overrides": {
+     "pd:Tartan - Col and Mon": "mono",
+     "pd:Tiny quest/Tiny Quest v2*": "mono"
+   }
+   ```
 1. **Gameinfo `screen_format` rules** from `MARCER_DATA_DIR/gameinfo/games-<scope>.json`
    (read-only, optional). The game folder is matched below the scope tree,
    so ZIPs in `Original/` and other sub-directories still use their game
@@ -719,6 +729,7 @@ Scope configuration:
                                               "--cpuclock", "16"] } }
   },
   "mono_dir_suffix": "Mono",
+  "monitor_overrides": {},
   "screen_format_monitor": {
     "utils": {
       "default": "mono",

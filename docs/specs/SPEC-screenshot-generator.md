@@ -329,6 +329,11 @@ performed. The section is index-only.
 
 Monitor mode is resolved per entry before Hatari starts. The precedence is:
 
+0. **Explicit overrides** (`monitor_overrides`, highest priority). Keys use
+   `"<scope>:<game folder>"`, `"<scope>:<path below the scope tree>"` or
+   `"<scope>:<path without the letter directory>"`, matched
+   case-insensitively with shell globs; values are `mono` or `color`
+   (`override` in the per-entry log). Invalid values are ignored.
 1. **Gameinfo `screen_format` rules** (optional, read-only) from
    `MARCER_DATA_DIR/gameinfo/games-<scope>.json`. The entry is matched by its
    `(letter, folder)` key below the selected scope tree (same grouping as
@@ -354,7 +359,8 @@ Monitor mode is resolved per entry before Hatari starts. The precedence is:
    folder `1000 Bornes - Col and Mon` does not match (ends with `Mon`).
 3. Otherwise color.
 
-A gameinfo rule wins over a conflicting suffix. Missing `MARCER_DATA_DIR`
+An explicit override wins over a conflicting gameinfo rule; a gameinfo rule
+wins over a conflicting suffix. Missing `MARCER_DATA_DIR`
 or `MARCER_DATA_DIR/gameinfo/games-<scope>.json` is not an error: the pass
 logs a warning and uses
 the suffix rule. The utils missing-folder default only applies when the
@@ -605,7 +611,9 @@ the image/archive is scanned before boot:
   `AUTO/` program wins, else the largest launchable
   `.PRG`/`.TOS`/`.TTP`/`.APP`; Hatari gets
   `--disk-a <image> --auto "A:\<path>"` (drive B included for a second
-  image). Self-extracting archives (LZH/STZip SFX, which only unpack onto the
+  image). FAT names are decoded as CP437 and passed to Hatari as raw Atari
+  bytes (`surrogateescape`), so umlauts such as `Ä` (0x8E) match the GEMDOS
+  path instead of being sent as UTF-8. Self-extracting archives (LZH/STZip SFX, which only unpack onto the
   write-protected disk) are skipped. The cluster-chain walk stops at the
   first repeated cluster (hard cap 4096) and directory recursion is bounded
   (depth 32 plus a visited-set), because damaged disks can contain a cyclic
@@ -1525,7 +1533,9 @@ global one; the
 default scope maps to `index.json`, every other scope to
 `index-<name>.json`, section 4.4; legacy `scope_trees` is still accepted
 when no `scopes` entry exists), `mono_dir_suffix` (folder suffix that
-triggers `--mono --tos-res high`, section 4.6), `screen_format_monitor`
+triggers `--mono --tos-res high`, section 4.6), `monitor_overrides`
+(explicit per-scope mono/color overrides with the highest precedence,
+section 4.6), `screen_format_monitor`
 (per-scope gameinfo rules that win over the suffix, section 4.6),
 `tos_default` +
 `tos_images` (version label → environment variable of its ROM image,
@@ -1776,8 +1786,9 @@ A conforming implementation satisfies all of the following.
       then scrolled down (`click_retry.scroll_attempts` times, its scrollbar
       down arrow) so hidden icons become visible; both gadget positions are
       detected from the window frame.
-- [ ] P8 Monitor mode is resolved before boot: gameinfo `screen_format`
-      rules (utils "mono unless noted", pd "all High") win over the
+- [ ] P8 Monitor mode is resolved before boot: explicit
+      `monitor_overrides` win over gameinfo `screen_format` rules (utils
+      "mono unless noted", pd "all High"), which win over the
       case-insensitive `mono_dir_suffix` folder check; mono entries boot
       with `--mono --tos-res high`, and `monitor: mono` is recorded in index
       and metadata. Missing gameinfo falls back to the suffix. The rules
