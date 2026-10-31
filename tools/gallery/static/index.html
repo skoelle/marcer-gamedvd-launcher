@@ -22,6 +22,7 @@
   <button data-section="magazine" type="button">magazines</button>
   <button data-section="falcon" type="button">falcon</button>
   <button data-section="crew" type="button">crews</button>
+  <button data-section="cluster" type="button">clusters</button>
 </nav>
 
 <div class="banner" id="banner" hidden></div>
@@ -119,7 +120,33 @@
           <tr><td><kbd>/</kbd></td><td>focus the release filter</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>clear the filter / close the crew browser</td></tr>
         </table>
+        <h3 style="margin-top:14px">Cluster browser</h3>
+        <table>
+          <tr><td><kbd>Esc</kbd></td><td>close the cluster detail</td></tr>
+          <tr><td>click crew</td><td>open that crew's releases</td></tr>
+        </table>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="cluster-lightbox" id="cluster-lightbox" hidden role="dialog" aria-modal="true" aria-label="Crew cluster">
+  <div class="cluster-inner">
+    <div class="cluster-header">
+      <div class="cluster-heading">
+        <strong id="cluster-title"></strong>
+        <span class="cluster-sub" id="cluster-sub"></span>
+      </div>
+      <div class="cluster-controls">
+        <button id="cluster-external-toggle" type="button" hidden
+                aria-pressed="false"
+                title="Show external groups without a local match">show external</button>
+        <button id="cluster-close" type="button" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <div class="cluster-body">
+      <div class="cluster-tree" id="cluster-tree" tabindex="0"></div>
+      <aside class="cluster-side" id="cluster-side"></aside>
     </div>
   </div>
 </div>

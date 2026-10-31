@@ -18,7 +18,8 @@ specification.
     `MARCER_DATA_DIR/gameinfo/`: `games-*.json` from `tools/gameinfo-gen`
     (adds metadata facets and hover info to the index-backed cards) plus the
     optional `crews.json`/`crew-images.json` from `tools/crew-analysis` for
-    the Crews tab
+    the Crews tab, plus the manually created `crew-cluster.json` for the
+    Clusters tab
   - `MARCER_ROOT_DIR` / `MARCER_PATCH_DIR` (optional): overlay trees for
     metadata-only boxscan/manual counts in the lightbox (read-only; no media
     is served, extracted or downloaded)
@@ -53,10 +54,11 @@ Backend filter/card helpers use stdlib `unittest` only:
 ## Features & Keyboard
 
 - **Sections**: tabs for games (cracked) / pd / utils / magazines / falcon /
-  crews (a tab appears when its index or gameinfo data exists; `crews`
-  requires `crews.json`). Each game section joins its own screenshot index
-  with the matching `games-*.json`; the `magazines` and `falcon` sections
-  are index-only (`index-magazine.json`, `index-falcon.json`; no gameinfo).
+  crews / clusters (a tab appears when its index or gameinfo data exists;
+  `crews` requires `crews.json`, `clusters` requires `crew-cluster.json`).
+  Each game section joins its own screenshot index with the matching
+  `games-*.json`; the `magazines` and `falcon` sections are index-only
+  (`index-magazine.json`, `index-falcon.json`; no gameinfo).
 - **Filters**: status preset (including the strict `desktop text` /
   `desktop black` ZIP-level presets), search, letter nav, publisher/crew/
   cracker/language/year facets, RAW/PASTI/Boxscan tri-state flags, TOS/Bad
@@ -106,6 +108,19 @@ Backend filter/card helpers use stdlib `unittest` only:
   built only from the crackers known in that crew's releases (with counts;
   hidden below two distinct crackers). Labels inferred from the ZIP name are
   marked `inferred`.
+- **Clusters**: the `clusters` tab lists the seven seeded crew clusters from
+  `crew-cluster.json` (Elite/Empire, Blade Runners, The Corporation (UK),
+  Syndicate & ESC, Union, Aenigmatica, Anti Lame Association) with
+  group/link/cross-link counts and a root preview. Clicking a cluster opens
+  an indented tree with `TOP`/`excluded`/`external` badges, subgroup links,
+  overlaps and cross-cluster edges. External branches without any local
+  group behind them are hidden by default; the header toggle (or
+  `external=1` in the URL) shows them and the header reports how many are
+  hidden. Local groups show a 100×62 preview thumbnail (from
+  `crews.json`/`crew-images.json`); external groups use an `EXT` placeholder.
+  Clicking a local thumbnail or name opens the existing crew release browser;
+  external groups are static. Missing or unreadable `crew-cluster.json` only
+  hides the Clusters tab.
 - **Local asset metadata**: the lightbox side panel shows boxscan/manual
   counts and edition/manual labels for the selected card when
   `MARCER_ROOT_DIR` is configured. It reads directory listings and ZIP

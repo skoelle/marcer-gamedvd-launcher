@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-TOOL_VERSION = "0.4.1"
+TOOL_VERSION = "0.5.0"
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
@@ -80,6 +80,7 @@ MAX_ZIP_ENTRIES = 10000
 GAMEINFO_SUBDIR = "gameinfo"
 CREW_FILE = "crews.json"
 CREW_IMAGES_FILE = "crew-images.json"
+CREW_CLUSTER_FILE = "crew-cluster.json"
 
 # XLS placeholders that are not scene groups (normalized).
 PLACEHOLDER_GROUPS = frozenset({"original", "unknown", "no 1 and no 2"})
@@ -960,6 +961,12 @@ class DataStore:
         self.crew_groups = {}
         self.crew_generated_at = ""
         self.crew_error = None
+        self.clusters = []
+        self.cluster_by_id = {}
+        self.cluster_generated_at = ""
+        self.cluster_error = None
+        self.cluster_edge_count = 0
+        self.cluster_cross_edge_count = 0
         self._crew_total_groups = 0
         self._crew_visible_groups = 0
         self._crew_release_count = 0
@@ -990,7 +997,7 @@ class DataStore:
                     self.data / "manifest.json")
             except OSError:
                 stamps["manifest"] = None
-            for name in (CREW_FILE, CREW_IMAGES_FILE):
+            for name in (CREW_FILE, CREW_IMAGES_FILE, CREW_CLUSTER_FILE):
                 try:
                     stamps[f"crew_{name}"] = os.path.getmtime(
                         self.data / name)
@@ -1082,6 +1089,7 @@ class DataStore:
                        for kind in SECTION_INDEX_NAMES}
         self._cracked_tree = section_trees.get("cracked", "")
         self._load_crews()
+        self._load_clusters()
         self._attach_release_labels()
 
         coverage = {}
@@ -1174,6 +1182,22 @@ class DataStore:
             "releases": self._crew_release_count,
             "generated_at": self.crew_generated_at,
             "error": self.crew_error,
+        }
+        self.meta["sections"]["cluster"] = {
+            "games": 0,
+            "cards": len(self.clusters),
+            "with_screenshot": sum(
+                1 for c in self.clusters if c.get("preview")),
+            "no_info": 0,
+        }
+        self.meta["clusters"] = {
+            "available": bool(self.clusters),
+            "count": len(self.clusters),
+            "groups": sum(int(c.get("groups") or 0) for c in self.clusters),
+            "edges": self.cluster_edge_count,
+            "cross_edges": self.cluster_cross_edge_count,
+            "generated_at": self.cluster_generated_at,
+            "error": self.cluster_error,
         }
 
     def _load_crews(self):
@@ -1272,6 +1296,161 @@ class DataStore:
                              else prefix + rel)
                 for key in keys:
                     self._release_labels[key] = label
+
+    def _load_clusters(self):
+        self.clusters = []
+        self.cluster_by_id = {}
+        self.cluster_generated_at = ""
+        self.cluster_error = None
+        self.cluster_edge_count = 0
+        self.cluster_cross_edge_count = 0
+        if not self.data:
+            self.cluster_error = "gameinfo unavailable"
+            return
+        path = self.data / CREW_CLUSTER_FILE
+        if not path.is_file():
+            self.cluster_error = f"{CREW_CLUSTER_FILE} not found"
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as exc:  # noqa: BLE001
+            self.cluster_error = f"{CREW_CLUSTER_FILE}: {exc}"
+            return
+        raw_clusters = data.get("clusters") or []
+        if not isinstance(raw_clusters, list):
+            self.cluster_error = f"{CREW_CLUSTER_FILE}: clusters is not a list"
+            return
+        trees = data.get("trees") or {}
+        if not isinstance(trees, dict):
+            trees = {}
+        all_edges = data.get("edges") or []
+        if not isinstance(all_edges, list):
+            all_edges = []
+        all_edges = [edge for edge in all_edges if isinstance(edge, dict)]
+        self.cluster_edge_count = len(all_edges)
+        self.cluster_cross_edge_count = sum(
+            1 for edge in all_edges if edge.get("cross_cluster") is True)
+        preview_cache = {}
+
+        def preview_for(local_id):
+            local_id = str(local_id or "").strip()
+            if not local_id:
+                return None
+            if local_id not in preview_cache:
+                local = self.crew_groups.get(local_id)
+                preview_cache[local_id] = (
+                    self._crew_preview(local) if local is not None else None)
+            return preview_cache[local_id]
+
+        for raw in raw_clusters:
+            if not isinstance(raw, dict):
+                continue
+            cluster_id = str(raw.get("id") or "").strip()
+            name = str(raw.get("name") or "").strip()
+            if not cluster_id or not name or cluster_id in self.cluster_by_id:
+                continue
+            groups = [g for g in (raw.get("groups") or [])
+                      if isinstance(g, dict)]
+            raw_edges = raw.get("edges")
+            if isinstance(raw_edges, list):
+                edges = [e for e in raw_edges if isinstance(e, dict)]
+            else:
+                edges = [
+                    edge for edge in all_edges
+                    if isinstance(edge, dict)
+                    and cluster_id in (edge.get("clusters") or [])
+                ]
+            raw_roots = raw.get("roots") or []
+            roots = [
+                {"name": str(item.get("name") or "").strip()}
+                for item in raw_roots
+                if isinstance(item, dict) and str(item.get("name") or "").strip()
+            ]
+            counts = raw.get("counts")
+            if not isinstance(counts, dict):
+                counts = {}
+            by_name = {
+                str(g.get("name") or "").strip().lower(): g for g in groups
+            }
+            for group in groups:
+                group["preview"] = preview_for(group.get("local_id"))
+            root_names = {item["name"].lower() for item in roots}
+            root_group = next(
+                (g for g in groups
+                 if str(g.get("name") or "").strip().lower() in root_names
+                 and g.get("local_id")), None)
+            tree = trees.get(cluster_id)
+            if isinstance(tree, dict):
+                def enrich_tree(node):
+                    if not isinstance(node, dict):
+                        return
+                    local_id = str(node.get("local_id") or "").strip()
+                    if not local_id:
+                        match = by_name.get(
+                            str(node.get("name") or "").strip().lower())
+                        if match:
+                            local_id = str(match.get("local_id") or "").strip()
+                    node["preview"] = preview_for(local_id)
+                    for child in node.get("children") or []:
+                        enrich_tree(child)
+                enrich_tree(tree)
+
+            def first_tree_preview(node):
+                if not isinstance(node, dict):
+                    return None
+                if node.get("preview"):
+                    return node["preview"]
+                for child in node.get("children") or []:
+                    found = first_tree_preview(child)
+                    if found:
+                        return found
+                return None
+
+            preview = tree.get("preview") if isinstance(tree, dict) else None
+            if not preview and isinstance(tree, dict):
+                preview = first_tree_preview(tree)
+            if not preview and root_group:
+                preview = preview_for(root_group.get("local_id"))
+            cross_edges = sum(
+                1 for edge in edges if edge.get("cross_cluster") is True)
+            summary = {
+                "id": cluster_id,
+                "name": name,
+                "roots": roots,
+                "counts": counts,
+                "groups": len(groups),
+                "edges": len(edges),
+                "cross_edges": cross_edges,
+                "preview": preview,
+            }
+            overlaps = [
+                {
+                    "name": str(group.get("name") or ""),
+                    "status": str(group.get("status") or ""),
+                    "clusters": list(group.get("clusters") or []),
+                }
+                for group in groups
+                if isinstance(group.get("clusters"), list)
+                and len(group["clusters"]) > 1
+            ]
+            overlaps.sort(key=lambda item: item["name"].lower())
+            cluster = dict(raw)
+            cluster.update({
+                "id": cluster_id,
+                "name": name,
+                "roots": roots,
+                "counts": counts,
+                "groups": groups,
+                "edges": edges,
+                "tree": tree if isinstance(tree, dict) else None,
+                "overlaps": overlaps,
+            })
+            self.cluster_by_id[cluster_id] = cluster
+            self.clusters.append(summary)
+        self.cluster_generated_at = str(data.get("generated_at") or "")
+        if not self.clusters:
+            self.cluster_error = "no clusters in file"
 
     def _attach_release_labels(self):
         """Attach inferred release labels (from crews.json) to cracked cards."""
@@ -1628,6 +1807,34 @@ def _public_crew_card(card):
     }
 
 
+def _public_cluster_card(cluster):
+    return {
+        "id": cluster["id"],
+        "name": cluster["name"],
+        "roots": cluster.get("roots") or [],
+        "counts": cluster.get("counts") or {},
+        "groups": int(cluster.get("groups") or 0),
+        "edges": int(cluster.get("edges") or 0),
+        "cross_edges": int(cluster.get("cross_edges") or 0),
+        "preview": cluster.get("preview"),
+        "cluster": True,
+    }
+
+
+def _public_cluster_detail(cluster, generated_at=""):
+    return {
+        "id": cluster["id"],
+        "name": cluster["name"],
+        "roots": cluster.get("roots") or [],
+        "counts": cluster.get("counts") or {},
+        "groups": cluster.get("groups") or [],
+        "edges": cluster.get("edges") or [],
+        "tree": cluster.get("tree"),
+        "overlaps": cluster.get("overlaps") or [],
+        "generated_at": generated_at,
+    }
+
+
 def _public_card(card, section):
     out = {
         "id": card["id"],
@@ -1704,6 +1911,9 @@ class GalleryHandler(BaseHTTPRequestHandler):
             if path == "/api/crews":
                 self.store.reload()
                 return self._crews()
+            if path == "/api/clusters":
+                self.store.reload()
+                return self._clusters()
             if path.startswith("/img/"):
                 return self._image(unquote(path[len("/img/"):]))
             return self._error(404, "not found")
@@ -1776,6 +1986,25 @@ class GalleryHandler(BaseHTTPRequestHandler):
             "offset": offset,
             "limit": limit,
             "cards": [_public_crew_card(c) for c in page],
+        })
+
+    def _clusters(self):
+        params = self._params()
+        cluster_id = (params.get("id") or "").strip()
+        if cluster_id:
+            cluster = self.store.cluster_by_id.get(cluster_id)
+            if cluster is None:
+                return self._error(404, "cluster not found")
+            return self._json(_public_cluster_detail(
+                cluster, self.store.cluster_generated_at))
+        return self._json({
+            "total": len(self.store.clusters),
+            "generated_at": self.store.cluster_generated_at,
+            "error": self.store.cluster_error,
+            "clusters": [
+                _public_cluster_card(cluster)
+                for cluster in self.store.clusters
+            ],
         })
 
     def _local_assets(self):

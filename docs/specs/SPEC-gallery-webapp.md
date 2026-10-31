@@ -107,7 +107,7 @@ Read from `local/paths.env` (git-ignored), exactly like the other tools:
 | Variable | Required | Meaning |
 |---|---|---|
 | `MARCER_OUT_DIR` | **yes** | screenshot output root: section indices + mirrored PNG tree |
-| `MARCER_DATA_DIR` | no | data directory; gameinfo metadata is read from `MARCER_DATA_DIR/gameinfo/`: `games-cracked.json`, `games-pd.json`, `games-utils.json`, `manifest.json`, optional `crews.json`/`crew-images.json` |
+| `MARCER_DATA_DIR` | no | data directory; gameinfo metadata is read from `MARCER_DATA_DIR/gameinfo/`: `games-cracked.json`, `games-pd.json`, `games-utils.json`, `manifest.json`, optional `crews.json`/`crew-images.json`/`crew-cluster.json` |
 | `MARCER_ROOT_DIR` | no | game root layer; used read-only for boxscan/manual metadata |
 | `MARCER_PATCH_DIR` | no | patch layer; merged read-only for boxscan/manual metadata |
 
@@ -213,7 +213,7 @@ Rules:
 - The tab shows all groups sorted by ZIP count/name (no cap). The **Type**
   dropdown filters groups by `kind` (`any`/`crew`/`cracker`), the
   **Ranking** dropdown by the curated TOP selection (`any`, `TOP only`,
-  `No TOP`). Current real data (2026-10-30): 877 groups, 8,499 releases.
+  `No TOP`). Current real data (2026-10-31): 791 groups, 8,499 releases.
 - `crew-images.json` (optional): curated card image per crew keyed by
   name/id, with `rel` (release ZIP index path) and `name` (image basename
   below the screenshot archive). Missing files fall back to the best release
@@ -222,7 +222,30 @@ Rules:
   `crews.available: false`, `crews.error` set); it never aborts the catalog
   load.
 
-### 2.5 Design reference
+### 2.5 Crew cluster data (`<DATA>/crew-cluster.json`)
+
+*(manually created cluster file; the gameinfo copy intentionally omits
+Demozoo IDs)*
+
+- `crew-cluster.json` (required for the Clusters tab): `schema`,
+  `generated_at`, `clusters[]`, `edges[]` and `trees{}`.
+- Each cluster carries `id`, `name`, `roots[]` (objects with `name`),
+  `counts` (`groups`, `top`, `excluded`, `ambiguous`, `external`) and
+  `groups[]` with `name`, optional `local_id`/`zips`/`preview`, `status`
+  (`top`/`excluded`/`external`/`ambiguous`) and `clusters[]` (overlap).
+  `preview` is joined server-side from `crews.json`/`crew-images.json` and is
+  `null` for external groups.
+- `edges[]` are global: `from` (subgroup), `to` (parent),
+  `type: "subgroup_of"`, `current`, `clusters[]` and `cross_cluster`.
+- `trees.<cluster id>` is the nested, deduplicated spanning tree used by the
+  UI; multiple parent links remain in `edges[]`.
+- The gameinfo file has no `demozoo_id`/`from_demozoo_id`/`to_demozoo_id`.
+  A local audit copy may keep them.
+- Missing/unreadable `crew-cluster.json` hides the Clusters tab
+  (`/api/meta` `clusters.available: false`, `clusters.error` set); it never
+  aborts the catalog.
+
+### 2.6 Design reference
 
 The visual design derives from the former `GALLERY_TEMPLATE` static gallery
 (dark theme `#14181c`, card grid, badges, filter bar) that this app replaced;
@@ -418,6 +441,7 @@ error body `{ "error": "<message>" }`.
 | `/api/entries` | filtered/sorted/paginated cards (section 5.3) |
 | `/api/local-assets` | boxscan/manual metadata for one card (section 5.5) |
 | `/api/crews` | crew cards / one crew with releases (section 5.6) |
+| `/api/clusters` | crew cluster cards / one cluster with tree and edges (section 5.7) |
 | `/img/<rel path>` | original preview/candidate PNG (section 5.4) |
 
 ### 5.2 `/api/meta`
@@ -475,7 +499,7 @@ error body `{ "error": "<message>" }`.
   "show_candidates": true,
   "default_status": "with_screenshot",
   "generated_at": "…",
-  "tool_version": "0.4.0",
+  "tool_version": "0.5.0",
   "local_assets": true,
   "crews": {
     "available": true,
@@ -485,6 +509,15 @@ error body `{ "error": "<message>" }`.
     "kinds": { "crew": 45, "cracker": 15 },
     "releases": 7786,
     "generated_at": "2026-10-24T14:08:32Z",
+    "error": null
+  },
+  "clusters": {
+    "available": true,
+    "count": 7,
+    "groups": 105,
+    "edges": 99,
+    "cross_edges": 11,
+    "generated_at": "2026-10-31T11:15:37Z",
     "error": null
   }
 }
@@ -515,7 +548,11 @@ error body `{ "error": "<message>" }`.
   statistics bar uses for the `N folders`, `M with screenshot` and
   `N without gameinfo` segments; the cracked
   `coverage.matched_folders` figure stays cracked-only. `sections.crew`
-  carries the visible crew-card count instead (no index/status counts).
+  carries the visible crew-card count instead (no index/status counts);
+  `sections.cluster` carries the cluster-card count.
+- `clusters` describes the optional Clusters tab: `available`, cluster
+  `count`, total `groups` (sum of the per-cluster group lists), unique
+  `edges`, `cross_edges`, `generated_at` and an optional `error`.
 - `crews` describes the optional Crews tab: `available`, the number of
   shown `groups` (all groups), `visible_groups` (all groups; `excluded` is
   ignored by the gallery), `total_groups` (all artifact groups), `kinds`
@@ -767,7 +804,44 @@ Semantics:
 - No media/body data is returned; previews are existing screenshot PNGs
   served through `/img/`.
 
-### 5.7 Error behavior
+### 5.7 `/api/clusters`
+
+`GET /api/clusters` returns the Clusters-tab cards:
+
+```json
+{
+  "total": 4,
+  "generated_at": "2026-10-31T11:04:03Z",
+  "error": null,
+  "clusters": [
+    {
+      "id": "elite",
+      "name": "Elite / Empire",
+      "roots": [{"name": "Elite"}],
+      "counts": {"groups": 24, "top": 9, "excluded": 3,
+                 "ambiguous": 0, "external": 12},
+      "groups": 24,
+      "edges": 27,
+      "cross_edges": 6,
+      "preview": "Title Sorted/.../Elite.png",
+      "cluster": true
+    }
+  ]
+}
+```
+
+`GET /api/clusters?id=<cluster id>` returns one cluster:
+
+- `id`, `name`, `roots[]`, `counts`, `generated_at`
+- `groups[]` (`name`, optional `local_id`/`zips`/`preview`, `status`,
+  `clusters[]`)
+- `edges[]` relevant to the cluster (`from`, `to`, `type`,
+  `current`, `clusters[]`, `cross_cluster`)
+- `tree` (nested spanning tree with the same `preview` field, or `null`)
+- `overlaps[]` (`name`, `status`, `clusters[]` for groups in >1 cluster)
+- `404` for an unknown cluster id.
+
+### 5.8 Error behavior
 
 | Condition | Response |
 |---|---|
@@ -808,8 +882,9 @@ lightbox, whose side panel carries the same metadata.
 
 1. **Header**: title + statistics bar (section 6.7).
 2. **Section tabs**: `games` (cracked) | `pd` | `utils` | `magazines` |
-   `falcon` | `crews` (last; a tab is hidden when its section has no cards
-   or, for `crews`, no `crews.json`; labels match the desktop app's tabs).
+   `falcon` | `crews` | `clusters` (last; a tab is hidden when its section
+   has no cards or, for `crews`, no `crews.json`, and for `clusters` no
+   `crew-cluster.json`; labels match the desktop app's tabs).
 3. **Control bar**: search input, status select, facet filters
    (publisher/crew/cracker/language/year/flags/tos), one **combined
    sort+order dropdown** with the ten entries `<key> asc|desc`
@@ -817,7 +892,8 @@ lightbox, whose side panel carries the same metadata.
    URL keeps the separate `sort`/`order` parameters), letter navigation
    row (A–Z + `0-9` + `Any`). In the `crews` tab only search, clear, the
    **Type** dropdown and the **Ranking** dropdown are shown; the crew cards
-   are already ordered by ZIP count.
+   are already ordered by ZIP count. In the `clusters` tab only search and
+   clear are shown; the seven cluster cards keep the file order.
 4. **Grid**: grouped cards (section 6.4), paginated.
 5. **Pagination**: page indicator + prev/next + page-size-constant
    (`offset/limit`); keyboard PageUp/PageDown works on the grid (6.6).
@@ -833,7 +909,10 @@ Filter/search/sort state is reflected in the URL query string
 - Badge: `display_status` with the colors above (done→`game` badge,
   desktop→`desktop`, everything else→`failed`-style badge showing the
   status label).
-- Name: game folder name (`folder`), below the badge (as today).
+- Name: game folder name (`folder`), below the badge (as today). Crew
+  cards use the group name; cluster cards use the cluster name plus the
+  root names, group/link/cross-link counts and a `CLUSTER` placeholder or
+  root preview.
 - Variant count chip when a folder has more than one ZIP (e.g. `×3`).
 - Preview image, or placeholder block when `screenshots` is false.
 - **Multi-variant grid** (no focus): when no crew/cracker filter is active
@@ -888,6 +967,8 @@ Filter/search/sort state is reflected in the URL query string
 - Crew cards show kind (`crew`/individual cracker), ZIP count, release
   count and aliases; groups in the desktop Crews-tab selection
   (`excluded == false`) carry a green `TOP` badge.
+- Cluster cards show roots, group/link/cross-link counts and the
+  `TOP`/excluded/external breakdown.
 - Panels never cover the whole grid; they disappear on mouse leave, key
   press and when the grid scrolls under them. Full details always live in
   the lightbox.
@@ -999,6 +1080,8 @@ parameter):
   backdrop.
 - All interactive elements are reachable by Tab as well; focus is always
   visible (outline consistent with the selection colors of SPEC.md).
+- Cluster cards open with Enter/Space like crew cards; `Esc` closes the
+  cluster browser. Local group buttons are reachable by Tab and Enter.
 - Mouse-only operation must remain fully equivalent.
 
 ### 6.7 Statistics bar
@@ -1027,6 +1110,9 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
   response (e.g. `42 crews · 13 crackers`; no `0` segments).
 - In the **crews** tab the bar shows `N crews`, `M crackers`, `K releases`
   and `crews: <generated_at>`; there are no status/ZIP segments.
+- In the **clusters** tab the bar shows `N clusters`, total groups, unique
+  links, cross-cluster links and `clusters: <generated_at>`; there are no
+  status/ZIP segments.
 
 ### 6.8 Section views
 
@@ -1038,13 +1124,15 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `with_screenshot`); `letter` = magazine name, `year` from the file name |
 | falcon | `index-falcon.json` (index-only, no gameinfo) | grouped by `(letter, folder)` like the cracked view | status filter (default `with_screenshot`); Falcon titles launch with the Falcon machine/TOS 4.04 (desktop) |
 | crews | `crews.json` (+ optional `crew-images.json`) | synthetic crew/cracker cards from all groups (`excluded` is ignored; no cap) | search only; fixed ZIP-count order; click opens the crew release browser (6.11); no status/facets/letter |
+| clusters | `crew-cluster.json` | seven seeded clusters with counts, root preview and cross-link count | search only; click opens the cluster browser (6.12); no status/facets/letter/pager |
 
 - Letter navigation, search, sorting, the status filter and the
   publisher/language/year facets work in all game sections; the remaining
   flag/tos/crew/cracker filters only where `SECTION_CONTROLS` lists them.
   In particular, `pd` exposes the `TOS/Bad` (`tos=has`) filter because its
-  gameinfo variants carry `tos_bad` notes. The `crews` section uses search
-  only (no status/facets/letter/sort).
+  gameinfo variants carry `tos_bad` notes. The `crews` and `clusters`
+  sections use search only (no status/facets/letter/sort); `clusters` also
+  has no pager.
 - The `magazines` section (section key `magazine`, `Bonus/Magazine Cover
   Disks`) has no metadata: its cards come from `index-magazine.json` grouped
   per issue by a filename parser (`ST Action 41`, `ST Computer 1995-02`,
@@ -1068,7 +1156,9 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
   If the card is not part of the current filter view, it is injected into
   the grid as a fallback so the lightbox still opens.
 - `?q=…&status=…&section=…&letter=…&sort=…&order=…` (crews additionally
-  `kind`/`top`): restored list state.
+  `kind`/`top`, clusters additionally `cluster`/`external`): restored list
+  state. `?section=cluster&cluster=<id>` opens the cluster browser after
+  loading; `external=1` shows the normally hidden external branches.
 - Every filter change updates the query string via `history.replaceState`;
   opening/closing the lightbox uses `pushState` so browser Back closes the
   lightbox first *(untested, best effort)*.
@@ -1081,6 +1171,8 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 - Missing gameinfo: controls for metadata facets hidden, small hint line in
   the footer (`gameinfo unavailable`).
 - Missing `crews.json`: the `crews` tab is hidden; no error banner.
+- Missing/unreadable `crew-cluster.json`: the `clusters` tab is hidden; no
+  error banner and no effect on the other sections.
 
 ### 6.11 Crew release browser
 
@@ -1119,6 +1211,37 @@ browser for that crew:
   crew browser; closing it returns to the crew browser. No play button or
   media download is added.
 
+### 6.12 Cluster browser
+
+Clicking a cluster card (or pressing Enter/Space on it) opens a modal cluster
+browser:
+
+- Header: cluster name, group count, TOP count, link count, the external
+  toggle (only when hidden groups exist) and close. While groups are hidden
+  the sub line appends `<N> external hidden`.
+- Left: the nested `tree` of the selected cluster. External nodes whose
+  subtree contains **no local group** (`local_id`) are hidden by default;
+  external nodes with a local descendant stay visible, but their purely
+  external child branches are still pruned. The header toggle or the
+  `external=1` URL flag shows all external nodes again. Each row starts with
+  a **100×62 px** preview thumbnail (`object-fit: cover`, lazy-loaded) from
+  the crew data. External groups without a local preview show an `EXT`
+  placeholder of the same size. Then come the status badge (`TOP`,
+  `excluded`, `external`, `ambiguous`), the group name and, for local
+  groups, the ZIP count. Both the thumbnail and the group name of local
+  groups are buttons that close the cluster browser and open the existing
+  crew release browser (6.11); external groups are static text because the
+  gameinfo cluster file has no Demozoo IDs.
+- Extra parent links from `edges[]` that are not the tree parent are shown
+  as `also subgroup of …` under the respective node.
+- Right: cluster counts, root, overlap list (groups in more than one
+  cluster), cross-cluster edges and the status legend. When branches are
+  hidden, the counts add a `Hidden` row and the legend explains why.
+- `Esc` or the close button closes the modal; clicking the backdrop closes
+  it. Opening a crew from the tree navigates to that crew's release browser.
+- Deep link `?section=cluster&cluster=<id>` opens the cluster browser after
+  loading the section; `&external=1` starts with the external groups shown.
+
 ---
 
 ## 7. Search, Filter and Sort Semantics (summary)
@@ -1154,6 +1277,12 @@ browser for that crew:
    `cracker`, `top` = `any`/`only`/`none` for the curated TOP selection);
    cards are pre-sorted by ZIP count then name. The release
    browser filters/sorts one crew's releases client-side (section 6.11).
+8. **Clusters (`section=cluster`)**: only `q` applies (cluster name and root
+   names, matched client-side); cards keep the file order and there is no
+   pager. `cluster=<id>` opens that cluster's detail after loading. The
+   cluster tree hides external nodes without a local descendant by default;
+   `external=1` (or the header toggle) shows them. Extra parent links come
+   from `edges[]` (section 6.12).
 
 ---
 
@@ -1187,9 +1316,9 @@ mirrors SPEC-screenshot-generator.md §9 write safety (S1/S2).
 ### 8.4 Data freshness (v1)
 
 - The server `stat`s the section indices, the metadata files and
-  `crews.json`/`crew-images.json` on API requests; if an mtime changed, the
-  affected dataset is reloaded once before answering (reload ≈ 0.16 s for
-  the index *(verified)*, happens only on change).
+  `crews.json`/`crew-images.json`/`crew-cluster.json` on API requests; if an
+  mtime changed, the affected dataset is reloaded once before answering
+  (reload ≈ 0.16 s for the index *(verified)*, happens only on change).
 - The UI does **not** poll; the user reloads the page to see new data.
 
 ### 8.5 Performance budgets *(targets, untested)*
@@ -1199,6 +1328,7 @@ mirrors SPEC-screenshot-generator.md §9 write safety (S1/S2).
 | `/api/entries` with any filter (in-memory) | < 100 ms p95 |
 | `/api/crews` list (all groups, in-memory) | < 50 ms |
 | `/api/crews?id=` with joined releases | < 250 ms |
+| `/api/clusters` list/detail (in-memory) | < 50 ms |
 | `/api/meta` after startup | < 50 ms |
 | Initial document (HTML+CSS+JS) | < 500 KB |
 | One page of JSON (`limit=60`, incl. variants/info) | < 400 KB |
@@ -1252,6 +1382,8 @@ capped at 200.
   metadata discovery cache (default 60; `0` disables caching).
 - Crew data is read from `<MARCER_DATA_DIR>/gameinfo/crews.json` and
   `<MARCER_DATA_DIR>/gameinfo/crew-images.json`; both are optional.
+- Cluster data is read from `<MARCER_DATA_DIR>/gameinfo/crew-cluster.json`
+  (manually created cluster file); optional.
 - Data paths are **never** configured here — `local/paths.env` only
   (same rule as the sibling tools).
 
@@ -1338,6 +1470,12 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     the desktop selection for visibility) but only non-excluded groups get
     the green `TOP` badge; no launch/play control exists. Without
     `crews.json` the tab is hidden and the other sections are unaffected.
+19. **Clusters**: with `crew-cluster.json` present, the `clusters` tab shows
+    the seven cluster cards with counts/root preview; clicking one opens the
+    tree with `TOP`/`excluded`/`external` badges, overlap and cross-cluster
+    links; clicking a local group opens the crew release browser while
+    external groups stay static; missing/unreadable `crew-cluster.json`
+    hides the tab and leaves the other sections unaffected.
 
 ---
 
@@ -1379,19 +1517,26 @@ A conforming implementation satisfies all of the following.
       with no cap, and their releases join the cracked index
       preview/status/kind fields (legacy section-relative `rel` paths
       resolve through the cracked tree).
+- [x] D8 `crew-cluster.json` is loaded from `gameinfo/`; its global edges
+      are distributed to clusters by the `clusters[]` membership, and the
+      root preview joins `crews.json`/`crew-images.json`. Missing or invalid
+      files only disable the Clusters tab (`clusters.available: false`).
 
 **API**
 - [x] A1 All endpoints of section 5 exist with the documented parameters.
 - [x] A2 Pagination is stable (total order, section 5.3) — no duplicate or
       skipped cards across consecutive pages.
 - [x] A3 `entry` returns a single card with `position`.
-- [x] A4 Errors follow section 5.7 (400/404/503), JSON error bodies.
+- [x] A4 Errors follow section 5.8 (400/404/503), JSON error bodies.
 - [x] A5 `/api/local-assets` returns only metadata (counts, labels, kinds,
       formats) for a valid card; no file paths, URLs or bytes. Invalid
       section/id → 400, unknown card → 404.
 - [x] A6 `/api/crews` lists all crew cards with `q`/pagination and
       returns one crew's releases (with joined screenshot fields) by id;
       unknown crews → 404.
+- [x] A7 `/api/clusters` lists the seven cluster cards and returns one
+      cluster with groups, relevant edges, tree and overlaps by id; unknown
+      clusters → 404.
 
 **UI**
 - [x] U1 Visual design matches the `GALLERY_TEMPLATE` language (colors,
@@ -1427,6 +1572,12 @@ A conforming implementation satisfies all of the following.
       `skipped_disk_n` hides its status badge/row; a release opens the game
       lightbox as a standalone card and closing returns to the browser. No
       launch/play control is present.
+- [x] U12 The `clusters` tab shows cluster cards and opens the cluster
+      browser with an indented tree, 100×62 preview thumbnails (or an `EXT`
+      placeholder), status badges, overlap and cross-cluster lists; external
+      nodes without a local descendant are hidden by default, the header
+      toggle/`external=1` shows them, local thumbnail/name buttons open the
+      existing crew browser, and missing cluster data hides the tab.
 
 **Process**
 - [x] P1 Zero new packages in the repo `.venv` (stdlib only).

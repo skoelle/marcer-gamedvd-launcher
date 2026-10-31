@@ -278,7 +278,7 @@ class CrewDataTest(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data), encoding="utf-8")
 
-    def _store(self, groups, cracked_variants=None):
+    def _store(self, groups, cracked_variants=None, clusters=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         out = os.path.join(self.tmp.name, "out")
@@ -334,6 +334,8 @@ class CrewDataTest(unittest.TestCase):
                 },
             },
         })
+        if clusters is not None:
+            self._write_json(os.path.join(data, "crew-cluster.json"), clusters)
         return gallery.DataStore(out, data_root)
 
     @staticmethod
@@ -539,6 +541,188 @@ class CrewDataTest(unittest.TestCase):
             [c["name"] for c in gallery.filter_crew_cards(
                 store.crews, top="only")],
             ["Alpha Crew", "Beta Crew"])
+
+
+    def test_loads_cluster_file_and_joins_root_preview(self):
+        groups = [
+            self._group("alpha-crew", "Alpha Crew", "crew", 2, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha",
+                 "year": "1990"},
+            ]),
+            self._group("hidden", "Hidden", "crew", 0, [], excluded=True),
+        ]
+        clusters = {
+            "schema": 1,
+            "generated_at": "2026-10-30T00:00:00Z",
+            "clusters": [{
+                "id": "alpha",
+                "name": "Alpha Cluster",
+                "roots": [{"name": "Alpha Crew"}],
+                "counts": {"groups": 3, "top": 1, "excluded": 1,
+                           "ambiguous": 0, "external": 1},
+                "groups": [
+                    {"name": "Alpha Crew", "local_id": "alpha-crew",
+                     "status": "top", "zips": 2, "clusters": ["alpha"]},
+                    {"name": "Hidden", "local_id": "hidden",
+                     "status": "excluded", "zips": 0,
+                     "clusters": ["alpha", "other"]},
+                    {"name": "External Group", "status": "external",
+                     "clusters": ["alpha"]},
+                ],
+            }],
+            "edges": [{
+                "from": "Hidden", "to": "Alpha Crew",
+                "type": "subgroup_of", "current": False,
+                "clusters": ["alpha", "other"],
+                "cross_cluster": True,
+            }],
+            "trees": {
+                "alpha": {
+                    "name": "Alpha Crew", "local_id": "alpha-crew",
+                    "status": "top", "children": [{
+                        "name": "Hidden", "local_id": "hidden",
+                        "status": "excluded",
+                    }, {
+                        "name": "External Group", "status": "external",
+                    }],
+                },
+            },
+        }
+        store = self._store(groups, clusters=clusters)
+
+        self.assertEqual(len(store.clusters), 1)
+        summary = store.clusters[0]
+        self.assertEqual(summary["id"], "alpha")
+        self.assertEqual(summary["groups"], 3)
+        self.assertEqual(summary["cross_edges"], 1)
+        self.assertEqual(summary["preview"],
+                         f"{self.tree}/A/Alpha/curated.png")
+        self.assertEqual(store.meta["clusters"]["available"], True)
+        self.assertEqual(store.meta["clusters"]["count"], 1)
+        self.assertEqual(store.meta["clusters"]["groups"], 3)
+        self.assertEqual(store.meta["clusters"]["edges"], 1)
+        self.assertEqual(store.meta["clusters"]["cross_edges"], 1)
+        self.assertEqual(store.meta["sections"]["cluster"]["cards"], 1)
+        cluster = store.cluster_by_id["alpha"]
+        self.assertEqual(cluster["tree"]["name"], "Alpha Crew")
+        self.assertEqual(cluster["tree"]["preview"],
+                         f"{self.tree}/A/Alpha/curated.png")
+        self.assertIsNone(cluster["tree"]["children"][0]["preview"])
+        self.assertIsNone(cluster["tree"]["children"][1]["preview"])
+        groups_by_name = {g["name"]: g for g in cluster["groups"]}
+        self.assertEqual(groups_by_name["Alpha Crew"]["preview"],
+                         f"{self.tree}/A/Alpha/curated.png")
+        self.assertIsNone(groups_by_name["Hidden"]["preview"])
+        self.assertIsNone(groups_by_name["External Group"]["preview"])
+        self.assertEqual(cluster["overlaps"][0]["name"], "Hidden")
+        self.assertEqual(cluster["overlaps"][0]["clusters"],
+                         ["alpha", "other"])
+
+    def test_missing_cluster_file_keeps_gallery_available(self):
+        store = self._store([])
+        self.assertFalse(store.meta["clusters"]["available"])
+        self.assertEqual(store.meta["clusters"]["count"], 0)
+        self.assertIn("crew-cluster.json not found",
+                      store.meta["clusters"]["error"])
+        self.assertEqual(store.meta["sections"]["cluster"]["cards"], 0)
+
+    def test_external_cluster_root_uses_first_local_descendant_preview(self):
+        groups = [
+            self._group("alpha-crew", "Alpha Crew", "crew", 1, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha"},
+            ]),
+        ]
+        clusters = {
+            "schema": 1,
+            "generated_at": "2026-10-30T00:00:00Z",
+            "clusters": [{
+                "id": "external-root",
+                "name": "External Root",
+                "roots": [{"name": "External Root"}],
+                "counts": {"groups": 2, "top": 1, "external": 1},
+                "groups": [
+                    {"name": "External Root", "status": "external",
+                     "clusters": ["external-root"]},
+                    {"name": "Alpha Crew", "local_id": "alpha-crew",
+                     "status": "top", "clusters": ["external-root"]},
+                ],
+            }],
+            "edges": [{
+                "from": "Alpha Crew", "to": "External Root",
+                "type": "subgroup_of", "current": False,
+                "clusters": ["external-root"], "cross_cluster": False,
+            }],
+            "trees": {
+                "external-root": {
+                    "name": "External Root", "status": "external",
+                    "children": [{
+                        "name": "Alpha Crew", "local_id": "alpha-crew",
+                        "status": "top",
+                    }],
+                },
+            },
+        }
+        store = self._store(groups, clusters=clusters)
+        summary = store.clusters[0]
+        self.assertIsNone(store.cluster_by_id["external-root"]["tree"].get("preview"))
+        self.assertEqual(summary["preview"], f"{self.tree}/A/Alpha/curated.png")
+        self.assertEqual(
+            store.cluster_by_id["external-root"]["tree"]["children"][0]["preview"],
+            f"{self.tree}/A/Alpha/curated.png")
+
+    def test_invalid_cluster_file_has_clean_error(self):
+        store = self._store([])
+        path = Path(self.tmp.name) / "data" / "gameinfo" / "crew-cluster.json"
+        path.write_text("{not json", encoding="utf-8")
+        store.reload(force=True)
+        self.assertFalse(store.meta["clusters"]["available"])
+        self.assertIn("crew-cluster.json:", store.meta["clusters"]["error"])
+
+    def test_cluster_api_list_detail_and_missing_id(self):
+        groups = [
+            self._group("alpha-crew", "Alpha Crew", "crew", 1, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha"},
+            ]),
+        ]
+        clusters = {
+            "schema": 1,
+            "generated_at": "2026-10-30T00:00:00Z",
+            "clusters": [{
+                "id": "alpha", "name": "Alpha Cluster",
+                "roots": [{"name": "Alpha Crew"}],
+                "counts": {"groups": 1, "top": 1},
+                "groups": [{"name": "Alpha Crew",
+                            "local_id": "alpha-crew", "status": "top"}],
+                "edges": [],
+            }],
+            "trees": {"alpha": {"name": "Alpha Crew",
+                                "local_id": "alpha-crew", "status": "top"}},
+        }
+        store = self._store(groups, clusters=clusters)
+
+        def fetch(query=""):
+            handler = object.__new__(gallery.GalleryHandler)
+            handler.path = "/api/clusters" + query
+            handler.store = store
+            handler.cfg = {"page_size": 60}
+            out = {}
+            handler._json = lambda obj, status=200: out.update(obj)
+            handler._error = lambda status, message: out.update(error=message)
+            handler._clusters()
+            return out
+
+        listing = fetch()
+        self.assertEqual(listing["total"], 1)
+        self.assertEqual(listing["clusters"][0]["name"], "Alpha Cluster")
+        detail = fetch("?id=alpha")
+        self.assertEqual(detail["name"], "Alpha Cluster")
+        self.assertEqual(detail["tree"]["name"], "Alpha Crew")
+        self.assertEqual(detail["tree"]["preview"],
+                         f"{self.tree}/A/Alpha/curated.png")
+        self.assertEqual(detail["groups"][0]["preview"],
+                         f"{self.tree}/A/Alpha/curated.png")
+        self.assertEqual(detail["generated_at"], "2026-10-30T00:00:00Z")
+        self.assertEqual(fetch("?id=nope")["error"], "cluster not found")
 
 
 class DataDirPathTest(unittest.TestCase):

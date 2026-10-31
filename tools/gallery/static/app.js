@@ -25,7 +25,7 @@ const SECTION_INDEX_NAMES = {
   cracked: "index.json", pd: "index-pd.json", utils: "index-utils.json",
   magazine: "index-magazine.json", falcon: "index-falcon.json",
 };
-const SECTION_KEYS = [...Object.keys(SECTION_INDEX_NAMES), "crew"];
+const SECTION_KEYS = [...Object.keys(SECTION_INDEX_NAMES), "crew", "cluster"];
 
 const SECTION_CONTROLS = {
   cracked: ["status", "publisher", "crew", "cracker", "language", "year",
@@ -58,6 +58,8 @@ const state = {
   tos: "any",
   crewKind: "any",
   crewTop: "any",
+  clusterId: "",
+  clusterExternal: false,
   sort: "name",
   order: "asc",
   offset: 0,
@@ -77,6 +79,8 @@ let assetKey = null;
 const crewCache = new Map();
 let crewView = null;
 let crewSearchTimer = null;
+const clusterCache = new Map();
+let clusterView = null;
 
 // Every section starts with the configured preset (usually `with_screenshot`).
 const sectionDefaultStatus = () => defaultStatus;
@@ -99,6 +103,8 @@ function readURL() {
   }
   if (u.has("offset")) state.offset = Math.max(0, parseInt(u.get("offset"), 10) || 0);
   if (u.has("entry")) state.entry = u.get("entry");
+  if (u.has("cluster")) state.clusterId = u.get("cluster");
+  if (u.has("external")) state.clusterExternal = u.get("external") === "1";
   if (u.has("kind")) {
     const kind = u.get("kind");
     state.crewKind = ["crew", "cracker"].includes(kind) ? kind : "any";
@@ -120,7 +126,12 @@ function writeURL(push) {
   keep("section", state.section, "cracked");
   keep("q", state.q, "");
   keep("offset", state.offset ? String(state.offset) : "", "0");
-  if (state.section !== "crew") {
+  if (state.section === "cluster") {
+    keep("cluster", state.clusterId, "");
+    if (state.clusterId) {
+      keep("external", state.clusterExternal ? "1" : "", "");
+    }
+  } else if (state.section !== "crew") {
     keep("status", state.status, sectionDefaultStatus());
     keep("letter", state.letter, "any");
     for (const k of ["publisher", "crew", "cracker", "language", "year",
@@ -183,6 +194,10 @@ function crewsQuery() {
   return "/api/crews?" + p;
 }
 
+function clusterDetailQuery(id) {
+  return "/api/clusters?id=" + encodeURIComponent(id);
+}
+
 // ---------------------------------------------------------------- controls
 function buildStatusOptions() {
   const sel = $("status");
@@ -203,6 +218,7 @@ function facetOptions(id, values, anyLabel) {
 function buildFacets() {
   const section = state.section;
   const isCrew = section === "crew";
+  const isCluster = section === "cluster";
   const facets = (meta && meta.facets && meta.facets[section]) || {};
   const fields = SECTION_CONTROLS[section] || [];
   // hide controls not available for this section / without gameinfo
@@ -211,6 +227,10 @@ function buildFacets() {
     "search", "crew-kind", "crew-top"]) {
     const el = $(id);
     if (!el) continue;
+    if (isCluster) {
+      el.hidden = !["search", "clear"].includes(id);
+      continue;
+    }
     if (isCrew) {
       el.hidden = !["search", "clear", "crew-kind", "crew-top"].includes(id);
       continue;
@@ -221,7 +241,7 @@ function buildFacets() {
     }
     el.hidden = !fields.includes(id);
   }
-  if (isCrew) return;
+  if (isCrew || isCluster) return;
   if (!meta || !meta.gameinfo) {
     for (const id of ["publisher", "crew", "cracker", "language", "year",
       "raw", "pasti", "boxscan", "tos"]) $(id).hidden = true;
@@ -245,7 +265,7 @@ function buildFacets() {
 
 function buildLetters() {
   const box = $("letters");
-  if (state.section === "crew") {
+  if (state.section === "crew" || state.section === "cluster") {
     box.hidden = true;
     box.innerHTML = "";
     return;
@@ -277,6 +297,25 @@ function renderStats(extra) {
       parts.push(`<span class="st"><b>${crew.releases || 0}</b> releases</span>`);
       if (crew.generated_at) {
         parts.push(`<span class="st">crews: ${esc(crew.generated_at)}</span>`);
+      }
+    }
+    if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
+    parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
+    $("stats").innerHTML = parts.join("");
+    return;
+  }
+  if (section === "cluster") {
+    const clusters = meta.clusters || {};
+    const parts = [];
+    if (clusters.error) {
+      parts.push(`<span class="st">cluster data: ${esc(clusters.error)}</span>`);
+    } else {
+      parts.push(`<span class="st"><b>${clusters.count || 0}</b> clusters</span>`);
+      parts.push(`<span class="st"><b>${clusters.groups || 0}</b> groups</span>`);
+      parts.push(`<span class="st"><b>${clusters.edges || 0}</b> links</span>`);
+      parts.push(`<span class="st"><b>${clusters.cross_edges || 0}</b> cross-links</span>`);
+      if (clusters.generated_at) {
+        parts.push(`<span class="st">clusters: ${esc(clusters.generated_at)}</span>`);
       }
     }
     if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
@@ -339,6 +378,13 @@ function renderFooter() {
     $("footer").textContent = bits.join("  ·  ");
     return;
   }
+  if (state.section === "cluster") {
+    const clusters = meta.clusters || {};
+    if (clusters.generated_at) bits.push("clusters: " + clusters.generated_at);
+    if (clusters.error) bits.push("cluster data: " + clusters.error);
+    $("footer").textContent = bits.join("  ·  ");
+    return;
+  }
   const idx = (meta.index && meta.index[state.section]) || {};
   if (idx.mtime) {
     const name = SECTION_INDEX_NAMES[state.section] || "index.json";
@@ -362,6 +408,10 @@ function hideBanner() { $("banner").hidden = true; }
 // ---------------------------------------------------------------- grid
 function isCrewCard(card) {
   return !!(card && card.crew);
+}
+
+function isClusterCard(card) {
+  return !!(card && card.cluster);
 }
 
 function badgeFor(card) {
@@ -389,6 +439,24 @@ function renderGrid(cards) {
   }
   $("empty").hidden = true;
   grid.innerHTML = cards.map((c, i) => {
+    if (isClusterCard(c)) {
+      const preview = c.preview
+        ? `<img loading="lazy" src="${imgSrc(c.preview)}" alt="">`
+        : `<div class="ph cluster-ph">CLUSTER</div>`;
+      const roots = (c.roots || []).map((r) => r.name).filter(Boolean).join(" · ");
+      const counts = c.counts || {};
+      const details = [
+        `${c.groups || 0} groups`,
+        `${c.edges || 0} links`,
+        `${c.cross_edges || 0} cross`,
+      ].join(" · ");
+      return `<div class="card cluster-card" data-idx="${i}" data-v="0" tabindex="-1">` +
+        `<span class="badge b-cluster">cluster</span>` +
+        `<span class="chip">${counts.top || 0} TOP</span>` +
+        `<div class="name">${esc(c.name)}</div>` +
+        `<div class="crew-release-count">${esc(roots)}</div>` +
+        `<div class="cluster-meta">${esc(details)}</div>${preview}</div>`;
+    }
     if (isCrewCard(c)) {
       const kind = c.kind === "cracker" ? "cracker" : "crew";
       const preview = c.preview
@@ -566,6 +634,28 @@ async function loadEntries() {
     hideBanner();
     if (lb) { lb = null; $("lightbox").hidden = true; }
     if (crewView) closeCrewBrowser(false);
+    if (clusterView) closeClusterBrowser(false, false);
+    if (state.section === "cluster") {
+      const data = await api("/api/clusters");
+      const query = state.q.trim().toLowerCase();
+      const clusters = (data.clusters || []).filter((c) => {
+        if (!query) return true;
+        const roots = (c.roots || []).map((r) => r.name).join(" ");
+        return `${c.name || ""} ${roots}`.toLowerCase().includes(query);
+      });
+      renderGrid(clusters);
+      $("pager").hidden = true;
+      $("result-count").textContent =
+        `${clusters.length} cluster${clusters.length === 1 ? "" : "s"}`;
+      writeURL(false);
+      renderStats();
+      renderFooter();
+      if (state.clusterId) {
+        const wanted = clusters.find((c) => c.id === state.clusterId);
+        if (wanted) openClusterBrowser(wanted);
+      }
+      return;
+    }
     if (state.section === "crew") {
       const data = await api(crewsQuery());
       renderGrid(data.cards);
@@ -617,7 +707,15 @@ function hoverHTML(card) {
     if (v !== "" && v != null && v !== false) rows.push(
       `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`);
   };
-  if (isCrewCard(card)) {
+  if (isClusterCard(card)) {
+    add("Kind", "crew cluster");
+    add("Roots", (card.roots || []).map((r) => r.name).join(", "));
+    add("Groups", card.groups);
+    add("Links", card.edges);
+    add("Cross-cluster links", card.cross_edges);
+    const counts = card.counts || {};
+    add("Strategy", `${counts.top || 0} TOP · ${counts.excluded || 0} excluded · ${counts.external || 0} external`);
+  } else if (isCrewCard(card)) {
     add("Kind", card.kind === "cracker" ? "individual cracker" : "crew");
     add("ZIPs", card.zips);
     add("Releases", card.releases);
@@ -1429,6 +1527,220 @@ function closeCrewBrowser(restoreFocus = true) {
   }
 }
 
+function clusterStatusBadge(status) {
+  if (status === "top") return `<span class="badge b-cluster-top">TOP</span>`;
+  if (status === "excluded") return `<span class="badge b-cluster-excluded">excluded</span>`;
+  if (status === "ambiguous") return `<span class="badge b-cluster-external">ambiguous</span>`;
+  return `<span class="badge b-cluster-external">external</span>`;
+}
+
+function clusterNodeStatus(node, groups) {
+  const group = groups.get(node.name) || {};
+  return group.status || node.status || "external";
+}
+
+function clusterHasLocalDescendant(node, groups) {
+  if (!node || !node.name) return false;
+  const group = groups.get(node.name) || {};
+  if (group.local_id || node.local_id) return true;
+  return (node.children || []).some((child) =>
+    clusterHasLocalDescendant(child, groups));
+}
+
+function clusterHiddenExternalCount(node, groups) {
+  if (!node || !node.name) return 0;
+  const children = (node.children || []).reduce(
+    (count, child) => count + clusterHiddenExternalCount(child, groups), 0);
+  if (clusterNodeStatus(node, groups) !== "external" ||
+      clusterHasLocalDescendant(node, groups)) {
+    return children;
+  }
+  return children + 1;
+}
+
+function clusterTreeMaps(cluster) {
+  const groups = new Map();
+  for (const group of cluster.groups || []) {
+    if (group && group.name) groups.set(group.name, group);
+  }
+  const parentMap = new Map();
+  const extraParents = new Map();
+  const walk = (node, parent) => {
+    if (!node || !node.name) return;
+    if (parent) parentMap.set(node.name, parent);
+    for (const child of node.children || []) walk(child, node.name);
+  };
+  if (cluster.tree) walk(cluster.tree, "");
+  for (const edge of cluster.edges || []) {
+    if (!edge || edge.type !== "subgroup_of") continue;
+    if (parentMap.get(edge.from) === edge.to) continue;
+    if (!extraParents.has(edge.from)) extraParents.set(edge.from, []);
+    const list = extraParents.get(edge.from);
+    if (!list.includes(edge.to)) list.push(edge.to);
+  }
+  return { groups, extraParents };
+}
+
+function clusterNodeHtml(node, groups, extraParents, showExternal) {
+  if (!node || !node.name) return "";
+  if (!showExternal &&
+      clusterNodeStatus(node, groups) === "external" &&
+      !clusterHasLocalDescendant(node, groups)) {
+    return "";
+  }
+  const group = groups.get(node.name) || {};
+  const status = clusterNodeStatus(node, groups);
+  const localId = group.local_id || node.local_id || "";
+  const zips = group.zips != null ? group.zips : node.zips;
+  const name = localId
+    ? `<button type="button" class="cluster-group" data-crew-id="${esc(localId)}">${esc(node.name)}</button>`
+    : `<span class="cluster-group-static">${esc(node.name)}</span>`;
+  const extras = extraParents.get(node.name) || [];
+  const preview = group.preview || node.preview;
+  const thumb = localId
+    ? `<button type="button" class="cluster-thumb-btn cluster-group" ` +
+      `data-crew-id="${esc(localId)}" title="${esc(node.name)}">` +
+      (preview
+        ? `<img class="cluster-thumb" loading="lazy" src="${imgSrc(preview)}" alt="">`
+        : `<span class="cluster-thumb cluster-thumb-empty">—</span>`) +
+      `</button>`
+    : `<span class="cluster-thumb cluster-thumb-empty">EXT</span>`;
+  const children = (node.children || [])
+    .map((child) =>
+      clusterNodeHtml(child, groups, extraParents, showExternal)).join("");
+  return `<div class="cluster-node">` +
+    `<div class="cluster-node-row">` +
+    thumb + clusterStatusBadge(status) + name +
+    (zips ? `<span class="chip">${zips} ZIPs</span>` : "") +
+    `</div>` +
+    (extras.length
+      ? `<div class="cluster-extra">also subgroup of ${extras.map(esc).join(", ")}</div>`
+      : "") +
+    (children ? `<div class="cluster-children">${children}</div>` : "") +
+    `</div>`;
+}
+
+function clusterRenderSide(cluster, hiddenExternal) {
+  const counts = cluster.counts || {};
+  const rows = [
+    ["Groups", counts.groups],
+    ["TOP", counts.top],
+    ["Excluded", counts.excluded],
+    ["Ambiguous", counts.ambiguous],
+    ["External", counts.external],
+    ["Links", (cluster.edges || []).length],
+  ];
+  if (hiddenExternal) rows.push(["Hidden", hiddenExternal]);
+  const visibleRows = rows.filter(([, value]) => value != null);
+  const roots = (cluster.roots || []).map((item) => item.name)
+    .filter(Boolean).join(", ");
+  let html = `<h3>Cluster</h3><table>`;
+  if (roots) html += `<tr><td>Root</td><td>${esc(roots)}</td></tr>`;
+  for (const [label, value] of visibleRows) {
+    html += `<tr><td>${esc(label)}</td><td>${esc(value)}</td></tr>`;
+  }
+  html += `</table>`;
+  const overlaps = cluster.overlaps || [];
+  if (overlaps.length) {
+    html += `<h3>Overlaps</h3><ul class="cluster-list">` +
+      overlaps.map((item) => `<li>${esc(item.name)} ` +
+        `<span class="cluster-muted">(${esc((item.clusters || []).join(", "))})</span></li>`).join("") +
+      `</ul>`;
+  }
+  const cross = (cluster.edges || []).filter((edge) => edge.cross_cluster);
+  if (cross.length) {
+    html += `<h3>Cross-cluster links</h3><ul class="cluster-list">` +
+      cross.map((edge) => `<li>${esc(edge.from)} → ${esc(edge.to)}</li>`).join("") +
+      `</ul>`;
+  }
+  html += `<h3>Legend</h3><div class="cluster-legend">` +
+    `${clusterStatusBadge("top")} local, visible in Crews` +
+    `${clusterStatusBadge("excluded")} local, hidden in Crews` +
+    `${clusterStatusBadge("external")} Demozoo group outside the archive` +
+    (hiddenExternal
+      ? `<div class="cluster-hint">External branches without a local group ` +
+        `are hidden by default.</div>`
+      : "") +
+    `</div>`;
+  $("cluster-side").innerHTML = html;
+}
+
+function renderClusterBrowser() {
+  if (!clusterView) return;
+  const cluster = clusterView.cluster;
+  const counts = cluster.counts || {};
+  const groupCount = Array.isArray(cluster.groups)
+    ? cluster.groups.length
+    : (counts.groups || 0);
+  const { groups, extraParents } = clusterView.maps;
+  const showExternal = !!state.clusterExternal;
+  const hidden = cluster.tree
+    ? clusterHiddenExternalCount(cluster.tree, groups) : 0;
+  const toggle = $("cluster-external-toggle");
+  toggle.hidden = hidden === 0;
+  toggle.textContent = showExternal
+    ? "hide external" : `show external (${hidden})`;
+  toggle.setAttribute("aria-pressed", showExternal ? "true" : "false");
+  const externalHint = hidden
+    ? (showExternal ? " · external shown" : ` · ${hidden} external hidden`)
+    : "";
+  $("cluster-title").textContent = cluster.name;
+  $("cluster-sub").textContent =
+    `${groupCount} groups · ${counts.top || 0} TOP · ` +
+    `${(cluster.edges || []).length} links${externalHint}`;
+  $("cluster-tree").innerHTML = cluster.tree
+    ? clusterNodeHtml(cluster.tree, groups, extraParents, showExternal)
+    : `<div class="crew-empty">No tree in this cluster.</div>`;
+  clusterRenderSide(cluster, showExternal ? 0 : hidden);
+}
+
+function showClusterBrowser(cluster) {
+  clusterView = {
+    cluster,
+    maps: clusterTreeMaps(cluster),
+  };
+  state.clusterId = cluster.id;
+  $("cluster-lightbox").hidden = false;
+  renderClusterBrowser();
+  writeURL(false);
+  requestAnimationFrame(() => $("cluster-tree").focus());
+}
+
+async function openClusterBrowser(card) {
+  try {
+    const cached = clusterCache.get(card.id);
+    if (cached) {
+      showClusterBrowser(cached);
+      return;
+    }
+    const data = await api(clusterDetailQuery(card.id));
+    clusterCache.set(card.id, data);
+    showClusterBrowser(data);
+  } catch (err) {
+    showBanner("Cannot load cluster: " + err.message, () => hideBanner());
+  }
+}
+
+function closeClusterBrowser(restoreFocus = true, updateUrl = true) {
+  clusterView = null;
+  state.clusterId = "";
+  state.clusterExternal = false;
+  $("cluster-lightbox").hidden = true;
+  if (updateUrl) writeURL(false);
+  if (restoreFocus) {
+    const card = $("grid").querySelector(`.card[data-idx="${focusIdx}"]`);
+    if (card) card.focus();
+  }
+}
+
+function clusterKeydown(e) {
+  if (!clusterView || lb || crewView) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeClusterBrowser();
+  }
+}
+
 async function crewOpenSelected() {
   if (!crewView || !crewView.filtered.length) return;
   const release = crewView.filtered[crewView.selected];
@@ -1564,7 +1876,9 @@ function gridKeydown(e) {
     case "Enter": case " ":
       e.preventDefault();
       if (focusIdx >= 0) {
-        if (isCrewCard(pageCards[focusIdx])) {
+        if (isClusterCard(pageCards[focusIdx])) {
+          openClusterBrowser(pageCards[focusIdx]);
+        } else if (isCrewCard(pageCards[focusIdx])) {
           openCrewBrowser(pageCards[focusIdx]);
         } else {
           const fv = parseInt(cards[focusIdx].dataset.v || "0", 10);
@@ -1605,6 +1919,7 @@ function globalKeydown(e) {
     return;
   }
   if (crewView && !lb) return;
+  if (clusterView && !lb) return;
   if (e.key === "Escape") {
     if (lb) { e.preventDefault(); closeLightbox(); return; }
     if (inInput && document.activeElement.id === "search") {
@@ -1672,6 +1987,10 @@ function wireEvents() {
     if (!cardEl) return;
     const idx = parseInt(cardEl.dataset.idx, 10);
     const fv = parseInt(cardEl.dataset.v || "0", 10);
+    if (isClusterCard(pageCards[idx])) {
+      openClusterBrowser(pageCards[idx]);
+      return;
+    }
     if (isCrewCard(pageCards[idx])) {
       openCrewBrowser(pageCards[idx]);
       return;
@@ -1770,6 +2089,7 @@ function wireEvents() {
     if (!b) return;
     state.section = b.dataset.section;
     state.offset = 0;
+    state.clusterId = "";
     // reset incompatible filters; status falls back to the section default
     state.status = sectionDefaultStatus();
     state.crewKind = "any";
@@ -1854,6 +2174,28 @@ function wireEvents() {
     $("crew-grid").focus();
   });
   document.addEventListener("keydown", crewKeydown);
+
+  // cluster detail
+  $("cluster-external-toggle").addEventListener("click", () => {
+    state.clusterExternal = !state.clusterExternal;
+    writeURL(false);
+    renderClusterBrowser();
+    $("cluster-tree").focus();
+  });
+  $("cluster-close").addEventListener("click", () => closeClusterBrowser());
+  $("cluster-lightbox").addEventListener("click", (e) => {
+    if (e.target === $("cluster-lightbox")) {
+      closeClusterBrowser();
+      return;
+    }
+    const group = e.target.closest(".cluster-group");
+    if (group && group.dataset.crewId) {
+      const crewId = group.dataset.crewId;
+      closeClusterBrowser(false);
+      openCrewBrowser({ id: crewId });
+    }
+  });
+  document.addEventListener("keydown", clusterKeydown);
 }
 
 function syncControls() {
@@ -1888,13 +2230,20 @@ async function boot() {
   const secMeta = (meta && meta.sections) || {};
   const secHasData = (s) => !!(secMeta[s] && (secMeta[s].games || secMeta[s].cards));
   const crewAvailable = !!(meta.crews && meta.crews.available);
+  const clusterAvailable = !!(meta.clusters && meta.clusters.available);
   if (state.section === "crew" && !crewAvailable) state.section = "cracked";
-  $("tabs").hidden = !(crewAvailable || secHasData("pd") ||
+  if (state.section === "cluster" && !clusterAvailable) state.section = "cracked";
+  $("tabs").hidden = !(crewAvailable || clusterAvailable || secHasData("pd") ||
     secHasData("utils") || secHasData("magazine") || secHasData("falcon"));
   for (const b of $("tabs").querySelectorAll("button")) {
     const s = b.dataset.section;
-    b.hidden = s === "crew" ? !crewAvailable
-      : (s !== "cracked" && !secHasData(s));
+    if (s === "crew") {
+      b.hidden = !crewAvailable;
+    } else if (s === "cluster") {
+      b.hidden = !clusterAvailable;
+    } else {
+      b.hidden = s !== "cracked" && !secHasData(s);
+    }
   }
   syncControls();
   renderStats();
