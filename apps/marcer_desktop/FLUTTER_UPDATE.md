@@ -1,11 +1,11 @@
 # Flutter Dependency Update Plan (marcer_desktop)
 
-Status: **Stage 1 + 2 done** (2026-10-31) — working note for the staged upgrade
-of the Flutter desktop app's dependencies. Stage 1 (lock refresh) and Stage 2
-(`archive` 4, `cupertino_icons` removal) are applied; Stage 3 (plugin majors)
-is pending.
+Status: **Stage 1 + 2 done, SDK on 3.47.9** (2026-10-31) — working note for the
+staged upgrade of the Flutter desktop app's dependencies. Stage 1 (lock
+refresh), Stage 2 (`archive` 4, `cupertino_icons` removal) and the Flutter SDK
+hotfix upgrade are applied; Stage 3 (plugin majors) is pending.
 
-Toolchain: **Flutter 3.47.7 stable** / **Dart 3.13.5** (`~/flutter`),
+Toolchain: **Flutter 3.47.9 stable** / **Dart 3.13.7** (`~/flutter`),
 `environment: sdk: ^3.13.5`, `pubspec.lock` pins `flutter: ">=3.38.0"`.
 
 ## Why / goal
@@ -140,11 +140,14 @@ checklist below. Do **not** combine stages.
 `screen_retriever`, `cross_file`, `dartssh2`, `material_color_utilities`,
 `test_api`: revisit after Stage 3 and after any Flutter SDK upgrade.
 
-### Optional — Flutter SDK patch
+### Done — Flutter SDK hotfix 3.47.7 → 3.47.9 (2026-10-31)
 
-Flutter 3.47.9 stable is available (local toolchain and CI pin are 3.47.7).
-Update `~/flutter` and `.github/workflows/ci-desktop.yml` +
-`desktop-release.yml` in a separate change.
+3.47.8 carries security advisory `GHSA-frr6-h895-5pxp` (BoringSSL / eMudhra CA
+removal in the Dart runtime; Flutter recommends rebuilding desktop apps).
+Local SDK upgraded, CI pins (`.github/workflows/ci-desktop.yml` and
+`desktop-release.yml`) set to `3.47.9`; analyze/tests/build green. A fresh
+`desktop-v*` release ships the fix. `pub outdated` was unchanged afterwards
+(`material_color_utilities`/`test_api` stay SDK-pinned).
 
 ## Verification checklist (per stage)
 
