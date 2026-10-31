@@ -6,6 +6,7 @@ import 'dart:isolate';
 
 import 'atarilegend.dart';
 import 'card.dart';
+import 'crew_clusters.dart';
 import 'crews.dart';
 import 'full_index.dart';
 import 'gameinfo.dart';
@@ -182,9 +183,10 @@ class CatalogUniverse {
         'utils' => utils,
         'magazine' => magazine,
         'falcon' => falcon,
-        // The crew section is built by the controller from `crews.json`
-        // (not from a screenshot index), so the universe has no cards here.
-        'crew' => const <GameCard>[],
+        // The crew/cluster sections are built by the controller from
+        // `crews.json`/`crew-cluster.json` (not from a screenshot index), so
+        // the universe has no cards here.
+        'crew' || 'cluster' => const <GameCard>[],
         _ => cracked,
       };
 
@@ -193,7 +195,7 @@ class CatalogUniverse {
         'utils' => utilsFacets,
         'magazine' => magazineFacets,
         'falcon' => falconFacets,
-        'crew' => const CatalogFacets(),
+        'crew' || 'cluster' => const CatalogFacets(),
         _ => crackedFacets,
       };
 
@@ -408,7 +410,7 @@ Set<String> kindFields(String kind) => switch (kind) {
       'pd' => {'publisher', 'language', 'release', 'tos_bad'},
       'magazine' => const {},
       'falcon' => const {},
-      'crew' => const {},
+      'crew' || 'cluster' => const {},
       'utils' => {
           'publisher',
           'crew',
@@ -440,6 +442,7 @@ class CatalogBundle {
     required this.info,
     required this.crews,
     required this.crewImages,
+    required this.clusters,
     required this.atariLegend,
     required this.universe,
     required this.warnings,
@@ -541,6 +544,7 @@ class CatalogBundle {
     onProgress?.call('Loading crew data…');
     final crews = CrewIndex.load(gameinfoDir);
     final crewImages = CrewImageIndex.load(gameinfoDir);
+    final clusters = CrewClusterIndex.load(gameinfoDir);
 
     onProgress?.call('Loading AtariLegend data…');
     final atariLegend =
@@ -560,6 +564,7 @@ class CatalogBundle {
       info: info,
       crews: crews,
       crewImages: crewImages,
+      clusters: clusters,
       atariLegend: atariLegend,
       universe: universe,
       warnings: warnings,
@@ -571,6 +576,7 @@ class CatalogBundle {
   final GameInfoIndex info;
   final CrewIndex crews;
   final CrewImageIndex crewImages;
+  final CrewClusterIndex clusters;
   final AtariLegendIndex atariLegend;
   final CatalogUniverse universe;
   final List<String> warnings;

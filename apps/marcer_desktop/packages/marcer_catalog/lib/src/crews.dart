@@ -140,9 +140,13 @@ class CrewGroup {
   final int zips;
   final List<String> aliases;
 
-  /// Hidden from the Crews tab (general exclusion list in the crew-analysis
-  /// tool); the group still exists in `crews.json` for audit/ranking.
+  /// Hidden from the curated TOP selection (general exclusion list in the
+  /// crew-analysis tool); the group still exists in `crews.json` and is
+  /// shown by the gallery/desktop Crews tab with a `Non-TOP` state.
   final bool excluded;
+
+  /// The curated TOP selection (`excluded == false`).
+  bool get top => !excluded;
 
   /// Optional curated image (cracktro/logo) from a later analysis phase.
   final String? image;
@@ -229,6 +233,7 @@ class CrewImageIndex {
 class CrewIndex {
   CrewIndex._(
     this.groups,
+    this._byId,
     this._byRel,
     this.loadError,
     this.generatedAt,
@@ -237,11 +242,12 @@ class CrewIndex {
   factory CrewIndex.load(String gameinfoDir) {
     if (gameinfoDir.trim().isEmpty) {
       return CrewIndex._(
-          const [], const {}, 'GameinfoDirectory not configured', '');
+          const [], const {}, const {}, 'GameinfoDirectory not configured', '');
     }
     final file = File('$gameinfoDir/crews.json');
     if (!file.existsSync()) {
-      return CrewIndex._(const [], const {}, 'crews.json not found', '');
+      return CrewIndex._(
+          const [], const {}, const {}, 'crews.json not found', '');
     }
     try {
       final map = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
@@ -257,23 +263,27 @@ class CrewIndex {
           byRel[normalizeRelSeparators(release.rel)] = release;
         }
       }
-      final groups = allGroups.where((g) => !g.excluded).toList()
+      final groups = allGroups.toList()
         ..sort((a, b) {
           final byZips = b.zips.compareTo(a.zips);
           if (byZips != 0) return byZips;
           return a.name.toLowerCase().compareTo(b.name.toLowerCase());
         });
+      final byId = {for (final group in groups) group.id: group};
       return CrewIndex._(
-          groups, byRel, null, (map['generated_at'] ?? '').toString());
+          groups, byId, byRel, null, (map['generated_at'] ?? '').toString());
     } catch (e) {
-      return CrewIndex._(const [], const {}, 'parse error: $e', '');
+      return CrewIndex._(const [], const {}, const {}, 'parse error: $e', '');
     }
   }
 
   static CrewIndex empty(String reason) =>
-      CrewIndex._(const [], const {}, reason, '');
+      CrewIndex._(const [], const {}, const {}, reason, '');
 
+  /// All groups from `crews.json`, sorted by ZIP count descending, then name
+  /// (gallery order); TOP and Non-TOP groups are included.
   final List<CrewGroup> groups;
+  final Map<String, CrewGroup> _byId;
   final Map<String, CrewRelease> _byRel;
   final String? loadError;
   final String generatedAt;
@@ -282,7 +292,11 @@ class CrewIndex {
   CrewRelease? releaseForRel(String rel) =>
       _byRel[normalizeRelSeparators(rel)];
 
+  CrewGroup? groupForId(String id) => _byId[id];
+
   int get length => groups.length;
+  int get topLength => groups.where((g) => g.top).length;
+  int get crackerLength => groups.where((g) => g.kind == 'cracker').length;
   int get totalReleases =>
       groups.fold(0, (sum, group) => sum + group.releases.length);
 }

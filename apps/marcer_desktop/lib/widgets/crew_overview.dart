@@ -13,10 +13,22 @@ class CrewOverview extends StatelessWidget {
     required this.crew,
     this.pirateFinderCrew,
     this.onOpenPirateFinder,
+    this.entity,
+    this.clusters = const [],
+    this.onOpenCluster,
     this.showHints = false,
   });
 
   final CrewGroup crew;
+
+  /// Cracker/group membership data from `crew-cluster.json`.
+  final CrewEntity? entity;
+
+  /// Clusters containing this crew (`crew-cluster.json` reverse lookup).
+  final List<CrewCluster> clusters;
+
+  /// Opens the cluster browser for a containing cluster.
+  final void Function(CrewCluster cluster)? onOpenCluster;
 
   /// Optional PirateFinder crew info of the same group (members, history,
   /// release count, source); shown below the aliases when present.
@@ -47,6 +59,10 @@ class CrewOverview extends StatelessWidget {
                   ),
                 ),
               ),
+              if (crew.top) ...[
+                _badge('TOP', Colors.green),
+                const SizedBox(width: 4),
+              ],
               _badge('${crew.zips} ZIPs', Colors.indigo),
             ],
           ),
@@ -62,6 +78,41 @@ class CrewOverview extends StatelessWidget {
             Text(
               'Also known as: ${crew.aliases.where((a) => a != crew.name).join(', ')}',
               style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ],
+          if (entity != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              entity!.summary,
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ],
+          if (clusters.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text(
+                  'Clusters:',
+                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                for (final cluster in clusters)
+                  InkWell(
+                    onTap: onOpenCluster == null
+                        ? null
+                        : () => onOpenCluster!(cluster),
+                    child: Text(
+                      cluster.name,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.lightBlueAccent,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ],
           if (pirateFinderCrew != null) ...[

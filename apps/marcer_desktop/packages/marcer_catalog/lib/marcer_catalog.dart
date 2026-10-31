@@ -14,6 +14,7 @@ export 'src/card.dart';
 export 'src/catalog_filter.dart';
 export 'src/catalog_universe.dart';
 export 'src/config.dart';
+export 'src/crew_clusters.dart';
 export 'src/crews.dart';
 export 'src/entry.dart';
 export 'src/full_index.dart';

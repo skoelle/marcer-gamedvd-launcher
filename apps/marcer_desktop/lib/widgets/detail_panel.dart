@@ -9,6 +9,7 @@ import 'package:marcer_catalog/marcer_catalog.dart';
 
 import '../catalog_controller.dart';
 import 'atari_legend_dialog.dart';
+import 'cluster_detail_panel.dart';
 import 'crew_detail_panel.dart';
 import 'game_info_panel.dart';
 import 'local_assets_chips.dart';
@@ -24,6 +25,8 @@ class DetailPanel extends StatelessWidget {
     required this.controller,
     this.onOpenLightbox,
     this.onOpenCrewRelease,
+    this.onOpenClusterLightbox,
+    this.onOpenCluster,
   });
 
   final CatalogController controller;
@@ -34,6 +37,12 @@ class DetailPanel extends StatelessWidget {
 
   /// Opens a crew release (ZIP rel path) in the existing game lightbox.
   final void Function(CrewGroup crew, String rel)? onOpenCrewRelease;
+
+  /// Opens the cluster browser for a synthetic cluster card.
+  final void Function(GameCard card)? onOpenClusterLightbox;
+
+  /// Opens the cluster browser for a cluster cross-link in the crew panel.
+  final void Function(CrewCluster cluster)? onOpenCluster;
 
   @override
   Widget build(BuildContext context) {
@@ -133,6 +142,16 @@ class DetailPanel extends StatelessWidget {
                   crew: card.crew!,
                 ),
                 onOpenRelease: onOpenCrewRelease,
+                entity: c.entityForCrew(card.crew!),
+                clusters: c.clustersForCrew(card.crew!),
+                onOpenCluster: onOpenCluster,
+              )
+            : card.cluster != null
+            ? ClusterDetailPanel(
+                cluster: card.cluster!,
+                onOpenCluster: onOpenClusterLightbox == null
+                    ? null
+                    : () => onOpenClusterLightbox!(card),
               )
             : _cardInfo(context, c, card),
       );

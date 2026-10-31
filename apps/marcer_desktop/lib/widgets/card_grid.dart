@@ -21,6 +21,7 @@ class CenterGrid extends StatefulWidget {
     required this.onOpenLightbox,
     required this.onFocusSearch,
     this.onOpenCrewLightbox,
+    this.onOpenClusterLightbox,
     this.focusNode,
   });
 
@@ -34,6 +35,9 @@ class CenterGrid extends StatefulWidget {
 
   /// Opens the crew release browser for a synthetic crew card.
   final void Function(GameCard card)? onOpenCrewLightbox;
+
+  /// Opens the cluster browser for a synthetic cluster card.
+  final void Function(GameCard card)? onOpenClusterLightbox;
 
   /// Optional externally-owned focus node (the home page can hand focus
   /// back here after leaving the search field); otherwise one is created
@@ -176,6 +180,8 @@ class _CenterGridState extends State<CenterGrid> {
       final card = c.selectedCard;
       if (card?.crew != null) {
         widget.onOpenCrewLightbox?.call(card!);
+      } else if (card?.cluster != null) {
+        widget.onOpenClusterLightbox?.call(card!);
       } else if (c.activate()) {
         _openLightboxForSelection();
       }
@@ -277,6 +283,10 @@ class _CenterGridState extends State<CenterGrid> {
     final card = c.selectedCard;
     if (card?.crew != null) {
       widget.onOpenCrewLightbox?.call(card!);
+      return;
+    }
+    if (card?.cluster != null) {
+      widget.onOpenClusterLightbox?.call(card!);
       return;
     }
     widget.onOpenLightbox(card == null ? 0 : _bestVariant(c, card), image);
@@ -420,14 +430,18 @@ class _CenterGridState extends State<CenterGrid> {
         ],
       );
     }
-    return _placeholder(crew: card.crew != null);
+    return _placeholder(crew: card.crew != null, cluster: card.cluster != null);
   }
 
-  Widget _placeholder({bool crew = false}) => Center(
+  Widget _placeholder({bool crew = false, bool cluster = false}) => Center(
     child: Icon(
-      crew ? Icons.groups : Icons.videogame_asset,
-      size: crew ? 52 : 42,
-      color: crew ? Colors.white54 : Colors.white24,
+      cluster
+          ? Icons.hub
+          : crew
+          ? Icons.groups
+          : Icons.videogame_asset,
+      size: crew || cluster ? 52 : 42,
+      color: crew || cluster ? Colors.white54 : Colors.white24,
     ),
   );
 
@@ -438,25 +452,40 @@ class _CenterGridState extends State<CenterGrid> {
     int index,
   ) {
     final crew = card.crew;
+    final cluster = card.cluster;
+    final synthetic = crew != null || cluster != null;
     // Never touch the filesystem while building a tile: read the async layer
     // cache and request a background scan for unknown folders. Badges appear
-    // as soon as the scan result arrives (throttled notify). Crew cards are
-    // synthetic and have no ZIP/folder layer of their own.
-    if (crew == null) c.ensureCardScanned(card);
-    final layer = crew == null ? c.cachedCardLayer(card) : null;
-    final missing = crew == null ? c.cachedCardMissing(card) : null;
+    // as soon as the scan result arrives (throttled notify). Crew/cluster
+    // cards are synthetic and have no ZIP/folder layer of their own.
+    if (!synthetic) c.ensureCardScanned(card);
+    final layer = synthetic ? null : c.cachedCardLayer(card);
+    final missing = synthetic ? null : c.cachedCardMissing(card);
     final chips = <String>[
-      if (crew != null) '${crew.zips} ZIPs',
-      if (crew == null && c.isFavoriteCard(card)) 'FAVORITE',
-      if (crew == null && card.variants.length > 1) '×${card.variants.length}',
-      if (crew == null && layer != null && layer.isNotEmpty) layer,
-      if (crew == null && missing == true) 'MISSING',
-      if (crew == null &&
+      if (crew != null) ...[
+        crew.kind == 'cracker' ? 'cracker' : 'crew',
+        if (crew.top) 'TOP',
+        '${crew.zips} ZIPs',
+        '${crew.releases.length} releases',
+      ],
+      if (cluster != null) ...[
+        cluster.isIndependent ? 'independent' : 'umbrella',
+        '${cluster.counts.top} TOP',
+        '${cluster.counts.groups} groups',
+        '${cluster.counts.zips} ZIPs',
+        '${cluster.edges.length} links',
+        if (cluster.edges.any((e) => e.crossCluster)) 'cross',
+      ],
+      if (!synthetic && c.isFavoriteCard(card)) 'FAVORITE',
+      if (!synthetic && card.variants.length > 1) '×${card.variants.length}',
+      if (!synthetic && layer != null && layer.isNotEmpty) layer,
+      if (!synthetic && missing == true) 'MISSING',
+      if (!synthetic &&
           card.tosVersion != null &&
           card.tosVersion!.isNotEmpty)
         'TOS ${card.tosVersion}',
-      if (crew == null && card.displayStatus.isNotEmpty) card.displayStatus,
-      if (crew == null && card.year != 'unknown') card.year,
+      if (!synthetic && card.displayStatus.isNotEmpty) card.displayStatus,
+      if (!synthetic && card.year != 'unknown') card.year,
     ];
     final preview = c.displayPreviewPathForCard(card);
     final thumbsBody = card.focusVariant == -1
@@ -470,6 +499,8 @@ class _CenterGridState extends State<CenterGrid> {
         c.moveSelectionTo(index);
         if (card.crew != null) {
           widget.onOpenCrewLightbox?.call(card);
+        } else if (card.cluster != null) {
+          widget.onOpenClusterLightbox?.call(card);
         } else if (c.activate()) {
           _openLightboxForSelection();
         }
@@ -477,7 +508,7 @@ class _CenterGridState extends State<CenterGrid> {
       image: _cardBody(c, card, index),
       badges: chips,
       title: card.name,
-      dim: crew == null && preview == null && !thumbsBody,
+      dim: !synthetic && preview == null && !thumbsBody,
     );
   }
 

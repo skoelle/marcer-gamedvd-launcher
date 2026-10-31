@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in project root for details.
 
 import 'atarilegend.dart';
+import 'crew_clusters.dart';
 import 'crews.dart';
 import 'gameinfo.dart';
 import 'screenshot_index.dart';
@@ -245,6 +246,7 @@ class GameCard {
     this.tosVersion,
     this.atariLegend,
     this.crew,
+    this.cluster,
   });
 
   final String id;
@@ -302,6 +304,10 @@ class GameCard {
   /// Crew payload for a synthetic `kind == 'crew'` card (the crew view).
   /// Null for every regular game/pd/utils/magazine/falcon card.
   final CrewGroup? crew;
+
+  /// Cluster payload for a synthetic `kind == 'cluster'` card (the Clusters
+  /// tab). Null for every other card.
+  final CrewCluster? cluster;
 
   /// AtariLegend match for this card's folder (`null` without data/match);
   /// supplies the genre/developer filters and the AtariLegend button.

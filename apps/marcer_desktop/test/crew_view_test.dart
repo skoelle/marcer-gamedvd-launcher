@@ -323,8 +323,9 @@ void main() {
       c.displayPreviewPathForCard(c.selectedCard!),
       endsWith('curated.png'),
     );
-    expect(c.countText, '2 crews');
+    expect(c.countText, '1 crew · 1 cracker');
     expect(c.statusLine, contains('3 releases'));
+    expect(c.statusLine, contains('2 groups'));
 
     c.setQuery('beta');
     expect(c.catalogCards, hasLength(1));
@@ -349,7 +350,7 @@ void main() {
     expect(c.catalogCards.every((card) => card.crew == null), isTrue);
   });
 
-  test('crews tab shows all non-excluded groups', () async {
+  test('crews tab shows all groups with TOP/Non-TOP filters', () async {
     final groups = [
       for (var i = 1; i <= 130; i++)
         {
@@ -376,12 +377,27 @@ void main() {
     addTearDown(c2.dispose);
     await c2.init();
     c2.setSection('crew');
-    expect(c2.crews.length, 129);
-    expect(c2.catalogCards, hasLength(129));
+    expect(c2.crews.length, 130);
+    expect(c2.catalogCards, hasLength(130));
     expect(c2.catalogCards.first.crew?.name, 'Crew 01');
     expect(c2.catalogCards.last.crew?.name, 'Crew 130');
-    expect(c2.crews.groups.any((g) => g.name == 'Crew 10'), isFalse);
-    expect(c2.statusLine, contains('129 groups'));
+    expect(c2.crews.groups.any((g) => g.name == 'Crew 10'), isTrue);
+    expect(c2.statusLine, contains('130 groups'));
+
+    c2.setCrewTop('only');
+    expect(c2.catalogCards, hasLength(129));
+    expect(c2.catalogCards.any((c) => c.crew?.name == 'Crew 10'), isFalse);
+
+    c2.setCrewTop('none');
+    expect(c2.catalogCards, hasLength(1));
+    expect(c2.catalogCards.single.crew?.name, 'Crew 10');
+    expect(c2.catalogCards.single.crew?.top, isFalse);
+
+    c2.setCrewTop('any');
+    c2.setCrewKind('cracker');
+    expect(c2.catalogCards, isEmpty);
+    c2.setCrewKind('crew');
+    expect(c2.catalogCards, hasLength(130));
   });
 
   testWidgets('crew lightbox lists releases and navigates with arrows', (

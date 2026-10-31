@@ -33,10 +33,10 @@ Save, the manual screenshot curation described below.
 ### ✨ Features
 
 - **Gallery-style catalog grid** with section tabs (`games`, `pd`, `utils`,
-  `magazines`, `falcon`, `crews`), search, status/publisher/crew/cracker/
-  language/year/genre/developer filters, tri-state `raw`/`pasti`/`boxscan`,
-  `TOS/Bad` and a combined sort dropdown. Every dropdown is virtualized and
-  type-to-filter.
+  `magazines`, `falcon`, `crews`, `clusters`), search, status/publisher/crew/
+  cracker/language/year/genre/developer filters, tri-state
+  `raw`/`pasti`/`boxscan`, `TOS/Bad` and a combined sort dropdown. Every
+  dropdown is virtualized and type-to-filter.
 - **Detail sidebar and full-screen lightbox** with the "This ZIP" table
   (including the release-specific `Cracked by`/`Crew` taken from the XLS row
   that matches the selected ZIP; missing labels fall back to the ZIP-name
@@ -51,11 +51,16 @@ Save, the manual screenshot curation described below.
   menu-disk appearances, trivia), both downloaded on demand, never bundled
   (CC BY-NC-SA 4.0). PirateFinder matches use the precomputed disk-image
   hashes from `full-index.json.gz` (exact) with a title fallback.
-- **Crews tab** from `crews.json` with a release browser (game title, folder
-  buttons and lightbox-style badges for the selected release, plus a cracker
-  filter built from the crew's releases) and PirateFinder
-  crew details. Joint credits use the unified `A & B` spelling and stay their
-  own group unless explicitly allowlisted for merging.
+- **Crews tab** from `crews.json` with all groups (TOP/Non-TOP badges plus
+  Type and Ranking filters), a release browser (game title, folder buttons and
+  lightbox-style badges for the selected release, plus a cracker filter built
+  from the crew's releases), memberships and cluster cross-links, and
+  PirateFinder crew details. Joint credits use the unified `A & B` spelling
+  and stay their own group unless explicitly allowlisted for merging.
+- **Clusters tab** from the optional `crew-cluster.json`: umbrella/independent
+  cluster cards and a tree browser with subgroup hierarchy, person members,
+  previews, overlaps, external-branch toggle and navigation between clusters
+  and crew releases.
 - **Local layer & missing ZIPs** resolved from the filesystem
   (`ROOT`/`PATCH`/`BOTH`, `MISSING`), plus **Download folder** from the Marcer
   FTP for absent game folders.

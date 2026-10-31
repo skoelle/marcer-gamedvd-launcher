@@ -219,6 +219,8 @@ class _FilterBarState extends State<FilterBar> {
     final facets = c.facets;
     final fields = kindFilters(f.section);
     final isCrew = f.section == 'crew';
+    final isCluster = f.section == 'cluster';
+    final isExtra = isCrew || isCluster;
     // AtariLegend-only facets: hidden until the cache has been downloaded.
     final withAtariLegend = c.hasAtariLegend;
 
@@ -233,14 +235,15 @@ class _FilterBarState extends State<FilterBar> {
             Row(
               children: [
                 if (c.catalogMode) ...[
-                  for (final s in kSections) ...[
-                    _tabButton(
-                      _sectionLabel(s),
-                      f.section == s,
-                      () => c.setSection(s),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
+                  for (final s in kSections)
+                    if (s != 'cluster' || c.clusters.hasData) ...[
+                      _tabButton(
+                        _sectionLabel(s),
+                        f.section == s,
+                        () => c.setSection(s),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
                 ],
                 const Spacer(),
                 if (c.hasPendingStatusChanges) ...[
@@ -309,7 +312,7 @@ class _FilterBarState extends State<FilterBar> {
                   // pd/utils carry index-derived statuses; all sections start
                   // with the configured `DefaultStatus`. Crew cards are not
                   // screenshot-status driven.
-                  if (!isCrew)
+                  if (!isExtra)
                     SelectMenu(
                       value: f.status,
                       items: ['with_screenshot', 'any', ...kStatusFilterKeys],
@@ -317,13 +320,45 @@ class _FilterBarState extends State<FilterBar> {
                       onChanged: c.setStatus,
                       width: 150,
                     ),
-                  if (isCrew)
+                  if (isCrew) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 2),
                       child: Text(
                         c.crews.length == 0
                             ? 'No crew data'
                             : '${c.crews.length} groups',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ),
+                    SelectMenu(
+                      value: f.crewKind,
+                      items: const ['any', 'crew', 'cracker'],
+                      labelOf: (v) => v == 'any' ? 'Type: any' : 'Type: $v',
+                      onChanged: c.setCrewKind,
+                      width: 120,
+                    ),
+                    SelectMenu(
+                      value: f.crewTop,
+                      items: const ['any', 'only', 'none'],
+                      labelOf: (v) => switch (v) {
+                        'only' => 'Ranking: TOP only',
+                        'none' => 'Ranking: No TOP',
+                        _ => 'Ranking: any',
+                      },
+                      onChanged: c.setCrewTop,
+                      width: 150,
+                    ),
+                  ],
+                  if (isCluster)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Text(
+                        c.clusters.hasData
+                            ? '${c.clusters.length} clusters'
+                            : 'No cluster data',
                         style: const TextStyle(
                           fontSize: 11,
                           color: Colors.grey,
@@ -418,7 +453,7 @@ class _FilterBarState extends State<FilterBar> {
                       onChanged: c.setTos,
                       width: 120,
                     ),
-                  if (!isCrew)
+                  if (!isExtra)
                     SelectMenu(
                       value: '${f.sort}:${f.order}',
                       items: [
@@ -434,7 +469,15 @@ class _FilterBarState extends State<FilterBar> {
                     ),
                 ],
               ),
-              if (!isCrew) ...[
+              if (isExtra) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    _labelButton('clear', c.resetFilters, width: 52),
+                  ],
+                ),
+              ],
+              if (!isExtra) ...[
                 const SizedBox(height: 4),
                 _letterRow(
                   facets.letters,
@@ -465,6 +508,7 @@ class _FilterBarState extends State<FilterBar> {
   String _sectionLabel(String section) => switch (section) {
     'cracked' => 'games',
     'crew' => 'crews',
+    'cluster' => 'clusters',
     'magazine' => 'magazines',
     _ => section,
   };

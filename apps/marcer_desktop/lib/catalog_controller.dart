@@ -107,6 +107,7 @@ class CatalogController extends ChangeNotifier {
   late CatalogUniverse universe;
   late CrewIndex crews;
   late CrewImageIndex crewImages;
+  late CrewClusterIndex clusters;
   FavoritesService? favorites;
 
   /// Section → tree directory rel path (e.g.
@@ -140,6 +141,7 @@ class CatalogController extends ChangeNotifier {
   bool _catalogDirty = true;
 
   List<GameCard>? _crewCardsBase;
+  List<GameCard>? _clusterCardsBase;
   Map<String, ({GameCard card, int index})>? _releaseLookupCache;
 
   /// Catalog-only "★ Favorites" filter (not part of [CatalogFilter]).
@@ -161,6 +163,7 @@ class CatalogController extends ChangeNotifier {
     _indexTreeCache.clear();
     _releaseLookupCache = null;
     _crewCardsBase = null;
+    _clusterCardsBase = null;
     notifyListeners();
     try {
       // Capture a plain config value (not `this`) so the loader stays
@@ -183,6 +186,7 @@ class CatalogController extends ChangeNotifier {
       gameinfo = bundle.info;
       crews = bundle.crews;
       crewImages = bundle.crewImages;
+      clusters = bundle.clusters;
       atariLegend = bundle.atariLegend;
       universe = bundle.universe;
       _statusLineCache.clear();
@@ -216,9 +220,9 @@ class CatalogController extends ChangeNotifier {
       favorites = FavoritesService.load(
         fileForSection: {
           for (final section in kSections)
-            if (patch.isEmpty)
+            if (section != 'cluster' && patch.isEmpty)
               section: p.join(appDir, favoritesSectionFileName(section))
-            else if (sectionTrees[section] != null)
+            else if (section != 'cluster' && sectionTrees[section] != null)
               section: p.join(
                 patch,
                 sectionTrees[section]!,
@@ -363,7 +367,24 @@ class CatalogController extends ChangeNotifier {
     if (!_catalogDirty && _catalogCache != null) return _catalogCache!;
     if (filter.section == 'crew') {
       final q = filter.q.trim().toLowerCase();
-      final base = _crewCards;
+      final kind = filter.crewKind;
+      final top = filter.crewTop;
+      _catalogCache = _crewCards.where((card) {
+        final group = card.crew;
+        if (q.isNotEmpty && !card.searchText.contains(q)) return false;
+        if (kind == 'crew' || kind == 'cracker') {
+          if (group?.kind != kind) return false;
+        }
+        if (top == 'only' && !(group?.top ?? false)) return false;
+        if (top == 'none' && (group?.top ?? false)) return false;
+        return true;
+      }).toList();
+      _catalogDirty = false;
+      return _catalogCache!;
+    }
+    if (filter.section == 'cluster') {
+      final q = filter.q.trim().toLowerCase();
+      final base = _clusterCards;
       _catalogCache = q.isEmpty
           ? base
           : base.where((card) => card.searchText.contains(q)).toList();
@@ -500,6 +521,117 @@ class CatalogController extends ChangeNotifier {
     return cards;
   }
 
+  // --------------------------------------------------------- cluster view
+
+  /// Synthetic catalog cards for the Clusters tab (gallery order).
+  List<GameCard> get _clusterCards =>
+      _clusterCardsBase ??= _buildClusterCards();
+
+  List<GameCard> _buildClusterCards() {
+    final cards = <GameCard>[];
+    for (final cluster in clusters.clusters) {
+      final preview = _clusterPreview(cluster);
+      final searchParts = <String>[cluster.name, cluster.kind, ...cluster.roots];
+      cards.add(
+        GameCard(
+          id: 'cluster:${cluster.id}',
+          name: cluster.name,
+          kind: 'cluster',
+          letter: '',
+          folder: cluster.id,
+          displayStatus: '',
+          screenshots: preview != null,
+          statusCounts: const {},
+          layer: '',
+          year: 'unknown',
+          previewPath: preview,
+          variants: const [],
+          info: null,
+          yearNum: 0,
+          publishers: const [],
+          crews: const [],
+          crackers: const [],
+          languages: const [],
+          raw: null,
+          pasti: null,
+          boxscan: null,
+          tos: false,
+          publisherSort: '',
+          crewSort: cluster.name.toLowerCase(),
+          crackerSort: '',
+          languageSort: '',
+          searchText: searchParts
+              .where((part) => part.isNotEmpty)
+              .join(' ')
+              .toLowerCase(),
+          sortName: cluster.name.toLowerCase(),
+          cluster: cluster,
+        ),
+      );
+    }
+    return cards;
+  }
+
+  /// Cluster card preview: `preview_local_id`, then the first preview in the
+  /// tree, then the first local group id (gallery `_cluster_public` order).
+  String? _clusterPreview(CrewCluster cluster) {
+    final preferred = cluster.previewLocalId;
+    if (preferred != null) {
+      final preview = previewForLocalCrewId(preferred);
+      if (preview != null) return preview;
+    }
+    final tree = cluster.tree;
+    if (tree != null) {
+      final ids = <String>[];
+      _collectLocalCrewIds(tree, ids);
+      for (final id in ids) {
+        final preview = previewForLocalCrewId(id);
+        if (preview != null) return preview;
+      }
+    }
+    for (final group in cluster.groups) {
+      final id = group.localId;
+      if (id == null || id.isEmpty) continue;
+      final preview = previewForLocalCrewId(id);
+      if (preview != null) return preview;
+    }
+    return null;
+  }
+
+  void _collectLocalCrewIds(CrewClusterNode node, List<String> out) {
+    final id = node.localId;
+    if (id != null && id.isNotEmpty && !out.contains(id)) out.add(id);
+    for (final member in node.members) {
+      final memberId = member.localId;
+      if (memberId != null &&
+          memberId.isNotEmpty &&
+          !out.contains(memberId)) {
+        out.add(memberId);
+      }
+    }
+    for (final child in node.children) {
+      _collectLocalCrewIds(child, out);
+    }
+  }
+
+  /// Resolved preview of one local crew id (clusters have no preview paths in
+  /// the published file; the app joins them like the gallery server).
+  String? previewForLocalCrewId(String id) {
+    final group = crews.groupForId(id);
+    if (group == null) return null;
+    return _crewPreview(group);
+  }
+
+  /// Local crew group for a cluster node/member id.
+  CrewGroup? crewForLocalId(String id) => crews.groupForId(id);
+
+  /// Clusters containing [group] (crew browser cross-links).
+  List<CrewCluster> clustersForCrew(CrewGroup group) =>
+      clusters.clustersForCrew(group.id);
+
+  /// Cracker/group membership entity of [group], if present.
+  CrewEntity? entityForCrew(CrewGroup group) => clusters.entityFor(group.id);
+
   /// Best available screenshot of a crew's releases (temporary card image
   /// until the curated cracktro image phase lands).
   String? _crewPreview(CrewGroup group) {
@@ -580,8 +712,9 @@ class CatalogController extends ChangeNotifier {
 
   void setSection(String value) {
     if (filter.section == value) return;
+    if (value == 'cluster' && !clusters.hasData) return;
     filter.section = value;
-    if (value == 'crew') favoritesOnly = false;
+    if (value == 'crew' || value == 'cluster') favoritesOnly = false;
     // Gallery section switch: reset incompatible filters.
     filter.status = config.defaultStatus;
     filter.raw = 'any';
@@ -631,6 +764,16 @@ class CatalogController extends ChangeNotifier {
 
   void setCracker(String value) {
     filter.cracker = value;
+    _filtersChanged();
+  }
+
+  void setCrewKind(String value) {
+    filter.crewKind = value;
+    _filtersChanged();
+  }
+
+  void setCrewTop(String value) {
+    filter.crewTop = value;
     _filtersChanged();
   }
 
@@ -706,6 +849,7 @@ class CatalogController extends ChangeNotifier {
   String? favoritesRelForEntry(Entry entry) {
     if (!entry.isVirtual) return null;
     for (final section in kSections) {
+      if (section == 'cluster') continue;
       if (entry.name == favoritesFolderLabel(section)) {
         return favoritesRelFor(section);
       }
@@ -716,7 +860,8 @@ class CatalogController extends ChangeNotifier {
   /// One virtual Favorites folder per section that currently has favorites.
   List<Entry> get virtualFavoritesEntries => [
     for (final section in kSections)
-      if (favorites?.pathsForSection(section).isNotEmpty ?? false)
+      if (section != 'cluster' &&
+          (favorites?.pathsForSection(section).isNotEmpty ?? false))
         Entry(
           name: favoritesFolderLabel(section),
           kind: EntryKind.directory,
@@ -2031,8 +2176,18 @@ class CatalogController extends ChangeNotifier {
   String get countText {
     if (catalogMode) {
       if (filter.section == 'crew') {
+        final cards = catalogCards;
+        final crews = cards.where((c) => c.crew?.kind != 'cracker').length;
+        final crackers = cards.length - crews;
+        final bits = <String>[
+          if (crews > 0) '$crews crew${crews == 1 ? '' : 's'}',
+          if (crackers > 0) '$crackers cracker${crackers == 1 ? '' : 's'}',
+        ];
+        return bits.isEmpty ? '0 results' : bits.join(' · ');
+      }
+      if (filter.section == 'cluster') {
         final n = catalogCards.length;
-        return '$n crew${n == 1 ? '' : 's'}';
+        return '$n cluster${n == 1 ? '' : 's'}';
       }
       if (favoritesOnly) return '${catalogCards.length} favorites';
       final n = catalogCards.length;
@@ -2057,10 +2212,33 @@ class CatalogController extends ChangeNotifier {
     if (section == 'crew') {
       final err = crews.loadError;
       if (err != null) return List<String>.unmodifiable(['crew data: $err']);
+      final cards = catalogCards;
+      final visible = cards.map((c) => c.crew).whereType<CrewGroup>();
+      final groupCount = visible.length;
+      final crewsCount = visible.where((g) => g.kind != 'cracker').length;
+      final crackerCount = groupCount - crewsCount;
+      final releases = visible.fold(
+        0,
+        (sum, group) => sum + group.releases.length,
+      );
       return List<String>.unmodifiable([
-        '${crews.totalReleases} releases',
-        '${crews.length} groups',
+        '$releases releases',
+        '$groupCount groups',
+        if (crewsCount > 0) '$crewsCount crews',
+        if (crackerCount > 0) '$crackerCount crackers',
         if (crews.generatedAt.isNotEmpty) 'crews: ${crews.generatedAt}',
+      ]);
+    }
+    if (section == 'cluster') {
+      final err = clusters.loadError;
+      if (err != null) {
+        return List<String>.unmodifiable(['cluster data: $err']);
+      }
+      return List<String>.unmodifiable([
+        '${clusters.length} clusters',
+        '${catalogCards.length} shown',
+        if (clusters.generatedAt.isNotEmpty)
+          'clusters: ${clusters.generatedAt}',
       ]);
     }
     final cached = _statusLineCache[section];
@@ -2172,6 +2350,11 @@ class CatalogController extends ChangeNotifier {
       if (crews.groups.isNotEmpty) return null;
       return 'No crew data loaded — run tools/crew-analysis/run.sh to '
           'generate crews.json in the GameinfoDirectory.';
+    }
+    if (section == 'cluster') {
+      if (clusters.hasData) return null;
+      return 'No cluster data loaded — generate crew-cluster.json in the '
+          'GameinfoDirectory (local/crew-clusters/run.sh).';
     }
     if (universe.cardsFor(section).isNotEmpty) return null;
     final noIndex = screenshots.forSection(section).loadError != null;
@@ -2496,9 +2679,10 @@ class CatalogController extends ChangeNotifier {
     // The crew release lookup holds the old card objects; rebuild it so
     // `C` (status/kind) also refreshes releases opened from the Crews tab.
     _releaseLookupCache = null;
-    // Crew cards embed a preview chosen by status/kind rank, so they must be
-    // rebuilt from the new universe as well.
+    // Crew/cluster cards embed previews resolved against the screenshot index,
+    // so they must be rebuilt from the new universe as well.
     _crewCardsBase = null;
+    _clusterCardsBase = null;
   }
 
   /// Persists the pending changes (shotgen lock, atomic `index.json` +

@@ -50,6 +50,7 @@ DataLayoutMigrationResult migrateDataLayout(DesktopConfig config) {
     'unmatched-report.txt',
     'crews.json',
     'crew-images.json',
+    'crew-cluster.json',
     '.marcer-assets.json',
   };
   final gameinfoDir = p.join(root, 'gameinfo');

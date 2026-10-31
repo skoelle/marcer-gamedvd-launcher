@@ -25,21 +25,34 @@ import 'select_menu.dart';
 /// right. Up/down move through the releases; P/Space launches, Enter opens the
 /// normal game lightbox, Esc closes.
 class CrewLightbox extends StatefulWidget {
-  const CrewLightbox({super.key, required this.controller, required this.crew});
+  const CrewLightbox({
+    super.key,
+    required this.controller,
+    required this.crew,
+    this.onOpenCluster,
+  });
 
   final CatalogController controller;
   final CrewGroup crew;
 
+  /// Opens the cluster browser from the crew's cluster cross-links.
+  final void Function(CrewCluster cluster)? onOpenCluster;
+
   static Future<void> show(
     BuildContext context,
     CatalogController controller,
-    CrewGroup crew,
-  ) {
+    CrewGroup crew, {
+    void Function(CrewCluster cluster)? onOpenCluster,
+  }) {
     return showDialog<void>(
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black87,
-      builder: (_) => CrewLightbox(controller: controller, crew: crew),
+      builder: (_) => CrewLightbox(
+        controller: controller,
+        crew: crew,
+        onOpenCluster: onOpenCluster,
+      ),
     );
   }
 
@@ -746,6 +759,14 @@ class _CrewLightboxState extends State<CrewLightbox> {
             key: const ValueKey('crew-lightbox-overview'),
             crew: widget.crew,
             pirateFinderCrew: pirateFinderCrew,
+            entity: widget.controller.entityForCrew(widget.crew),
+            clusters: widget.controller.clustersForCrew(widget.crew),
+            onOpenCluster: widget.onOpenCluster == null
+                ? null
+                : (cluster) {
+                    Navigator.of(context).pop();
+                    widget.onOpenCluster!(cluster);
+                  },
             onOpenPirateFinder: pirateFinderCrew == null
                 ? null
                 : () => showPirateFinderCrewDialog(

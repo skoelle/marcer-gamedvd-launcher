@@ -24,6 +24,7 @@ import 'theme.dart';
 import 'tos_rom.dart';
 import 'window_layout.dart';
 import 'widgets/card_grid.dart';
+import 'widgets/cluster_lightbox.dart';
 import 'widgets/crew_lightbox.dart';
 import 'widgets/detail_panel.dart';
 import 'widgets/entry_list.dart';
@@ -884,7 +885,7 @@ class _HomePageState extends State<HomePage> {
       if (e == null || e.kind != EntryKind.zip) return;
     } else {
       final card = c.selectedCard;
-      if (card == null || card.crew != null) return;
+      if (card == null || card.crew != null || card.cluster != null) return;
     }
     GameLightbox.show(
       context,
@@ -900,7 +901,40 @@ class _HomePageState extends State<HomePage> {
   void _openCrewLightbox(GameCard card) {
     final crew = card.crew;
     if (crew == null) return;
-    CrewLightbox.show(context, _controller, crew);
+    CrewLightbox.show(
+      context,
+      _controller,
+      crew,
+      onOpenCluster: _openCluster,
+    );
+  }
+
+  /// Opens the cluster browser for a synthetic cluster card.
+  void _openClusterLightbox(GameCard card) {
+    final cluster = card.cluster;
+    if (cluster == null) return;
+    _openCluster(cluster);
+  }
+
+  /// Opens the cluster browser and wires its local-crew navigation back to
+  /// the crew release browser.
+  void _openCluster(CrewCluster cluster) {
+    ClusterLightbox.show(
+      context,
+      _controller,
+      cluster,
+      onOpenCrew: _openCrewGroup,
+    );
+  }
+
+  /// Opens the crew release browser for a crew found inside a cluster tree.
+  void _openCrewGroup(CrewGroup crew) {
+    CrewLightbox.show(
+      context,
+      _controller,
+      crew,
+      onOpenCluster: _openCluster,
+    );
   }
 
   /// Opens a crew release in the existing game lightbox without leaving the
@@ -1059,6 +1093,7 @@ class _HomePageState extends State<HomePage> {
                           onToggleHelp: _toggleHelp,
                           onOpenLightbox: _openLightbox,
                           onOpenCrewLightbox: _openCrewLightbox,
+                          onOpenClusterLightbox: _openClusterLightbox,
                           onFocusSearch: () => _searchFocus.requestFocus(),
                           focusNode: _centerFocus,
                         )
@@ -1079,6 +1114,8 @@ class _HomePageState extends State<HomePage> {
                       controller: c,
                       onOpenLightbox: _openLightbox,
                       onOpenCrewRelease: _openCrewRelease,
+                      onOpenClusterLightbox: _openClusterLightbox,
+                      onOpenCluster: _openCluster,
                     ),
                   ),
                 ),

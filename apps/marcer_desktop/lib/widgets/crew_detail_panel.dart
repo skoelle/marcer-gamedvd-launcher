@@ -16,9 +16,17 @@ class CrewDetailPanel extends StatelessWidget {
     this.pirateFinderCrew,
     this.onOpenPirateFinder,
     this.onOpenRelease,
+    this.entity,
+    this.clusters = const [],
+    this.onOpenCluster,
   });
 
   final CrewGroup crew;
+
+  /// Membership data and cluster cross-links from `crew-cluster.json`.
+  final CrewEntity? entity;
+  final List<CrewCluster> clusters;
+  final void Function(CrewCluster cluster)? onOpenCluster;
 
   /// Optional PirateFinder crew info of the same group (members, history,
   /// release count, source); shown above the release list when present.
@@ -39,6 +47,9 @@ class CrewDetailPanel extends StatelessWidget {
           crew: crew,
           pirateFinderCrew: pirateFinderCrew,
           onOpenPirateFinder: onOpenPirateFinder,
+          entity: entity,
+          clusters: clusters,
+          onOpenCluster: onOpenCluster,
           showHints: true,
         ),
         const Divider(height: 1),

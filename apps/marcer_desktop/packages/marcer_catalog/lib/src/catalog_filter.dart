@@ -15,7 +15,7 @@ Set<String> kindFilters(String kind) => switch (kind) {
         },
       'magazine' => {'year'},
       'falcon' => const {},
-      'crew' => const {},
+      'crew' || 'cluster' => const {},
       'utils' => {
           'publisher',
           'genre',
@@ -61,6 +61,8 @@ class CatalogFilter {
     this.pasti = 'any',
     this.boxscan = 'any',
     this.tos = 'any',
+    this.crewKind = 'any',
+    this.crewTop = 'any',
     this.sort = 'name',
     this.order = 'asc',
   });
@@ -80,6 +82,11 @@ class CatalogFilter {
   String pasti;
   String boxscan;
   String tos;
+
+  /// Crews-tab filters: group kind (`any`/`crew`/`cracker`) and curated TOP
+  /// selection (`any`/`only`/`none`).
+  String crewKind;
+  String crewTop;
   String sort;
   String order;
 
@@ -104,6 +111,8 @@ class CatalogFilter {
       pasti != 'any' ||
       boxscan != 'any' ||
       tos != 'any' ||
+      crewKind != 'any' ||
+      crewTop != 'any' ||
       sort != 'name' ||
       order != 'asc';
 
@@ -124,6 +133,8 @@ class CatalogFilter {
     pasti = 'any';
     boxscan = 'any';
     tos = 'any';
+    crewKind = 'any';
+    crewTop = 'any';
     sort = 'name';
     order = 'asc';
   }
@@ -144,6 +155,8 @@ class CatalogFilter {
         pasti: pasti,
         boxscan: boxscan,
         tos: tos,
+        crewKind: crewKind,
+        crewTop: crewTop,
         sort: sort,
         order: order,
       );
