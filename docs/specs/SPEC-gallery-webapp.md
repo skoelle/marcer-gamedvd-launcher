@@ -244,7 +244,8 @@ internal matching IDs)*
   `preview` is joined server-side from `crews.json`/`crew-images.json` and is
   `null` for external groups.
 - `edges[]` are global: `from` (subgroup), `to` (parent),
-  `type: "subgroup_of"`, `current`, `clusters[]` and `cross_cluster`.
+  `type: "subgroup_of"`, `current`, `clusters[]`, `cross_cluster` and an
+  optional `manual: true` for locally curated edge overrides.
 - `trees.<cluster id>` is the nested, deduplicated spanning tree used by the
   UI; multiple parent links remain in `edges[]`. Tree nodes additionally
   carry `members[]` (`name`, `local_id`, `zips`, `current`) for person
@@ -538,9 +539,9 @@ error body `{ "error": "<message>" }`.
     "available": true,
     "count": 32,
     "groups": 283,
-    "edges": 243,
+    "edges": 244,
     "cross_edges": 40,
-    "generated_at": "2026-10-31T19:57:39Z",
+    "generated_at": "2026-10-31T21:02:36Z",
     "error": null
   }
 }
