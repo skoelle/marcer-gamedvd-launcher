@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "screens": {
+    "cdc93236cdc93236": {
+      "label": "Error while loading [Invalid argument]",
+      "action": "error",
+      "notes": "Generic TOS/GEMDOS loader error; retry with TOS 1.02, then TOS 1.00."
+    },
+    "be1bc1e43e9fc060": {
+      "label": "Daten auf Diskette ... defekt",
+      "action": "error",
+      "notes": "TOS disk-defect dialog seen with many unrelated titles; retry with TOS 1.02 then 1.00."
+    },
+    "949c2b9c3b62e52b": {
+      "label": "LAPD bootsector cracktro",
+      "action": "valid",
+      "notes": "Cracktro is a desired done/game preview."
+    },
+    "cccc3333cccc3333": {
+      "label": "DECON cracktro",
+      "action": "valid",
+      "notes": "Cracktro is a desired done/game preview."
+    },
+    "c2c23d3dd2d2c62d": {
+      "label": "STARMAN cracktro",
+      "action": "valid",
+      "notes": "Cracktro is a desired done/game preview."
+    },
+    "99cc663399cc6633": {
+      "label": "Choose & load title loader menu",
+      "action": "valid",
+      "notes": "Loader menus are accepted as done/game previews."
+    }
+  }
+}

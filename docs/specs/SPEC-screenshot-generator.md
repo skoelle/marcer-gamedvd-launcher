@@ -379,7 +379,8 @@ capture pipeline, timepoints and filters are unchanged (screenshots are
 
 The rules apply to **future captures** only. A normal `run` still skips
 finished entries (`done`, `desktop`, `no_usable_shots`); existing captures
-are not recaptured automatically. `run --force --only <substring>` can
+are not recaptured automatically. `run --force --only <substring>` or
+`run --force --only-file <list>` (exact rel paths, one per line) can
 recapture selected entries explicitly. Applies in every scope (the rules
 are config keys, not pipeline branches).
 
@@ -875,8 +876,9 @@ classified `black` (section 8.1) and the entry ends as
 
 - **TOS map.** The config maps a version label to the environment
   variable holding its ROM image (section 11.2 `tos_images`): `1.04`
-  (default, `MARCER_TOS_IMG`) and `1.02` (`MARCER_TOS102_IMG`). The
-  alternative image is resolved lazily, so a run that does not use it
+  (default, `MARCER_TOS_IMG`), `1.02` (`MARCER_TOS102_IMG`) and `1.00`
+  (`MARCER_TOS100_IMG`, fallback for old error-screen retries). The
+  alternative images are resolved lazily, so a run that does not use one
   does not require its variable to be set.
 - **`run --tos <version>`.** Boots every pending entry with the given
   version instead of `tos_default`. The override combines with any
@@ -1502,6 +1504,7 @@ specs, logs or examples):
 | `MARCER_DATA_DIR` | no | data directory; gameinfo files are read from `MARCER_DATA_DIR/gameinfo/games-<scope>.json`, enables the `screen_format` monitor rules (section 4.6) |
 | `MARCER_TOS_IMG` | yes | default TOS 1.04 ROM image for Hatari |
 | `MARCER_TOS102_IMG` | no | TOS 1.02 ROM image, required only by `run --tos 1.02` (section 7.5) |
+| `MARCER_TOS100_IMG` | no | TOS 1.00 ROM image, required only by `run --tos 1.00` (section 7.5) |
 | `MARCER_HATARI_BIN` | no | Hatari executable, default `hatari` from PATH |
 | `MARCER_DISPLAY` | no | fixed X display number, default `:99` |
 
@@ -1517,6 +1520,7 @@ MARCER_OUT_DIR=...
 MARCER_DATA_DIR=...   # optional, data directory (gameinfo/ subfolder)
 MARCER_TOS_IMG=...
 MARCER_TOS102_IMG=...
+MARCER_TOS100_IMG=...
 MARCER_HATARI_BIN=...
 MARCER_DISPLAY=...
 ```

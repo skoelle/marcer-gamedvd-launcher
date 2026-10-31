@@ -2517,6 +2517,21 @@ def safe_filename(name: str) -> str:
     return re.sub(r'[:?*"\x00-\x1f]', "_", name)
 
 
+def load_only_file(path: str) -> set[str]:
+    """Load exact rel paths from ``--only-file`` (one per line)."""
+    if not path:
+        return set()
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError as exc:
+        sys.exit(f"error: cannot read --only-file {path}: {exc}")
+    return {
+        line.strip().replace("\\", "/").lower()
+        for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+
 def metadata_path(mirror: Path, base: str):
     """Locate the per-entry metadata JSON for a mirror directory.
 
@@ -3642,6 +3657,7 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
 
     idx = load_index(out, scope["index"])
     entries = idx["entries"]
+    only_file = load_only_file(getattr(args, "only_file", ""))
     pending = []
     for rel in sorted(entries):
         e = entries[rel]
@@ -3682,6 +3698,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 and not args.force:
             continue
         if args.only and args.only.lower() not in rel.lower():
+            continue
+        if only_file and rel.lower() not in only_file:
             continue
         pending.append(e)
 
@@ -4734,6 +4752,8 @@ def main() -> int:
                        help="reprocess done/desktop entries too")
     p_run.add_argument("--only", type=str, default="",
                        help="only entries whose path contains this string")
+    p_run.add_argument("--only-file", type=str, default="",
+                       help="file with exact entry rel paths, one per line")
     p_run.add_argument("--jobs", type=int, default=1,
                        help="parallel workers, each runs one Hatari instance "
                             "in the shared Xvfb display (default: 1 = "

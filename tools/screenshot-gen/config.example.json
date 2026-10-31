@@ -67,8 +67,9 @@
   "keep_candidates": true,
   "tos_default": "1.04",
   "tos_images": {
-    "1.04": "MARCER_TOS_IMG",
+    "1.00": "MARCER_TOS100_IMG",
     "1.02": "MARCER_TOS102_IMG",
+    "1.04": "MARCER_TOS_IMG",
     "4.04": "MARCER_TOS404_IMG"
   },
   "disk_skip_regex": "(?i)(?:^|[\\s\\-_.])(?:disk|side|disc)[\\s\\-_.]*(?:[2-9]|b|ii|iii)(?:$|[\\s\\-_.])",

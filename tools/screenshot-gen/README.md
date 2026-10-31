@@ -15,8 +15,9 @@ full specification.
   (`Pillow`, `imagehash`, `numpy`, `scipy`)
 - Environment in `local/paths.env` (git-ignored):
   `MARCER_ROOT_DIR`, `MARCER_PATCH_DIR`, `MARCER_OUT_DIR`, `MARCER_TOS_IMG`
-  (default TOS 1.04), for the TOS-1.02 retry `MARCER_TOS102_IMG` and for the
-  Falcon scope `MARCER_TOS404_IMG` (TOS 4.04).
+  (default TOS 1.04), for the TOS retries `MARCER_TOS102_IMG` /
+  `MARCER_TOS100_IMG` and for the Falcon scope `MARCER_TOS404_IMG`
+  (TOS 4.04).
   Optional `MARCER_DATA_DIR` (gameinfo files are read from
   `MARCER_DATA_DIR/gameinfo/games-<scope>.json`) enables the `screen_format`
   monitor rules.
@@ -29,6 +30,7 @@ tools/screenshot-gen/run.sh run            # process pending entries (default sc
 tools/screenshot-gen/run.sh run --hours 8  # night run with time budget
 tools/screenshot-gen/run.sh run --limit 3  # small test batch
 tools/screenshot-gen/run.sh run --only Xevious   # only matching paths
+tools/screenshot-gen/run.sh run --only-file list.txt  # exact rel paths, one per line
 tools/screenshot-gen/run.sh run --jobs 8   # parallel workers (e.g. night runs)
 tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
 
@@ -39,6 +41,12 @@ tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
 # Play variant); failed attempts are remembered in `tos_tried`.
 tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.02
 tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.02 --only Bellum
+tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.00
+
+# Known error screens in bulk: tools/screenshot-audit clusters preview pHashes
+# and retries error entries with TOS 1.02, then TOS 1.00.
+tools/screenshot-audit/run.sh scan
+tools/screenshot-audit/run.sh retry
 
 # Scopes: every command works on exactly one scope per invocation
 # (default: the configured scope_default, see "Scopes" below).
