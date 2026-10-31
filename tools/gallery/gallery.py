@@ -1400,6 +1400,10 @@ class DataStore:
                         if match:
                             local_id = str(match.get("local_id") or "").strip()
                     node["preview"] = preview_for(local_id)
+                    for member in node.get("members") or []:
+                        if isinstance(member, dict):
+                            member["preview"] = preview_for(
+                                member.get("local_id"))
                     for child in node.get("children") or []:
                         enrich_tree(child)
                 enrich_tree(tree)
@@ -1415,7 +1419,9 @@ class DataStore:
                         return found
                 return None
 
-            preview = tree.get("preview") if isinstance(tree, dict) else None
+            preview = preview_for(raw.get("preview_local_id"))
+            if not preview:
+                preview = tree.get("preview") if isinstance(tree, dict) else None
             if not preview and isinstance(tree, dict):
                 preview = first_tree_preview(tree)
             if not preview and root_group:

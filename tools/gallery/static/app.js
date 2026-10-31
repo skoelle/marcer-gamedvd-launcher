@@ -1461,10 +1461,12 @@ function entitySummary(entity) {
   if (!entity) return "";
   const status = String(entity.status || "");
   if (status === "resolved" && entity.kind === "group") {
-    const names = (entity.parents || []).map((item) =>
+    const parts = [];
+    const parents = (entity.parents || []).map((item) =>
       `${item.name}${item.current ? " (current)" : ""}`);
-    return names.length
-      ? `Parent groups: ${names.join(" · ")}` : "Parent groups: none";
+    if (parents.length) parts.push(`Parent groups: ${parents.join(" · ")}`);
+    if (entity.subgroup_count) parts.push(`Subgroups: ${entity.subgroup_count}`);
+    return parts.length ? parts.join(" · ") : "Parent groups / subgroups: none";
   }
   if (status === "resolved") {
     const names = (entity.memberships || []).map((item) =>
@@ -1473,10 +1475,10 @@ function entitySummary(entity) {
       ? `Memberships: ${names.join(" · ")}` : "Memberships: none known";
   }
   if (status === "ambiguous") {
-    return `Memberships: ambiguous (${entity.candidate_count || 0} matches)`;
+    return `Matching: ambiguous (${entity.candidate_count || 0} matches)`;
   }
-  if (status === "joint") return "Memberships: joint label";
-  return "Memberships: none known";
+  if (status === "joint") return "Matching: joint label";
+  return "Matching: none known";
 }
 
 function renderCrewBrowser() {
@@ -1638,6 +1640,27 @@ function clusterNodeHtml(node, groups, extraParents, showExternal) {
   const children = (node.children || [])
     .map((child) =>
       clusterNodeHtml(child, groups, extraParents, showExternal)).join("");
+  const members = (node.members || []).map((member) => {
+    const memberThumb = member.local_id
+      ? `<button type="button" class="cluster-thumb-btn cluster-group" ` +
+        `data-crew-id="${esc(member.local_id)}" ` +
+        `title="${esc(member.name)}">` +
+        (member.preview
+          ? `<img class="cluster-thumb" loading="lazy" src="${imgSrc(member.preview)}" alt="">`
+          : `<span class="cluster-thumb cluster-thumb-empty">—</span>`) +
+        `</button>`
+      : `<span class="cluster-thumb cluster-thumb-empty">—</span>`;
+    const memberName = member.local_id
+      ? `<button type="button" class="cluster-group" ` +
+        `data-crew-id="${esc(member.local_id)}">${esc(member.name)}</button>`
+      : `<span class="cluster-group-static">${esc(member.name)}</span>`;
+    return `<div class="cluster-member-row">` +
+      memberThumb +
+      `<span class="badge b-member">member</span>${memberName}` +
+      (member.zips ? `<span class="chip">${member.zips} ZIPs</span>` : "") +
+      (member.current ? `<span class="cluster-muted">current</span>` : "") +
+      `</div>`;
+  }).join("");
   return `<div class="cluster-node">` +
     `<div class="cluster-node-row">` +
     thumb + clusterStatusBadge(status) + name +
@@ -1646,6 +1669,7 @@ function clusterNodeHtml(node, groups, extraParents, showExternal) {
     (extras.length
       ? `<div class="cluster-extra">also subgroup of ${extras.map(esc).join(", ")}</div>`
       : "") +
+    (members ? `<div class="cluster-members">${members}</div>` : "") +
     (children ? `<div class="cluster-children">${children}</div>` : "") +
     `</div>`;
 }
@@ -1658,6 +1682,7 @@ function clusterRenderSide(cluster, hiddenExternal) {
     ["Excluded", counts.excluded],
     ["Ambiguous", counts.ambiguous],
     ["External", counts.external],
+    ["Members", counts.members],
     ["Links", (cluster.edges || []).length],
   ];
   if (hiddenExternal) rows.push(["Hidden", hiddenExternal]);

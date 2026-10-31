@@ -230,21 +230,25 @@ internal matching IDs)*
 - `crew-cluster.json` (required for the Clusters tab): `schema`,
   `generated_at`, `clusters[]`, `edges[]`, `trees{}` and `entities{}`.
 - Each cluster carries `id`, `name`, `roots[]` (objects with `name`),
-  `counts` (`groups`, `top`, `excluded`, `ambiguous`, `external`) and
-  `groups[]` with `name`, optional `local_id`/`zips`/`preview`, `status`
+  `counts` (`groups`, `top`, `excluded`, `ambiguous`, `external`, `members`),
+  optional `preview_local_id` (preferred local preview) and `groups[]` with `name`, optional `local_id`/`zips`/`preview`, `status`
   (`top`/`excluded`/`external`/`ambiguous`) and `clusters[]` (overlap).
   `preview` is joined server-side from `crews.json`/`crew-images.json` and is
   `null` for external groups.
 - `edges[]` are global: `from` (subgroup), `to` (parent),
   `type: "subgroup_of"`, `current`, `clusters[]` and `cross_cluster`.
 - `trees.<cluster id>` is the nested, deduplicated spanning tree used by the
-  UI; multiple parent links remain in `edges[]`.
-- `entities{}` is keyed by local crew id and describes cracker memberships:
-  `name`, `kind` (`person`/`group`/`joint`/`unknown`), `status`
-  (`resolved`/`ambiguous`/`none`/`joint`), `memberships[]`/`parents[]`
-  (`name`, `current`) and `candidate_count` for ambiguous entries. The
-  gameinfo file has no internal matching IDs; a local audit copy may keep
-  them.
+  UI; multiple parent links remain in `edges[]`. Tree nodes additionally
+  carry `members[]` (`name`, `local_id`, `zips`, `current`) for person
+  labels that belong to the crew; members are not subgroup edges and do not
+  appear in `children`.
+- `entities{}` is keyed by local crew id and covers all TOP groups, all
+  crackers and explicit overrides: `name`, `kind`
+  (`person`/`group`/`joint`/`unknown`), `status`
+  (`resolved`/`ambiguous`/`none`/`joint`), `memberships[]` for persons,
+  `parents[]` plus `subgroup_count`/`descendant_count` for groups, and
+  `candidate_count` for ambiguous entries. The gameinfo file has no internal
+  matching IDs; a local audit copy may keep them.
 - Missing/unreadable `crew-cluster.json` hides the Clusters tab
   (`/api/meta` `clusters.available: false`, `clusters.error` set); it never
   aborts the catalog.
@@ -517,11 +521,11 @@ error body `{ "error": "<message>" }`.
   },
   "clusters": {
     "available": true,
-    "count": 9,
-    "groups": 131,
-    "edges": 123,
-    "cross_edges": 16,
-    "generated_at": "2026-10-31T12:33:07Z",
+    "count": 10,
+    "groups": 155,
+    "edges": 147,
+    "cross_edges": 18,
+    "generated_at": "2026-10-31T13:59:03Z",
     "error": null
   }
 }
@@ -899,7 +903,7 @@ lightbox, whose side panel carries the same metadata.
    row (A–Z + `0-9` + `Any`). In the `crews` tab only search, clear, the
    **Type** dropdown and the **Ranking** dropdown are shown; the crew cards
    are already ordered by ZIP count. In the `clusters` tab only search and
-   clear are shown; the nine cluster cards keep the file order.
+   clear are shown; the ten cluster cards keep the file order.
 4. **Grid**: grouped cards (section 6.4), paginated.
 5. **Pagination**: page indicator + prev/next + page-size-constant
    (`offset/limit`); keyboard PageUp/PageDown works on the grid (6.6).
@@ -1131,7 +1135,7 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `with_screenshot`); `letter` = magazine name, `year` from the file name |
 | falcon | `index-falcon.json` (index-only, no gameinfo) | grouped by `(letter, folder)` like the cracked view | status filter (default `with_screenshot`); Falcon titles launch with the Falcon machine/TOS 4.04 (desktop) |
 | crews | `crews.json` (+ optional `crew-images.json`) | synthetic crew/cracker cards from all groups (`excluded` is ignored; no cap) | search only; fixed ZIP-count order; click opens the crew release browser (6.11); no status/facets/letter |
-| clusters | `crew-cluster.json` | nine seeded clusters with counts, root preview and cross-link count | search only; click opens the cluster browser (6.12); no status/facets/letter/pager |
+| clusters | `crew-cluster.json` | ten seeded clusters with counts, root preview and cross-link count | search only; click opens the cluster browser (6.12); no status/facets/letter/pager |
 
 - Letter navigation, search, sorting, the status filter and the
   publisher/language/year facets work in all game sections; the remaining
@@ -1228,7 +1232,9 @@ browser:
 - Header: cluster name, group count, TOP count, link count, the external
   toggle (only when hidden groups exist) and close. While groups are hidden
   the sub line appends `<N> external hidden`.
-- Left: the nested `tree` of the selected cluster. External nodes whose
+- Left: the nested `tree` of the selected cluster. If the cluster carries
+  `preview_local_id`, the cluster card uses that local crew preview before
+  falling back to the tree root/descendant. External nodes whose
   subtree contains **no local group** (`local_id`) are hidden by default;
   external nodes with a local descendant stay visible, but their purely
   external child branches are still pruned. The header toggle or the
@@ -1241,6 +1247,10 @@ browser:
   groups are buttons that close the cluster browser and open the existing
   crew release browser (6.11); external groups are static text because the
   gameinfo cluster file has no internal matching IDs.
+- Person members (`members[]`) are rendered as additional rows under their
+  crew with a **100×62 px** preview thumbnail, a `member` badge, name, ZIP
+  count and optional `current` marker. They are clickable like local groups
+  but are not part of the subgroup hierarchy.
 - Extra parent links from `edges[]` that are not the tree parent are shown
   as `also subgroup of …` under the respective node.
 - Right: cluster counts, root, overlap list (groups in more than one
@@ -1480,7 +1490,7 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     the green `TOP` badge; no launch/play control exists. Without
     `crews.json` the tab is hidden and the other sections are unaffected.
 19. **Clusters**: with `crew-cluster.json` present, the `clusters` tab shows
-    the nine cluster cards with counts/root preview; clicking one opens the
+    the ten cluster cards with counts/root preview; clicking one opens the
     tree with `TOP`/`excluded`/`external` badges, overlap and cross-cluster
     links; clicking a local group opens the crew release browser while
     external groups stay static; missing/unreadable `crew-cluster.json`
@@ -1543,7 +1553,7 @@ A conforming implementation satisfies all of the following.
 - [x] A6 `/api/crews` lists all crew cards with `q`/pagination and
       returns one crew's releases (with joined screenshot fields) by id;
       unknown crews → 404.
-- [x] A7 `/api/clusters` lists the nine cluster cards and returns one
+- [x] A7 `/api/clusters` lists the ten cluster cards and returns one
       cluster with groups, relevant edges, tree and overlaps by id; unknown
       clusters → 404.
 

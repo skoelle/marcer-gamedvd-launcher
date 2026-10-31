@@ -923,6 +923,19 @@ footer {
 }
 .cluster-node-row .badge { margin-right: 0; font-size: 0.62em; }
 .cluster-node-row .chip { font-size: 0.62em; }
+.badge.b-member { background: #2d3f52; color: #dce9f5; }
+.cluster-member-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  margin: 2px 0 2px 18px;
+  padding-left: 10px;
+  border-left: 1px solid #24303a;
+  flex-wrap: wrap;
+}
+.cluster-member-row .badge { margin-right: 0; font-size: 0.6em; }
+.cluster-member-row .chip { font-size: 0.62em; }
 .cluster-thumb-btn {
   padding: 0;
   border: none;

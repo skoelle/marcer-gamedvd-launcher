@@ -550,6 +550,9 @@ class CrewDataTest(unittest.TestCase):
                  "year": "1990"},
             ]),
             self._group("hidden", "Hidden", "crew", 0, [], excluded=True),
+            self._group("bust", "Bust", "crew", 165, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha"},
+            ]),
         ]
         clusters = {
             "schema": 1,
@@ -579,7 +582,10 @@ class CrewDataTest(unittest.TestCase):
             "trees": {
                 "alpha": {
                     "name": "Alpha Crew", "local_id": "alpha-crew",
-                    "status": "top", "children": [{
+                    "status": "top", "members": [{
+                        "name": "Bust", "local_id": "bust",
+                        "zips": 165, "current": False,
+                    }], "children": [{
                         "name": "Hidden", "local_id": "hidden",
                         "status": "excluded",
                     }, {
@@ -612,6 +618,9 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(store.meta["sections"]["cluster"]["cards"], 1)
         cluster = store.cluster_by_id["alpha"]
         self.assertEqual(cluster["tree"]["name"], "Alpha Crew")
+        self.assertEqual(cluster["tree"]["members"][0]["name"], "Bust")
+        self.assertEqual(cluster["tree"]["members"][0]["preview"],
+                         f"{self.tree}/A/Alpha/a.png")
         self.assertEqual(cluster["tree"]["preview"],
                          f"{self.tree}/A/Alpha/curated.png")
         self.assertIsNone(cluster["tree"]["children"][0]["preview"])
@@ -685,6 +694,49 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(
             store.cluster_by_id["external-root"]["tree"]["children"][0]["preview"],
             f"{self.tree}/A/Alpha/curated.png")
+
+    def test_cluster_preview_local_id_wins_over_tree_fallback(self):
+        groups = [
+            self._group("alpha-crew", "Alpha Crew", "crew", 1, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha"},
+            ]),
+            self._group("bust", "Bust", "crew", 165, [
+                {"rel": self.rel_a, "zip": "a.zip", "title": "Alpha"},
+            ]),
+        ]
+        clusters = {
+            "schema": 1,
+            "generated_at": "2026-10-30T00:00:00Z",
+            "clusters": [{
+                "id": "external-root",
+                "name": "External Root",
+                "roots": [{"name": "External Root"}],
+                "preview_local_id": "alpha-crew",
+                "counts": {"groups": 3, "top": 2, "external": 1},
+                "groups": [
+                    {"name": "External Root", "status": "external",
+                     "clusters": ["external-root"]},
+                    {"name": "Bust", "local_id": "bust",
+                     "status": "top", "clusters": ["external-root"]},
+                    {"name": "Alpha Crew", "local_id": "alpha-crew",
+                     "status": "top", "clusters": ["external-root"]},
+                ],
+            }],
+            "trees": {
+                "external-root": {
+                    "name": "External Root", "status": "external",
+                    "children": [
+                        {"name": "Bust", "local_id": "bust",
+                         "status": "top"},
+                        {"name": "Alpha Crew", "local_id": "alpha-crew",
+                         "status": "top"},
+                    ],
+                },
+            },
+        }
+        store = self._store(groups, clusters=clusters)
+        self.assertEqual(store.clusters[0]["preview"],
+                         f"{self.tree}/A/Alpha/curated.png")
 
     def test_invalid_cluster_file_has_clean_error(self):
         store = self._store([])
