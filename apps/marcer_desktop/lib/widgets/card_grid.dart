@@ -350,6 +350,7 @@ class _CenterGridState extends State<CenterGrid> {
             io.File(t.path),
             key: ValueKey('${t.path}#${c.imageVersionOf(t.path)}'),
             fit: BoxFit.cover,
+            cacheWidth: 440,
             errorBuilder: (_, _, _) => Container(color: Colors.black),
           ),
         ),
@@ -546,6 +547,7 @@ class _CenterGridState extends State<CenterGrid> {
                     width: 44,
                     height: 26,
                     fit: BoxFit.cover,
+                    cacheWidth: 96,
                     filterQuality: FilterQuality.none,
                     errorBuilder: (_, _, _) =>
                         Container(width: 44, height: 26, color: Colors.black),

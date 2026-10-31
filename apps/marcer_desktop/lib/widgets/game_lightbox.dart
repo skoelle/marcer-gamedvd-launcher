@@ -944,6 +944,7 @@ class _GameLightboxState extends State<GameLightbox> {
                                       key: ValueKey(
                                         '${v.preview}#${widget.controller.imageVersionOf(v.preview!)}',
                                       ),
+                                      cacheWidth: 192,
                                       fit: BoxFit.cover,
                                       filterQuality: FilterQuality.none,
                                       errorBuilder: (_, _, _) =>
@@ -1104,6 +1105,7 @@ class _GameLightboxState extends State<GameLightbox> {
                   ),
                   height: 48,
                   fit: BoxFit.contain,
+                  cacheWidth: 96,
                   filterQuality: FilterQuality.none,
                   errorBuilder: (_, _, _) =>
                       Container(width: 48, height: 48, color: Colors.black),
@@ -1265,13 +1267,20 @@ class _IntegerScaledImageState extends State<_IntegerScaledImage> {
   void didUpdateWidget(covariant _IntegerScaledImage old) {
     super.didUpdateWidget(old);
     if (old.path != widget.path) {
-      _decoded?.dispose();
+      _disposeLater(_decoded);
       _decoded = null;
       _failed = false;
       // Bumping the generation invalidates an in-flight decode for the old
       // path, so the new path is always loaded (even while one is running).
       _load();
     }
+  }
+
+  /// Disposes a decoded image after the current frame: the old image may
+  /// still be referenced by the compositor of the frame that is being built.
+  void _disposeLater(ui.Image? img) {
+    if (img == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => img.dispose());
   }
 
   @override
@@ -1290,10 +1299,9 @@ class _IntegerScaledImageState extends State<_IntegerScaledImage> {
         img.dispose();
         return;
       }
-      setState(() {
-        _decoded?.dispose();
-        _decoded = img;
-      });
+      final old = _decoded;
+      setState(() => _decoded = img);
+      _disposeLater(old);
     } catch (_) {
       if (!mounted || generation != _generation) return;
       setState(() => _failed = true);
@@ -1328,21 +1336,19 @@ class _IntegerScaledImageState extends State<_IntegerScaledImage> {
             child: SizedBox(
               width: img.width * scale.toDouble(),
               height: img.height * scale.toDouble(),
-              child: Image.file(
-                io.File(widget.path),
+              child: RawImage(
+                image: img,
                 fit: BoxFit.fill,
                 filterQuality: FilterQuality.none,
-                gaplessPlayback: true,
               ),
             ),
           );
         }
         return Center(
-          child: Image.file(
-            io.File(widget.path),
+          child: RawImage(
+            image: img,
             fit: BoxFit.contain,
             filterQuality: FilterQuality.none,
-            gaplessPlayback: true,
           ),
         );
       },

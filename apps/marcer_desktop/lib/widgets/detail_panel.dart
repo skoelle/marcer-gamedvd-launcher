@@ -448,6 +448,7 @@ class DetailPanel extends StatelessWidget {
                         File(path),
                         key: ValueKey('$path#${c.imageVersionOf(path)}'),
                         height: 56,
+                        cacheWidth: 112,
                         errorBuilder: (_, _, _) => const SizedBox(width: 56),
                       ),
                     ),

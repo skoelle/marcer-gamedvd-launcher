@@ -112,6 +112,41 @@ void main() {
       expect(idx.previewPathFor('Games/alpha.zip'), '$out/Games/alpha.png');
       expect(idx.previewPathFor('missing.zip'), isNull);
     });
+
+    test('path lookups are cached until clearPathCaches', () {
+      final out = '${tmp.path}/out';
+      Directory('$out/Games').createSync(recursive: true);
+      File('$out/Games/alpha.png').createSync();
+      File('$out/Games/c1.png').createSync();
+      File('$out/index.json').writeAsStringSync('''
+        {"version": 1, "entries": {
+          "Games/alpha.zip": {"rel": "Games/alpha.zip", "name": "alpha",
+            "status": "done", "kind": "game", "layer": "ROOT",
+            "preview": "alpha.png", "candidates": ["c1.png", "c2.png"]},
+          "Games/beta.zip": {"rel": "Games/beta.zip", "name": "beta",
+            "status": "done", "kind": "game", "layer": "ROOT",
+            "preview": "beta.png", "candidates": []}
+        }}''');
+      final idx = ScreenshotIndex.load(out);
+
+      expect(idx.previewPathFor('Games/alpha.zip'), '$out/Games/alpha.png');
+      expect(idx.candidatePathsFor('Games/alpha.zip'), ['$out/Games/c1.png']);
+      expect(idx.previewPathFor('Games/beta.zip'), isNull);
+
+      // Files created after the first lookup stay invisible while cached …
+      File('$out/Games/c2.png').createSync();
+      File('$out/Games/beta.png').createSync();
+      expect(idx.candidatePathsFor('Games/alpha.zip'), ['$out/Games/c1.png']);
+      expect(idx.previewPathFor('Games/beta.zip'), isNull);
+
+      // … and are picked up after an explicit invalidation.
+      idx.clearPathCaches();
+      expect(idx.candidatePathsFor('Games/alpha.zip'), [
+        '$out/Games/c1.png',
+        '$out/Games/c2.png',
+      ]);
+      expect(idx.previewPathFor('Games/beta.zip'), '$out/Games/beta.png');
+    });
   });
 
   group('GameInfoIndex', () {
