@@ -715,7 +715,7 @@ function hoverHTML(card) {
     add("Links", card.edges);
     add("Cross-cluster links", card.cross_edges);
     const counts = card.counts || {};
-    add("Strategy", `${counts.top || 0} TOP · ${counts.excluded || 0} excluded · ${counts.external || 0} external`);
+    add("Strategy", `${counts.top || 0} TOP · ${counts.excluded || 0} Non-TOP · ${counts.external || 0} external`);
   } else if (isCrewCard(card)) {
     add("Kind", card.kind === "cracker" ? "individual cracker" : "crew");
     add("ZIPs", card.zips);
@@ -1562,7 +1562,7 @@ function closeCrewBrowser(restoreFocus = true) {
 
 function clusterStatusBadge(status) {
   if (status === "top") return `<span class="badge b-cluster-top">TOP</span>`;
-  if (status === "excluded") return `<span class="badge b-cluster-excluded">excluded</span>`;
+  if (status === "excluded") return `<span class="badge b-cluster-excluded">Non-TOP</span>`;
   if (status === "ambiguous") return `<span class="badge b-cluster-external">ambiguous</span>`;
   return `<span class="badge b-cluster-external">external</span>`;
 }
@@ -1683,7 +1683,7 @@ function clusterRenderSide(cluster, hiddenExternal) {
     ["Group ZIPs", counts.group_zips],
     ["Member ZIPs", counts.member_zips],
     ["TOP", counts.top],
-    ["Excluded", counts.excluded],
+    ["Non-TOP", counts.excluded],
     ["Ambiguous", counts.ambiguous],
     ["External", counts.external],
     ["Members", counts.members],
@@ -1714,7 +1714,7 @@ function clusterRenderSide(cluster, hiddenExternal) {
   }
   html += `<h3>Legend</h3><div class="cluster-legend">` +
     `${clusterStatusBadge("top")} local, visible in Crews` +
-    `${clusterStatusBadge("excluded")} local, hidden in Crews` +
+    `${clusterStatusBadge("excluded")} local, outside the TOP selection` +
     `${clusterStatusBadge("external")} External group outside the archive` +
     (hiddenExternal
       ? `<div class="cluster-hint">External branches without a local group ` +

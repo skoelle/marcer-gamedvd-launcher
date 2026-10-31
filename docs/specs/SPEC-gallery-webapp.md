@@ -234,7 +234,8 @@ internal matching IDs)*
   `ambiguous`, `external`, `members`), optional `preview_local_id` (preferred
   local preview) and `groups[]` with `name`, optional
   `local_id`/`zips`/`preview`, `status`
-  (`top`/`excluded`/`external`/`ambiguous`) and `clusters[]` (overlap).
+  (`top`/`excluded`/`external`/`ambiguous`; displayed as
+  `TOP`/`Non-TOP`/`external`/`ambiguous`) and `clusters[]` (overlap).
   `zips` is the sum of distinct local group and member ZIP counts in the
   cluster; `group_zips` covers group nodes, `member_zips` the additional
   member contribution. Overlapping groups count once per cluster; external
@@ -531,11 +532,11 @@ error body `{ "error": "<message>" }`.
   },
   "clusters": {
     "available": true,
-    "count": 18,
-    "groups": 245,
-    "edges": 220,
-    "cross_edges": 37,
-    "generated_at": "2026-10-31T16:48:51Z",
+    "count": 23,
+    "groups": 272,
+    "edges": 241,
+    "cross_edges": 38,
+    "generated_at": "2026-10-31T17:58:07Z",
     "error": null
   }
 }
@@ -913,7 +914,8 @@ lightbox, whose side panel carries the same metadata.
    row (A–Z + `0-9` + `Any`). In the `crews` tab only search, clear, the
    **Type** dropdown and the **Ranking** dropdown are shown; the crew cards
    are already ordered by ZIP count. In the `clusters` tab only search and
-   clear are shown; the cluster cards keep the file order.
+   clear are shown; the cluster data is ordered by ZIP count descending,
+   then name, and the cluster cards keep that order.
 4. **Grid**: grouped cards (section 6.4), paginated.
 5. **Pagination**: page indicator + prev/next + page-size-constant
    (`offset/limit`); keyboard PageUp/PageDown works on the grid (6.6).
@@ -989,7 +991,7 @@ Filter/search/sort state is reflected in the URL query string
   line; groups in the desktop Crews-tab selection (`excluded == false`)
   carry a green `TOP` badge.
 - Cluster cards show roots, group/ZIP/link/cross-link counts and the
-  `TOP`/excluded/external breakdown.
+  `TOP`/Non-TOP/external breakdown.
 - Panels never cover the whole grid; they disappear on mouse leave, key
   press and when the grid scrolls under them. Full details always live in
   the lightbox.
@@ -1252,7 +1254,7 @@ browser:
   a **100×62 px** preview thumbnail (`object-fit: cover`, lazy-loaded) from
   the crew data. External groups without a local preview show an `EXT`
   placeholder of the same size. Then come the status badge (`TOP`,
-  `excluded`, `external`, `ambiguous`), the group name and, for local
+  `Non-TOP`, `external`, `ambiguous`), the group name and, for local
   groups, the ZIP count. Both the thumbnail and the group name of local
   groups are buttons that close the cluster browser and open the existing
   crew release browser (6.11); external groups are static text because the
@@ -1503,7 +1505,7 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     `crews.json` the tab is hidden and the other sections are unaffected.
 19. **Clusters**: with `crew-cluster.json` present, the `clusters` tab shows
     the cluster cards with counts/root preview; clicking one opens the
-    tree with `TOP`/`excluded`/`external` badges, overlap and cross-cluster
+    tree with `TOP`/`Non-TOP`/`external` badges, overlap and cross-cluster
     links; clicking a local group opens the crew release browser while
     external groups stay static; missing/unreadable `crew-cluster.json`
     hides the tab and leaves the other sections unaffected.
