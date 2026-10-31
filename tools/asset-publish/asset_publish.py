@@ -72,6 +72,7 @@ INCLUDE_PATTERNS = (
     "manifest.json",
     "crews.json",
     "crew-images.json",
+    "crew-cluster.json",
     "unmatched-report.txt",
     "full-index.json.gz",
 )

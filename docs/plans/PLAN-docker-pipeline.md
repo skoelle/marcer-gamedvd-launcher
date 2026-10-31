@@ -112,7 +112,8 @@ Neues Uploader-Tool, bewusst getrennt von `asset-manifest`.
   - Root-Indizes `index.json`, `index-*.json` werden wieder aufgenommen.
 - Gameinfo-Quelle: `MARCER_DATA_DIR/gameinfo`.
   - Enthalten: `games-*.json`, `manifest.json`, `crews.json`,
-    `crew-images.json` (falls vorhanden), `full-index.json.gz`,
+    `crew-images.json` (falls vorhanden), `crew-cluster.json`
+    (manuell erstellte Clusterdatei, falls vorhanden), `full-index.json.gz`,
     `unmatched-report.txt`.
   - Ausgeschlossen: `.marcer-assets.json`, `*.bak-*`, Temp-Dateien und
     sonstige Dateien.

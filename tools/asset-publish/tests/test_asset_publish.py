@@ -96,6 +96,7 @@ class GameinfoPublishTests(unittest.TestCase):
         (self.source / "games-pd.json").write_text('{"b": 2}\n')
         (self.source / "manifest.json").write_text('{"count": 2}\n')
         (self.source / "crews.json").write_text('{"crews": []}\n')
+        (self.source / "crew-cluster.json").write_text('{"clusters": []}\n')
         (self.source / "unmatched-report.txt").write_text("none\n")
 
     def tearDown(self) -> None:
@@ -159,6 +160,7 @@ class GameinfoPublishTests(unittest.TestCase):
                         "games-pd.json",
                         "manifest.json",
                         "crews.json",
+                        "crew-cluster.json",
                         "unmatched-report.txt",
                     ]
                 ),
@@ -184,6 +186,7 @@ class GameinfoPublishTests(unittest.TestCase):
                     "manifest.json",
                     "crews.json",
                     "crew-images.json",
+                    "crew-cluster.json",
                     "full-index.json.gz",
                     "unmatched-report.txt",
                 ]

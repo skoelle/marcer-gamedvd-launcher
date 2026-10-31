@@ -15,6 +15,7 @@ in later pipeline phases; see
    - `games-*.json` (`games-cracked.json`, `games-pd.json`, `games-utils.json`)
    - `manifest.json`
    - `crews.json` / `crew-images.json` (when present)
+   - `crew-cluster.json` (manually created cluster file, when present)
    - `full-index.json.gz` (screenshot-independent catalog index)
    - `unmatched-report.txt`
 3. Ignores everything else: `.marcer-assets.json`, `*.bak-*`, `*.tmp`,
