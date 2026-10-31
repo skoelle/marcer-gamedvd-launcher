@@ -2487,6 +2487,9 @@ class CatalogController extends ChangeNotifier {
     // The crew release lookup holds the old card objects; rebuild it so
     // `C` (status/kind) also refreshes releases opened from the Crews tab.
     _releaseLookupCache = null;
+    // Crew cards embed a preview chosen by status/kind rank, so they must be
+    // rebuilt from the new universe as well.
+    _crewCardsBase = null;
   }
 
   /// Persists the pending changes (shotgen lock, atomic `index.json` +

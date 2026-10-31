@@ -1364,8 +1364,9 @@ def analyze_image(path: Path, cfg: dict,
     from PIL import Image, ImageFilter, ImageStat
     import imagehash
 
-    img = Image.open(path)
-    rgb = img.convert("RGB")
+    with Image.open(path) as img:
+        rgb = img.convert("RGB")
+        gray = img.convert("L")
     small = rgb.resize((64, 64))
     raw = small.tobytes()
     n = len(raw) // 3
@@ -1376,7 +1377,6 @@ def analyze_image(path: Path, cfg: dict,
             green += 1
     colors_raw = rgb.getcolors(maxcolors=100000)
     n_colors = len(colors_raw) if colors_raw is not None else 100000
-    gray = img.convert("L")
     stat = ImageStat.Stat(gray)
     mean = stat.mean[0] / 255.0
     std = stat.stddev[0]
@@ -2574,8 +2574,10 @@ def _screen_changed(a: Path, b: Path, frac: float = 0.02) -> bool:
     import numpy as np
     from PIL import Image
     try:
-        ia = np.asarray(Image.open(a).convert("L"), dtype=np.int16)
-        ib = np.asarray(Image.open(b).convert("L"), dtype=np.int16)
+        with Image.open(a) as ia_img:
+            ia = np.asarray(ia_img.convert("L"), dtype=np.int16)
+        with Image.open(b) as ib_img:
+            ib = np.asarray(ib_img.convert("L"), dtype=np.int16)
     except Exception:
         return False
     if ia.shape != ib.shape:

@@ -21,7 +21,7 @@ import gzip
 import json
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -151,7 +151,7 @@ def hash_jobs(
             for rel, path in jobs
         }
         done = 0
-        for future in futures:
+        for future in as_completed(futures):
             rel = futures[future]
             try:
                 results[rel] = future.result()
