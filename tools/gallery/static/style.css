@@ -837,6 +837,7 @@ footer {
   justify-content: center;
 }
 .badge.b-cluster { background: #214d3a; color: #d8ffe9; }
+.badge.b-cluster-independent { background: #3d2a55; color: #e5d8ff; }
 .badge.b-cluster-top { background: #214d3a; color: #d8ffe9; }
 .badge.b-cluster-excluded { background: #5a2440; color: #ffd9ee; }
 .badge.b-cluster-external { background: #26323d; color: #c5d6e3; }

@@ -229,8 +229,9 @@ internal matching IDs)*
 
 - `crew-cluster.json` (required for the Clusters tab): `schema`,
   `generated_at`, `clusters[]`, `edges[]`, `trees{}` and `entities{}`.
-- Each cluster carries `id`, `name`, `roots[]` (objects with `name`),
-  `counts` (`groups`, `zips`, `group_zips`, `member_zips`, `top`, `excluded`,
+- Each cluster carries `id`, `name`, `kind` (`umbrella`/`independent`;
+  independent means no local group descendant), `roots[]` (objects with
+  `name`), `counts` (`groups`, `zips`, `group_zips`, `member_zips`, `top`, `excluded`,
   `ambiguous`, `external`, `members`), optional `preview_local_id` (preferred
   local preview) and `groups[]` with `name`, optional
   `local_id`/`zips`/`preview`, `status`
@@ -532,11 +533,11 @@ error body `{ "error": "<message>" }`.
   },
   "clusters": {
     "available": true,
-    "count": 23,
-    "groups": 272,
-    "edges": 241,
-    "cross_edges": 38,
-    "generated_at": "2026-10-31T17:58:07Z",
+    "count": 29,
+    "groups": 280,
+    "edges": 243,
+    "cross_edges": 40,
+    "generated_at": "2026-10-31T18:22:05Z",
     "error": null
   }
 }
@@ -933,8 +934,9 @@ Filter/search/sort state is reflected in the URL query string
   status label).
 - Name: game folder name (`folder`), below the badge (as today). Crew
   cards use the group name; cluster cards use the cluster name plus the
-  root names, group/ZIP/link/cross-link counts and a `CLUSTER` placeholder
-  or root preview.
+  root names, an `umbrella`/`independent` type badge,
+  group/ZIP/link/cross-link counts and a `CLUSTER` placeholder or root
+  preview.
 - Variant count chip when a folder has more than one ZIP (e.g. `×3`).
 - Preview image, or placeholder block when `screenshots` is false.
 - **Multi-variant grid** (no focus): when no crew/cracker filter is active
@@ -1241,8 +1243,9 @@ browser for that crew:
 Clicking a cluster card (or pressing Enter/Space on it) opens a modal cluster
 browser:
 
-- Header: cluster name, group count, ZIP count, TOP count, link count, the
-  external toggle (only when hidden groups exist) and close. While groups are hidden
+- Header: cluster name, `umbrella`/`independent` type, group count, ZIP
+  count, TOP count, link count, the external toggle (only when hidden groups
+  exist) and close. While groups are hidden
   the sub line appends `<N> external hidden`.
 - Left: the nested `tree` of the selected cluster. If the cluster carries
   `preview_local_id`, the cluster card uses that local crew preview before
@@ -1266,9 +1269,9 @@ browser:
   (`manual: true`) render like normal local crew nodes with a `TOP` badge.
 - Extra parent links from `edges[]` that are not the tree parent are shown
   as `also subgroup of …` under the respective node.
-- Right: cluster counts (ZIP total plus group/member split), root, overlap
-  list (groups in more than one cluster), cross-cluster edges and the status
-  legend. When branches are
+- Right: cluster type, counts (ZIP total plus group/member split), root,
+  overlap list (groups in more than one cluster), cross-cluster edges and the
+  status legend. When branches are
   hidden, the counts add a `Hidden` row and the legend explains why.
 - `Esc` or the close button closes the modal; clicking the backdrop closes
   it. Opening a crew from the tree navigates to that crew's release browser.

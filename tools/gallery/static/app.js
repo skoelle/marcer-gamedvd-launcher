@@ -445,6 +445,10 @@ function renderGrid(cards) {
         : `<div class="ph cluster-ph">CLUSTER</div>`;
       const roots = (c.roots || []).map((r) => r.name).filter(Boolean).join(" · ");
       const counts = c.counts || {};
+      const kind = c.kind === "independent" ? "independent"
+        : (c.kind === "umbrella" ? "umbrella" : "cluster");
+      const kindClass = kind === "independent"
+        ? "badge b-cluster b-cluster-independent" : "badge b-cluster";
       const details = [
         `${c.groups || 0} groups`,
         `${counts.zips || 0} ZIPs`,
@@ -452,7 +456,7 @@ function renderGrid(cards) {
         `${c.cross_edges || 0} cross`,
       ].join(" · ");
       return `<div class="card cluster-card" data-idx="${i}" data-v="0" tabindex="-1">` +
-        `<span class="badge b-cluster">cluster</span>` +
+        `<span class="${kindClass}">${esc(kind)}</span>` +
         `<span class="chip">${counts.top || 0} TOP</span>` +
         `<div class="name">${esc(c.name)}</div>` +
         `<div class="crew-release-count">${esc(roots)}</div>` +
@@ -710,6 +714,7 @@ function hoverHTML(card) {
   };
   if (isClusterCard(card)) {
     add("Kind", "crew cluster");
+    add("Type", card.kind || "cluster");
     add("Roots", (card.roots || []).map((r) => r.name).join(", "));
     add("Groups", card.groups);
     add("Links", card.edges);
@@ -1677,7 +1682,10 @@ function clusterNodeHtml(node, groups, extraParents, showExternal) {
 
 function clusterRenderSide(cluster, hiddenExternal) {
   const counts = cluster.counts || {};
+  const kindLabel = cluster.kind === "independent" ? "Independent"
+    : (cluster.kind === "umbrella" ? "Umbrella" : null);
   const rows = [
+    ["Type", kindLabel],
     ["Groups", counts.groups],
     ["ZIPs", counts.zips],
     ["Group ZIPs", counts.group_zips],
@@ -1744,9 +1752,11 @@ function renderClusterBrowser() {
     ? (showExternal ? " · external shown" : ` · ${hidden} external hidden`)
     : "";
   $("cluster-title").textContent = cluster.name;
+  const kindLabel = cluster.kind === "independent" ? "Independent"
+    : (cluster.kind === "umbrella" ? "Umbrella" : "");
   $("cluster-sub").textContent =
-    `${groupCount} groups · ${counts.zips || 0} ZIPs · ` +
-    `${counts.top || 0} TOP · ` +
+    `${kindLabel ? kindLabel + " · " : ""}${groupCount} groups · ` +
+    `${counts.zips || 0} ZIPs · ${counts.top || 0} TOP · ` +
     `${(cluster.edges || []).length} links${externalHint}`;
   $("cluster-tree").innerHTML = cluster.tree
     ? clusterNodeHtml(cluster.tree, groups, extraParents, showExternal)

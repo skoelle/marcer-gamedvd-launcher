@@ -1431,6 +1431,7 @@ class DataStore:
             summary = {
                 "id": cluster_id,
                 "name": name,
+                "kind": str(raw.get("kind") or "").strip(),
                 "roots": roots,
                 "counts": counts,
                 "groups": len(groups),
@@ -1835,6 +1836,7 @@ def _public_cluster_card(cluster):
     return {
         "id": cluster["id"],
         "name": cluster["name"],
+        "kind": cluster.get("kind") or "",
         "roots": cluster.get("roots") or [],
         "counts": cluster.get("counts") or {},
         "groups": int(cluster.get("groups") or 0),
@@ -1849,6 +1851,7 @@ def _public_cluster_detail(cluster, generated_at=""):
     return {
         "id": cluster["id"],
         "name": cluster["name"],
+        "kind": cluster.get("kind") or "",
         "roots": cluster.get("roots") or [],
         "counts": cluster.get("counts") or {},
         "groups": cluster.get("groups") or [],

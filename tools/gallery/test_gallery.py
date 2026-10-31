@@ -560,6 +560,7 @@ class CrewDataTest(unittest.TestCase):
             "clusters": [{
                 "id": "alpha",
                 "name": "Alpha Cluster",
+                "kind": "umbrella",
                 "roots": [{"name": "Alpha Crew"}],
                 "counts": {"groups": 3, "zips": 167, "group_zips": 2,
                            "member_zips": 165, "top": 1, "excluded": 1,
@@ -607,6 +608,7 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(len(store.clusters), 1)
         summary = store.clusters[0]
         self.assertEqual(summary["id"], "alpha")
+        self.assertEqual(summary["kind"], "umbrella")
         self.assertEqual(summary["groups"], 3)
         self.assertEqual(summary["counts"]["zips"], 167)
         self.assertEqual(summary["counts"]["group_zips"], 2)
@@ -762,6 +764,7 @@ class CrewDataTest(unittest.TestCase):
             "generated_at": "2026-10-30T00:00:00Z",
             "clusters": [{
                 "id": "alpha", "name": "Alpha Cluster",
+                "kind": "independent",
                 "roots": [{"name": "Alpha Crew"}],
                 "counts": {"groups": 1, "top": 1},
                 "groups": [{"name": "Alpha Crew",
@@ -787,8 +790,10 @@ class CrewDataTest(unittest.TestCase):
         listing = fetch()
         self.assertEqual(listing["total"], 1)
         self.assertEqual(listing["clusters"][0]["name"], "Alpha Cluster")
+        self.assertEqual(listing["clusters"][0]["kind"], "independent")
         detail = fetch("?id=alpha")
         self.assertEqual(detail["name"], "Alpha Cluster")
+        self.assertEqual(detail["kind"], "independent")
         self.assertEqual(detail["tree"]["name"], "Alpha Crew")
         self.assertEqual(detail["tree"]["preview"],
                          f"{self.tree}/A/Alpha/curated.png")
