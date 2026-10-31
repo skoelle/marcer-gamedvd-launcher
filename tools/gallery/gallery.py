@@ -964,6 +964,7 @@ class DataStore:
         self.clusters = []
         self.cluster_by_id = {}
         self.cluster_entities = {}
+        self.crew_clusters = {}
         self.cluster_generated_at = ""
         self.cluster_error = None
         self.cluster_edge_count = 0
@@ -1298,10 +1299,40 @@ class DataStore:
                 for key in keys:
                     self._release_labels[key] = label
 
+    @staticmethod
+    def _cluster_local_ids(cluster):
+        """Local crew ids referenced by a cluster's groups and tree."""
+        local_ids = set()
+
+        def walk(node):
+            if not isinstance(node, dict):
+                return
+            local_id = str(node.get("local_id") or "").strip()
+            if local_id:
+                local_ids.add(local_id)
+            for member in node.get("members") or []:
+                if not isinstance(member, dict):
+                    continue
+                member_id = str(member.get("local_id") or "").strip()
+                if member_id:
+                    local_ids.add(member_id)
+            for child in node.get("children") or []:
+                walk(child)
+
+        for group in cluster.get("groups") or []:
+            if not isinstance(group, dict):
+                continue
+            local_id = str(group.get("local_id") or "").strip()
+            if local_id:
+                local_ids.add(local_id)
+        walk(cluster.get("tree"))
+        return local_ids
+
     def _load_clusters(self):
         self.clusters = []
         self.cluster_by_id = {}
         self.cluster_entities = {}
+        self.crew_clusters = {}
         self.cluster_generated_at = ""
         self.cluster_error = None
         self.cluster_edge_count = 0
@@ -1464,6 +1495,13 @@ class DataStore:
             self.cluster_by_id[cluster_id] = cluster
             self.clusters.append(summary)
         self.cluster_generated_at = str(data.get("generated_at") or "")
+        for cluster in self.cluster_by_id.values():
+            for local_id in self._cluster_local_ids(cluster):
+                self.crew_clusters.setdefault(local_id, {})[cluster["id"]] = {
+                    "id": cluster["id"],
+                    "name": cluster["name"],
+                    "kind": str(cluster.get("kind") or ""),
+                }
         for summary in self.crews:
             entity = self.cluster_entities.get(str(summary.get("id") or ""))
             if entity is not None:
@@ -1604,6 +1642,9 @@ class DataStore:
         entity = self.cluster_entities.get(str(group.get("id") or ""))
         if entity is not None:
             out["entity"] = entity
+        clusters = self.crew_clusters.get(str(group.get("id") or ""))
+        if clusters:
+            out["clusters"] = list(clusters.values())
         for release in group.get("releases") or []:
             item = {
                 "rel": str(release.get("rel") or ""),

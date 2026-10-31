@@ -261,6 +261,9 @@ internal matching IDs)*
   `parents[]` plus `subgroup_count`/`descendant_count` for groups, and
   `candidate_count` for ambiguous entries. The gameinfo file has no internal
   matching IDs; a local audit copy may keep them.
+- Reverse lookup: local crew id → containing clusters is derived server-side
+  from `groups[].local_id`, tree nodes and tree `members[]`. It powers the
+  cluster links in the crew release browser (section 6.11).
 - Missing/unreadable `crew-cluster.json` hides the Clusters tab
   (`/api/meta` `clusters.available: false`, `clusters.error` set); it never
   aborts the catalog.
@@ -537,7 +540,7 @@ error body `{ "error": "<message>" }`.
     "groups": 283,
     "edges": 243,
     "cross_edges": 40,
-    "generated_at": "2026-10-31T18:47:37Z",
+    "generated_at": "2026-10-31T19:57:39Z",
     "error": null
   }
 }
@@ -817,8 +820,10 @@ Semantics:
 
 `GET /api/crews?id=<group id>` returns one crew with all releases:
 
-- group fields as above plus `generated_at` and an optional `entity`
-  (cracker memberships from section 2.5).
+- group fields as above plus `generated_at`, an optional `entity`
+  (cracker memberships from section 2.5) and an optional `clusters[]`
+  (`id`, `name`, `kind`) listing every loaded cluster that contains the
+  crew (as a direct group or a tree member).
 - each release keeps the `crews.json` fields and adds `found`,
   `index_rel` (resolved full cracked-index path), `preview`, `status`,
   `kind`, `layer` and `size` joined from the cracked screenshot index.
@@ -1106,7 +1111,9 @@ parameter):
 - All interactive elements are reachable by Tab as well; focus is always
   visible (outline consistent with the selection colors of SPEC.md).
 - Cluster cards open with Enter/Space like crew cards; `Esc` closes the
-  cluster browser. Local group buttons are reachable by Tab and Enter.
+  cluster browser. Local group buttons are reachable by Tab and Enter; the
+  cluster links in the crew browser header are reachable by Tab too and open
+  with Enter/Space.
 - Mouse-only operation must remain fully equivalent.
 
 ### 6.7 Statistics bar
@@ -1209,6 +1216,10 @@ browser for that crew:
   ambiguous match count, joint label or none known), release search, sort
   (`name asc` default, `name desc`, `year asc`, `year desc`), position
   indicator and close.
+- Cluster links: when the crew appears in `crew-cluster.json`, a
+  **Clusters** line lists every containing cluster as a button. Clicking it
+  (or Tab + Enter) closes the crew browser and opens the cluster browser
+  (6.12); the crew's own node in that tree links back.
 - Cracker filter: a dropdown derived from the crew's releases (`cracked_by`
   values, case-insensitive deduplication) with per-cracker release counts
   (`Cracker: any`, `Cracker: Snake (170)`). It is hidden when fewer than two
@@ -1274,7 +1285,9 @@ browser:
   status legend. When branches are
   hidden, the counts add a `Hidden` row and the legend explains why.
 - `Esc` or the close button closes the modal; clicking the backdrop closes
-  it. Opening a crew from the tree navigates to that crew's release browser.
+  it. Opening a crew from the tree navigates to that crew's release browser;
+  conversely the crew release browser's cluster links (6.11) close the crew
+  browser and open the selected cluster here.
 - Deep link `?section=cluster&cluster=<id>` opens the cluster browser after
   loading the section; `&external=1` starts with the external groups shown.
 

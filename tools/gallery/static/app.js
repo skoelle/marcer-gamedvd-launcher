@@ -1496,6 +1496,13 @@ function renderCrewBrowser() {
   $("crew-aliases").textContent = aliases.length
     ? `Also known as: ${aliases.join(", ")}` : "";
   $("crew-memberships").textContent = entitySummary(crewView.entity);
+  const clusters = crew.clusters || [];
+  $("crew-clusters").innerHTML = clusters.length
+    ? `Clusters: ` + clusters.map((cluster) =>
+      `<button type="button" class="crew-cluster-link" ` +
+      `data-cluster-id="${esc(cluster.id)}" ` +
+      `title="Open cluster">${esc(cluster.name)}</button>`).join(" ")
+    : "";
   if ($("crew-search").value !== crewView.query) {
     $("crew-search").value = crewView.query;
   }
@@ -1561,6 +1568,12 @@ function closeCrewBrowser(restoreFocus = true) {
     const card = $("grid").querySelector(`.card[data-idx="${focusIdx}"]`);
     if (card) card.focus();
   }
+}
+
+function openClusterFromCrew(clusterId) {
+  if (!clusterId) return;
+  closeCrewBrowser(false);
+  openClusterBrowser({ id: clusterId });
 }
 
 function clusterStatusBadge(status) {
@@ -1843,6 +1856,14 @@ function crewKeydown(e) {
         closeCrewBrowser();
       }
       e.preventDefault();
+    }
+    return;
+  }
+  if (document.activeElement &&
+      document.activeElement.tagName === "BUTTON") {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeCrewBrowser();
     }
     return;
   }
@@ -2217,6 +2238,10 @@ function wireEvents() {
   });
   $("crew-side").addEventListener("click", (e) => {
     if (e.target.closest("#crew-open")) crewOpenSelected();
+  });
+  $("crew-clusters").addEventListener("click", (e) => {
+    const link = e.target.closest("[data-cluster-id]");
+    if (link) openClusterFromCrew(link.dataset.clusterId);
   });
   $("crew-search").addEventListener("input", () => {
     clearTimeout(crewSearchTimer);

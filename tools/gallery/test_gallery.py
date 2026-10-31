@@ -650,6 +650,58 @@ class CrewDataTest(unittest.TestCase):
         detail = store.crew_detail(store.crew_groups["alpha-crew"])
         self.assertEqual(detail["entity"], entity)
 
+    def test_crew_detail_reports_containing_clusters(self):
+        groups = [
+            self._group("alpha-crew", "Alpha Crew", "crew", 2, []),
+            self._group("bust", "Bust", "crew", 165, []),
+            self._group("unrelated", "Unrelated", "crew", 1, []),
+        ]
+        clusters = {
+            "schema": 1,
+            "generated_at": "2026-10-30T00:00:00Z",
+            "clusters": [
+                {
+                    "id": "alpha",
+                    "name": "Alpha Cluster",
+                    "kind": "umbrella",
+                    "groups": [{
+                        "name": "Alpha Crew", "local_id": "alpha-crew",
+                        "status": "top", "clusters": ["alpha"],
+                    }],
+                },
+                {
+                    "id": "beta",
+                    "name": "Beta Cluster",
+                    "kind": "independent",
+                    "groups": [{
+                        "name": "Alpha Crew", "local_id": "alpha-crew",
+                        "status": "top", "clusters": ["alpha", "beta"],
+                    }],
+                },
+            ],
+            "edges": [],
+            "trees": {
+                "alpha": {
+                    "name": "Alpha Crew", "local_id": "alpha-crew",
+                    "members": [{
+                        "name": "Bust", "local_id": "bust",
+                    }],
+                    "children": [],
+                },
+            },
+        }
+        store = self._store(groups, clusters=clusters)
+
+        detail = store.crew_detail(store.crew_groups["alpha-crew"])
+        self.assertEqual(detail["clusters"], [
+            {"id": "alpha", "name": "Alpha Cluster", "kind": "umbrella"},
+            {"id": "beta", "name": "Beta Cluster", "kind": "independent"},
+        ])
+        member = store.crew_detail(store.crew_groups["bust"])
+        self.assertEqual([c["id"] for c in member["clusters"]], ["alpha"])
+        unrelated = store.crew_detail(store.crew_groups["unrelated"])
+        self.assertNotIn("clusters", unrelated)
+
     def test_missing_cluster_file_keeps_gallery_available(self):
         store = self._store([])
         self.assertFalse(store.meta["clusters"]["available"])

@@ -107,7 +107,9 @@ Backend filter/card helpers use stdlib `unittest` only:
   `skipped_disk_n` status (desktop parity), and offers a **Cracker** filter
   built only from the crackers known in that crew's releases (with counts;
   hidden below two distinct crackers). Labels inferred from the ZIP name are
-  marked `inferred`.
+  marked `inferred`. When the crew appears in `crew-cluster.json`, a
+  **Clusters** line in the header links to every containing cluster; opening
+  one closes the crew browser and shows the cluster browser.
 - **Clusters**: the `clusters` tab lists the seeded crew clusters from
   `crew-cluster.json` (Elite/Empire, The Union, Atari Legend,
   The Blade Runners, D-Bug, The Corporation (UK), ICS, Automation,
@@ -125,6 +127,8 @@ Backend filter/card helpers use stdlib `unittest` only:
   `external=1` in the URL) shows them and the header reports how many are
   hidden. Local groups show a 100×62 preview thumbnail (from
   `crews.json`/`crew-images.json`); external groups use an `EXT` placeholder.
+  Local groups link back to the crew release browser; the crew browser in
+  turn links to the clusters containing that crew.
 - **Cracker memberships**: `crew-cluster.json` also carries neutral
   `entities` data for all TOP groups, all crackers, explicit overrides and
   excluded crews with an unambiguous person membership.
