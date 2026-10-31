@@ -72,6 +72,27 @@ Everything else is *(untested)* and must be confirmed during implementation.
   or the future desktop app (DECISION-app-architecture.md).
 - **No user accounts, no write-back** (no favorites, no annotations), no
   configuration UI (config file only).
+- **Desktop-only features are intentionally not ported.** The gallery
+  deliberately stays a read-only catalog and screenshot browser and does not
+  reproduce these desktop app capabilities:
+  - **AtariLegend integration** — genre/developer facets, the metadata dialog
+    with reviews/magazines/comments, community scores, publisher/developer
+    logos and hotlinked AtariLegend images.
+  - **PirateFinder-Catalog integration** — disk-hash matching, the
+    `PirateFinder Crew Releases` block and the crew/menu/trivia/source dialogs.
+  - **Favorites** — the `★` filter, per-section favorite lists and the virtual
+    favorites folder.
+  - **Folder browser / overlay tree** (`T` / Folders), including ZIPs that are
+    not part of the published index.
+  - **Local-filesystem state** — `MISSING` badges, live ROOT/PATCH resolution
+    and the `Download missing` FTP action.
+  - **Status/kind editor and manual screenshot curation** (`C` / Save).
+  - **Box scan/manual viewers** — only metadata counts and labels are exposed
+    (see *No local media distribution* above).
+  - **Emulator launch** — Hatari/Play variants, Falcon and magazine GEMDOS
+    launch, TOS handling and CosmosEx sending.
+  - **Desktop operations UI** — settings/config forms, self-update/update
+    checks, Hatari/TOS installation and catalog-data/FTP downloads.
 - No modification of `tools/screenshot-gen` beyond removing the `html`
   subcommand at the end of the migration.
 
@@ -1067,18 +1088,21 @@ Clicking a crew card (or pressing Enter/Space on it) opens a modal release
 browser for that crew:
 
 - Header: crew name, `crew`/`individual cracker`, ZIP count, release count,
-  aliases, release search, sort (`year asc` / `year desc` / `title A–Z`),
-  position indicator and close.
+  aliases, release search, sort (`name asc` default, `name desc`, `year asc`,
+  `year desc`), position indicator and close.
 - Left: responsive release screenshot grid (up to four columns) with
   status/kind/layer/ambiguous badges, title, year and credits; missing
-  screenshots show a placeholder. Images use `/img/` and `loading="lazy"`.
+  screenshots show a placeholder. `skipped_disk_n` releases keep their place
+  but hide the status badge (desktop parity). Images use `/img/` and
+  `loading="lazy"`.
   Grid rows are content-sized (`grid-auto-rows: min-content`): the release
   card's min-content height is 0 because its `.crew-thumb` aspect-ratio box
   and `overflow: hidden` contribute no intrinsic height, so `auto` rows would
   size to ~0 and the cards would collapse (stretch) or overlap (`start`).
 - Right: compact release side panel with title/year/publisher/cracked by/
   crew/language/disks, RAW/PASTI/Boxscan/TOS flags, ZIP, status, kind,
-  layer and ambiguity. Inferred `cracked_by`/`crew` values carry an
+  layer and ambiguity. The `Status` row is omitted for `skipped_disk_n`
+  (desktop parity). Inferred `cracked_by`/`crew` values carry an
   `inferred` marker. A **Open game lightbox** button (not a launch/play
   button) and double-click/Enter open the existing game lightbox for that
   release; a release not present in the cracked screenshot index shows a
@@ -1392,9 +1416,10 @@ A conforming implementation satisfies all of the following.
       (boxscan editions/counts and manual labels/formats) when assets
       exist; it has no links, media or download/open controls.
 - [x] U11 The last `crews` tab shows crew cards/previews and opens the
-      release browser with search/sort/keyboard navigation; a release opens
-      the game lightbox as a standalone card and closing returns to the
-      browser. No launch/play control is present.
+      release browser with search, `name asc` default sort (`name`/`year`
+      asc/desc) and keyboard navigation; `skipped_disk_n` hides its status
+      badge/row; a release opens the game lightbox as a standalone card and
+      closing returns to the browser. No launch/play control is present.
 
 **Process**
 - [x] P1 Zero new packages in the repo `.venv` (stdlib only).

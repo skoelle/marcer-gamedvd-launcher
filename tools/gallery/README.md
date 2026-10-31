@@ -100,7 +100,9 @@ Backend filter/card helpers use stdlib `unittest` only:
   aliases and all release fields. Clicking a crew card opens the release browser: screenshot
   grid + compact release panel, search/sort, arrow/PgUp/PgDn/Home/End
   navigation, and `Enter`/double-click opens the selected release in the
-  normal game lightbox (no launch/play button). Labels inferred from the ZIP
+  normal game lightbox (no launch/play button). The release browser sorts by
+  `name asc` (default), `name desc`, `year asc` or `year desc` and hides the
+  `skipped_disk_n` status (desktop parity). Labels inferred from the ZIP
   name are marked `inferred`.
 - **Local asset metadata**: the lightbox side panel shows boxscan/manual
   counts and edition/manual labels for the selected card when

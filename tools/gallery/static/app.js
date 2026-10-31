@@ -1164,28 +1164,30 @@ function crewApplyFilter() {
   const query = crewView.query.trim().toLowerCase();
   const list = crewView.releases.filter((release) =>
     !query || crewSearchText(release).includes(query));
-  if (crewView.sort === "year_desc") {
-    list.sort((a, b) => {
-      const ay = parseInt(a.year, 10);
-      const by = parseInt(b.year, 10);
-      if (Number.isNaN(ay) && Number.isNaN(by)) return crewTitleCompare(a, b);
-      if (Number.isNaN(ay)) return 1;
-      if (Number.isNaN(by)) return -1;
-      return by - ay || crewTitleCompare(a, b);
-    });
-  } else if (crewView.sort === "title_asc") {
-    list.sort(crewTitleCompare);
-  } else {
-    list.sort((a, b) => {
-      const ay = parseInt(a.year, 10);
-      const by = parseInt(b.year, 10);
-      if (Number.isNaN(ay) && Number.isNaN(by)) return crewTitleCompare(a, b);
-      if (Number.isNaN(ay)) return 1;
-      if (Number.isNaN(by)) return -1;
-      return ay - by || crewTitleCompare(a, b);
-    });
+  switch (crewView.sort) {
+    case "name_desc":
+      list.sort((a, b) => crewTitleCompare(b, a));
+      break;
+    case "year_asc":
+      list.sort((a, b) => crewYearCompare(a, b, false));
+      break;
+    case "year_desc":
+      list.sort((a, b) => crewYearCompare(a, b, true));
+      break;
+    default:
+      list.sort(crewTitleCompare);
   }
   return list;
+}
+
+function crewYearCompare(a, b, desc) {
+  const ay = parseInt(a.year, 10);
+  const by = parseInt(b.year, 10);
+  if (Number.isNaN(ay) && Number.isNaN(by)) return crewTitleCompare(a, b);
+  if (Number.isNaN(ay)) return 1;
+  if (Number.isNaN(by)) return -1;
+  if (ay === by) return crewTitleCompare(a, b);
+  return desc ? by - ay : ay - by;
 }
 
 function crewTitleCompare(a, b) {
@@ -1227,8 +1229,10 @@ function crewRenderGrid() {
     const preview = release.preview
       ? `<img loading="lazy" src="${imgSrc(release.preview)}" alt="">`
       : `<div class="crew-thumb-ph">NO SHOT</div>`;
+    const showStatus = release.status &&
+      release.status !== "skipped_disk_n";
     const badges = [
-      release.status
+      showStatus
         ? `<span class="badge ${release.status === "done" ? "b-game" :
           release.status === "desktop" ? "b-desktop" : "b-failed"}">${esc(release.status)}</span>`
         : "",
@@ -1287,7 +1291,9 @@ function crewRenderSide() {
   if (release.tos_bad) flags.push("TOS/Bad");
   add("Flags", flags.join(", "));
   add("ZIP", release.zip);
-  add("Status", release.status);
+  if (release.status && release.status !== "skipped_disk_n") {
+    add("Status", release.status);
+  }
   add("Kind", release.kind);
   add("Layer", release.layer);
   if (release.ambiguous) add("Ambiguous", "yes");
@@ -1351,7 +1357,7 @@ function showCrewBrowser(crew) {
     filtered: [],
     selected: 0,
     query: "",
-    sort: "year_asc",
+    sort: "name_asc",
   };
   crewView.filtered = crewApplyFilter();
   const withPreview = crewView.filtered.findIndex((r) => r.preview);

@@ -40,6 +40,10 @@ relevant specs and decision records.
   likely unnecessary. Deferred.
 - **Security-scoped bookmarks.** Only needed if a sandboxed macOS build is ever
   required (Mac App Store); a substantial rework.
+- **Gallery parity leftovers.** Virtualized/type-to-filter filter dropdowns
+  are the only desktop feature still considered for the gallery. All other
+  desktop capabilities are intentionally not ported (see
+  [`specs/SPEC-gallery-webapp.md`](specs/SPEC-gallery-webapp.md) §1.2).
 
 ## Not planned / won't do
 
@@ -47,3 +51,8 @@ relevant specs and decision records.
 - **Windows code signing.**
 - **macOS notarization/signing.**
 - **App Sandbox / Mac App Store.**
+- **Porting desktop-only features to the gallery.** AtariLegend,
+  PirateFinder-Catalog, favorites, the folder browser, missing-ZIP/FTP
+  handling, status/screenshot editing, boxscan/manual viewers, emulator launch
+  and the settings/update flows stay desktop-only (see
+  [`specs/SPEC-gallery-webapp.md`](specs/SPEC-gallery-webapp.md) §1.2).
