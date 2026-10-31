@@ -22,7 +22,9 @@ stay one entry; crew name centred in the header, close at the right, sidebar
 below the header with the crew overview above the selected release's game
 header (title, ROOT/PATCH folder buttons and the same badges as the lightbox
 header), followed by the selected ZIP info, name/year sort with `name asc` as
-default, `skipped_disk_n` hidden). The crew overview's
+default, `skipped_disk_n` hidden). Layer/`MISSING` badges in the release
+browser use the same cached background scan as the catalog grid and never
+block a frame on filesystem access. The crew overview's
 PirateFinder-Catalog block has a **More** button opening a crew-only PF
 lightbox (`Overview`, `Releases`, `Menus`, `Trivia`, `Sources`). There is an
 optional overlay folder browser (`T` / Folders button) per

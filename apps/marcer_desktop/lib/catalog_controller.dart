@@ -530,16 +530,25 @@ class CatalogController extends ChangeNotifier {
   String? _curatedCrewImagePath(CrewImage image) {
     final base = config.screenshotDirectory.trim();
     if (base.isEmpty) return null;
-    final rels = <String>[image.rel];
     final tree = sectionTrees['cracked'];
-    if (tree != null && !image.rel.startsWith('$tree/')) {
-      rels.add('$tree/${image.rel}');
-    }
+    final legacy =
+        tree != null &&
+        !p.isAbsolute(image.rel) &&
+        !image.rel.startsWith('$tree/');
+    final rels = <String>[image.rel];
+    if (legacy) rels.add('$tree/${image.rel}');
+    // Resolve from the in-memory screenshot index first: curated images are
+    // almost always an existing preview/candidate, and this avoids blocking
+    // the first Crews-tab build on NAS `existsSync` calls.
     for (final rel in rels) {
-      final path = p.normalize(p.join(base, p.dirname(rel), image.name));
-      if (File(path).existsSync()) return path;
+      final preview = screenshots.previewPathFor(rel);
+      if (preview != null && p.basename(preview) == image.name) return preview;
+      for (final candidate in screenshots.candidatePathsFor(rel)) {
+        if (p.basename(candidate) == image.name) return candidate;
+      }
     }
-    return null;
+    final rel = legacy ? '$tree/${image.rel}' : image.rel;
+    return p.normalize(p.join(base, p.dirname(rel), image.name));
   }
 
   static int _previewRank(CardVariant variant) {

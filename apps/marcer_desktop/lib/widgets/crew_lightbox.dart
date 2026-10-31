@@ -103,6 +103,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
   @override
   void initState() {
     super.initState();
+    widget.controller.addListener(_onControllerChanged);
     _crackerStats = _buildCrackerStats(widget.crew.releases);
     _crackerKeys = _crackerStats.keys.toList()
       ..sort(
@@ -119,8 +120,13 @@ class _CrewLightboxState extends State<CrewLightbox> {
     });
   }
 
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
     _focus.dispose();
     _searchFocus.dispose();
     _scroll.dispose();
@@ -595,7 +601,9 @@ class _CrewLightboxState extends State<CrewLightbox> {
     final release = _releases[index];
     final selected = index == _selected;
     final entry = widget.controller.screenshots[release.rel];
-    final layer = widget.controller.zipLayer(release.rel);
+    final hit = widget.controller.releaseCardFor(release.rel);
+    if (hit != null) widget.controller.ensureCardScanned(hit.card);
+    final layer = widget.controller.cachedZipLayer(release.rel);
     final preview = _previewPath(release);
     final status = entry?.status ?? '';
     final showStatus = status.isNotEmpty && status != 'skipped_disk_n';
@@ -661,8 +669,9 @@ class _CrewLightboxState extends State<CrewLightbox> {
                       child: Wrap(
                         spacing: 4,
                         children: [
-                          if (layer.isNotEmpty) _badge(layer, Colors.indigo),
-                          if (layer.isEmpty)
+                          if (layer != null && layer.isNotEmpty)
+                            _badge(layer, Colors.indigo),
+                          if (layer != null && layer.isEmpty)
                             _badge('MISSING', Colors.redAccent),
                         ],
                       ),
@@ -764,6 +773,8 @@ class _CrewLightboxState extends State<CrewLightbox> {
 
     final card = hit.card;
     final variant = card.variants[hit.index];
+    widget.controller.ensureCardScanned(card);
+    final variantLayer = widget.controller.cachedZipLayer(variant.rel);
     final atariLegend = widget.controller.atariLegendForCard(card);
     final pfMatch = widget.controller.pirateFinderIndexMatchForCard(
       card,
@@ -782,10 +793,10 @@ class _CrewLightboxState extends State<CrewLightbox> {
               name: variant.name,
               status: variant.status,
               kind: variant.kind,
-              layer: widget.controller.variantLayer(variant),
+              layer: variantLayer ?? '',
               rel: variant.rel,
               size: variant.size,
-              missing: widget.controller.variantMissing(variant),
+              missing: variantLayer != null && variantLayer.isEmpty,
               tos: variant.tos,
               hideStatus: variant.status == 'skipped_disk_n',
             ),
@@ -834,7 +845,8 @@ class _CrewLightboxState extends State<CrewLightbox> {
   /// ROOT/PATCH folder buttons and the same badges as the lightbox header.
   Widget _gameHeader(GameCard card, CardVariant variant, CrewRelease release) {
     final c = widget.controller;
-    final layer = c.cardLayer(card);
+    final layer = c.cachedCardLayer(card);
+    final missing = c.cachedCardMissing(card);
     final year = card.year == 'unknown' ? '' : card.year;
     final counts = card.statusCounts.entries
         .map((e) => '${e.value}× ${e.key}')
@@ -842,7 +854,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
     final sub = [
       if (variant.status.isNotEmpty && variant.status != 'skipped_disk_n')
         variant.status,
-      if (layer.isNotEmpty) layer,
+      if (layer != null && layer.isNotEmpty) layer,
       if (variant.size != null) '${(variant.size! / 1024).round()} KB',
     ].join('  ·  ');
     return Container(
@@ -891,8 +903,9 @@ class _CrewLightboxState extends State<CrewLightbox> {
             children: [
               if (c.isFavoriteRel(release.rel))
                 _badge('★ FAVORITE', Colors.amber),
-              if (layer.isNotEmpty) _badge(layer, Colors.green),
-              if (c.cardMissing(card)) _badge('MISSING', Colors.redAccent),
+              if (layer != null && layer.isNotEmpty)
+                _badge(layer, Colors.green),
+              if (missing == true) _badge('MISSING', Colors.redAccent),
               if (variant.tos != null && variant.tos!.isNotEmpty)
                 _badge('TOS ${variant.tos}', Colors.deepOrange),
               if (counts.isNotEmpty) _badge(counts, Colors.blueGrey),
@@ -906,7 +919,7 @@ class _CrewLightboxState extends State<CrewLightbox> {
 
   Widget _fallbackInfo(CrewRelease release) {
     final entry = widget.controller.screenshots[release.rel];
-    final layer = widget.controller.zipLayer(release.rel);
+    final layer = widget.controller.cachedZipLayer(release.rel);
     final status = entry?.status ?? '';
     final rows = <(String, String)>[
       if (release.title.isNotEmpty) ('Title', release.title),
@@ -927,7 +940,8 @@ class _CrewLightboxState extends State<CrewLightbox> {
       ('ZIP', release.zip),
       if (status.isNotEmpty && status != 'skipped_disk_n') ('Status', status),
       if (entry?.kind != null && entry!.kind!.isNotEmpty) ('Kind', entry.kind!),
-      if (layer.isNotEmpty) ('Layer', layer) else ('Layer', 'MISSING'),
+      if (layer != null && layer.isNotEmpty) ('Layer', layer),
+      if (layer != null && layer.isEmpty) ('Layer', 'MISSING'),
     ];
     return ListView(
       padding: const EdgeInsets.all(14),
