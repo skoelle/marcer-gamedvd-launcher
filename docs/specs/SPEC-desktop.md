@@ -15,12 +15,14 @@ prefers a curated cracktro image
 from `crew-images.json`, then the best release screenshot. The detail panel
 lists all releases (inferred `cracked_by`/`crew` values from the ZIP name are
 marked `inferred`) and opens one in the existing lightbox. Double-clicking a
-crew card opens the release browser (main-style search field and sort at the
-top left, crew name centred in the header, close at the right, sidebar below
-the header with the crew overview above the selected release's game header
-(title, ROOT/PATCH folder buttons and the same badges as the lightbox header),
-followed by the selected ZIP info, name/year sort with `name asc` as default,
-`skipped_disk_n` hidden). The crew overview's
+crew card opens the release browser (main-style search field, sort and a
+cracker filter at the top left; the filter is derived from the crew's releases
+with per-cracker counts, hidden below two distinct crackers, and joint credits
+stay one entry; crew name centred in the header, close at the right, sidebar
+below the header with the crew overview above the selected release's game
+header (title, ROOT/PATCH folder buttons and the same badges as the lightbox
+header), followed by the selected ZIP info, name/year sort with `name asc` as
+default, `skipped_disk_n` hidden). The crew overview's
 PirateFinder-Catalog block has a **More** button opening a crew-only PF
 lightbox (`Overview`, `Releases`, `Menus`, `Trivia`, `Sources`). There is an
 optional overlay folder browser (`T` / Folders button) per

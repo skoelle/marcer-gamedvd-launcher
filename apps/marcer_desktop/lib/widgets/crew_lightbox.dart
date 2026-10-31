@@ -93,13 +93,23 @@ class _CrewLightboxState extends State<CrewLightbox> {
   final TextEditingController _search = TextEditingController();
 
   late List<CrewRelease> _releases;
+  late final Map<String, ({String label, int count})> _crackerStats;
+  late final List<String> _crackerKeys;
   int _selected = 0;
   String _query = '';
+  String _cracker = 'any';
   String _sort = 'name:asc';
 
   @override
   void initState() {
     super.initState();
+    _crackerStats = _buildCrackerStats(widget.crew.releases);
+    _crackerKeys = _crackerStats.keys.toList()
+      ..sort(
+        (a, b) => _crackerStats[a]!.label.toLowerCase().compareTo(
+          _crackerStats[b]!.label.toLowerCase(),
+        ),
+      );
     _releases = _applyFilter();
     _selected = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -122,9 +132,35 @@ class _CrewLightboxState extends State<CrewLightbox> {
       ? null
       : _releases[_selected.clamp(0, _releases.length - 1)];
 
+  static Map<String, ({String label, int count})> _buildCrackerStats(
+    List<CrewRelease> releases,
+  ) {
+    final stats = <String, ({String label, int count})>{};
+    for (final release in releases) {
+      final label = release.crackedBy.trim();
+      if (label.isEmpty) continue;
+      final key = label.toLowerCase();
+      final current = stats[key];
+      stats[key] = current == null
+          ? (label: label, count: 1)
+          : (label: current.label, count: current.count + 1);
+    }
+    return stats;
+  }
+
+  String _crackerLabel(String key) {
+    if (key == 'any') return 'cracker: any';
+    final stat = _crackerStats[key];
+    if (stat == null) return 'cracker: any';
+    return 'cracker: ${stat.label} (${stat.count})';
+  }
+
   List<CrewRelease> _applyFilter() {
     final query = _query.trim().toLowerCase();
     final list = widget.crew.releases.where((release) {
+      if (_cracker != 'any' && release.crackedBy.toLowerCase() != _cracker) {
+        return false;
+      }
       if (query.isEmpty) return true;
       final haystack = [
         release.title,
@@ -412,7 +448,9 @@ class _CrewLightboxState extends State<CrewLightbox> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            const leftWidth = 174.0 + 8 + 120.0;
+            final showCracker = _crackerStats.length >= 2;
+            final leftWidth =
+                174.0 + 8 + (showCracker ? 180.0 + 8 : 0.0) + 120.0;
             final nameWidth = math.max(
               0.0,
               constraints.maxWidth - 2 * (leftWidth + 8),
@@ -463,6 +501,19 @@ class _CrewLightboxState extends State<CrewLightbox> {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    if (showCracker) ...[
+                      SelectMenu(
+                        value: _cracker,
+                        items: ['any', ..._crackerKeys],
+                        labelOf: _crackerLabel,
+                        onChanged: (value) {
+                          setState(() => _cracker = value);
+                          _rebuild();
+                        },
+                        width: 180,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     SelectMenu(
                       value: _sort,
                       items: const [

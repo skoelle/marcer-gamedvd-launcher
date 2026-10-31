@@ -410,6 +410,7 @@ void main() {
     expect(find.text('Alpha Crew'), findsWidgets);
     expect(find.text('Crew · 2 releases'), findsOneWidget);
     expect(find.text('Search  ( / )'), findsOneWidget);
+    expect(find.text('cracker: any'), findsNothing);
     expect(find.text('Alpha v2'), findsOneWidget);
     expect(find.text('a_v2.zip'), findsNothing);
     final search = tester.getTopLeft(find.text('Search  ( / )'));
@@ -623,6 +624,84 @@ void main() {
 
     final alphaV2After = tester.getTopLeft(find.text('Alpha v2'));
     expect(alphaV2After.dx, lessThan(alphaV2Before.dx));
+  });
+
+  testWidgets('crew lightbox filters by cracker with counts', (tester) async {
+    await tester.runAsync(() async {
+      await c.init();
+    });
+    CrewRelease release(
+      String zip,
+      String crackedBy,
+      String title,
+      String year,
+    ) => CrewRelease.fromJson({
+      'rel': '$tree/M/Multi/$zip',
+      'letter': 'M',
+      'folder': 'Multi',
+      'zip': zip,
+      'title': title,
+      'year': year,
+      'cracked_by': crackedBy,
+    });
+    final crew = CrewGroup(
+      id: 'multi-crackers',
+      name: 'Multi Crackers',
+      kind: 'crew',
+      rank: 1,
+      zips: 5,
+      aliases: const [],
+      releases: [
+        release('a.zip', 'Snake', 'Alpha', '1990'),
+        release('b.zip', 'snake', 'Beta', '1991'),
+        release('c.zip', 'Maxi', 'Gamma', '1992'),
+        release('d.zip', 'Arioch & V8', 'Delta', '1993'),
+        release('e.zip', '', 'Epsilon', '1994'),
+      ],
+    );
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CrewLightbox(controller: c, crew: crew),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('cracker: any'), findsOneWidget);
+    final header = tester.getRect(
+      find.byKey(const ValueKey('crew-lightbox-header')),
+    );
+    final headerName = tester.getRect(
+      find.byKey(const ValueKey('crew-lightbox-header-name')),
+    );
+    expect((headerName.center.dx - header.center.dx).abs(), lessThan(2));
+
+    await tester.tap(find.text('cracker: any'));
+    await tester.pump();
+    expect(find.text('cracker: Snake (2)'), findsOneWidget);
+    expect(find.text('cracker: Maxi (1)'), findsOneWidget);
+    expect(find.text('cracker: Arioch & V8 (1)'), findsOneWidget);
+
+    await tester.tap(find.text('cracker: Snake (2)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha'), findsWidgets);
+    expect(find.text('Beta'), findsWidgets);
+    expect(find.text('Gamma'), findsNothing);
+    expect(find.text('Delta'), findsNothing);
+    expect(find.text('Epsilon'), findsNothing);
+
+    await tester.tap(find.text('cracker: Snake (2)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('cracker: Arioch & V8 (1)').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Delta'), findsWidgets);
+    expect(find.text('Alpha'), findsNothing);
   });
 
   testWidgets('crew lightbox hides skipped_disk_n status', (tester) async {

@@ -52,7 +52,8 @@ Save, the manual screenshot curation described below.
   (CC BY-NC-SA 4.0). PirateFinder matches use the precomputed disk-image
   hashes from `full-index.json.gz` (exact) with a title fallback.
 - **Crews tab** from `crews.json` with a release browser (game title, folder
-  buttons and lightbox-style badges for the selected release) and PirateFinder
+  buttons and lightbox-style badges for the selected release, plus a cracker
+  filter built from the crew's releases) and PirateFinder
   crew details. Joint credits use the unified `A & B` spelling and stay their
   own group unless explicitly allowlisted for merging.
 - **Local layer & missing ZIPs** resolved from the filesystem
