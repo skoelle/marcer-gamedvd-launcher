@@ -587,6 +587,13 @@ class CrewDataTest(unittest.TestCase):
                     }],
                 },
             },
+            "entities": {
+                "alpha-crew": {
+                    "name": "Alpha Crew", "kind": "person",
+                    "status": "resolved",
+                    "memberships": [{"name": "Beta Crew", "current": False}],
+                },
+            },
         }
         store = self._store(groups, clusters=clusters)
 
@@ -617,6 +624,15 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(cluster["overlaps"][0]["name"], "Hidden")
         self.assertEqual(cluster["overlaps"][0]["clusters"],
                          ["alpha", "other"])
+        entity = store.cluster_entities["alpha-crew"]
+        self.assertEqual(entity["kind"], "person")
+        self.assertEqual(entity["memberships"][0]["name"], "Beta Crew")
+        summary = next(c for c in store.crews if c["id"] == "alpha-crew")
+        self.assertEqual(summary["entity"], entity)
+        self.assertEqual(
+            gallery._public_crew_card(summary)["entity"], entity)
+        detail = store.crew_detail(store.crew_groups["alpha-crew"])
+        self.assertEqual(detail["entity"], entity)
 
     def test_missing_cluster_file_keeps_gallery_available(self):
         store = self._store([])

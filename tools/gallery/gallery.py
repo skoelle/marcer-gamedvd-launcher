@@ -963,6 +963,7 @@ class DataStore:
         self.crew_error = None
         self.clusters = []
         self.cluster_by_id = {}
+        self.cluster_entities = {}
         self.cluster_generated_at = ""
         self.cluster_error = None
         self.cluster_edge_count = 0
@@ -1300,6 +1301,7 @@ class DataStore:
     def _load_clusters(self):
         self.clusters = []
         self.cluster_by_id = {}
+        self.cluster_entities = {}
         self.cluster_generated_at = ""
         self.cluster_error = None
         self.cluster_edge_count = 0
@@ -1324,6 +1326,12 @@ class DataStore:
         trees = data.get("trees") or {}
         if not isinstance(trees, dict):
             trees = {}
+        raw_entities = data.get("entities") or {}
+        if isinstance(raw_entities, dict):
+            self.cluster_entities = {
+                str(key): value for key, value in raw_entities.items()
+                if isinstance(value, dict)
+            }
         all_edges = data.get("edges") or []
         if not isinstance(all_edges, list):
             all_edges = []
@@ -1449,6 +1457,10 @@ class DataStore:
             self.cluster_by_id[cluster_id] = cluster
             self.clusters.append(summary)
         self.cluster_generated_at = str(data.get("generated_at") or "")
+        for summary in self.crews:
+            entity = self.cluster_entities.get(str(summary.get("id") or ""))
+            if entity is not None:
+                summary["entity"] = entity
         if not self.clusters:
             self.cluster_error = "no clusters in file"
 
@@ -1582,6 +1594,9 @@ class DataStore:
             "generated_at": self.crew_generated_at,
             "releases": [],
         }
+        entity = self.cluster_entities.get(str(group.get("id") or ""))
+        if entity is not None:
+            out["entity"] = entity
         for release in group.get("releases") or []:
             item = {
                 "rel": str(release.get("rel") or ""),
@@ -1793,7 +1808,7 @@ def filter_crew_cards(cards, q="", kind="", top=""):
 
 
 def _public_crew_card(card):
-    return {
+    out = {
         "id": card["id"],
         "name": card["name"],
         "kind": card["kind"],
@@ -1805,6 +1820,9 @@ def _public_crew_card(card):
         "top": card.get("top", True),
         "crew": True,
     }
+    if card.get("entity"):
+        out["entity"] = card["entity"]
+    return out
 
 
 def _public_cluster_card(cluster):

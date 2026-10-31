@@ -720,6 +720,12 @@ function hoverHTML(card) {
     add("ZIPs", card.zips);
     add("Releases", card.releases);
     add("Aliases", (card.aliases || []).join(", "));
+    const entityLine = entitySummary(card.entity);
+    if (entityLine) {
+      const split = entityLine.indexOf(": ");
+      add(split >= 0 ? entityLine.slice(0, split) : "Memberships",
+        split >= 0 ? entityLine.slice(split + 2) : entityLine);
+    }
   } else if (card.info) {
     const i = card.info;
     add("Title", i.title);
@@ -1451,6 +1457,28 @@ function crewRenderSelection() {
   if (selected) selected.scrollIntoView({ block: "nearest" });
 }
 
+function entitySummary(entity) {
+  if (!entity) return "";
+  const status = String(entity.status || "");
+  if (status === "resolved" && entity.kind === "group") {
+    const names = (entity.parents || []).map((item) =>
+      `${item.name}${item.current ? " (current)" : ""}`);
+    return names.length
+      ? `Parent groups: ${names.join(" · ")}` : "Parent groups: none";
+  }
+  if (status === "resolved") {
+    const names = (entity.memberships || []).map((item) =>
+      `${item.name}${item.current ? " (current)" : ""}`);
+    return names.length
+      ? `Memberships: ${names.join(" · ")}` : "Memberships: none known";
+  }
+  if (status === "ambiguous") {
+    return `Memberships: ambiguous (${entity.candidate_count || 0} matches)`;
+  }
+  if (status === "joint") return "Memberships: joint label";
+  return "Memberships: none known";
+}
+
 function renderCrewBrowser() {
   if (!crewView) return;
   const crew = crewView.group;
@@ -1461,6 +1489,7 @@ function renderCrewBrowser() {
   const aliases = (crew.aliases || []).filter((a) => a !== crew.name);
   $("crew-aliases").textContent = aliases.length
     ? `Also known as: ${aliases.join(", ")}` : "";
+  $("crew-memberships").textContent = entitySummary(crewView.entity);
   if ($("crew-search").value !== crewView.query) {
     $("crew-search").value = crewView.query;
   }
@@ -1484,6 +1513,7 @@ function crewSelect(index) {
 function showCrewBrowser(crew) {
   crewView = {
     group: crew,
+    entity: crew.entity || null,
     releases: crew.releases || [],
     filtered: [],
     selected: 0,
@@ -1656,7 +1686,7 @@ function clusterRenderSide(cluster, hiddenExternal) {
   html += `<h3>Legend</h3><div class="cluster-legend">` +
     `${clusterStatusBadge("top")} local, visible in Crews` +
     `${clusterStatusBadge("excluded")} local, hidden in Crews` +
-    `${clusterStatusBadge("external")} Demozoo group outside the archive` +
+    `${clusterStatusBadge("external")} External group outside the archive` +
     (hiddenExternal
       ? `<div class="cluster-hint">External branches without a local group ` +
         `are hidden by default.</div>`

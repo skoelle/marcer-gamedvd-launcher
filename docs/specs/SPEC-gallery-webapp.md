@@ -225,10 +225,10 @@ Rules:
 ### 2.5 Crew cluster data (`<DATA>/crew-cluster.json`)
 
 *(manually created cluster file; the gameinfo copy intentionally omits
-Demozoo IDs)*
+internal matching IDs)*
 
 - `crew-cluster.json` (required for the Clusters tab): `schema`,
-  `generated_at`, `clusters[]`, `edges[]` and `trees{}`.
+  `generated_at`, `clusters[]`, `edges[]`, `trees{}` and `entities{}`.
 - Each cluster carries `id`, `name`, `roots[]` (objects with `name`),
   `counts` (`groups`, `top`, `excluded`, `ambiguous`, `external`) and
   `groups[]` with `name`, optional `local_id`/`zips`/`preview`, `status`
@@ -239,8 +239,12 @@ Demozoo IDs)*
   `type: "subgroup_of"`, `current`, `clusters[]` and `cross_cluster`.
 - `trees.<cluster id>` is the nested, deduplicated spanning tree used by the
   UI; multiple parent links remain in `edges[]`.
-- The gameinfo file has no `demozoo_id`/`from_demozoo_id`/`to_demozoo_id`.
-  A local audit copy may keep them.
+- `entities{}` is keyed by local crew id and describes cracker memberships:
+  `name`, `kind` (`person`/`group`/`joint`/`unknown`), `status`
+  (`resolved`/`ambiguous`/`none`/`joint`), `memberships[]`/`parents[]`
+  (`name`, `current`) and `candidate_count` for ambiguous entries. The
+  gameinfo file has no internal matching IDs; a local audit copy may keep
+  them.
 - Missing/unreadable `crew-cluster.json` hides the Clusters tab
   (`/api/meta` `clusters.available: false`, `clusters.error` set); it never
   aborts the catalog.
@@ -513,11 +517,11 @@ error body `{ "error": "<message>" }`.
   },
   "clusters": {
     "available": true,
-    "count": 7,
-    "groups": 105,
-    "edges": 99,
-    "cross_edges": 11,
-    "generated_at": "2026-10-31T11:15:37Z",
+    "count": 9,
+    "groups": 131,
+    "edges": 123,
+    "cross_edges": 16,
+    "generated_at": "2026-10-31T12:33:07Z",
     "error": null
   }
 }
@@ -792,11 +796,13 @@ Semantics:
 - Card payload: `id` (group id), `name`, `kind`, `rank`, `zips`,
   `releases`, `aliases`, `preview` (screenshot path below `MARCER_OUT_DIR`
   or `null`), `top` (`excluded == false`, i.e. the desktop Crews-tab
-  selection) and `crew: true`.
+  selection), `crew: true` and an optional `entity` (cracker memberships
+  from section 2.5).
 
 `GET /api/crews?id=<group id>` returns one crew with all releases:
 
-- group fields as above plus `generated_at`.
+- group fields as above plus `generated_at` and an optional `entity`
+  (cracker memberships from section 2.5).
 - each release keeps the `crews.json` fields and adds `found`,
   `index_rel` (resolved full cracked-index path), `preview`, `status`,
   `kind`, `layer` and `size` joined from the cracked screenshot index.
@@ -893,7 +899,7 @@ lightbox, whose side panel carries the same metadata.
    row (A–Z + `0-9` + `Any`). In the `crews` tab only search, clear, the
    **Type** dropdown and the **Ranking** dropdown are shown; the crew cards
    are already ordered by ZIP count. In the `clusters` tab only search and
-   clear are shown; the seven cluster cards keep the file order.
+   clear are shown; the nine cluster cards keep the file order.
 4. **Grid**: grouped cards (section 6.4), paginated.
 5. **Pagination**: page indicator + prev/next + page-size-constant
    (`offset/limit`); keyboard PageUp/PageDown works on the grid (6.6).
@@ -965,8 +971,9 @@ Filter/search/sort state is reflected in the URL query string
   special flag/note — the fields of ANALYSIS-game-data.md §5.3.
 - Without gameinfo: panel shows relative path, status, layer and file size.
 - Crew cards show kind (`crew`/individual cracker), ZIP count, release
-  count and aliases; groups in the desktop Crews-tab selection
-  (`excluded == false`) carry a green `TOP` badge.
+  count, aliases and, for crackers, their optional Memberships/Parent groups
+  line; groups in the desktop Crews-tab selection (`excluded == false`)
+  carry a green `TOP` badge.
 - Cluster cards show roots, group/link/cross-link counts and the
   `TOP`/excluded/external breakdown.
 - Panels never cover the whole grid; they disappear on mouse leave, key
@@ -1124,7 +1131,7 @@ Shown in the header, sourced from `/api/meta`; all counts are for the
 | magazines | `index-magazine.json` (index-only, no gameinfo) | one card per magazine issue (filename-derived title/year, variants = disks + copies) | status filter (default `with_screenshot`); `letter` = magazine name, `year` from the file name |
 | falcon | `index-falcon.json` (index-only, no gameinfo) | grouped by `(letter, folder)` like the cracked view | status filter (default `with_screenshot`); Falcon titles launch with the Falcon machine/TOS 4.04 (desktop) |
 | crews | `crews.json` (+ optional `crew-images.json`) | synthetic crew/cracker cards from all groups (`excluded` is ignored; no cap) | search only; fixed ZIP-count order; click opens the crew release browser (6.11); no status/facets/letter |
-| clusters | `crew-cluster.json` | seven seeded clusters with counts, root preview and cross-link count | search only; click opens the cluster browser (6.12); no status/facets/letter/pager |
+| clusters | `crew-cluster.json` | nine seeded clusters with counts, root preview and cross-link count | search only; click opens the cluster browser (6.12); no status/facets/letter/pager |
 
 - Letter navigation, search, sorting, the status filter and the
   publisher/language/year facets work in all game sections; the remaining
@@ -1180,8 +1187,10 @@ Clicking a crew card (or pressing Enter/Space on it) opens a modal release
 browser for that crew:
 
 - Header: crew name, `crew`/`individual cracker`, ZIP count, release count,
-  aliases, release search, sort (`name asc` default, `name desc`, `year asc`,
-  `year desc`), position indicator and close.
+  aliases, an optional **Memberships** line (resolved person/group,
+  ambiguous match count, joint label or none known), release search, sort
+  (`name asc` default, `name desc`, `year asc`, `year desc`), position
+  indicator and close.
 - Cracker filter: a dropdown derived from the crew's releases (`cracked_by`
   values, case-insensitive deduplication) with per-cracker release counts
   (`Cracker: any`, `Cracker: Snake (170)`). It is hidden when fewer than two
@@ -1231,7 +1240,7 @@ browser:
   groups, the ZIP count. Both the thumbnail and the group name of local
   groups are buttons that close the cluster browser and open the existing
   crew release browser (6.11); external groups are static text because the
-  gameinfo cluster file has no Demozoo IDs.
+  gameinfo cluster file has no internal matching IDs.
 - Extra parent links from `edges[]` that are not the tree parent are shown
   as `also subgroup of …` under the respective node.
 - Right: cluster counts, root, overlap list (groups in more than one
@@ -1471,7 +1480,7 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     the green `TOP` badge; no launch/play control exists. Without
     `crews.json` the tab is hidden and the other sections are unaffected.
 19. **Clusters**: with `crew-cluster.json` present, the `clusters` tab shows
-    the seven cluster cards with counts/root preview; clicking one opens the
+    the nine cluster cards with counts/root preview; clicking one opens the
     tree with `TOP`/`excluded`/`external` badges, overlap and cross-cluster
     links; clicking a local group opens the crew release browser while
     external groups stay static; missing/unreadable `crew-cluster.json`
@@ -1534,7 +1543,7 @@ A conforming implementation satisfies all of the following.
 - [x] A6 `/api/crews` lists all crew cards with `q`/pagination and
       returns one crew's releases (with joined screenshot fields) by id;
       unknown crews → 404.
-- [x] A7 `/api/clusters` lists the seven cluster cards and returns one
+- [x] A7 `/api/clusters` lists the nine cluster cards and returns one
       cluster with groups, relevant edges, tree and overlaps by id; unknown
       clusters → 404.
 

@@ -657,7 +657,7 @@ footer {
   gap: 2px;
 }
 #crew-title { font-size: 1.05em; }
-.crew-sub, .crew-aliases { color: #89a; font-size: 0.72em; }
+.crew-sub, .crew-aliases, .crew-memberships { color: #89a; font-size: 0.72em; }
 .crew-controls {
   display: flex;
   align-items: center;
