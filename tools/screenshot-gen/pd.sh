@@ -10,5 +10,12 @@ cd "$(dirname "$0")"
 ./run.sh run --scope pd --retry-desktop --jobs 4
 ./run.sh run --scope pd --retry-desktop-auto --jobs 8
 ./run.sh run --scope pd --retry-no-usable --tos 1.02 --jobs 4
+
+# Retry known error screens before the final index/audit pass.
+../screenshot-audit/run.sh retry --section pd --jobs 4
+
 ./run.sh cleanup-duplicates --scope pd
 ./run.sh index --scope pd
+
+# Final read-only report for the next review.
+../screenshot-audit/run.sh scan --section pd --limit-clusters 120

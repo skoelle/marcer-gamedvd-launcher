@@ -89,6 +89,25 @@ class ClusterTests(unittest.TestCase):
             a.cluster_info(["abcd"], items, {}, min_folders=2, registry_dist=2)
         )
 
+    def test_no_usable_cluster_is_kept_without_done_entries(self) -> None:
+        e1 = entry("pd", "T/A/A.zip", status="desktop")
+        e2 = entry("pd", "T/B/B.zip", status="desktop")
+        items = {
+            "cdc93236cdc93236": [
+                a.HashItem(e1, e1.shots[0]),
+                a.HashItem(e2, e2.shots[0]),
+            ]
+        }
+        info = a.cluster_info(
+            ["cdc93236cdc93236"],
+            items,
+            {"cdc93236cdc93236": {"action": "no_usable", "label": "bad"}},
+            min_folders=3,
+            registry_dist=2,
+        )
+        self.assertIsNotNone(info)
+        self.assertEqual(info["action"], "no_usable")
+
 
 class FlagTests(unittest.TestCase):
     def test_blank_and_known_error_flags(self) -> None:
@@ -133,15 +152,39 @@ class RetryTests(unittest.TestCase):
         )
         self.assertFalse(a.needs_retry(good, registry, 2))
 
-    def test_no_usable_targets_are_skipped_by_default(self) -> None:
-        e = entry("pd", "A.zip", status="no_usable_shots")
-        registry = {"cdc93236cdc93236": {"action": "error"}}
+    def test_no_usable_targets_need_explicit_try_options(self) -> None:
+        e = entry("pd", "A.zip", status="done")
+        registry = {
+            "cdc93236cdc93236": {
+                "action": "no_usable",
+                "try": {"tos": ["1.02"]},
+            }
+        }
         cfg = {"filters": {}}
-        self.assertFalse(a.targets_from_error_clusters([e], registry, cfg, 2))
-        grouped = a.targets_from_error_clusters(
-            [e], registry, cfg, 2, include_no_usable=True
+        groups = a.target_groups([e], registry, cfg, 2)
+        self.assertEqual(sum(len(value) for value in groups.values()), 1)
+        registry["cdc93236cdc93236"] = {"action": "no_usable"}
+        self.assertFalse(a.target_groups([e], registry, cfg, 2))
+
+    def test_apply_matches_no_usable_without_try(self) -> None:
+        e = entry("pd", "A.zip", status="desktop")
+        registry = {"cdc93236cdc93236": {"action": "no_usable"}}
+        matches = a.collect_registry_matches(
+            [e], registry, {"filters": {}}, 2, ("no_usable",)
         )
-        self.assertEqual(len(grouped["pd"]), 1)
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0][1], "no_usable")
+
+    def test_no_usable_marks_desktop_but_keeps_fixed_done(self) -> None:
+        registry = {"cdc93236cdc93236": {"action": "no_usable"}}
+        desktop = entry("pd", "A.zip", status="desktop")
+        self.assertTrue(a.needs_mark(desktop, registry, 2, "no_usable"))
+        fixed = entry(
+            "pd", "A.zip", status="done",
+            preview_metrics={"phash": "0000000000000000", "std": 60.0,
+                             "unique_colors": 16},
+        )
+        self.assertFalse(a.needs_mark(fixed, registry, 2, "no_usable"))
 
 
 class OnlyFileTests(unittest.TestCase):

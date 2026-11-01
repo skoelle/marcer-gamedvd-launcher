@@ -2986,7 +2986,8 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                   force: bool = False, tos_version: str = "",
                   tos_image: str = "", monitor_info=None,
                   profile: dict = None, boot_mode: str = "",
-                  timepoints: list = None, auto_retry: bool = False) -> None:
+                  timepoints: list = None, auto_retry: bool = False,
+                  no_drive_b: bool = False) -> None:
     def commit(fn):
         # With parallel jobs, entry mutation must be serialized against
         # index saves performed by other workers (avoids torn index state).
@@ -3100,6 +3101,17 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             log(f"boot: {boot_kind} {boot_args}")
         else:
             boot_args = ["--disk-a", str(staged)]
+
+        if no_drive_b:
+            cleaned = []
+            index = 0
+            while index < len(boot_args):
+                if boot_args[index] == "--disk-b":
+                    index += 2
+                    continue
+                cleaned.append(boot_args[index])
+                index += 1
+            boot_args = cleaned + ["--drive-b", "off"]
 
         cmd = [
             P["hatari"],
@@ -3519,7 +3531,8 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   index_name: str = INDEX_NAME, tos_version: str = "",
                   tos_image: str = "", monitor_map: dict = None,
                   profile: dict = None, boot_mode: str = "",
-                  timepoints: list = None, auto_retry: bool = False):
+                  timepoints: list = None, auto_retry: bool = False,
+                  no_drive_b: bool = False):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
@@ -3587,7 +3600,8 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                               monitor_info=(monitor_map or {}).get(e["rel"]),
                               profile=profile, boot_mode=boot_mode,
                               timepoints=timepoints,
-                              auto_retry=auto_retry)
+                              auto_retry=auto_retry,
+                              no_drive_b=no_drive_b)
                 with state_lock:
                     save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
@@ -3651,6 +3665,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                    or cfg.get("tos_default") or "1.04").strip()
     tos_image = tos_image_for(cfg, P, tos_version)
     scope_prof = scope_profile(cfg, scope)
+    if getattr(args, "memsize", ""):
+        scope_prof["memsize"] = str(args.memsize)
     boot_mode = scope.get("boot", "")
     if tos_version != (cfg.get("tos_default") or "1.04"):
         print(f"TOS override: {tos_version}", flush=True)
@@ -3663,8 +3679,11 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
         e = entries[rel]
         if e["status"] == "skipped_disk_n":
             continue
+        retry_statuses = {"desktop"}
+        if args.retry_any:
+            retry_statuses |= {"done", "no_usable_shots", "error"}
         if args.retry_desktop:
-            if e["status"] != "desktop":
+            if e["status"] not in retry_statuses:
                 continue
             if not e.get("click"):
                 continue
@@ -3673,7 +3692,7 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
         elif args.retry_desktop_auto:
             # scan the image/archive for a launchable program and start it
             # with --auto (no GEM desktop clicks)
-            if e["status"] != "desktop":
+            if e["status"] not in retry_statuses:
                 continue
             if e.get("auto_retried") and not args.force:
                 continue
@@ -3734,7 +3753,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 monitor_map=monitor_map,
                 profile=scope_prof, boot_mode=boot_mode,
                 timepoints=scope.get("timepoints"),
-                auto_retry=args.retry_desktop_auto)
+                auto_retry=args.retry_desktop_auto,
+                no_drive_b=args.no_drive_b)
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -3769,7 +3789,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                               monitor_info=monitor_map.get(e["rel"]),
                               profile=scope_prof, boot_mode=boot_mode,
                               timepoints=scope.get("timepoints"),
-                              auto_retry=args.retry_desktop_auto)
+                              auto_retry=args.retry_desktop_auto,
+                              no_drive_b=args.no_drive_b)
                 save_index(out, idx, scope["index"])
                 done_counts[e["status"]] = done_counts.get(e["status"], 0) + 1
                 if STOP_EVENT.is_set():
@@ -4766,6 +4787,14 @@ def main() -> int:
                        help="retry desktop-only entries by scanning the image/"
                             "archive for a launchable program and starting it "
                             "with --auto (no GEM desktop clicks)")
+    p_run.add_argument("--retry-any", action="store_true",
+                       help="with --retry-desktop / --retry-desktop-auto, "
+                            "also process done/no_usable/error entries")
+    p_run.add_argument("--memsize", type=str, default="",
+                       help="override ST RAM (Hatari: 0 = 512 KiB, 1-14 = "
+                            "MiB, otherwise KiB)")
+    p_run.add_argument("--no-drive-b", action="store_true",
+                       help="disable floppy drive B and omit --disk-b")
     p_run.add_argument("--retry-no-usable", action="store_true",
                        help="retry only entries that ended as no_usable_shots "
                             "(not reprocessed by a normal run)")

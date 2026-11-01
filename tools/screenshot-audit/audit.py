@@ -294,10 +294,10 @@ def cluster_info(
         if match and match[0]:
             matched_action, matched_info = match
             matched_hash = value
-            if matched_action == "error":
+            if matched_action in ("error", "no_usable"):
                 break
     status_counts = Counter(item.entry.status for item in all_items)
-    if matched_action not in ("error", "valid"):
+    if matched_action not in ("error", "valid", "no_usable"):
         if len(folders) < min_folders:
             return None
         if not any(
@@ -470,7 +470,7 @@ def write_report(
     parts.append("</table>")
 
     for index, cluster in enumerate(clusters):
-        cls = "bad" if cluster["action"] == "error" else "ok"
+        cls = "bad" if cluster["action"] in ("error", "no_usable") else "ok"
         parts.append(
             f"<h2 class='{cls}'>Cluster: {esc(cluster['action'])} "
             f"({cluster['folder_count']} folders, {cluster['entry_count']} entries)</h2>"
@@ -531,7 +531,7 @@ def scan(args) -> int:
         if info:
             infos.append(info)
     infos.sort(key=lambda value: (
-        {"error": 0, "review": 1, "valid": 2}.get(value["action"], 3),
+        {"error": 0, "no_usable": 1, "review": 2, "valid": 3}.get(value["action"], 4),
         -value["folder_count"],
         -value["entry_count"],
     ))
@@ -558,6 +558,7 @@ def scan(args) -> int:
         "entries": len(entries),
         "hash_clusters": len(clusters),
         "error_clusters": sum(1 for value in infos if value["action"] == "error"),
+        "no_usable_clusters": sum(1 for value in infos if value["action"] == "no_usable"),
         "review_clusters": sum(1 for value in infos if value["action"] == "review"),
         "valid_clusters": sum(1 for value in infos if value["action"] == "valid"),
         "flagged_entries": len(flags),
@@ -592,26 +593,68 @@ def scan(args) -> int:
     return 0
 
 
-def targets_from_error_clusters(
+def collect_registry_matches(
+    entries: list[Entry],
+    registry: dict,
+    cfg: dict,
+    registry_dist: int,
+    actions: tuple[str, ...],
+) -> list[tuple[Entry, str, dict, str]]:
+    matches: list[tuple[Entry, str, dict, str]] = []
+    for entry in entries:
+        if not entry.preview_path:
+            continue
+        preview_hash = str((entry.preview_metrics or {}).get("phash") or "")
+        if not preview_hash:
+            preview_hash = entry_preview_hash(entry, cfg)
+        if not preview_hash:
+            continue
+        match = registry_match(preview_hash, registry, registry_dist)
+        if match and match[0] in actions:
+            matches.append((entry, match[0], match[1], preview_hash))
+    return matches
+
+
+def target_groups(
     entries: list[Entry],
     registry: dict,
     cfg: dict,
     registry_dist: int,
     include_no_usable: bool = False,
-) -> dict[str, list[Entry]]:
-    grouped: dict[str, list[Entry]] = defaultdict(list)
-    for entry in entries:
-        if not entry.preview_path:
+) -> dict[tuple[str, str, str, str], list[Entry]]:
+    grouped: dict[tuple[str, str, str, str], list[Entry]] = defaultdict(list)
+    for entry, action, info, phash in collect_registry_matches(
+        entries, registry, cfg, registry_dist, ("error", "no_usable")
+    ):
+        options = info.get("try") or {}
+        if action == "no_usable" and not options:
             continue
         if entry.status == "no_usable_shots" and not include_no_usable:
             continue
-        preview_hash = str((entry.preview_metrics or {}).get("phash") or "")
-        if not preview_hash:
-            preview_hash = entry_preview_hash(entry, cfg)
-        match = registry_match(preview_hash, registry, registry_dist) if preview_hash else None
-        if match and match[0] == "error":
-            grouped[entry.section].append(entry)
+        key = (
+            entry.section,
+            action,
+            phash,
+            json.dumps(options, sort_keys=True),
+        )
+        grouped[key].append(entry)
     return grouped
+
+
+def needs_mark(
+    entry: Entry,
+    registry: dict,
+    registry_dist: int,
+    action: str,
+) -> bool:
+    if action == "no_usable":
+        if entry.status in ("desktop", "no_usable_shots", "error", "interrupted"):
+            return True
+        metrics = entry.preview_metrics or {}
+        phash = str(metrics.get("phash") or "")
+        match = registry_match(phash, registry, registry_dist) if phash else None
+        return bool(match and match[0] == "no_usable")
+    return needs_retry(entry, registry, registry_dist)
 
 
 def needs_retry(entry: Entry, registry: dict, registry_dist: int) -> bool:
@@ -663,8 +706,16 @@ def run_shotgen(
     jobs: int,
     mode: str,
     click: bool,
+    memsize: str = "",
+    no_drive_b: bool = False,
+    retry_any: bool = True,
 ) -> None:
-    target_file = report_dir / f"targets-{section}-tos{tos}-{mode}.txt"
+    suffix = f"tos{tos}-{mode}"
+    if memsize:
+        suffix += f"-mem{memsize}"
+    if no_drive_b:
+        suffix += "-nob"
+    target_file = report_dir / f"targets-{section}-{suffix}.txt"
     target_file.write_text("\n".join(rels) + "\n", encoding="utf-8")
     argv = [
         str(REPO_ROOT / "tools" / "screenshot-gen" / "run.sh"),
@@ -685,7 +736,18 @@ def run_shotgen(
         if not click or not shutil.which("xdotool"):
             return
         argv.append("--retry-desktop")
-    print(f"\n==> {section}: {mode} TOS {tos} ({len(rels)} entries)", flush=True)
+    if retry_any and mode in ("auto", "click"):
+        argv.append("--retry-any")
+    if memsize:
+        argv += ["--memsize", str(memsize)]
+    if no_drive_b:
+        argv.append("--no-drive-b")
+    print(
+        f"\n==> {section}: {mode} TOS {tos}"
+        f"{' mem ' + str(memsize) if memsize else ''}"
+        f"{' no-drive-b' if no_drive_b else ''} ({len(rels)} entries)",
+        flush=True,
+    )
     print("    " + " ".join(argv), flush=True)
     proc = subprocess.run(argv, cwd=REPO_ROOT)
     if proc.returncode != 0:
@@ -730,57 +792,111 @@ def mark_no_usable(out: Path, section: str, rels: list[str]) -> int:
     return changed
 
 
+def apply(args) -> int:
+    registry = load_registry(Path(args.registry).expanduser())
+    out = out_dir()
+    cfg = shotgen.load_config()
+    sections = args.section or list(SECTION_INDEXES)
+    entries = collect_entries(sections, out, args.workers, cfg)
+    actions = tuple(
+        value.strip() for value in str(args.action).split(",") if value.strip()
+    )
+    matches = collect_registry_matches(
+        entries, registry, cfg, args.registry_distance, actions
+    )
+    grouped: dict[str, list[str]] = defaultdict(list)
+    for entry, _action, _info, _hash in matches:
+        grouped[entry.section].append(entry.rel)
+    total = sum(len(value) for value in grouped.values())
+    print(f"registry matches: {total}", flush=True)
+    for section in sorted(grouped):
+        print(f"  {section}: {len(grouped[section])}", flush=True)
+        if args.dry_run:
+            for rel in grouped[section][:20]:
+                print(f"    would mark no_usable: {rel}", flush=True)
+            if len(grouped[section]) > 20:
+                print(f"    ... {len(grouped[section]) - 20} more", flush=True)
+    if args.dry_run:
+        return 0
+    marked = 0
+    for section, rels in grouped.items():
+        marked += mark_no_usable(out, section, rels)
+    print(f"marked no_usable_shots: {marked}", flush=True)
+    return 0
+
+
 def retry(args) -> int:
     registry = load_registry(Path(args.registry).expanduser())
     out = out_dir()
     cfg = shotgen.load_config()
     sections = args.section or list(SECTION_INDEXES)
     entries = collect_entries(sections, out, args.workers, cfg)
-    grouped = targets_from_error_clusters(
+    groups = target_groups(
         entries,
         registry,
         cfg,
         args.registry_distance,
         include_no_usable=args.include_no_usable,
     )
-    if args.limit:
-        for section in grouped:
-            grouped[section] = grouped[section][: args.limit]
-    total = sum(len(value) for value in grouped.values())
-    if not total:
-        print("no known error-screen entries found", flush=True)
+    if not groups:
+        print("no known error/no_usable targets found", flush=True)
         return 0
-    print(f"known error-screen entries: {total}", flush=True)
     report_dir = Path(args.report_dir).expanduser() / stamp()
     report_dir.mkdir(parents=True, exist_ok=True)
-    remaining = {section: [entry.rel for entry in values]
-                 for section, values in grouped.items()}
-    for tos in args.tos:
-        for section in list(remaining):
-            rels = remaining[section]
-            if not rels:
-                continue
-            if args.dry_run:
-                print(f"would retry {len(rels)} {section} entries with TOS {tos}", flush=True)
-                continue
-            for mode in ("plain", "auto", "click"):
-                run_shotgen(
-                    section, rels, report_dir, tos, args.jobs, mode, not args.no_click
-                )
-            reloaded = reload_entries(out, section, rels, cfg, args.workers)
-            remaining[section] = [
-                rel for rel in rels
-                if rel in reloaded
-                and needs_retry(reloaded[rel], registry, args.registry_distance)
-            ]
-    if args.dry_run:
-        return 0
-    marked = 0
-    for section, rels in remaining.items():
-        if rels:
-            print(f"marking {len(rels)} {section} entries as no_usable_shots", flush=True)
-            marked += mark_no_usable(out, section, rels)
-    print(f"\nmarked no_usable_shots: {marked}", flush=True)
+    total = sum(len(value) for value in groups.values())
+    print(f"known retry targets: {total}", flush=True)
+    for (section, action, phash, options_json), values in groups.items():
+        options = json.loads(options_json)
+        rels = [entry.rel for entry in values]
+        if args.limit:
+            rels = rels[: args.limit]
+        if args.sample:
+            rels = rels[: args.sample]
+        if not rels:
+            continue
+        tos_list = options.get("tos") or list(args.tos)
+        memsize_list = options.get("memsize") or [args.memsize or ""]
+        no_drive_b = bool(options.get("no_drive_b", False))
+        retry_any = bool(options.get("retry_any", True))
+        print(
+            f"\n[{section}] {action} {phash}: {len(rels)} entries, "
+            f"TOS {','.join(tos_list)}, "
+            f"memory {','.join(str(value or 'default') for value in memsize_list)}"
+            f"{', no-drive-b' if no_drive_b else ''}",
+            flush=True,
+        )
+        if args.dry_run:
+            print("  would retry (dry-run)", flush=True)
+            continue
+        for tos in tos_list:
+            for memsize in memsize_list:
+                for mode in ("plain", "auto", "click"):
+                    run_shotgen(
+                        section,
+                        rels,
+                        report_dir,
+                        tos,
+                        args.jobs,
+                        mode,
+                        not args.no_click,
+                        memsize=memsize,
+                        no_drive_b=no_drive_b,
+                        retry_any=retry_any,
+                    )
+        reloaded = reload_entries(out, section, rels, cfg, args.workers)
+        remaining = [
+            rel for rel in rels
+            if rel in reloaded
+            and needs_mark(
+                reloaded[rel], registry, args.registry_distance, action
+            )
+        ]
+        if remaining:
+            print(
+                f"marking {len(remaining)} {section} entries as no_usable_shots",
+                flush=True,
+            )
+            mark_no_usable(out, section, remaining)
     return 0
 
 
@@ -791,7 +907,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"screenshot-audit {TOOL_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("scan", "retry"):
+    for name in ("scan", "retry", "apply"):
         cmd = sub.add_parser(name)
         cmd.add_argument(
             "--section", action="append", choices=list(SECTION_INDEXES), default=[],
@@ -818,9 +934,17 @@ def build_parser() -> argparse.ArgumentParser:
     scan_cmd.add_argument("--phash-distance", type=int, default=0)
     scan_cmd.add_argument("--limit-clusters", type=int, default=50)
     retry_cmd = sub.choices["retry"]
+    retry_cmd.set_defaults(registry_distance=0)
     retry_cmd.add_argument("--tos", default="1.02,1.00")
+    retry_cmd.add_argument("--memsize", default="",
+                           help="memory fallback when the registry has no "
+                                "memsize list (Hatari: 0 = 512 KiB)")
     retry_cmd.add_argument("--jobs", type=int, default=4)
     retry_cmd.add_argument("--limit", type=int, default=0)
+    retry_cmd.add_argument(
+        "--sample", type=int, default=0,
+        help="retry only the first N entries per cluster group (default: all)",
+    )
     retry_cmd.add_argument("--dry-run", action="store_true")
     retry_cmd.add_argument("--no-click", action="store_true")
     retry_cmd.add_argument(
@@ -828,6 +952,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also retry entries already marked no_usable_shots",
     )
+    apply_cmd = sub.choices["apply"]
+    apply_cmd.set_defaults(registry_distance=0)
+    apply_cmd.add_argument(
+        "--action", default="no_usable",
+        help="registry action(s) to mark, comma-separated (default: no_usable)",
+    )
+    apply_cmd.add_argument("--dry-run", action="store_true")
     return parser
 
 
@@ -837,7 +968,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "retry":
         args.tos = [part.strip() for part in str(args.tos).split(",") if part.strip()]
     try:
-        return scan(args) if args.command == "scan" else retry(args)
+        if args.command == "scan":
+            return scan(args)
+        if args.command == "apply":
+            return apply(args)
+        return retry(args)
     except AuditError as exc:
         print(f"screenshot-audit error [{exc.stage}]: {exc}", file=sys.stderr)
         return 1

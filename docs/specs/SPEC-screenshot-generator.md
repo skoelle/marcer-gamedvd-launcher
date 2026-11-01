@@ -898,6 +898,14 @@ classified `black` (section 8.1) and the entry ends as
 - `--tos` accepts any version label defined in `tos_images`; an unknown
   label aborts with a clear message. A missing ROM image aborts with the
   usual `require_env` message.
+- `run --memsize <x>` overrides the configured profile RAM for that run
+  (Hatari semantics: `0` = 512 KiB, `1`–`14` = MiB, otherwise KiB).
+- `run --no-drive-b` omits a second `--disk-b` image and passes
+  `--drive-b off`, forcing single-drive boot.
+- `run --retry-desktop`/`--retry-desktop-auto` normally select only
+  `status: desktop`; `--retry-any` extends the selection to
+  `done`, `no_usable_shots` and `error` entries (combined with `--force`
+  to ignore the `auto_retried`/`click_retried` gates).
 
 ---
 

@@ -32,6 +32,11 @@ tools/screenshot-gen/run.sh run --limit 3  # small test batch
 tools/screenshot-gen/run.sh run --only Xevious   # only matching paths
 tools/screenshot-gen/run.sh run --only-file list.txt  # exact rel paths, one per line
 tools/screenshot-gen/run.sh run --jobs 8   # parallel workers (e.g. night runs)
+
+# Retry done/no_usable entries too (normally auto/click retries only desktop)
+tools/screenshot-gen/run.sh run --retry-desktop-auto --retry-any --force --only-file list.txt
+tools/screenshot-gen/run.sh run --force --memsize 0 --only-file list.txt  # 512 KiB
+tools/screenshot-gen/run.sh run --force --no-drive-b --only-file list.txt # drive B off
 tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
 
 # Old titles that hang on TOS 1.04 (black screen -> no_usable_shots) but run
@@ -42,6 +47,7 @@ tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
 tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.02
 tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.02 --only Bellum
 tools/screenshot-gen/run.sh run --retry-no-usable --tos 1.00
+tools/screenshot-gen/run.sh run --retry-any --tos 1.02 --memsize 0 --force --only-file list.txt
 
 # Known error screens in bulk: tools/screenshot-audit clusters preview pHashes
 # and retries error entries with TOS 1.02, then TOS 1.00.
@@ -108,6 +114,14 @@ and retries unfinished or failed ones (`pending`, `interrupted`, `timeout`,
 repeat them explicitly with `run --retry-no-usable`. A TOS version already
 attempted via `--tos` is skipped on the next `run --retry-no-usable --tos`
 invocation (recorded in `tos_tried`); `--force` retries it anyway.
+
+### PD nightly script
+
+`pd.sh` runs the complete PD sequence: index, run, detect, desktop retries,
+the TOS-1.02 `no_usable_shots` retry, `tools/screenshot-audit retry` for known
+error screens, duplicate cleanup, a final index refresh and a final audit
+report (`local/screenshot-audit/`). It starts with `cd "$(dirname "$0")"`, so
+it can be invoked from anywhere.
 
 ## Scopes
 

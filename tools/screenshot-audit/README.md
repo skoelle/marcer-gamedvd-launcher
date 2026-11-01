@@ -29,11 +29,18 @@ tools/screenshot-audit/run.sh scan
 # One section only
 tools/screenshot-audit/run.sh scan --section pd
 
-# Find error-screen entries and retry them with TOS 1.02 -> 1.00
+# Find error/no_usable entries and retry with TOS/memory options
 tools/screenshot-audit/run.sh retry
 
 # Preview the retry plan
 tools/screenshot-audit/run.sh retry --dry-run
+
+# Retry only a small sample per cluster (recommended for huge clusters)
+tools/screenshot-audit/run.sh retry --sample 2 --jobs 6
+
+# Mark all reviewed no_usable clusters (including desktop entries)
+tools/screenshot-audit/run.sh apply --action no_usable --dry-run
+tools/screenshot-audit/run.sh apply --action no_usable
 ```
 
 Options (`scan`):
@@ -53,10 +60,19 @@ Options (`retry`):
 |---|---|
 | `--tos LIST` | TOS retry order (default `1.02,1.00`) |
 | `--jobs N` | parallel Hatari jobs (default 4) |
-| `--limit N` | max entries per section |
+| `--limit N` | max entries per cluster group |
+| `--sample N` | retry only the first N entries per cluster group |
+| `--memsize VALUE` | memory fallback when the registry has no `memsize` list (`0` = 512 KiB) |
 | `--dry-run` | print targets, change nothing |
 | `--no-click` | skip the `retry-desktop` click pass |
 | `--include-no-usable` | also retry entries already marked `no_usable_shots` (default: skip) |
+
+Options (`apply`):
+
+| Option | Meaning |
+|---|---|
+| `--action LIST` | registry action(s) to mark, default `no_usable` |
+| `--dry-run` | show counts and sample paths, change nothing |
 
 ## Registry
 
@@ -79,25 +95,47 @@ Options (`retry`):
 ```
 
 - `error` — known bad screen; `retry` recaptures these entries.
+- `no_usable` — reviewed bad/blank/desktop screen; optional `try` retries,
+  then `apply` marks the remaining matches as `no_usable_shots`.
 - `valid` — cracktro/menu or otherwise desired shared screen; ignored.
 - unclassified clusters appear in the report for manual review.
 
-The registry matching uses a small pHash distance (`--registry-distance`,
-default 2), so a re-encoded screenshot still matches.
+`retry`/`apply` use exact pHash matching by default (`--registry-distance 0`);
+`scan` still uses distance 2 to group re-encoded variants.
+
+Example with retry options:
+
+```json
+"ffbf9c9c9c888088": {
+  "label": "Mono GEM desktop after failed start",
+  "action": "no_usable",
+  "try": {
+    "tos": ["1.02", "1.00"],
+    "memsize": ["0"],
+    "retry_any": true
+  }
+}
+```
+
+`memsize: ["0"]` is 512 KiB. `no_drive_b: true` omits `--disk-b` and passes
+`--drive-b off`. `retry_any: true` lets `retry-desktop`/`retry-desktop-auto`
+process `done` entries too (not only `desktop`).
 
 ## Retry behaviour
 
-For every entry whose current preview matches an `error` screen:
+For every entry whose current preview matches an `error` or `no_usable`
+screen with `try` options:
 
-1. `run --force --tos 1.02`
-2. `run --retry-desktop-auto --force --tos 1.02`
-3. `run --retry-desktop --force --tos 1.02` (when `xdotool` exists)
-4. Repeat with TOS 1.00 for entries that are still error, blank, desktop or
-   `no_usable_shots`
+1. `run --force [--memsize N] [--no-drive-b]`
+2. `run --retry-desktop-auto --retry-any --force ...`
+3. `run --retry-desktop --retry-any --force ...` (when `xdotool` exists)
+4. Repeat for each TOS/memory combination
 5. Mark remaining entries as `no_usable_shots` (preview kept)
 
-A real `done` preview stops the chain. A plain desktop does **not** stop it,
-because the goal is a usable game/cracktro screenshot.
+A real `done` result with a different preview stops the chain. A plain
+desktop does **not** stop it; after all attempts the cluster is marked
+`no_usable_shots`. `apply` is the bulk step for reviewed clusters without a
+successful retry.
 
 ## Output
 
