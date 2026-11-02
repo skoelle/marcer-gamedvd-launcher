@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -185,6 +186,36 @@ class RetryTests(unittest.TestCase):
                              "unique_colors": 16},
         )
         self.assertFalse(a.needs_mark(fixed, registry, 2, "no_usable"))
+
+
+class ApplyStateTests(unittest.TestCase):
+    def test_valid_status_and_kind_are_written_to_index_and_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            rel = "T/A/Game.zip"
+            index = {
+                "entries": {
+                    rel: {
+                        "status": "desktop",
+                        "kind": "desktop",
+                        "preview": "Game.png",
+                    }
+                }
+            }
+            (out / "index-pd.json").write_text(json.dumps(index), encoding="utf-8")
+            meta_dir = out / "T/A"
+            meta_dir.mkdir(parents=True)
+            (meta_dir / "Game.json").write_text(
+                json.dumps({"status": "desktop", "kind": "desktop"}),
+                encoding="utf-8",
+            )
+            changed = a.apply_entry_state(out, "pd", [rel], "done", "game")
+            self.assertEqual(changed, 1)
+            data = json.loads((out / "index-pd.json").read_text(encoding="utf-8"))
+            entry = data["entries"][rel]
+            self.assertEqual((entry["status"], entry["kind"]), ("done", "game"))
+            sidecar = json.loads((meta_dir / "Game.json").read_text(encoding="utf-8"))
+            self.assertEqual((sidecar["status"], sidecar["kind"]), ("done", "game"))
 
 
 class OnlyFileTests(unittest.TestCase):

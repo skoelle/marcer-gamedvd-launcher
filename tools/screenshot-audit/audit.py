@@ -757,7 +757,13 @@ def run_shotgen(
         )
 
 
-def mark_no_usable(out: Path, section: str, rels: list[str]) -> int:
+def apply_entry_state(
+    out: Path,
+    section: str,
+    rels: list[str],
+    status: str,
+    kind: str | None,
+) -> int:
     if not rels:
         return 0
     lock = shotgen.acquire_lock(out)
@@ -770,8 +776,8 @@ def mark_no_usable(out: Path, section: str, rels: list[str]) -> int:
         for rel, entry in entries.items():
             if rel.casefold() not in wanted:
                 continue
-            entry["status"] = "no_usable_shots"
-            entry["kind"] = None
+            entry["status"] = status
+            entry["kind"] = kind
             changed += 1
             mirror = out / Path(rel).parent
             meta = shotgen.metadata_path(
@@ -780,8 +786,12 @@ def mark_no_usable(out: Path, section: str, rels: list[str]) -> int:
             if meta is not None and meta.is_file():
                 try:
                     data = json.loads(meta.read_text(encoding="utf-8"))
-                    data["status"] = "no_usable_shots"
-                    data["kind"] = None
+                    data["status"] = status
+                    data["kind"] = kind
+                    if kind is not None:
+                        data["preview_is_desktop"] = kind in (
+                            "desktop", "textscreen", "darkscreen",
+                        )
                     shotgen.write_json_atomic(meta, data)
                 except (OSError, ValueError):
                     pass
@@ -790,6 +800,10 @@ def mark_no_usable(out: Path, section: str, rels: list[str]) -> int:
     finally:
         shotgen.release_lock(lock)
     return changed
+
+
+def mark_no_usable(out: Path, section: str, rels: list[str]) -> int:
+    return apply_entry_state(out, section, rels, "no_usable_shots", None)
 
 
 def apply(args) -> int:
@@ -804,24 +818,36 @@ def apply(args) -> int:
     matches = collect_registry_matches(
         entries, registry, cfg, args.registry_distance, actions
     )
-    grouped: dict[str, list[str]] = defaultdict(list)
-    for entry, _action, _info, _hash in matches:
-        grouped[entry.section].append(entry.rel)
+    grouped: dict[tuple[str, str, str | None], list[str]] = defaultdict(list)
+    for entry, action, info, _hash in matches:
+        if action == "no_usable":
+            key = (entry.section, "no_usable_shots", None)
+        elif action == "valid":
+            status = str(info.get("status") or "").strip()
+            if not status:
+                continue
+            key = (entry.section, status, info.get("kind"))
+        else:
+            continue
+        grouped[key].append(entry.rel)
     total = sum(len(value) for value in grouped.values())
     print(f"registry matches: {total}", flush=True)
-    for section in sorted(grouped):
-        print(f"  {section}: {len(grouped[section])}", flush=True)
+    for (section, status, kind), rels in sorted(grouped.items()):
+        print(
+            f"  {section}: {len(rels)} -> status={status} kind={kind}",
+            flush=True,
+        )
         if args.dry_run:
-            for rel in grouped[section][:20]:
-                print(f"    would mark no_usable: {rel}", flush=True)
-            if len(grouped[section]) > 20:
-                print(f"    ... {len(grouped[section]) - 20} more", flush=True)
+            for rel in rels[:20]:
+                print(f"    would set: {rel}", flush=True)
+            if len(rels) > 20:
+                print(f"    ... {len(rels) - 20} more", flush=True)
     if args.dry_run:
         return 0
-    marked = 0
-    for section, rels in grouped.items():
-        marked += mark_no_usable(out, section, rels)
-    print(f"marked no_usable_shots: {marked}", flush=True)
+    changed = 0
+    for (section, status, kind), rels in grouped.items():
+        changed += apply_entry_state(out, section, rels, status, kind)
+    print(f"updated entries: {changed}", flush=True)
     return 0
 
 

@@ -38,6 +38,10 @@ tools/screenshot-audit/run.sh retry --dry-run
 # Retry only a small sample per cluster (recommended for huge clusters)
 tools/screenshot-audit/run.sh retry --sample 2 --jobs 6
 
+# Apply reviewed valid clusters (done/game or done/textscreen)
+tools/screenshot-audit/run.sh apply --action valid --dry-run
+tools/screenshot-audit/run.sh apply --action valid
+
 # Mark all reviewed no_usable clusters (including desktop entries)
 tools/screenshot-audit/run.sh apply --action no_usable --dry-run
 tools/screenshot-audit/run.sh apply --action no_usable
@@ -71,7 +75,7 @@ Options (`apply`):
 
 | Option | Meaning |
 |---|---|
-| `--action LIST` | registry action(s) to mark, default `no_usable` |
+| `--action LIST` | registry action(s) to apply, comma-separated; default `no_usable` |
 | `--dry-run` | show counts and sample paths, change nothing |
 
 ## Registry
@@ -97,11 +101,24 @@ Options (`apply`):
 - `error` — known bad screen; `retry` recaptures these entries.
 - `no_usable` — reviewed bad/blank/desktop screen; optional `try` retries,
   then `apply` marks the remaining matches as `no_usable_shots`.
-- `valid` — cracktro/menu or otherwise desired shared screen; ignored.
+- `valid` — cracktro/menu or otherwise desired shared screen. Optional
+  `status`/`kind` make `apply --action valid` set the desired state for every
+  matching entry (including `desktop`/`no_usable`).
 - unclassified clusters appear in the report for manual review.
 
 `retry`/`apply` use exact pHash matching by default (`--registry-distance 0`);
 `scan` still uses distance 2 to group re-encoded variants.
+
+Example valid state:
+
+```json
+"b939393939393931": {
+  "label": "Aura textscreen",
+  "action": "valid",
+  "status": "done",
+  "kind": "textscreen"
+}
+```
 
 Example with retry options:
 

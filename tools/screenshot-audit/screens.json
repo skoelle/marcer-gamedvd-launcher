@@ -220,6 +220,256 @@
         ],
         "retry_any": true
       }
+    },
+    "c0c0c4c61f3f3b3b": {
+      "label": "Valid cracktro / GEM menu app (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "e56ccb139c9392c6": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "cd8c36f07833876a": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "93926c6c6d8d2d2d": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "c0c0c4ce1f3b3b3b": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "94907b7a360f0f87": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "9696696996966969": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "c0c0c4c63f3b3b3b": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "c76d38926969c666": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "d0932b903f6c3e6c": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "c0c0c4c43f3f3b3b": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "eb3e971fc0c1e0e0": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "978d6872c3b4346d": {
+      "label": "Valid cracktro (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "8e8e8e8e8e8e8e8e": {
+      "label": "Valid GEM app with menu bar (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "b4b4b4b4b4b4b4b4": {
+      "label": "Valid GEM app with menu bar (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "a5a5a5a5a5a5a5a5": {
+      "label": "Valid GEM app with menu bar (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "a9a9a9a9a9a9a9a9": {
+      "label": "Valid GEM app with menu bar (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "aaaaaaaaaaaaaaaa": {
+      "label": "Valid GEM app with menu bar (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "b1b1b1b1b1b1b1b1": {
+      "label": "Valid GEM app with menu bar (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "9999666699996666": {
+      "label": "Dark but valid game screen (done game)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game"
+    },
+    "b939393939393931": {
+      "label": "Valid utility text screen (done textscreen)",
+      "action": "valid",
+      "status": "done",
+      "kind": "textscreen"
+    },
+    "ee6ec46691919999": {
+      "label": "Program started but did not appear",
+      "action": "no_usable",
+      "try": {
+        "tos": [
+          "1.02",
+          "1.00"
+        ],
+        "memsize": [
+          "0"
+        ],
+        "retry_any": true
+      }
+    },
+    "a3a3b3a3a2a2b3a3": {
+      "label": "Program started but did not appear",
+      "action": "no_usable",
+      "try": {
+        "tos": [
+          "1.02",
+          "1.00"
+        ],
+        "memsize": [
+          "0"
+        ],
+        "retry_any": true
+      }
+    },
+    "99a2668699b3e6c6": {
+      "label": "Program started but did not appear",
+      "action": "no_usable",
+      "try": {
+        "tos": [
+          "1.02",
+          "1.00"
+        ],
+        "memsize": [
+          "0"
+        ],
+        "retry_any": true
+      }
+    },
+    "99a2668e99b1e6c6": {
+      "label": "Program started but did not appear",
+      "action": "no_usable",
+      "try": {
+        "tos": [
+          "1.02",
+          "1.00"
+        ],
+        "memsize": [
+          "0"
+        ],
+        "retry_any": true
+      }
+    },
+    "9ab065c39ab0e3c7": {
+      "label": "Program started but did not appear",
+      "action": "no_usable",
+      "try": {
+        "tos": [
+          "1.02",
+          "1.00"
+        ],
+        "memsize": [
+          "0"
+        ],
+        "retry_any": true
+      }
+    },
+    "99a2668a99b3e6c6": {
+      "label": "Program started but did not appear",
+      "action": "no_usable",
+      "try": {
+        "tos": [
+          "1.02",
+          "1.00"
+        ],
+        "memsize": [
+          "0"
+        ],
+        "retry_any": true
+      }
+    },
+    "9ab061c39ab8e7c3": {
+      "label": "Program started but did not appear",
+      "action": "no_usable",
+      "try": {
+        "tos": [
+          "1.02",
+          "1.00"
+        ],
+        "memsize": [
+          "0"
+        ],
+        "retry_any": true
+      }
+    },
+    "80feff0000ffff00": {
+      "label": "Game crash / bombs",
+      "action": "no_usable",
+      "try": {
+        "tos": [
+          "1.02",
+          "1.00"
+        ],
+        "memsize": [
+          "0"
+        ],
+        "no_drive_b": true,
+        "retry_any": true
+      }
+    },
+    "bf3f3f37c0c0c0c0": {
+      "label": "TOS version error / partially OK",
+      "action": "no_usable",
+      "try": {
+        "tos": [
+          "1.02",
+          "1.00"
+        ],
+        "retry_any": true
+      }
     }
   }
 }
