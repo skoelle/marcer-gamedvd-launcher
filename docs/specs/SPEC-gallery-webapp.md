@@ -541,7 +541,7 @@ error body `{ "error": "<message>" }`.
     "groups": 283,
     "edges": 244,
     "cross_edges": 40,
-    "generated_at": "2026-10-31T21:02:36Z",
+    "generated_at": "2026-11-01T18:19:46Z",
     "error": null
   }
 }
