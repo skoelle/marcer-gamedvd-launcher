@@ -1297,13 +1297,17 @@ def _effective_jobs(requested: int, cfg: dict, out_dir: Path,
     swap_free = _meminfo_mb("SwapFree")
     budget = available + swap_free
     try:
-        disk_free = min(shutil.disk_usage(out_dir).free,
-                        shutil.disk_usage(tmp_root).free) / (1024.0 * 1024.0)
+        out_free = shutil.disk_usage(out_dir).free / (1024.0 * 1024.0)
+        tmp_free = shutil.disk_usage(tmp_root).free / (1024.0 * 1024.0)
     except OSError:
-        disk_free = 0.0
-    if disk_free < min_disk:
-        sys.exit(f"error: not enough disk space ({disk_free:.0f} MB free, "
-                 f"need {min_disk:.0f} MB)")
+        out_free = tmp_free = 0.0
+    if min(out_free, tmp_free) < min_disk:
+        sys.exit(
+            f"error: not enough disk space "
+            f"(out {out_dir}: {out_free:.0f} MB free, "
+            f"tmp {tmp_root}: {tmp_free:.0f} MB free; "
+            f"need {min_disk:.0f} MB each)"
+        )
     if available < min_free:
         sys.exit(f"error: not enough free RAM ({available:.0f} MB available, "
                  f"need {min_free:.0f} MB)")
