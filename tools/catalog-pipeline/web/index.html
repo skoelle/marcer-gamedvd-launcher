@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!-- Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+     Licensed under the MIT License. See LICENSE file in project root. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marcer Catalog Pipeline</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="headline">
+    <h1>Marcer Catalog Pipeline</h1>
+    <span class="badge badge-readonly">read-only</span>
+  </div>
+  <div class="meta">
+    <span id="version"></span>
+    <span id="updated"></span>
+  </div>
+</header>
+
+<div class="actions">
+  <button type="button" disabled title="Phase 2">Start sync</button>
+  <button type="button" disabled title="Phase 5">Publish screenshots</button>
+  <span class="hint">Actions are added in a later phase.</span>
+</div>
+
+<div id="banner" class="banner" hidden></div>
+
+<main>
+  <section class="grid" id="cards" aria-live="polite">
+    <div class="card placeholder">Loading status…</div>
+  </section>
+
+  <section class="panel">
+    <h2>Run history</h2>
+    <div id="runs" class="table-wrap"><p class="muted">Loading…</p></div>
+  </section>
+</main>
+
+<footer>
+  <span>tools/catalog-pipeline</span>
+  <span>Status is read-only and refreshed every 5 s.</span>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
