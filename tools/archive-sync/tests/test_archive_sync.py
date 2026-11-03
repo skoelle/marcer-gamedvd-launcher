@@ -666,6 +666,32 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.retries, 1)
         self.assertEqual(cfg.workers, 2)
 
+    def test_report_dir_defaults_to_data_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / "Data"
+            data.mkdir()
+            env = {
+                "MARCER_PATCH_DIR": str(Path(tmp) / "patch"),
+                "MARCER_FTP_HOST": "ftp.example",
+                "MARCER_DATA_DIR": str(data),
+            }
+            with mock.patch.dict(os.environ, env, clear=True):
+                report_dir = a.resolve_report_dir(None)
+        self.assertEqual(report_dir, data / "state" / "archive-sync")
+
+    def test_explicit_state_dir_overrides_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = {
+                "MARCER_PATCH_DIR": str(root / "patch"),
+                "MARCER_FTP_HOST": "ftp.example",
+                "MARCER_DATA_DIR": str(root / "Data"),
+                "MARCER_STATE_DIR": str(root / "State"),
+            }
+            with mock.patch.dict(os.environ, env, clear=True):
+                report_dir = a.resolve_report_dir(None)
+        self.assertEqual(report_dir, root / "State" / "archive-sync")
+
     def test_default_encoding_is_utf8(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

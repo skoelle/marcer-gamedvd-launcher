@@ -87,6 +87,9 @@ class FakeFTP:
 
 class GameinfoPublishTests(unittest.TestCase):
     def setUp(self) -> None:
+        state_env = mock.patch.dict(os.environ, {"MARCER_STATE_DIR": ""}, clear=False)
+        state_env.start()
+        self.addCleanup(state_env.stop)
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
         self.data = self.tmp / "Data"
@@ -126,6 +129,9 @@ class GameinfoPublishTests(unittest.TestCase):
 
     def archives(self) -> list[Path]:
         return sorted(self.data.glob("gameinfo-*.zip"))
+
+    def state_file(self) -> Path:
+        return self.data / "state" / "asset-publish" / "state.json"
 
     def test_ftp_settings_default_encoding_is_utf8(self) -> None:
         with self.ftp_env(MARCER_FTP_ENCODING=""):
@@ -200,11 +206,26 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertTrue(archive.is_file())
         self.assertRegex(archive.name, ARCHIVE_RE)
 
-        state = json.loads((self.data / ".asset-publish-state.json").read_text())
+        state = json.loads(self.state_file().read_text())
         entry = state["assets"]["gameinfo"]
         self.assertEqual(entry["signature"], result["signature"])
         self.assertEqual(entry["archive"], archive.name)
         self.assertEqual(entry["size"], archive.stat().st_size)
+
+    def test_legacy_state_file_is_read_and_migrated(self) -> None:
+        _, first = self.publish()
+        legacy = self.data / ".asset-publish-state.json"
+        legacy.write_bytes(self.state_file().read_bytes())
+        self.state_file().unlink()
+
+        _, second = self.publish()
+        self.assertEqual(second["status"], "skipped")
+        self.assertTrue(self.state_file().is_file())
+        state = json.loads(self.state_file().read_text())
+        self.assertEqual(
+            state["assets"]["gameinfo"]["archive"],
+            Path(first["archive"]).name,
+        )
 
     def test_unchanged_content_is_skipped_and_force_repacks(self) -> None:
         _, first = self.publish()
@@ -238,7 +259,7 @@ class GameinfoPublishTests(unittest.TestCase):
         _, first = self.publish("--dry-run")
         self.assertEqual(first["status"], "would-create")
         self.assertEqual(self.archives(), [])
-        self.assertFalse((self.data / ".asset-publish-state.json").exists())
+        self.assertFalse(self.state_file().exists())
 
     def test_dry_run_reports_skip(self) -> None:
         self.publish()
@@ -258,7 +279,7 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("MARCER_FTP_HOST", err)
         self.assertEqual(self.archives(), [])
-        self.assertFalse((self.data / ".asset-publish-state.json").exists())
+        self.assertFalse(self.state_file().exists())
 
     def test_upload_success_uploads_and_updates_manifest(self) -> None:
         fake = FakeFTP()
@@ -286,7 +307,7 @@ class GameinfoPublishTests(unittest.TestCase):
             fake.files, {Path(result["archive"]).name: result["size"]}
         )
 
-        state = json.loads((self.data / ".asset-publish-state.json").read_text())
+        state = json.loads(self.state_file().read_text())
         entry = state["assets"]["gameinfo"]
         self.assertTrue(entry["uploaded"])
         self.assertFalse(entry["manifest_dirty"])
@@ -351,7 +372,7 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertEqual(len(self.archives()), 1)
         archive = Path(result["archive"])
         self.assertTrue(archive.is_file())
-        state = json.loads((self.data / ".asset-publish-state.json").read_text())
+        state = json.loads(self.state_file().read_text())
         self.assertFalse(state["assets"]["gameinfo"]["uploaded"])
 
         working = FakeFTP()
@@ -382,7 +403,7 @@ class GameinfoPublishTests(unittest.TestCase):
             fake.files, {archive.name: archive.stat().st_size + 1}
         )
         self.assertFalse(any(call[0] == "delete" for call in fake.calls))
-        state = json.loads((self.data / ".asset-publish-state.json").read_text())
+        state = json.loads(self.state_file().read_text())
         self.assertFalse(state["assets"]["gameinfo"]["uploaded"])
 
         with self.ftp_env(), mock.patch.object(
@@ -411,7 +432,7 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertTrue(result["uploaded"])
         self.assertIn("gh failed", result["error"])
         self.assertEqual(len(self.archives()), 1)
-        state = json.loads((self.data / ".asset-publish-state.json").read_text())
+        state = json.loads(self.state_file().read_text())
         entry = state["assets"]["gameinfo"]
         self.assertTrue(entry["uploaded"])
         self.assertTrue(entry["manifest_dirty"])
@@ -425,7 +446,7 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertFalse(second["created"])
         self.assertEqual(len(self.archives()), 1)
         manifest.assert_called_once_with()
-        state = json.loads((self.data / ".asset-publish-state.json").read_text())
+        state = json.loads(self.state_file().read_text())
         self.assertFalse(state["assets"]["gameinfo"]["manifest_dirty"])
 
     def test_local_only_never_touches_ftp_or_manifest(self) -> None:
@@ -452,7 +473,7 @@ class GameinfoPublishTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "would-create-upload")
         self.assertEqual(self.archives(), [])
-        self.assertFalse((self.data / ".asset-publish-state.json").exists())
+        self.assertFalse(self.state_file().exists())
         manifest.assert_not_called()
 
     def test_dry_run_upload_reports_existing_unuploaded_archive(self) -> None:

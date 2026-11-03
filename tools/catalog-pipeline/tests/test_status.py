@@ -241,6 +241,40 @@ class StatusCollectorTest(unittest.TestCase):
         self.assertNotIn("do-not-expose", serialized)
         self.assertNotIn("token-do-not-expose", serialized)
 
+    def test_state_defaults_to_data_state_and_reads_legacy_publish_state(self) -> None:
+        env, paths = self.make_env()
+        env.pop("MARCER_STATE_DIR")
+        state_root = paths["data"] / "state"
+        write_json(
+            state_root / "archive-sync" / "changes.json",
+            {"generated_at": "2026-11-03T18:00:00Z", "counts": {"new": 1}},
+        )
+        write_json(
+            state_root / "catalog-update" / "runs" / "20261103T180000Z.json",
+            {
+                "status": "ok",
+                "started_at": "2026-11-03T18:00:00Z",
+                "finished_at": "2026-11-03T18:01:00Z",
+                "steps": [],
+            },
+        )
+        write_json(
+            paths["data"] / ".asset-publish-state.json",
+            {"assets": {"gameinfo": {"archive": "gameinfo-x.zip", "uploaded": True}}},
+        )
+
+        collector = st.StatusCollector(environ=env, repo_root=self.repo)
+        result = collector.collect()
+        self.assertEqual(result["config"]["state_source"], "data")
+        self.assertTrue(result["sync"]["present"])
+        self.assertEqual(
+            result["pipeline"]["last_run"]["file"], "20261103T180000Z.json"
+        )
+        self.assertEqual(result["publish"]["status"], "uploaded")
+        self.assertEqual(
+            result["publish"]["file"]["name"], ".asset-publish-state.json"
+        )
+
     def test_malformed_json_does_not_raise(self) -> None:
         env, paths = self.make_env()
         (paths["state"] / "archive-sync").mkdir(parents=True)

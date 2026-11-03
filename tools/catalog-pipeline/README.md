@@ -18,7 +18,9 @@ phases.
 - `local/paths.env` (git-ignored) with the usual path variables:
   `MARCER_ROOT_DIR`, `MARCER_PATCH_DIR`, `MARCER_OUT_DIR`,
   `MARCER_DATA_DIR` and optionally `MARCER_STATE_DIR`,
-  `MARCER_SYNC_REPORT_DIR`, `MARCER_PIPELINE_REPORT_DIR`
+  `MARCER_SYNC_REPORT_DIR`, `MARCER_PIPELINE_REPORT_DIR`.
+  Pipeline state lives in `$MARCER_DATA_DIR/state` by default; an explicit
+  `MARCER_STATE_DIR` overrides it (the Docker container uses `/state`).
 - No FTP or GitHub connection is made in this phase; credentials only affect
   the configuration indicator
 
@@ -39,8 +41,9 @@ Environment overrides:
 |---|---|---|
 | `MARCER_PIPELINE_HOST` | `0.0.0.0` | bind address |
 | `MARCER_PIPELINE_PORT` | `8080` | bind port |
-| `MARCER_SYNC_REPORT_DIR` | `$MARCER_STATE_DIR/archive-sync` or `local/archive-sync` | `archive-sync` reports |
-| `MARCER_PIPELINE_REPORT_DIR` | `$MARCER_STATE_DIR/catalog-update` or `local/catalog-update` | `catalog-update` run reports |
+| `MARCER_STATE_DIR` | `$MARCER_DATA_DIR/state` | state root (Docker: `/state`) |
+| `MARCER_SYNC_REPORT_DIR` | `$MARCER_STATE_DIR/archive-sync` | `archive-sync` reports |
+| `MARCER_PIPELINE_REPORT_DIR` | `$MARCER_STATE_DIR/catalog-update` | `catalog-update` run reports |
 | `PIPELINE_VERBOSE` | – | log every HTTP request |
 
 The UI binds to `0.0.0.0` by default. It has no authentication; expose it only
@@ -64,7 +67,7 @@ All endpoints are read-only and return JSON except `/` and `/static/*`.
 | Gameinfo | `gameinfo/manifest.json`, `games-*.json`, file metadata |
 | Full index | `gameinfo/full-index.json.gz` |
 | Crews | `gameinfo/crews.json` |
-| Publish | `asset-publish/state.json` (or `<MARCER_DATA_DIR>/.asset-publish-state.json`) |
+| Publish | `$MARCER_STATE_DIR/asset-publish/state.json` (legacy fallback: `<MARCER_DATA_DIR>/.asset-publish-state.json`) |
 | Screenshots | `MARCER_OUT_DIR/index*.json` and referenced PNGs |
 | Run history | `<report dir>/runs/*.json` |
 | Storage | `shutil.disk_usage` for root, patch, out, data and state |

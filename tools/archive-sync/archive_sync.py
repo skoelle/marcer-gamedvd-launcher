@@ -39,6 +39,11 @@ from datetime import datetime, timezone
 from ftplib import FTP, all_errors as FTP_ALL_ERRORS, error_perm, error_temp
 from pathlib import Path, PurePosixPath
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT / "tools"))
+
+from _lib import pipeline_paths  # noqa: E402
+
 TOOL_VERSION = "0.2.1"
 REPORT_SCHEMA = 2
 DEFAULT_REMOTE = "/GameDVD/"
@@ -246,7 +251,9 @@ def load_json(path: Path) -> dict:
 
 def resolve_report_dir(arg: str | None) -> Path:
     value = arg or env("MARCER_SYNC_REPORT_DIR")
-    return Path(value) if value else repo_root() / "local" / "archive-sync"
+    if value:
+        return Path(value).expanduser()
+    return pipeline_paths.state_root(repo_root()) / "archive-sync"
 
 
 def parse_int(value, default: int, minimum: int = 0) -> int:
@@ -1350,8 +1357,8 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--report-dir",
-        help="report directory (default: MARCER_SYNC_REPORT_DIR or "
-        "local/archive-sync)",
+        help="report directory (default: MARCER_SYNC_REPORT_DIR, "
+        "MARCER_STATE_DIR/archive-sync or MARCER_DATA_DIR/state/archive-sync)",
     )
     parser.add_argument("--remote", help="remote base (default: MARCER_FTP_REMOTE)")
     parser.add_argument("--host", help="FTP host or host:port")

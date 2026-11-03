@@ -23,7 +23,7 @@ added or removed. The documentation taxonomy is described in
 | One-shot catalog update | `tools/catalog-update/` | [`tools/catalog-update/README.md`](tools/catalog-update/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | Catalog pipeline status UI | `tools/catalog-pipeline/` | [`tools/catalog-pipeline/README.md`](tools/catalog-pipeline/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | Screenshot audit | `tools/screenshot-audit/` | [`tools/screenshot-audit/README.md`](tools/screenshot-audit/README.md), [`SPEC-screenshot-generator.md`](docs/specs/SPEC-screenshot-generator.md) |
-| Shared pipeline helpers | `tools/_lib/` | Section trees/overlay scan (`catalog_sections.py`) + disk-image hashing (`zip_hashes.py`) |
+| Shared pipeline helpers | `tools/_lib/` | Section trees/overlay scan (`catalog_sections.py`), disk-image hashing (`zip_hashes.py`) + pipeline state paths (`pipeline_paths.py`) |
 | Archive sync / asset publish / manifest | `tools/archive-sync/`, `tools/asset-publish/`, `tools/asset-manifest/` | [`docs/plans/PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) + each tool README |
 
 Catalog data flow: `tools/full-index-gen` scans the game trees (no screenshot

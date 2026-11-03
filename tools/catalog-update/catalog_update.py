@@ -34,10 +34,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from _lib import catalog_sections as cs  # noqa: E402
+from _lib import pipeline_paths  # noqa: E402
 
 TOOL_VERSION = "0.1.0"
-DEFAULT_REPORT_DIR = REPO_ROOT / "local" / "catalog-update"
-DEFAULT_SYNC_REPORT_DIR = REPO_ROOT / "local" / "archive-sync"
 GAMEINFO_SCOPES = ("cracked", "pd", "utils")
 PUBLISH_STATUSES = {
     "would-create-upload",
@@ -396,17 +395,17 @@ def asset_publish_paths(opts: Options) -> tuple[Path, Path]:
         if env("MARCER_ASSET_OUT_DIR")
         else opts.data_dir
     )
-    state_dir = env("MARCER_STATE_DIR")
-    if state_dir:
-        state_file = Path(state_dir).expanduser() / "asset-publish" / "state.json"
-    else:
-        state_file = opts.data_dir / ".asset-publish-state.json"
+    state_file = pipeline_paths.asset_state_file_for(opts.data_dir)
     return output_dir, state_file
 
 
 def publish_pending(opts: Options) -> bool:
     """True when the published gameinfo asset is missing or still pending."""
     output_dir, state_file = asset_publish_paths(opts)
+    if not state_file.is_file():
+        legacy = pipeline_paths.legacy_asset_state_file_for(opts.data_dir)
+        if legacy.is_file():
+            state_file = legacy
     try:
         state = json.loads(state_file.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -497,7 +496,7 @@ def publish_gameinfo(runner: CommandRunner, opts: Options) -> dict:
 
 def run_update(opts: Options, runner: CommandRunner) -> int:
     report = UpdateReport()
-    lock = RunLock(opts.repo_root / "local" / "catalog-update" / "run.lock")
+    lock = RunLock(opts.report_dir / "run.lock")
     try:
         if not opts.dry_run:
             lock.acquire()
@@ -694,12 +693,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--report-dir",
         default="",
-        help=f"run report directory (default: {DEFAULT_REPORT_DIR})",
+        help="run report directory (default: MARCER_DATA_DIR/state/catalog-update)",
     )
     parser.add_argument(
         "--sync-report-dir",
         default="",
-        help=f"archive-sync report directory (default: {DEFAULT_SYNC_REPORT_DIR})",
+        help="archive-sync report directory (default: MARCER_DATA_DIR/state/archive-sync)",
     )
     parser.add_argument(
         "--version",
@@ -719,21 +718,23 @@ def build_options(args: argparse.Namespace) -> Options:
             "MARCER_ROOT_DIR, MARCER_PATCH_DIR and MARCER_DATA_DIR must be set "
             "(add them to local/paths.env)",
         )
+    data_path = Path(data).expanduser()
+    state_root = pipeline_paths.state_dir_for(data_path)
     report_dir = (
         Path(args.report_dir).expanduser()
         if args.report_dir
-        else DEFAULT_REPORT_DIR
+        else state_root / "catalog-update"
     )
     sync_report_dir = (
         Path(args.sync_report_dir).expanduser()
         if args.sync_report_dir
-        else DEFAULT_SYNC_REPORT_DIR
+        else state_root / "archive-sync"
     )
     return Options(
         repo_root=Path(__file__).resolve().parents[2],
         root=Path(root).expanduser(),
         patch=Path(patch).expanduser(),
-        data_dir=Path(data).expanduser(),
+        data_dir=data_path,
         only=tuple(args.only or ()),
         excludes=tuple(args.exclude or ()),
         dry_run=bool(args.dry_run),

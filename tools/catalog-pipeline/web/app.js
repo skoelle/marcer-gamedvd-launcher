@@ -227,10 +227,15 @@ function renderStorage(storage) {
 
 function renderConfig(config) {
   const warnings = [...(config.missing || []).map((item) => `${item} is not set`), ...(config.warnings || [])];
+  const stateLabel = config.state_source === "env"
+    ? "MARCER_STATE_DIR"
+    : config.state_source === "data"
+      ? "DATA/state"
+      : "missing";
   const body = `<div class="chips">
       <span class="chip${config.ftp_configured ? "" : " warn"}">FTP <b>${config.ftp_configured ? "configured" : "missing"}</b></span>
       <span class="chip${config.github_configured ? "" : " warn"}">GitHub token <b>${config.github_configured ? "configured" : "missing"}</b></span>
-      <span class="chip">state dir <b>${config.state_configured ? "configured" : "default"}</b></span>
+      <span class="chip${config.state_source === "missing" ? " warn" : ""}">state dir <b>${stateLabel}</b></span>
     </div>` + listWarnings(warnings);
   return card("Configuration", body, badge(warnings.length ? "warnings" : "ok",
     warnings.length ? "warn" : "ok"));

@@ -45,7 +45,7 @@ The archive is written to a temporary `.part` file and moved into place with
 MARCER_DATA_DIR="/path/to/GamesDVD-Update/Data"
 # Optional:
 #MARCER_ASSET_OUT_DIR="/path/to/GamesDVD-Update/Data"
-#MARCER_STATE_DIR="/state"
+#MARCER_STATE_DIR="/state"  # optional; default is <MARCER_DATA_DIR>/state
 
 # Only needed for --upload:
 MARCER_FTP_HOST="host:2121"
@@ -96,7 +96,7 @@ Useful options:
 | Source | `<MARCER_DATA_DIR>/gameinfo` |
 | ZIP output | `MARCER_ASSET_OUT_DIR`, else `MARCER_DATA_DIR` |
 | Name | `gameinfo-<yyyyMMdd-HHmmss>.zip` (local time) |
-| State | `MARCER_STATE_DIR/asset-publish/state.json`, else `<MARCER_DATA_DIR>/.asset-publish-state.json` |
+| State | `MARCER_STATE_DIR/asset-publish/state.json`; default `MARCER_STATE_DIR` is `<MARCER_DATA_DIR>/state` |
 | FTP target | `MARCER_FTP_ASSETS_REMOTE`, else `/Uploads/MarcerGameDVDLauncher-assets/` |
 
 The state file holds the content signature, the archive name/size/SHA-256 and
@@ -156,7 +156,7 @@ With `--json` the result looks like:
   "status": "uploaded",
   "source": "/data/gameinfo",
   "output_dir": "/data",
-  "state_file": "/data/.asset-publish-state.json",
+  "state_file": "/data/state/asset-publish/state.json",
   "signature": "…",
   "files": 7,
   "archive": "/data/gameinfo-20261028-174408.zip",

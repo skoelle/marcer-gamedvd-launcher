@@ -22,8 +22,8 @@ The source is ``<MARCER_DATA_DIR>/gameinfo``.  The ZIP is written to
 An unchanged content signature (sorted ``relpath,size,sha256`` list) skips the
 packaging step unless ``--force`` is given.  The signature plus the upload and
 manifest state are stored in the state file (default:
-``<MARCER_DATA_DIR>/.asset-publish-state.json``,
-``<MARCER_STATE_DIR>/asset-publish/state.json`` when that variable is set).
+``<MARCER_DATA_DIR>/state/asset-publish/state.json``;
+``MARCER_STATE_DIR/asset-publish/state.json`` when that variable is set).
 
 With ``--upload`` the archive is transferred directly into
 ``MARCER_FTP_ASSETS_REMOTE`` (default ``/Uploads/MarcerGameDVDLauncher-assets/``)
@@ -54,6 +54,11 @@ import zipfile
 from datetime import datetime, timezone
 from ftplib import FTP, all_errors as FTP_ALL_ERRORS
 from pathlib import Path, PurePosixPath
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT / "tools"))
+
+from _lib import pipeline_paths  # noqa: E402
 
 TOOL_VERSION = "0.2.0"
 STATE_SCHEMA = 1
@@ -351,7 +356,7 @@ def run_asset_manifest() -> None:
 
 
 
-def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
+def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
     data_dir_arg = args.data_dir or env("MARCER_DATA_DIR")
     if not data_dir_arg:
         raise PublishError(
@@ -370,12 +375,10 @@ def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
 
     if args.state_file:
         state_file = Path(args.state_file).expanduser()
-    elif env("MARCER_STATE_DIR"):
-        state_file = Path(env("MARCER_STATE_DIR")).expanduser() / "asset-publish" / "state.json"
     else:
-        state_file = data_dir / ".asset-publish-state.json"
+        state_file = pipeline_paths.asset_state_file_for(data_dir)
 
-    return source, output_dir, state_file
+    return source, output_dir, state_file, data_dir
 
 
 # --------------------------------------------------------------------------
@@ -385,12 +388,18 @@ def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
 
 def publish(args: argparse.Namespace) -> int:
     kind = args.only
-    source, output_dir, state_file = resolve_paths(args)
+    source, output_dir, state_file, data_dir = resolve_paths(args)
     ftp = ftp_settings() if args.upload else {}
 
     entries = collect_entries(source)
     signature = content_signature(entries)
     state = load_state(state_file)
+    if not state:
+        legacy = pipeline_paths.legacy_asset_state_file_for(data_dir)
+        if legacy.is_file() and legacy != state_file:
+            state = load_state(legacy)
+            if state:
+                write_state(state_file, state)
     assets = state.setdefault("assets", {})
     previous = assets.get(kind, {})
     previous_archive = previous.get("archive")

@@ -5,10 +5,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -139,8 +141,51 @@ def publish_responses(status: str = "would-skip") -> dict:
     return responses
 
 
+class DefaultPathTests(unittest.TestCase):
+    def test_defaults_live_in_data_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data = root / "Data"
+            data.mkdir()
+            env = {
+                "MARCER_ROOT_DIR": str(root / "root"),
+                "MARCER_PATCH_DIR": str(root / "patch"),
+                "MARCER_DATA_DIR": str(data),
+            }
+            with mock.patch.dict(os.environ, env, clear=True):
+                args = cu.build_parser().parse_args(["run"])
+                opts = cu.build_options(args)
+                state_file = cu.asset_publish_paths(opts)[1]
+            self.assertEqual(opts.report_dir, data / "state" / "catalog-update")
+            self.assertEqual(opts.sync_report_dir, data / "state" / "archive-sync")
+            self.assertEqual(
+                state_file, data / "state" / "asset-publish" / "state.json"
+            )
+
+    def test_explicit_state_dir_wins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data = root / "Data"
+            data.mkdir()
+            state = root / "State"
+            env = {
+                "MARCER_ROOT_DIR": str(root / "root"),
+                "MARCER_PATCH_DIR": str(root / "patch"),
+                "MARCER_DATA_DIR": str(data),
+                "MARCER_STATE_DIR": str(state),
+            }
+            with mock.patch.dict(os.environ, env, clear=True):
+                args = cu.build_parser().parse_args(["run"])
+                opts = cu.build_options(args)
+            self.assertEqual(opts.report_dir, state / "catalog-update")
+            self.assertEqual(opts.sync_report_dir, state / "archive-sync")
+
+
 class CatalogUpdateTests(unittest.TestCase):
     def setUp(self) -> None:
+        state_env = mock.patch.dict(os.environ, {"MARCER_STATE_DIR": ""}, clear=False)
+        state_env.start()
+        self.addCleanup(state_env.stop)
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
         self.opts = make_options(self.tmp)

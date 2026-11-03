@@ -22,17 +22,22 @@ surrounding server pipeline.
 ```sh
 MARCER_ROOT_DIR="/path/to/MarcersGameDVD"
 MARCER_PATCH_DIR="/path/to/MarcersGamesDVD-Update/Patch"
+MARCER_DATA_DIR="/path/to/MarcersGamesDVD-Update/Data"
 MARCER_FTP_HOST="host:2121"
 MARCER_FTP_USER="user"
 MARCER_FTP_PASS="password"
 # Optional:
 #MARCER_FTP_REMOTE="/GameDVD/"
-#MARCER_SYNC_REPORT_DIR="/path/to/local/archive-sync"
+#MARCER_STATE_DIR="/state"
+#MARCER_SYNC_REPORT_DIR="/path/to/Data/state/archive-sync"
 ```
 
 `MARCER_FTP_REMOTE` defaults to `/GameDVD/`. Reports default to
-`local/archive-sync/` (git-ignored); in the Docker container set
-`MARCER_SYNC_REPORT_DIR=/state/archive-sync`.
+`$MARCER_STATE_DIR/archive-sync`, where `MARCER_STATE_DIR` defaults to
+`$MARCER_DATA_DIR/state`. In the Docker container `MARCER_STATE_DIR=/state`
+and the host directory is `${HOST_DATA_DIR}/state`. If neither
+`MARCER_STATE_DIR` nor `MARCER_DATA_DIR` is set, the tool falls back to
+`local/archive-sync/` (git-ignored).
 
 ## Usage
 
@@ -145,7 +150,9 @@ the file is still `new` or `changed` in the current comparison.
 | `MARCER_FTP_PASSIVE` | `1` | set `0`/`false` to disable passive mode |
 | `MARCER_SYNC_RETRIES` | `3` | retry count per operation |
 | `MARCER_SYNC_WORKERS` | `4` | parallel FTP listing connections |
-| `MARCER_SYNC_REPORT_DIR` | `local/archive-sync` | report directory |
+| `MARCER_DATA_DIR` | – | data root; state defaults to `$MARCER_DATA_DIR/state` |
+| `MARCER_STATE_DIR` | `$MARCER_DATA_DIR/state` | state root override (Docker: `/state`) |
+| `MARCER_SYNC_REPORT_DIR` | `$MARCER_STATE_DIR/archive-sync` (`$MARCER_DATA_DIR/state/archive-sync`) | report directory |
 | `MARCER_SYNC_ONLY` | – | comma-separated path prefixes |
 | `MARCER_SYNC_EXCLUDES` | – | comma-separated extra exclude globs |
 | `MARCER_SYNC_REPORT_LIMIT` | `0` | max list entries per section in `changes.txt` |

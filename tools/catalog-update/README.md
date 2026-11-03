@@ -20,6 +20,8 @@ detection.
 - Python 3.12 (the repo `.venv`)
 - `local/paths.env` with `MARCER_ROOT_DIR`, `MARCER_PATCH_DIR` and
   `MARCER_DATA_DIR`
+- Pipeline state defaults to `$MARCER_DATA_DIR/state`; `MARCER_STATE_DIR`
+  overrides it (Docker: `/state`)
 - FTP credentials for `archive-sync` and `asset-publish`
 - `gh` authentication for the `latest.json` update after an upload
 
@@ -41,8 +43,8 @@ Options:
 | `--dry-run` | run `archive-sync plan` and read-only checks; write nothing |
 | `--skip-publish` | update the local catalog but do not package/upload gameinfo |
 | `--no-crew` | skip `crew-analysis` |
-| `--report-dir DIR` | run report directory (default `local/catalog-update`) |
-| `--sync-report-dir DIR` | `archive-sync` report directory (default `local/archive-sync`) |
+| `--report-dir DIR` | run report directory (default `$MARCER_DATA_DIR/state/catalog-update`) |
+| `--sync-report-dir DIR` | `archive-sync` report directory (default `$MARCER_DATA_DIR/state/archive-sync`) |
 
 The default is a full archive sync. Use `--only` for a targeted update such as
 the PD/T folder.
@@ -88,7 +90,7 @@ failed manifest update from an earlier run is therefore retried automatically.
 ## Run report
 
 Unless `--dry-run` is used, each run writes
-`local/catalog-update/runs/<timestamp>.json` (git-ignored):
+`$MARCER_DATA_DIR/state/catalog-update/runs/<timestamp>.json`:
 
 - overall status and error
 - executed steps with args, exit code and duration
@@ -96,7 +98,7 @@ Unless `--dry-run` is used, each run writes
 - whether gameinfo, full index, crew analysis and publish ran
 - publish status
 
-A lock file at `local/catalog-update/run.lock` prevents concurrent runs. A lock
+A lock file at `$MARCER_DATA_DIR/state/catalog-update/run.lock` prevents concurrent runs. A lock
 owned by a dead process or older than 24 hours is treated as stale.
 
 ## Exit codes

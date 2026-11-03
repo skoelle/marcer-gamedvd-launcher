@@ -72,7 +72,7 @@ Dev-Server (Hatari/Xvfb)
 
 | Service | Image | Port | Schreibzugriff |
 |---|---|---|---|
-| `pipeline` | gemeinsames Pipeline-Image | `8080` (intern/Proxy) | `MARCER_PATCH_DIR`, `MARCER_DATA_DIR`, `MARCER_OUT_DIR`, `MARCER_STATE_DIR` |
+| `pipeline` | gemeinsames Pipeline-Image | `8080` (intern/Proxy) | `MARCER_PATCH_DIR`, `MARCER_DATA_DIR` (inkl. `state/`), `MARCER_OUT_DIR` |
 | `gallery` | dasselbe Image, anderes Kommando | `8764` (Proxy) | keiner; alle Mounts `:ro` |
 
 Die Gallery erhält **keine** FTP- oder GitHub-Secrets. Das Pipeline-UI bleibt
@@ -87,7 +87,7 @@ freigegebener Pfad über einen Reverse Proxy veröffentlicht.
 | `HOST_PATCH_DIR` | `/data/patch` | `rw` | `ro` |
 | `HOST_OUT_DIR` | `/data/out` | `rw` (Phase 5) / `ro` (vorher) | `ro` |
 | `HOST_DATA_DIR` | `/data/data` | `rw` | `ro` |
-| `HOST_STATE_DIR` | `/state` | `rw` | – |
+| `${HOST_DATA_DIR}/state` | `/state` | `rw` | – |
 
 ---
 
@@ -179,7 +179,13 @@ services:
       - ${HOST_PATCH_DIR}:/data/patch
       - ${HOST_OUT_DIR}:/data/out
       - ${HOST_DATA_DIR}:/data/data
-      - ${HOST_STATE_DIR}:/state
+      - ${HOST_DATA_DIR}/state:/state
+    environment:
+      MARCER_ROOT_DIR: /data/root
+      MARCER_PATCH_DIR: /data/patch
+      MARCER_OUT_DIR: /data/out
+      MARCER_DATA_DIR: /data/data
+      MARCER_STATE_DIR: /state
     env_file: .env
     restart: unless-stopped
     init: true
@@ -218,7 +224,7 @@ services:
 - Getrennte Ports; Pipeline nicht direkt öffentlich
 - Log-Rotation für `docker logs` und Job-Logs
 - Image-Tag im Compose per Digest pinnen
-- Backup von `HOST_STATE_DIR` und der Katalogdaten
+- Backup von `HOST_DATA_DIR` (inkl. `state/`) und der Katalogdaten
 
 #### Akzeptanz Phase 3
 
@@ -307,9 +313,9 @@ Ziel: Screenshots werden getrennt vom automatischen Sync veröffentlicht –
 | `MARCER_ROOT_DIR` | Haupt-Game-Tree (read-only) |
 | `MARCER_PATCH_DIR` | Patch-Tree (Sync-Ziel, schreibbar) |
 | `MARCER_OUT_DIR` | Screenshots + `index*.json` |
-| `MARCER_DATA_DIR` | Data-Verzeichnis (`gameinfo/`) |
+| `MARCER_DATA_DIR` | Data-Verzeichnis (`gameinfo/`, `state/`) |
 | `MARCER_ASSET_OUT_DIR` | Ablage der Gameinfo-ZIPs (Default: `MARCER_DATA_DIR`) |
-| `MARCER_STATE_DIR` | Persistenter Container-State (`/state`) |
+| `MARCER_STATE_DIR` | State-Root; Default `$MARCER_DATA_DIR/state`, im Container fest `/state` (gemountet von `${HOST_DATA_DIR}/state`) |
 | `MARCER_SYNC_REPORT_DIR` | `archive-sync`-Reports |
 | `MARCER_PIPELINE_REPORT_DIR` | Run-Reports der Pipeline |
 
@@ -354,6 +360,9 @@ im Repository.
 - **Löschungen/Renames:** werden nur reported, nicht übernommen.
 - **NAS-Dateisperren:** `flock` ist unzuverlässig; PID-/Heartbeat-Marker
   zusätzlich prüfen.
+- **Dropbox/NAS-Sync:** `MARCER_DATA_DIR` liegt aktuell unter Dropbox. Locks,
+  Job-Logs und Scheduler-State erzeugen dort Sync-Traffic/Konflikte;
+  `Data/state/` vom Sync ausnehmen oder beobachten.
 - **Große Screenshot-ZIPs:** Upload kann lange dauern; Status und Cancel
   müssen weiter reagieren.
 - **Screenshot-Index während Dev-Lauf:** Hook muss `shotgen.lock` respektieren.

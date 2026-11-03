@@ -21,6 +21,7 @@ from pathlib import Path, PurePosixPath
 TOOL_VERSION = "0.1.0"
 STATUS_SCHEMA = 1
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
 DEFAULT_RUN_LIMIT = 10
 SCREENSHOT_BYTES_BUDGET = 0.4
 
@@ -163,21 +164,20 @@ class StatusCollector:
         patch = self.path("MARCER_PATCH_DIR")
         out = self.path("MARCER_OUT_DIR")
         data = self.path("MARCER_DATA_DIR")
-        state = self.path("MARCER_STATE_DIR")
+        state_explicit = self.path("MARCER_STATE_DIR")
+        if state_explicit is not None:
+            state = state_explicit
+        elif data is not None:
+            state = data / "state"
+        else:
+            state = None
+        reports_root = state if state is not None else self.repo_root / "local"
         sync_dir = self.path("MARCER_SYNC_REPORT_DIR")
         if sync_dir is None:
-            sync_dir = (
-                state / "archive-sync"
-                if state is not None
-                else self.repo_root / "local" / "archive-sync"
-            )
+            sync_dir = reports_root / "archive-sync"
         pipeline_dir = self.path("MARCER_PIPELINE_REPORT_DIR")
         if pipeline_dir is None:
-            pipeline_dir = (
-                state / "catalog-update"
-                if state is not None
-                else self.repo_root / "local" / "catalog-update"
-            )
+            pipeline_dir = reports_root / "catalog-update"
         asset_out = self.path("MARCER_ASSET_OUT_DIR")
         if asset_out is None:
             asset_out = data
@@ -187,16 +187,21 @@ class StatusCollector:
             asset_state = data / ".asset-publish-state.json"
         else:
             asset_state = None
+        legacy_asset_state = (
+            data / ".asset-publish-state.json" if data is not None else None
+        )
         return {
             "root": root,
             "patch": patch,
             "out": out,
             "data": data,
             "state": state,
+            "state_explicit": state_explicit,
             "sync_dir": sync_dir,
             "pipeline_dir": pipeline_dir,
             "asset_out": asset_out,
             "asset_state": asset_state,
+            "legacy_asset_state": legacy_asset_state,
             "gameinfo": data / "gameinfo" if data is not None else None,
         }
 
@@ -263,10 +268,15 @@ class StatusCollector:
                 ("MARCER_PATCH_DIR", paths["patch"]),
                 ("MARCER_OUT_DIR", paths["out"]),
                 ("MARCER_DATA_DIR", paths["data"]),
-                ("MARCER_STATE_DIR", paths["state"]),
             )
             if path is not None and not path.is_dir()
         ]
+        if paths["state_explicit"] is not None and not paths["state_explicit"].is_dir():
+            warnings.append("MARCER_STATE_DIR is not a directory")
+        if paths["state"] is not None:
+            state_source = "env" if paths["state_explicit"] is not None else "data"
+        else:
+            state_source = "missing"
         return {
             "missing": missing,
             "warnings": warnings,
@@ -275,6 +285,7 @@ class StatusCollector:
             ),
             "github_configured": bool(self.env("MARCER_GITHUB_TOKEN")),
             "state_configured": paths["state"] is not None,
+            "state_source": state_source,
         }
 
     def _sync(self, paths: dict) -> dict:
@@ -393,9 +404,14 @@ class StatusCollector:
 
     def _publish(self, paths: dict) -> dict:
         state_file = paths["asset_state"]
+        legacy = paths.get("legacy_asset_state")
         if state_file is None:
             return {"status": "missing", "error": "state directory missing"}
         state, error = self.cache.load(state_file)
+        if state is None and legacy is not None and legacy != state_file:
+            legacy_state, legacy_error = self.cache.load(legacy)
+            if legacy_state is not None:
+                state, error, state_file = legacy_state, None, legacy
         if state is None:
             return {"status": "missing", "error": error, "file": _file_info(state_file)}
         assets = state.get("assets")
@@ -420,6 +436,7 @@ class StatusCollector:
         return {
             "status": publish_status,
             "error": None,
+            "file": _file_info(state_file),
             "archive": archive,
             "archive_exists": archive_exists,
             "size": entry.get("size"),
