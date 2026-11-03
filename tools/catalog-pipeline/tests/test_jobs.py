@@ -10,6 +10,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -118,6 +119,29 @@ class JobManagerTest(unittest.TestCase):
         job = manager.get_job(jobs_dir.name)
         self.assertEqual(job["status"], "interrupted")
         self.assertFalse((self.state / "pipeline.lock").exists())
+
+    def test_notification_is_sent_for_a_finished_report(self) -> None:
+        report = self.state / "catalog-update" / "runs" / "20260101T000000Z.json"
+        report.parent.mkdir(parents=True)
+        code = (
+            "import json, pathlib; "
+            f"pathlib.Path({str(report)!r}).write_text("
+            "json.dumps({'sync': {'counts': {'new': 1, 'changed': 0}}}), "
+            "encoding='utf-8')"
+        )
+        manager = self.manager(code)
+        with mock.patch.object(
+            jobs.notify, "notify_sync_changes", return_value="e-mail sent"
+        ) as notify:
+            started = manager.start("full")
+            self.assertTrue(wait_for(lambda: manager.current() is None))
+            self.assertTrue(
+                wait_for(
+                    lambda: "notification: e-mail sent"
+                    in "\n".join(manager.log_tail(started["id"])["lines"])
+                )
+            )
+        notify.assert_called_once()
 
     def test_jobs_are_listed_newest_first(self) -> None:
         manager = self.manager("print('done')\n")

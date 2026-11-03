@@ -11,7 +11,7 @@ analogous to the catalog sections `games`, `pd`, `utils`, `magazines` and
 Tool: [`tools/crew-analysis`](../../tools/crew-analysis/README.md). It is
 read-only towards the game trees and the normal `games-*.json`; it writes the
 derived `crews.json`/`crew-images.json` into `GameinfoDirectory` and audit files
-into `local/crew-analysis/`.
+into `$MARCER_STATE_DIR/crew-analysis/` (default `$MARCER_DATA_DIR/state/crew-analysis/`).
 
 ## Data sources
 
@@ -138,7 +138,7 @@ publisher, cracker, crew, disks, flags, TOS notes and the ZIP rel path).
 the apps mark those values as `inferred`. Its
 top-level `source` block uses logical names only (`crew_tree`,
 `games-cracked.json`, `full-index.json.gz`/`index.json`, `crews.json`); absolute
-local paths stay in the git-ignored `local/crew-analysis/` audits. The
+local paths stay in the `$MARCER_STATE_DIR/crew-analysis/` audits. The
 optional `excluded` flag marks a group as Non-TOP (selection in
 `tools/crew-analysis/crew-tab.json`); the gallery and desktop Crews tab show
 both TOP and Non-TOP groups and expose Type/Ranking filters. `image` is
@@ -188,7 +188,7 @@ repeated screens per crew from the existing per-ZIP screenshot sidecars
 - Prefer screens repeated across many **different games**, then many releases.
 - Filter the known plain TOS/GEM desktop hash and rank screens that appear
   across many **other crews** lower (generic screens).
-- Write the top 3 candidates per crew to `local/crew-analysis/` (JSON/CSV/MD +
+- Write the top 3 candidates per crew to `$MARCER_STATE_DIR/crew-analysis/` (JSON/CSV/MD +
   self-contained HTML contact sheet).
 - `--write-images` writes a starter `<GameinfoDirectory>/crew-images.json`
   (`source: "auto"`); review/replace manually. Curated overrides in
@@ -197,7 +197,7 @@ repeated screens per crew from the existing per-ZIP screenshot sidecars
 
 ## Audit files and review status
 
-The git-ignored `local/crew-analysis/` directory holds the review artifacts;
+The `$MARCER_STATE_DIR/crew-analysis/` directory holds the review artifacts;
 `crews.json`/`crew-images.json` in the gameinfo directory are the published
 outputs. `groups-review.csv` is a **label audit**, not a release report:
 

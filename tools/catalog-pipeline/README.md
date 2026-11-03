@@ -2,14 +2,14 @@
 
 Status dashboard and manual job control for the Marcer catalog pipeline.
 
-Phase 1 (read-only status) and Phase 2 (manual runs, job runner, locking and
-cancellation) of the server automation described in
-[`docs/plans/PLAN-docker-pipeline.md`](../../docs/plans/PLAN-docker-pipeline.md)
+Phase 1 (read-only status), Phase 2 (manual runs, job runner, locking and
+cancellation) and Phase 3 (Docker/Compose/GHCR) of the server automation
+described in [`docs/plans/PLAN-docker-pipeline.md`](../../docs/plans/PLAN-docker-pipeline.md)
 are implemented. The dashboard aggregates sync reports, gameinfo files, full
 index, crew data, asset-publish state, screenshot indices, storage, recent run
 reports and pipeline jobs.
 
-The scheduler, Docker/GHCR and screenshot publishing are later phases.
+The scheduler and screenshot publishing are later phases.
 
 ## Requirements
 
@@ -21,8 +21,8 @@ The scheduler, Docker/GHCR and screenshot publishing are later phases.
   Pipeline state lives in `$MARCER_DATA_DIR/state` by default; an explicit
   `MARCER_STATE_DIR` overrides it (the Docker container uses `/state`).
 - Status polling makes no FTP or GitHub connection. A full run needs the FTP
-  credentials (and `gh` authentication for `latest.json` until the token API
-  lands); a dry run needs FTP read access.
+  credentials and either `gh` authentication or `MARCER_GITHUB_TOKEN` for the
+  `latest.json` update; a dry run needs FTP read access.
 
 ## Usage
 
@@ -70,6 +70,48 @@ behind a reverse proxy with TLS and Basic Auth.
 `only`/`exclude`/`skip_publish`/`no_crew` options. A second start returns
 `409` while a job is running. `POST /api/cancel` returns `202` and terminates
 the process group (SIGTERM, then SIGKILL after 10 seconds).
+
+## Docker
+
+The pipeline and the gallery run as separate services from one image:
+
+```sh
+cd docker
+cp .env.example .env        # fill in HOST_* paths, FTP, GitHub token, mail
+# create <HOST_DATA_DIR>/state on the host, e.g.
+# mkdir -p /path/to/MarcersGamesDVD-Update/Data/state
+docker compose build
+docker compose up -d
+```
+
+- `pipeline` exposes `8080`; `gallery` exposes `8764`.
+- Both mount `HOST_DATA_DIR`; the pipeline additionally mounts
+  `${HOST_DATA_DIR}/state` as `/state` (`MARCER_STATE_DIR=/state`).
+- The gallery only gets the four catalog path variables, never FTP/GitHub/mail
+  secrets.
+- The image is built for `linux/amd64` and published as
+  `ghcr.io/skoelle/marcer-gamedvd-launcher/pipeline:latest` plus a
+  `sha-…` tag by `.github/workflows/pipeline-image.yml`.
+
+## E-mail notification
+
+After a successful **full** job with at least one `new` or `changed` sync file,
+the job runner sends one e-mail. Dry runs, failed runs and no-op runs are
+silent. The notification is optional and disabled unless the SMTP settings are
+present:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MARCER_SMTP_HOST` | – | SMTP server; notification disabled when empty |
+| `MARCER_SMTP_PORT` | `587` | SMTP port |
+| `MARCER_SMTP_USER` / `MARCER_SMTP_PASS` | – | optional SMTP login |
+| `MARCER_SMTP_STARTTLS` | `1` | use STARTTLS |
+| `MARCER_SMTP_SSL` | `0` | use implicit TLS (e.g. port 465) |
+| `MARCER_MAIL_FROM` | `MARCER_SMTP_USER` | sender |
+| `MARCER_MAIL_TO` | – | recipient(s) |
+
+Notification errors never fail the pipeline job; the result is written to the
+job log.
 
 ## Status sources
 

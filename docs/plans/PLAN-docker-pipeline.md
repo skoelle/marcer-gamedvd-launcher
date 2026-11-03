@@ -93,113 +93,15 @@ freigegebener Pfad über einen Reverse Proxy veröffentlicht.
 
 ## 3. Phasen
 
-Phase 1 (read-only Status-Web-Interface) und Phase 2 (Aktionen, Job-Runner
-und Sperren) sind in [`tools/catalog-pipeline`](../../tools/catalog-pipeline/README.md)
-umgesetzt. Offen sind die folgenden Phasen.
+Phase 1 (read-only Status-Web-Interface), Phase 2 (Aktionen, Job-Runner und
+Sperren) und Phase 3 (Docker, Compose und GHCR) sind in
+[`tools/catalog-pipeline`](../../tools/catalog-pipeline/README.md) bzw.
+[`docker/`](../../docker/README.md) umgesetzt. Die E-Mail-Benachrichtigung bei
+Sync-Änderungen ist in `tools/catalog-pipeline/notify.py` umgesetzt.
 
-### Phase 3 – Docker, Compose und GHCR
+Offen sind Scheduler und Screenshot-Veröffentlichung.
 
-Ziel: Pipeline und Gallery laufen auf dem Docker-Host als getrennte Container
-aus einem gemeinsamen Image.
-
-#### Dateien
-
-```text
-docker/
-  Dockerfile
-  compose.yml
-  .env.example
-  .dockerignore
-.github/workflows/pipeline-image.yml
-```
-
-#### Image
-
-- Basis `python:3.12-slim`, `tzdata`
-- Nur benötigte Laufzeitabhängigkeiten (kein Hatari/Xvfb/7zz)
-- `COPY tools/` und `LICENSE`
-- Non-root-Benutzer, PUID/PGID-kompatibel
-- Optional Multi-Target (`base`, `pipeline`, `gallery`), falls das
-  Gallery-Image kleiner werden soll
-- Healthcheck gegen `/healthz`
-
-#### Voraussetzung für Container-Publish
-
-`tools/asset-manifest` bekommt die GitHub-Token-API (Release finden/erstellen,
-`latest.json` ersetzen). Der lokale `gh`-Fallback bleibt erhalten. Ohne diesen
-Schritt müsste `gh` ins Image oder der Publish-Schritt im Container entfallen.
-
-#### Compose
-
-```yaml
-services:
-  pipeline:
-    image: ghcr.io/<owner>/marcer-gamedvd-launcher/pipeline:latest
-    command: ["python", "tools/catalog-pipeline/pipeline.py", "serve"]
-    ports: ["8080:8080"]
-    volumes:
-      - ${HOST_ROOT_DIR}:/data/root:ro
-      - ${HOST_PATCH_DIR}:/data/patch
-      - ${HOST_OUT_DIR}:/data/out
-      - ${HOST_DATA_DIR}:/data/data
-      - ${HOST_DATA_DIR}/state:/state
-    environment:
-      MARCER_ROOT_DIR: /data/root
-      MARCER_PATCH_DIR: /data/patch
-      MARCER_OUT_DIR: /data/out
-      MARCER_DATA_DIR: /data/data
-      MARCER_STATE_DIR: /state
-    env_file: .env
-    restart: unless-stopped
-    init: true
-
-  gallery:
-    image: ghcr.io/<owner>/marcer-gamedvd-launcher/pipeline:latest
-    command: ["python", "tools/gallery/gallery.py"]
-    ports: ["8764:8764"]
-    volumes:
-      - ${HOST_OUT_DIR}:/data/out:ro
-      - ${HOST_DATA_DIR}:/data/data:ro
-      - ${HOST_ROOT_DIR}:/data/root:ro
-      - ${HOST_PATCH_DIR}:/data/patch:ro
-    environment:
-      MARCER_OUT_DIR: /data/out
-      MARCER_DATA_DIR: /data/data
-      MARCER_ROOT_DIR: /data/root
-      MARCER_PATCH_DIR: /data/patch
-    restart: unless-stopped
-    init: true
-```
-
-#### CI
-
-`.github/workflows/pipeline-image.yml`:
-
-- Push auf `main` bei Änderungen an `tools/**`, `docker/**`
-- `workflow_dispatch`
-- Build amd64 (optional arm64), Push nach
-  `ghcr.io/<owner>/marcer-gamedvd-launcher/pipeline:latest` und `:sha-…`
-- Keine Secrets im Image; GHCR-Login über `GITHUB_TOKEN`
-
-#### Betrieb
-
-- Reverse Proxy mit TLS und Basic Auth vor Gallery und Pipeline-UI
-- Getrennte Ports; Pipeline nicht direkt öffentlich
-- Log-Rotation für `docker logs` und Job-Logs
-- Image-Tag im Compose per Digest pinnen
-- Backup von `HOST_DATA_DIR` (inkl. `state/`) und der Katalogdaten
-
-#### Akzeptanz Phase 3
-
-- `docker compose up` startet beide Services
-- Status-UI und Gallery sind erreichbar
-- Gallery-Container hat keine FTP-/GitHub-Secrets
-- Neustart behält State, Reports und Locks korrekt
-- Image wird bei Push auf `main` automatisch gebaut
-
----
-
-### Phase 4 – Scheduler und Benachrichtigungen
+### Phase 4 – Scheduler
 
 Ziel: Der Sync startet unbeaufsichtigt wöchentlich am Donnerstagabend.
 
@@ -216,20 +118,11 @@ Ziel: Der Sync startet unbeaufsichtigt wöchentlich am Donnerstagabend.
 - Nächster geplanter Lauf im Status sichtbar
 - Manuelle Läufe verschieben den Zeitplan nicht
 
-#### Benachrichtigungen
-
-- Optionaler generischer Webhook (`MARCER_NOTIFY_URL`) nach jedem Lauf
-- Inhalt: Status, Dauer, Sync-Counts, ausgeführte Schritte, Publish-Status,
-  Fehlertext
-- Fehlgeschlagene Benachrichtigung darf den Lauf nicht als fehlgeschlagen
-  markieren, sondern wird geloggt
-
 #### Akzeptanz Phase 4
 
 - Scheduler läuft in der Zeitzone Europe/Berlin, auch über DST-Wechsel
 - Neustart am Donnerstagabend erzeugt keinen Doppellauf
 - Verpasster Lauf wird gemäß Policy nachgeholt oder übersprungen
-- Fehler landen im Report und optional im Webhook
 
 ---
 
@@ -310,7 +203,18 @@ Ziel: Screenshots werden getrennt vom automatischen Sync veröffentlicht –
 | `MARCER_SCHEDULE_CRON` | `0 20 * * 4` |
 | `MARCER_TZ` | `Europe/Berlin` |
 | `MARCER_SCHEDULE_CATCH_UP_HOURS` | `24` |
-| `MARCER_NOTIFY_URL` | – |
+
+### E-Mail
+
+| Variable | Default |
+|---|---|
+| `MARCER_SMTP_HOST` | – (Benachrichtigung aus, wenn leer) |
+| `MARCER_SMTP_PORT` | `587` |
+| `MARCER_SMTP_USER` / `MARCER_SMTP_PASS` | – |
+| `MARCER_SMTP_STARTTLS` | `1` |
+| `MARCER_SMTP_SSL` | `0` |
+| `MARCER_MAIL_FROM` | `MARCER_SMTP_USER` |
+| `MARCER_MAIL_TO` | – |
 
 Secrets ausschließlich über `env_file`/Docker-Secrets, niemals im Image oder
 im Repository.
@@ -341,10 +245,9 @@ im Repository.
 
 ## 6. Definition of Done
 
-- Phase 3: Pipeline und Gallery laufen als getrennte Container aus GHCR;
-  Secrets bleiben in der Pipeline.
 - Phase 4: Wöchentlicher Donnerstagslauf funktioniert unbeaufsichtigt in
-  `Europe/Berlin`, inklusive Misfire-Policy und optionaler Benachrichtigung.
+  `Europe/Berlin`, inklusive Misfire-Policy; die E-Mail-Benachrichtigung ist
+  bereits implementiert.
 - Phase 5: Screenshot-Veröffentlichung läuft separat über Button/Hook, ohne
   den automatischen Sync zu verändern.
 - Tests und Dokumentation sind je Phase aktualisiert; keine Secrets im Repo.

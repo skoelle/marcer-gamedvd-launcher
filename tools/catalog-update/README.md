@@ -23,7 +23,7 @@ detection.
 - Pipeline state defaults to `$MARCER_DATA_DIR/state`; `MARCER_STATE_DIR`
   overrides it (Docker: `/state`)
 - FTP credentials for `archive-sync` and `asset-publish`
-- `gh` authentication for the `latest.json` update after an upload
+- `gh` authentication or `MARCER_GITHUB_TOKEN` for the `latest.json` update after an upload
 
 ## Usage
 

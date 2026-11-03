@@ -77,6 +77,8 @@ Environment (via the repo `local/paths.env`):
   `MARCER_DATA_DIR/gameinfo` (contains `games-cracked.json` and
   `full-index.json.gz`)
 - `MARCER_OUT_DIR` — optional fallback screenshot index for `ranking`; required by `images`
+- `MARCER_STATE_DIR` — optional state root for ranking/audit output; defaults to
+  `MARCER_DATA_DIR/state` (Docker: `/state`)
 
 ## Output
 
@@ -193,7 +195,7 @@ Manual corrections live in `manual-images.json` (same schema, keyed by crew
 name). `images --write-images` merges them over the automatic top suggestions,
 so re-running the pipeline never silently replaces a curated pick.
 
-### `local/crew-analysis/`
+### `$MARCER_STATE_DIR/crew-analysis/`
 
 | File | Contents |
 |---|---|

@@ -26,7 +26,8 @@ Paths/environment (see ``run.sh`` and the repo ``local/paths.env``):
 and optionally ``MARCER_OUT_DIR`` (screenshot index fallback; override with
 ``--index``).
 
-Outputs go to ``--out`` (default ``local/crew-analysis``) and contain the
+Outputs go to ``--out`` (default ``$MARCER_STATE_DIR/crew-analysis``, where
+``MARCER_STATE_DIR`` defaults to ``$MARCER_DATA_DIR/state``) and contain the
 ranking plus audit files for alias curation. No game data is modified.
 """
 from __future__ import annotations
@@ -47,6 +48,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _lib import catalog_sections as cs  # noqa: E402
+from _lib import pipeline_paths  # noqa: E402
 
 TOOL_VERSION = "0.1.5"
 SCHEMA_VERSION = 1
@@ -103,6 +105,11 @@ def default_gameinfo_dir() -> str:
     """The gameinfo directory: ``<MARCER_DATA_DIR>/gameinfo``."""
     data = env("MARCER_DATA_DIR")
     return str(Path(data) / GAMEINFO_SUBDIR) if data else ""
+
+
+def default_output_dir() -> str:
+    """Pipeline state output directory (``$STATE/crew-analysis``)."""
+    return str(pipeline_paths.state_root(REPO_ROOT) / "crew-analysis")
 
 
 def norm(value: str) -> str:
@@ -1426,7 +1433,7 @@ def crews_source_summary(zip_source: str) -> dict:
     """Path-free provenance block for the published ``crews.json``.
 
     The gameinfo asset is published; absolute local paths must never appear
-    in it. The local audit (``local/crew-analysis/crew-ranking.json``) keeps
+    in it. The local audit (``$MARCER_STATE_DIR/crew-analysis/crew-ranking.json``) keeps
     the full paths via ``meta["source"]``.
     """
     return {
@@ -1728,7 +1735,7 @@ def main() -> int:
     parser.add_argument("--index", default=env("MARCER_OUT_DIR"), help="Screenshot output directory or index.json path (MARCER_OUT_DIR; fallback when the full index is missing)")
     parser.add_argument("--include-subdirs", action="store_true", help="Include STX/Original/Demo/... subfolders")
     parser.add_argument("--top", type=int, default=24, help="Rows printed to the console (default: 24)")
-    parser.add_argument("--out", default=str(REPO_ROOT / "local" / "crew-analysis"), help="Output directory")
+    parser.add_argument("--out", default=default_output_dir(), help="Output directory (default: $MARCER_STATE_DIR/crew-analysis)")
     parser.add_argument("--aliases", default=str(Path(__file__).with_name("aliases.json")))
     parser.add_argument("--exclude", default=str(Path(__file__).with_name("exclude.txt")))
     parser.add_argument("--crew-tab", default=str(Path(__file__).with_name("crew-tab.json")),

@@ -22,6 +22,7 @@ added or removed. The documentation taxonomy is described in
 | Full catalog index | `tools/full-index-gen/` | [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md), [`ANALYSIS-piratefinder.md`](docs/analysis/ANALYSIS-piratefinder.md) |
 | One-shot catalog update | `tools/catalog-update/` | [`tools/catalog-update/README.md`](tools/catalog-update/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | Catalog pipeline web UI | `tools/catalog-pipeline/` | [`tools/catalog-pipeline/README.md`](tools/catalog-pipeline/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
+| Pipeline image / compose | `docker/` | [`docker/README.md`](docker/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | Screenshot audit | `tools/screenshot-audit/` | [`tools/screenshot-audit/README.md`](tools/screenshot-audit/README.md), [`SPEC-screenshot-generator.md`](docs/specs/SPEC-screenshot-generator.md) |
 | Shared pipeline helpers | `tools/_lib/` | Section trees/overlay scan (`catalog_sections.py`), disk-image hashing (`zip_hashes.py`) + pipeline state paths (`pipeline_paths.py`) |
 | Archive sync / asset publish / manifest | `tools/archive-sync/`, `tools/asset-publish/`, `tools/asset-manifest/` | [`docs/plans/PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) + each tool README |
@@ -39,9 +40,9 @@ publish (no root changes, no rename detection, no deletion).
 
 **No absolute local paths in published artifacts.** Gameinfo/screenshot assets
 must only contain relative rel paths and logical names. Absolute paths belong
-exclusively in git-ignored `local/` audits (e.g.
-`local/crew-analysis/crew-ranking.json`); `crews.json` carries a path-free
-`source` block.
+exclusively in local audit/state files (e.g.
+`<MARCER_DATA_DIR>/state/crew-analysis/crew-ranking.json`); `crews.json`
+carries a path-free `source` block.
 
 Architecture decisions: [`docs/decisions/`](docs/decisions/). The backlog is
 [`docs/IDEAS.md`](docs/IDEAS.md); the user-facing overview is
@@ -63,6 +64,7 @@ The console launcher cannot be executed or tested via `apps/marcer_console/start
 - Each workflow triggers only on its own tag prefix (`v*` never matches `desktop-v*` and vice versa), so releasing one app never rebuilds the other. Release notes are matched with the same prefix (`git describe --match`). Desktop release notes automatically append a tag-specific link to `docs/guides/GETTING-STARTED.md`.
 - Desktop Linux builds are pinned to `ubuntu-24.04` (the 22.04 runner retires 2027-04-17 and `ubuntu-latest` moves to 26.04); the Windows ZIP bundles the Visual C++ runtime DLLs (`msvcp140`, `vcruntime140`, `vcruntime140_1`).
 - Path-based CI (build + test on `main`/PRs, **no release**): `.github/workflows/ci-launcher.yml` (`apps/marcer_console/**`), `.github/workflows/ci-desktop.yml` (`apps/marcer_desktop/**`) — GitHub does not evaluate `paths` for tag pushes, so path filtering is only used for CI, never for releases.
+- Pipeline image (no app release): pushes to `main` touching `tools/**` or `docker/**` build the amd64 image in `.github/workflows/pipeline-image.yml` and publish `ghcr.io/skoelle/marcer-gamedvd-launcher/pipeline:{latest,sha-…}`. `workflow_dispatch` can rebuild it manually.
 - Developer steps for a release:
    1. Ensure `README.md` and `AGENTS.md` are up to date.
    2. Commit all changes.

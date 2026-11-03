@@ -1,0 +1,100 @@
+name: marcer-pipeline
+
+# Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+# Licensed under the MIT License. See LICENSE file in project root.
+#
+# Run from this directory:
+#   cp .env.example .env
+#   docker compose build
+#   docker compose up -d
+#
+# The host paths in .env are read by Compose for the volume mounts. The same
+# file is the pipeline's env_file; the gallery intentionally does not get the
+# FTP/GitHub/mail secrets.
+
+services:
+  pipeline:
+    image: ${PIPELINE_IMAGE:-ghcr.io/skoelle/marcer-gamedvd-launcher/pipeline:latest}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["python", "tools/catalog-pipeline/pipeline.py", "serve"]
+    env_file: .env
+    environment:
+      MARCER_ROOT_DIR: /data/root
+      MARCER_PATCH_DIR: /data/patch
+      MARCER_OUT_DIR: /data/out
+      MARCER_DATA_DIR: /data/data
+      MARCER_STATE_DIR: /state
+      MARCER_PIPELINE_HOST: 0.0.0.0
+      MARCER_PIPELINE_PORT: "8080"
+    ports:
+      - "${PIPELINE_PORT:-8080}:8080"
+    volumes:
+      - ${HOST_ROOT_DIR}:/data/root:ro
+      - ${HOST_PATCH_DIR}:/data/patch
+      - ${HOST_OUT_DIR}:/data/out
+      - ${HOST_DATA_DIR}:/data/data
+      - ${HOST_DATA_DIR}/state:/state
+    user: "${PUID:-10001}:${PGID:-10001}"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=5)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  gallery:
+    image: ${PIPELINE_IMAGE:-ghcr.io/skoelle/marcer-gamedvd-launcher/pipeline:latest}
+    command: ["python", "tools/gallery/gallery.py"]
+    environment:
+      MARCER_ROOT_DIR: /data/root
+      MARCER_PATCH_DIR: /data/patch
+      MARCER_OUT_DIR: /data/out
+      MARCER_DATA_DIR: /data/data
+    ports:
+      - "${GALLERY_PORT:-8764}:8764"
+    volumes:
+      - ${HOST_ROOT_DIR}:/data/root:ro
+      - ${HOST_PATCH_DIR}:/data/patch:ro
+      - ${HOST_OUT_DIR}:/data/out:ro
+      - ${HOST_DATA_DIR}:/data/data:ro
+    user: "${PUID:-10001}:${PGID:-10001}"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8764/', timeout=5)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

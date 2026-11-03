@@ -29,6 +29,8 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from _lib import pipeline_paths  # noqa: E402
 
+import notify  # noqa: E402
+
 TOOL_VERSION = "0.1.0"
 JOB_SCHEMA = 1
 JOB_RETENTION = 50
@@ -435,6 +437,7 @@ class JobManager:
         self._finish(job_id, proc.returncode)
 
     def _finish(self, job_id: str, returncode: int | None) -> None:
+        job_to_notify = None
         with self._mutex:
             job = self._current if self._current and self._current.get("id") == job_id else None
             if job is None:
@@ -476,6 +479,7 @@ class JobManager:
             job.pop("cancelling", None)
             _atomic_write_json(self._job_file(job_id), job)
             self._release_lock()
+            job_to_notify = dict(job)
             self._current = None
             self._proc = None
             self._reader = None
@@ -483,6 +487,32 @@ class JobManager:
             self._cancel_requested = False
             self._cancel_started = 0.0
             self._shutdown_requested = False
+        if job_to_notify is not None:
+            self._notify(job_to_notify)
+
+    def _notify(self, job: dict) -> None:
+        if job.get("mode") != "full" or job.get("status") != "ok":
+            return
+        report_name = job.get("report_file")
+        if not report_name:
+            return
+        report_path = self.catalog_report_dir / "runs" / str(report_name)
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        message = notify.notify_sync_changes(report)
+        if not message:
+            return
+        try:
+            with open(
+                self.jobs_dir / str(job["id"]) / "job.log",
+                "a",
+                encoding="utf-8",
+            ) as handle:
+                handle.write(f"\nnotification: {message}\n")
+        except OSError:
+            pass
 
     def _set_stage(self, job_id: str, stage: str) -> None:
         with self._mutex:

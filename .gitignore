@@ -42,6 +42,7 @@ desktop.config.json
 /tools/gameinfo-gen/__pycache__/
 /tools/atarilegend-gen/__pycache__/
 /tools/asset-manifest/__pycache__/
+/tools/asset-manifest/tests/__pycache__/
 /tools/archive-sync/__pycache__/
 /tools/archive-sync/tests/__pycache__/
 /tools/asset-publish/__pycache__/
@@ -64,3 +65,6 @@ desktop.config.json
 
 # Local machine-specific tool overrides (docs mention config.local.json)
 /tools/screenshot-gen/config.local.json
+
+# Docker pipeline secrets
+/docker/.env

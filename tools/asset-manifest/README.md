@@ -18,8 +18,9 @@ also runs this tool automatically after a successful `--upload`.
 3. Pick the newest `screenshots-<yyyyMMdd-HHmmss>.zip` and
    `gameinfo-<yyyyMMdd-HHmmss>.zip` by the timestamp in the name.
 4. Build `latest.json`.
-5. (Re)upload it as a release asset on the fixed tag via the authenticated
-   `gh` CLI (`gh release upload <tag> latest.json --clobber`).
+5. (Re)upload it as a release asset on the fixed tag. With
+   `MARCER_GITHUB_TOKEN` the GitHub REST API is used (no `gh` CLI in the
+   container); otherwise the authenticated `gh` CLI is used.
 
 The asset can be replaced as often as the archives change — the fixed tag is
 **not** an app release, so this never triggers a build and stays independent of
@@ -57,7 +58,8 @@ Everything secret lives in the git-ignored `local/paths.env`:
 | `MARCER_FTP_ASSETS_REMOTE` | asset directory (default `/Uploads/MarcerGameDVDLauncher-assets/`) |
 | `MARCER_FTP_ENCODING` | FTP filename encoding (default `utf-8`; the Marcer server returns non-ASCII names as ISO-8859-1, so use `latin-1` for listings with umlauts) |
 | `MARCER_RELEASE_TAG` | fixed release/tag holding the pointer (default `catalog-latest`) |
-| `MARCER_REPO` | optional `owner/repo`; otherwise `gh` uses the current git remote |
+| `MARCER_REPO` | optional `owner/repo`; otherwise the `gh` CLI or the git remote is used |
+| `MARCER_GITHUB_TOKEN` | optional GitHub token for the REST API (release/asset write); enables container use without `gh` |
 
 If `MARCER_FTP_HOST` is unset, the tool falls back to
 `apps/marcer_desktop/desktop.config.json` (git-ignored) or a file passed via
@@ -76,3 +78,17 @@ tools/asset-manifest/run.sh --only screenshots
 
 First run: create the release once (prerelease so it does not take the repo's
 "Latest" slot), then every later run just replaces the `latest.json` asset.
+
+With `MARCER_GITHUB_TOKEN` set, `MARCER_REPO` must identify the target
+repository (or the tool falls back to the `origin` git remote). The existing
+asset with the same name is deleted before the new `latest.json` is uploaded.
+
+## Tests
+
+```sh
+.venv/bin/python -m unittest discover -s tools/asset-manifest/tests -v
+```
+
+## License
+
+MIT License - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

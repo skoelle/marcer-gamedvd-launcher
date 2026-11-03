@@ -55,8 +55,9 @@ MARCER_FTP_PASS="password"
 #MARCER_FTP_ENCODING="latin-1"
 ```
 
-`--upload` also needs the authenticated `gh` CLI for `tools/asset-manifest`
-(unless/until the token-based GitHub API lands, see pipeline phase 3).
+`--upload` also needs `tools/asset-manifest` authentication: either the
+authenticated `gh` CLI or `MARCER_GITHUB_TOKEN` for the GitHub token API (used
+by the Docker pipeline).
 
 ## Usage
 

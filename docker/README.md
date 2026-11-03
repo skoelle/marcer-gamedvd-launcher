@@ -1,0 +1,86 @@
+# Marcer Pipeline Docker
+
+Docker image and Compose stack for the catalog pipeline and the gallery.
+
+The image is built for **linux/amd64** only. It contains the Python tools from
+`tools/`; runtime dependencies are `tzdata` and `olefile` (for `gameinfo-gen`).
+No Hatari, Xvfb, 7-Zip or desktop toolchain is included.
+
+## Services
+
+| Service | Port | Access | State |
+|---|---|---|---|
+| `pipeline` | `8080` | internal / reverse proxy | read/write |
+| `gallery` | `8764` | reverse proxy | read-only |
+
+Both services use the same image. The gallery gets only the four catalog path
+variables and never receives FTP, GitHub, pipeline-token or mail secrets.
+
+## Setup
+
+```sh
+cd docker
+cp .env.example .env
+# edit .env: HOST_* paths, FTP, MARCER_GITHUB_TOKEN, optional SMTP and token
+# create <HOST_DATA_DIR>/state on the host, e.g.
+# mkdir -p /path/to/MarcersGamesDVD-Update/Data/state
+# ensure HOST_PATCH_DIR, HOST_DATA_DIR and HOST_DATA_DIR/state are writable by PUID:PGID
+docker compose build
+docker compose up -d
+```
+
+The host paths are read from `docker/.env` for the Compose volume mounts. The
+pipeline state lives under `${HOST_DATA_DIR}/state` and is mounted as `/state`
+(`MARCER_STATE_DIR=/state`). Create that directory before the first start and
+match `PUID`/`PGID` to the owner of the NAS mounts. It contains `archive-sync/`, `catalog-update/`,
+`asset-publish/`, `crew-analysis/`, `jobs/`, `pipeline.lock` and later
+`scheduler.json`.
+
+## Image
+
+```sh
+docker build -f Dockerfile -t marcer-pipeline:local ..
+```
+
+The GitHub workflow `.github/workflows/pipeline-image.yml` builds and pushes:
+
+```text
+ghcr.io/skoelle/marcer-gamedvd-launcher/pipeline:latest
+ghcr.io/skoelle/marcer-gamedvd-launcher/pipeline:sha-<commit>
+```
+
+It runs on pushes to `main` that touch `tools/**` or `docker/**`, and on
+`workflow_dispatch`. There is no app release tag for the pipeline image.
+
+## Reverse proxy
+
+Expose only the gallery and, if needed, the pipeline UI through the existing
+reverse proxy with TLS and authentication. The pipeline UI has an optional
+`MARCER_PIPELINE_TOKEN` for `POST` requests; `GET` endpoints are read-only. Do
+not publish port `8080` directly to the internet.
+
+## E-mail notification
+
+A successful full run with at least one `new` or `changed` sync file sends one
+mail when the `MARCER_SMTP_*` / `MARCER_MAIL_*` variables are configured.
+Dry runs, no-op runs and failed runs do not send mail.
+
+## Update
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+If the GHCR package is private, log in on the Docker host first:
+
+```sh
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
+```
+
+Image updates are intentionally manual for now. Pin `PIPELINE_IMAGE` to a
+`sha-…` tag if you want reproducible deployments.
+
+## License
+
+MIT License - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

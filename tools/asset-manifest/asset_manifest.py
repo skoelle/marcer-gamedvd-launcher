@@ -10,8 +10,9 @@ Release asset** on a fixed tag (default ``catalog-latest``), so the desktop app
 can check for catalog-data updates without touching the FTP itself.
 
 The FTP is only ever read (list); nothing is uploaded there. The release asset
-is (re)uploaded through the authenticated ``gh`` CLI with ``--clobber``, so it
-can be replaced as often as the assets change — independent of app releases.
+is replaced through the authenticated ``gh`` CLI, or via the GitHub REST API
+when ``MARCER_GITHUB_TOKEN`` is set (used by the Docker pipeline), so it can be
+replaced as often as the assets change — independent of app releases.
 
 Usage:
   tools/asset-manifest/run.sh                     # list FTP, (re)upload latest.json
@@ -28,9 +29,12 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from ftplib import FTP, error_perm, error_temp
 from pathlib import Path
+from urllib.parse import quote
 
 TOOL_VERSION = "0.2.0"
 SCHEMA_VERSION = 1
@@ -47,6 +51,7 @@ DEFAULT_CONFIG = {
     "asset_name": "latest.json",
     "release_tag": "catalog-latest",
 }
+DEFAULT_GITHUB_API = "https://api.github.com"
 
 
 # --------------------------------------------------------------------------
@@ -180,6 +185,58 @@ def sha256_of(ftp: FTP, name: str) -> str:
 # GitHub release asset
 # --------------------------------------------------------------------------
 
+def github_token() -> str:
+    return env("MARCER_GITHUB_TOKEN")
+
+
+def github_api_base() -> str:
+    return (env("MARCER_GITHUB_API") or DEFAULT_GITHUB_API).rstrip("/")
+
+
+def api_request(
+    method: str,
+    path: str,
+    token: str,
+    body: bytes | None = None,
+    content_type: str = "application/json",
+) -> tuple[int, bytes]:
+    """Call the GitHub REST API and return (status, body)."""
+    url = path if path.startswith("http") else github_api_base() + path
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "marcer-asset-manifest",
+    }
+    if body is not None:
+        headers["Content-Type"] = content_type
+    request = urllib.request.Request(
+        url, data=body, headers=headers, method=method
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+    except urllib.error.URLError as exc:
+        sys.exit(f"error: GitHub API request failed: {exc}")
+
+
+def repo_from_git() -> str | None:
+    proc = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        text=True,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return None
+    match = re.search(
+        r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$",
+        proc.stdout.strip(),
+    )
+    return match.group(1) if match else None
+
+
 def gh(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     proc = subprocess.run(["gh", *args], text=True, capture_output=True)
     if check and proc.returncode != 0:
@@ -187,11 +244,17 @@ def gh(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     return proc
 
 
-def repo_slug(explicit: str | None) -> str:
+def repo_slug(explicit: str | None, token: str = "") -> str:
     if explicit:
         return explicit
     if env("MARCER_REPO"):
         return env("MARCER_REPO")
+    if token:
+        repo = repo_from_git()
+        if repo:
+            return repo
+        sys.exit("error: cannot determine the repository with "
+                 "MARCER_GITHUB_TOKEN — set MARCER_REPO or pass --repo.")
     proc = gh("repo", "view", "--json", "nameWithOwner",
               "-q", ".nameWithOwner", check=False)
     if proc.returncode != 0 or not proc.stdout.strip():
@@ -200,14 +263,40 @@ def repo_slug(explicit: str | None) -> str:
     return proc.stdout.strip()
 
 
-def release_exists(tag: str, repo: str) -> bool:
+def release_exists(tag: str, repo: str, token: str = "") -> bool:
+    if token:
+        status, _ = api_request(
+            "GET", f"/repos/{repo}/releases/tags/{quote(tag)}", token
+        )
+        if status == 200:
+            return True
+        if status == 404:
+            return False
+        sys.exit(f"error: GitHub release lookup failed (HTTP {status})")
     return gh("release", "view", tag, "--json", "tagName", "--repo", repo,
               check=False).returncode == 0
 
 
-def create_release(tag: str, repo: str, verbose: bool) -> None:
+def create_release(tag: str, repo: str, verbose: bool, token: str = "") -> None:
     if verbose:
         print(f"creating prerelease {tag} in {repo} …", file=sys.stderr)
+    if token:
+        payload = json.dumps(
+            {
+                "tag_name": tag,
+                "name": "Catalog data (latest.json)",
+                "body": "Pointer to the newest Marcer catalog asset archives.",
+                "prerelease": True,
+                "draft": False,
+            }
+        ).encode("utf-8")
+        status, raw = api_request("POST", f"/repos/{repo}/releases", token, payload)
+        if status not in (200, 201):
+            sys.exit(
+                "error: cannot create release "
+                f"(HTTP {status}): {raw.decode('utf-8', 'replace')[:300]}"
+            )
+        return
     gh("release", "create", tag,
        "--repo", repo,
        "--title", "Catalog data (latest.json)",
@@ -215,9 +304,46 @@ def create_release(tag: str, repo: str, verbose: bool) -> None:
        "--prerelease", "--latest=false")
 
 
-def upload_asset(tag: str, file_path: Path, repo: str, verbose: bool) -> None:
+def upload_asset(
+    tag: str, file_path: Path, repo: str, verbose: bool, token: str = ""
+) -> None:
     if verbose:
         print(f"uploading {file_path.name} to {tag} …", file=sys.stderr)
+    if token:
+        status, raw = api_request(
+            "GET", f"/repos/{repo}/releases/tags/{quote(tag)}", token
+        )
+        if status != 200:
+            sys.exit(f"error: release lookup failed (HTTP {status})")
+        try:
+            release = json.loads(raw)
+        except ValueError:
+            sys.exit("error: invalid GitHub release response")
+        for asset in release.get("assets") or []:
+            if asset.get("name") != file_path.name:
+                continue
+            delete_status, _ = api_request(
+                "DELETE",
+                f"/repos/{repo}/releases/assets/{asset.get('id')}",
+                token,
+            )
+            if delete_status not in (200, 204, 404):
+                sys.exit(
+                    f"error: cannot replace release asset (HTTP {delete_status})"
+                )
+        upload_url = (release.get("upload_url") or "").split("{", 1)[0]
+        if not upload_url:
+            sys.exit("error: GitHub release has no upload URL")
+        target = f"{upload_url}?name={quote(file_path.name)}"
+        status, raw = api_request(
+            "POST", target, token, file_path.read_bytes(), "application/octet-stream"
+        )
+        if status not in (200, 201):
+            sys.exit(
+                "error: cannot upload release asset "
+                f"(HTTP {status}): {raw.decode('utf-8', 'replace')[:300]}"
+            )
+        return
     gh("release", "upload", tag, str(file_path), "--clobber", "--repo", repo)
 
 
@@ -314,18 +440,19 @@ def main(argv=None) -> int:
 
     tag = args.release_tag or env("MARCER_RELEASE_TAG") or cfg["release_tag"]
     asset_name = cfg["asset_name"]
-    repo = repo_slug(args.repo)
+    token = github_token()
+    repo = repo_slug(args.repo, token)
 
-    if not release_exists(tag, repo):
+    if not release_exists(tag, repo, token):
         if not args.create_release:
             sys.exit(f"error: release '{tag}' not found in {repo} "
                      f"(pass --create-release to create it once).")
-        create_release(tag, repo, args.verbose)
+        create_release(tag, repo, args.verbose, token)
 
     with tempfile.TemporaryDirectory() as tmp:
         asset_file = Path(tmp) / asset_name
         asset_file.write_text(content, encoding="utf-8")
-        upload_asset(tag, asset_file, repo, args.verbose)
+        upload_asset(tag, asset_file, repo, args.verbose, token)
 
     url = f"https://github.com/{repo}/releases/download/{tag}/{asset_name}"
     print(f"updated {url}")
