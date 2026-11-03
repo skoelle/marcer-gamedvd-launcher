@@ -29,6 +29,7 @@ from jobs import (  # noqa: E402
     JobManager,
     NotFoundError,
 )
+from scheduler import Scheduler, SchedulerError  # noqa: E402
 from status import DEFAULT_RUN_LIMIT, TOOL_VERSION, StatusCollector  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent / "web"
@@ -271,6 +272,16 @@ def main(argv: list[str] | None = None) -> int:
             port = 8080
 
     manager = JobManager()
+    scheduler = None
+    try:
+        scheduler = Scheduler(manager)
+        scheduler.start()
+    except SchedulerError as exc:
+        print(
+            f"catalog-pipeline: scheduler disabled: {exc}",
+            file=sys.stderr,
+        )
+        scheduler = None
     server = ThreadingHTTPServer((host, port), StatusHandler)
     server.collector = collector
     server.manager = manager
@@ -290,6 +301,8 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\ncatalog-pipeline: stopped", file=sys.stderr)
     finally:
+        if scheduler is not None:
+            scheduler.stop()
         manager.shutdown()
         server.server_close()
     return 0

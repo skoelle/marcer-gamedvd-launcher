@@ -33,7 +33,7 @@ The host paths are read from `docker/.env` for the Compose volume mounts. The
 pipeline state lives under `${HOST_DATA_DIR}/state` and is mounted as `/state`
 (`MARCER_STATE_DIR=/state`). Create that directory before the first start and
 match `PUID`/`PGID` to the owner of the NAS mounts. It contains `archive-sync/`, `catalog-update/`,
-`asset-publish/`, `crew-analysis/`, `jobs/`, `pipeline.lock` and later
+`asset-publish/`, `crew-analysis/`, `jobs/`, `pipeline.lock` and
 `scheduler.json`.
 
 ## Image
@@ -59,6 +59,17 @@ reverse proxy with TLS and authentication. The pipeline UI has an optional
 `MARCER_PIPELINE_TOKEN` for `POST` requests; `GET` endpoints are read-only. The
 token field in the UI only appears when that variable is set. Do not publish
 port `8080` directly to the internet.
+
+## Scheduler
+
+The pipeline service runs the weekly scheduler in-process:
+
+- Default: Thursday 20:00 `Europe/Berlin` (`MARCER_SCHEDULE_CRON`)
+- Persistent state in `$MARCER_STATE_DIR/scheduler.json`
+- Missed runs are caught up within `MARCER_SCHEDULE_CATCH_UP_HOURS`
+  (default 24; `0` skips missed runs)
+- Manual runs do not move the schedule
+- Output uses the normal job runner and e-mail notification
 
 ## E-mail notification
 

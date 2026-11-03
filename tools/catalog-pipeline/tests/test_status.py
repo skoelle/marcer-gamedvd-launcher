@@ -283,6 +283,29 @@ class StatusCollectorTest(unittest.TestCase):
         collector = st.StatusCollector(environ=env, repo_root=self.repo)
         self.assertTrue(collector.collect()["config"]["pipeline_token_required"])
 
+    def test_collects_scheduler_state(self) -> None:
+        env, paths = self.make_env()
+        write_json(
+            paths["state"] / "scheduler.json",
+            {
+                "cron": "0 20 * * 4",
+                "timezone": "Europe/Berlin",
+                "catch_up_hours": 24,
+                "next_run": "2026-11-05T19:00:00Z",
+                "last_attempt": "2026-10-29T19:00:05Z",
+                "last_started": "2026-10-29T19:00:05Z",
+                "last_status": "started",
+                "last_job_id": "20261029T190005Z-abc123",
+                "last_error": None,
+            },
+        )
+        collector = st.StatusCollector(environ=env, repo_root=self.repo)
+        scheduler = collector.collect()["scheduler"]
+        self.assertTrue(scheduler["present"])
+        self.assertEqual(scheduler["next_run"], "2026-11-05T19:00:00Z")
+        self.assertEqual(scheduler["last_status"], "started")
+        self.assertEqual(scheduler["cron"], "0 20 * * 4")
+
     def test_collects_current_and_recent_jobs(self) -> None:
         env, paths = self.make_env()
         job_id = "20261103T210000Z-abc123"

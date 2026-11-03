@@ -204,6 +204,9 @@ class StatusCollector:
             "legacy_asset_state": legacy_asset_state,
             "jobs_dir": state / "jobs" if state is not None else None,
             "pipeline_lock": state / "pipeline.lock" if state is not None else None,
+            "scheduler_state": (
+                state / "scheduler.json" if state is not None else None
+            ),
             "gameinfo": data / "gameinfo" if data is not None else None,
         }
 
@@ -246,6 +249,7 @@ class StatusCollector:
             "storage": self._storage(paths),
             "pipeline": self._pipeline(paths),
             "jobs": self._jobs(paths),
+            "scheduler": self._scheduler(paths),
         }
         return status
 
@@ -619,6 +623,47 @@ class StatusCollector:
                 break
         result["recent"] = jobs[:10]
         return result
+
+    def _scheduler(self, paths: dict) -> dict:
+        state_file = paths.get("scheduler_state")
+        data, error = (None, "state directory missing")
+        if state_file is not None:
+            data, error = self.cache.load(state_file)
+        cron = self.env("MARCER_SCHEDULE_CRON", "0 20 * * 4")
+        timezone_name = self.env("MARCER_TZ", "Europe/Berlin")
+        try:
+            catch_up = int(
+                self.env("MARCER_SCHEDULE_CATCH_UP_HOURS", "24") or "24"
+            )
+        except ValueError:
+            catch_up = 24
+        if isinstance(data, dict):
+            cron = data.get("cron", cron)
+            timezone_name = data.get("timezone", timezone_name)
+            catch_up = data.get("catch_up_hours", catch_up)
+        return {
+            "present": isinstance(data, dict),
+            "error": error,
+            "cron": cron,
+            "timezone": timezone_name,
+            "catch_up_hours": catch_up,
+            "next_run": data.get("next_run") if isinstance(data, dict) else None,
+            "last_attempt": (
+                data.get("last_attempt") if isinstance(data, dict) else None
+            ),
+            "last_started": (
+                data.get("last_started") if isinstance(data, dict) else None
+            ),
+            "last_status": (
+                data.get("last_status") if isinstance(data, dict) else None
+            ),
+            "last_job_id": (
+                data.get("last_job_id") if isinstance(data, dict) else None
+            ),
+            "last_error": (
+                data.get("last_error") if isinstance(data, dict) else None
+            ),
+        }
 
     def _storage(self, paths: dict) -> dict:
         result = {}

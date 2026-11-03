@@ -243,18 +243,34 @@ function renderStorage(storage) {
     <tbody>${rows}</tbody></table></div>`, badge("mounts", ""));
 }
 
-function renderConfig(config) {
+function renderConfig(config, scheduler) {
   const warnings = [...(config.missing || []).map((item) => `${item} is not set`), ...(config.warnings || [])];
   const stateLabel = config.state_source === "env"
     ? "MARCER_STATE_DIR"
     : config.state_source === "data"
       ? "DATA/state"
       : "missing";
+  const sched = scheduler || {};
+  const schedStatus = sched.last_status || (sched.present ? "idle" : "not started");
+  const schedKind = sched.last_status === "error"
+    ? "bad"
+    : sched.last_status === "busy" || sched.last_status === "skipped"
+      ? "warn"
+      : sched.last_status === "started"
+        ? "ok"
+        : "";
+  const schedBody = `<div class="kv" style="margin-top:8px">
+      <span>next run <b>${fmtTime(sched.next_run)}</b></span>
+      <span>last <b>${fmtTime(sched.last_started || sched.last_attempt)}</b></span>
+      <span>cron <b>${esc(sched.cron || "–")}</b></span>
+      <span>tz <b>${esc(sched.timezone || "–")}</b></span>
+    </div>` + (sched.last_error ? listWarnings([sched.last_error]) : "");
   const body = `<div class="chips">
       <span class="chip${config.ftp_configured ? "" : " warn"}">FTP <b>${config.ftp_configured ? "configured" : "missing"}</b></span>
       <span class="chip${config.github_configured ? "" : " warn"}">GitHub token <b>${config.github_configured ? "configured" : "missing"}</b></span>
       <span class="chip${config.state_source === "missing" ? " warn" : ""}">state dir <b>${stateLabel}</b></span>
-    </div>` + listWarnings(warnings);
+      <span class="chip${schedKind === "bad" ? " bad" : schedKind === "warn" ? " warn" : ""}">scheduler <b>${esc(schedStatus)}</b></span>
+    </div>` + schedBody + listWarnings(warnings);
   return card("Configuration", body, badge(warnings.length ? "warnings" : "ok",
     warnings.length ? "warn" : "ok"));
 }
@@ -492,7 +508,7 @@ function render(status, runs, jobsPayload) {
     renderSync(status.sync || {}),
     `<div class="card-stack">
       ${renderPublish(status.publish || {})}
-      ${renderConfig(status.config || {})}
+      ${renderConfig(status.config || {}, status.scheduler || {})}
     </div>`,
     renderStorage(status.storage || {}),
   ].join("");

@@ -9,7 +9,8 @@ are implemented. The dashboard aggregates sync reports, gameinfo files, full
 index, crew data, asset-publish state, screenshot indices, storage, recent run
 reports and pipeline jobs.
 
-The scheduler and screenshot publishing are later phases.
+The weekly scheduler is included; screenshot publishing is the remaining
+phase.
 
 ## Requirements
 
@@ -45,6 +46,9 @@ Environment overrides:
 | `MARCER_SYNC_REPORT_DIR` | `$MARCER_STATE_DIR/archive-sync` | `archive-sync` reports |
 | `MARCER_PIPELINE_REPORT_DIR` | `$MARCER_STATE_DIR/catalog-update` | `catalog-update` run reports |
 | `MARCER_PIPELINE_TOKEN` | – | optional bearer token for `POST` requests |
+| `MARCER_SCHEDULE_CRON` | `0 20 * * 4` | five-field cron schedule |
+| `MARCER_TZ` | `Europe/Berlin` | IANA timezone for the schedule |
+| `MARCER_SCHEDULE_CATCH_UP_HOURS` | `24` | missed-run catch-up window; `0` skips |
 | `PIPELINE_VERBOSE` | – | log every HTTP request |
 
 The UI binds to `0.0.0.0` by default. `GET` endpoints are read-only and
@@ -126,6 +130,7 @@ job log.
 | Screenshots | `MARCER_OUT_DIR/index*.json` and referenced PNGs |
 | Run history | `<report dir>/runs/*.json` |
 | Jobs | `$MARCER_STATE_DIR/jobs/<id>/job.json` + `job.log` |
+| Scheduler | `$MARCER_STATE_DIR/scheduler.json` |
 | Lock | `$MARCER_STATE_DIR/pipeline.lock` |
 | Storage | `shutil.disk_usage` for root, patch, out, data and state |
 | Configuration | presence of the `MARCER_*` variables, never their values |
@@ -150,6 +155,23 @@ value (the UI prefixes it with `≥`). The index file size is always included.
 - A stale lock is detected by PID/heartbeat; after a service restart a running
   job is marked `interrupted` and an orphaned process group is terminated.
 - The job history keeps the newest 50 jobs.
+
+## Scheduler
+
+The service starts one scheduler thread. Its default schedule is
+**Thursday 20:00 Europe/Berlin** (`0 20 * * 4`). It starts a normal full
+catalog-update job through the shared `JobManager` (`source: "scheduler"`),
+so lock handling, cancellation, logs and e-mail notifications are identical
+to a manual run.
+
+- Persistent state: `$MARCER_STATE_DIR/scheduler.json` with the next run, last
+  attempt and last job id.
+- A missed run is caught up when it is no later than
+  `MARCER_SCHEDULE_CATCH_UP_HOURS` (default 24). `0` skips missed runs.
+- Manual runs do not move the schedule.
+- If a manual job is running at the due time, the scheduler retries within the
+  catch-up window.
+- The next run and last scheduler result are shown in the Configuration card.
 
 ## Tests
 

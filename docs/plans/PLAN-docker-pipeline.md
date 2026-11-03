@@ -97,34 +97,11 @@ Phase 1 (read-only Status-Web-Interface), Phase 2 (Aktionen, Job-Runner und
 Sperren) und Phase 3 (Docker, Compose und GHCR) sind in
 [`tools/catalog-pipeline`](../../tools/catalog-pipeline/README.md) bzw.
 [`docker/`](../../docker/README.md) umgesetzt. Die E-Mail-Benachrichtigung bei
-Sync-Änderungen ist in `tools/catalog-pipeline/notify.py` umgesetzt.
+Sync-Änderungen ist in `tools/catalog-pipeline/notify.py` umgesetzt. Der
+wöchentliche Scheduler ist in `tools/catalog-pipeline/scheduler.py` umgesetzt
+(Donnerstag 20:00 Europe/Berlin, Catch-up-Fenster und persistenter State).
 
-Offen sind Scheduler und Screenshot-Veröffentlichung.
-
-### Phase 4 – Scheduler
-
-Ziel: Der Sync startet unbeaufsichtigt wöchentlich am Donnerstagabend.
-
-#### Scheduler
-
-- Python-Scheduler im selben Prozess (kein Cron-Daemon)
-- Default: `MARCER_SCHEDULE_CRON=0 20 * * 4`
-- Zeitzone: `MARCER_TZ=Europe/Berlin` (`zoneinfo`)
-- Persistenter State: `$MARCER_STATE_DIR/scheduler.json`
-- Kein Doppellauf nach Neustart
-- Misfire-Policy konfigurierbar:
-  - `catch_up_hours` (Default z. B. 24): verpasster Lauf wird nachgeholt
-  - `0`: verpasster Lauf wird übersprungen
-- Nächster geplanter Lauf im Status sichtbar
-- Manuelle Läufe verschieben den Zeitplan nicht
-
-#### Akzeptanz Phase 4
-
-- Scheduler läuft in der Zeitzone Europe/Berlin, auch über DST-Wechsel
-- Neustart am Donnerstagabend erzeugt keinen Doppellauf
-- Verpasster Lauf wird gemäß Policy nachgeholt oder übersprungen
-
----
+Offen ist die Screenshot-Veröffentlichung.
 
 ### Phase 5 – Screenshots veröffentlichen (später)
 
@@ -245,9 +222,6 @@ im Repository.
 
 ## 6. Definition of Done
 
-- Phase 4: Wöchentlicher Donnerstagslauf funktioniert unbeaufsichtigt in
-  `Europe/Berlin`, inklusive Misfire-Policy; die E-Mail-Benachrichtigung ist
-  bereits implementiert.
 - Phase 5: Screenshot-Veröffentlichung läuft separat über Button/Hook, ohne
   den automatischen Sync zu verändern.
 - Tests und Dokumentation sind je Phase aktualisiert; keine Secrets im Repo.

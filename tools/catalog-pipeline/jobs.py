@@ -185,6 +185,7 @@ class JobManager:
         exclude = self._string_list(options.get("exclude"), "exclude")
         skip_publish = bool(options.get("skip_publish"))
         no_crew = bool(options.get("no_crew"))
+        source = str(options.get("source") or "manual")
 
         with self._mutex:
             if self._current and self._current.get("status") in (
@@ -203,7 +204,7 @@ class JobManager:
                 "schema": JOB_SCHEMA,
                 "id": job_id,
                 "mode": mode,
-                "source": "manual",
+                "source": source,
                 "status": "running",
                 "stage": "starting",
                 "started_at": iso_now(),
