@@ -324,7 +324,7 @@ Releases are automated via GitHub Actions. This is a monorepo with **one tag sch
 
 Each workflow triggers only on its own tag prefix (`v*` never matches `desktop-v*` and vice versa), so a desktop release never rebuilds the console launcher and the other way around. Path-based CI (build + test on `main` and PRs, **no release**) runs only when the relevant app changed: [`ci-launcher.yml`](.github/workflows/ci-launcher.yml) for `apps/marcer_console/**`, [`ci-desktop.yml`](.github/workflows/ci-desktop.yml) for `apps/marcer_desktop/**`.
 
-The pipeline image is **not** an app release: pushes to `main` touching `tools/**` or `docker/**` build the amd64 image in [`pipeline-image.yml`](.github/workflows/pipeline-image.yml) and publish it to GHCR ([`docker/README.md`](docker/README.md)).
+The pipeline image is **not** an app release: pushes to `main` touching `tools/**` or `docker/**` build the amd64 image in [`pipeline-image.yml`](.github/workflows/pipeline-image.yml) and publish it to GHCR ([`docker/README.md`](docker/README.md)). With the repository secrets `WEBHOOK_URL`/`WEBHOOK_TOKEN`, the workflow then calls one deployment webhook that updates the whole compose stack.
 
 **To create a release:**
 

@@ -86,6 +86,7 @@ header {
   color: var(--muted);
   font-size: 0.78em;
 }
+.actions .token[hidden] { display: none; }
 .actions .token input {
   width: 130px;
   background: var(--card);

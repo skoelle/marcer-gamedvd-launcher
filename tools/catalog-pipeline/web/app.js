@@ -21,6 +21,7 @@ const els = {
   startFull: document.getElementById("start-full"),
   startDry: document.getElementById("start-dry"),
   cancelJob: document.getElementById("cancel-job"),
+  tokenField: document.getElementById("token-field"),
   token: document.getElementById("token"),
   actionHint: document.getElementById("action-hint"),
   jobPanel: document.getElementById("job-panel"),
@@ -342,8 +343,21 @@ function setHint(message) {
   els.actionHint.textContent = message;
 }
 
+function updateTokenField(required) {
+  els.tokenField.hidden = !required;
+  if (!required) {
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+    } catch {
+      /* ignore unavailable storage */
+    }
+    els.token.value = "";
+  }
+}
+
 function handleAuthError(error) {
   if (error.status === 401) {
+    updateTokenField(true);
     setBanner("Token missing or invalid. Enter it in the Token field.", "action");
     els.token.focus();
     return true;
@@ -473,6 +487,7 @@ function scheduleRefresh(delay) {
 function render(status, runs, jobsPayload) {
   els.version.textContent = `v${status.tool_version || "?"}`;
   els.updated.textContent = `updated ${new Date().toLocaleTimeString()}`;
+  updateTokenField(!!(status.config && status.config.pipeline_token_required));
   els.cards.innerHTML = [
     renderSync(status.sync || {}),
     `<div class="card-stack">

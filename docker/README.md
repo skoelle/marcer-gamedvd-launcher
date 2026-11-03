@@ -56,14 +56,35 @@ It runs on pushes to `main` that touch `tools/**` or `docker/**`, and on
 
 Expose only the gallery and, if needed, the pipeline UI through the existing
 reverse proxy with TLS and authentication. The pipeline UI has an optional
-`MARCER_PIPELINE_TOKEN` for `POST` requests; `GET` endpoints are read-only. Do
-not publish port `8080` directly to the internet.
+`MARCER_PIPELINE_TOKEN` for `POST` requests; `GET` endpoints are read-only. The
+token field in the UI only appears when that variable is set. Do not publish
+port `8080` directly to the internet.
 
 ## E-mail notification
 
 A successful full run with at least one `new` or `changed` sync file sends one
 mail when the `MARCER_SMTP_*` / `MARCER_MAIL_*` variables are configured.
 Dry runs, no-op runs and failed runs do not send mail.
+
+## Deployment webhook
+
+The image workflow can notify the Docker host after a successful GHCR push.
+Set these **repository secrets** in GitHub (not in `docker/.env`):
+
+- `WEBHOOK_URL`
+- `WEBHOOK_TOKEN`
+
+The workflow sends one `POST` with `Authorization: Bearer <token>`. The
+endpoint is expected to update the whole Compose stack and return HTTP `200`
+with:
+
+```json
+{"summary": {"updated": 1, "failed": 0}}
+```
+
+A value of `updated` other than 1 is fine (`> 0` is required); the step fails
+when `updated == 0` or `failed > 0`. Without `WEBHOOK_URL` the step is
+skipped.
 
 ## Update
 

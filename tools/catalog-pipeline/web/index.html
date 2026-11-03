@@ -24,8 +24,8 @@
   <button type="button" id="start-full" class="primary">Start catalog update</button>
   <button type="button" id="start-dry">Dry run</button>
   <button type="button" id="cancel-job" class="danger" hidden>Cancel</button>
-  <label class="token">Token
-    <input id="token" type="password" autocomplete="off" placeholder="optional">
+  <label class="token" id="token-field" hidden>Pipeline token
+    <input id="token" type="password" autocomplete="off" placeholder="Bearer token">
   </label>
   <span class="hint" id="action-hint">Manual runs only; the scheduler follows later.</span>
 </div>

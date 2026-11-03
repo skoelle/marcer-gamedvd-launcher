@@ -287,6 +287,7 @@ class StatusCollector:
                 self.env("MARCER_FTP_HOST") and self.env("MARCER_FTP_USER")
             ),
             "github_configured": bool(self.env("MARCER_GITHUB_TOKEN")),
+            "pipeline_token_required": bool(self.env("MARCER_PIPELINE_TOKEN")),
             "state_configured": paths["state"] is not None,
             "state_source": state_source,
         }

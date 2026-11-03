@@ -49,9 +49,10 @@ Environment overrides:
 
 The UI binds to `0.0.0.0` by default. `GET` endpoints are read-only and
 unauthenticated. If `MARCER_PIPELINE_TOKEN` is set, every `POST` requires
-`Authorization: Bearer <token>`; the UI has a token field and stores it in
-`localStorage`. Without a token, expose the UI only on a trusted network or
-behind a reverse proxy with TLS and Basic Auth.
+`Authorization: Bearer <token>`. The UI shows the token field only when the
+server has `MARCER_PIPELINE_TOKEN` configured and stores the value in
+`localStorage`; without a token the field stays hidden. Expose the UI only on a
+trusted network or behind a reverse proxy with TLS and Basic Auth.
 
 ## HTTP API
 

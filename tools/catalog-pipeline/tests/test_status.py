@@ -275,6 +275,14 @@ class StatusCollectorTest(unittest.TestCase):
             result["publish"]["file"]["name"], ".asset-publish-state.json"
         )
 
+    def test_pipeline_token_required_flag(self) -> None:
+        env, _ = self.make_env()
+        collector = st.StatusCollector(environ=env, repo_root=self.repo)
+        self.assertFalse(collector.collect()["config"]["pipeline_token_required"])
+        env["MARCER_PIPELINE_TOKEN"] = "secret"
+        collector = st.StatusCollector(environ=env, repo_root=self.repo)
+        self.assertTrue(collector.collect()["config"]["pipeline_token_required"])
+
     def test_collects_current_and_recent_jobs(self) -> None:
         env, paths = self.make_env()
         job_id = "20261103T210000Z-abc123"
