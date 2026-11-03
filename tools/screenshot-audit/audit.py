@@ -709,12 +709,24 @@ def run_shotgen(
     memsize: str = "",
     no_drive_b: bool = False,
     retry_any: bool = True,
+    monitor: str = "",
+    tos_res: str = "",
+    press_key: str = "",
+    auto_program_index: int = 0,
 ) -> None:
     suffix = f"tos{tos}-{mode}"
     if memsize:
         suffix += f"-mem{memsize}"
     if no_drive_b:
         suffix += "-nob"
+    if monitor:
+        suffix += f"-mon{monitor}"
+    if tos_res:
+        suffix += f"-res{tos_res}"
+    if press_key:
+        suffix += f"-key{press_key}"
+    if auto_program_index:
+        suffix += f"-prog{auto_program_index}"
     target_file = report_dir / f"targets-{section}-{suffix}.txt"
     target_file.write_text("\n".join(rels) + "\n", encoding="utf-8")
     argv = [
@@ -742,10 +754,23 @@ def run_shotgen(
         argv += ["--memsize", str(memsize)]
     if no_drive_b:
         argv.append("--no-drive-b")
+    if monitor:
+        argv += ["--monitor", monitor]
+    if tos_res:
+        argv += ["--tos-res", tos_res]
+    if press_key:
+        argv += ["--press-key", press_key]
+    if auto_program_index:
+        argv += ["--auto-program-index", str(auto_program_index)]
     print(
         f"\n==> {section}: {mode} TOS {tos}"
         f"{' mem ' + str(memsize) if memsize else ''}"
-        f"{' no-drive-b' if no_drive_b else ''} ({len(rels)} entries)",
+        f"{' no-drive-b' if no_drive_b else ''}"
+        f"{' monitor ' + monitor if monitor else ''}"
+        f"{' res ' + tos_res if tos_res else ''}"
+        f"{' key ' + press_key if press_key else ''}"
+        f"{' prog ' + str(auto_program_index) if auto_program_index else ''}"
+        f" ({len(rels)} entries)",
         flush=True,
     )
     print("    " + " ".join(argv), flush=True)
@@ -884,6 +909,19 @@ def retry(args) -> int:
         memsize_list = options.get("memsize") or [args.memsize or ""]
         no_drive_b = bool(options.get("no_drive_b", False))
         retry_any = bool(options.get("retry_any", True))
+        monitors = options.get("monitor") or [""]
+        if isinstance(monitors, str):
+            monitors = [monitors]
+        resolutions = options.get("tos_res") or [""]
+        if isinstance(resolutions, str):
+            resolutions = [resolutions]
+        press_keys = options.get("press_keys") or [""]
+        if isinstance(press_keys, str):
+            press_keys = [press_keys]
+        program_indexes = options.get("auto_program_indexes") or [0]
+        if isinstance(program_indexes, int):
+            program_indexes = [program_indexes]
+        modes = options.get("modes") or ["plain", "auto", "click"]
         print(
             f"\n[{section}] {action} {phash}: {len(rels)} entries, "
             f"TOS {','.join(tos_list)}, "
@@ -894,29 +932,55 @@ def retry(args) -> int:
         if args.dry_run:
             print("  would retry (dry-run)", flush=True)
             continue
+        remaining = list(rels)
         for tos in tos_list:
             for memsize in memsize_list:
-                for mode in ("plain", "auto", "click"):
-                    run_shotgen(
-                        section,
-                        rels,
-                        report_dir,
-                        tos,
-                        args.jobs,
-                        mode,
-                        not args.no_click,
-                        memsize=memsize,
-                        no_drive_b=no_drive_b,
-                        retry_any=retry_any,
-                    )
-        reloaded = reload_entries(out, section, rels, cfg, args.workers)
-        remaining = [
-            rel for rel in rels
-            if rel in reloaded
-            and needs_mark(
-                reloaded[rel], registry, args.registry_distance, action
-            )
-        ]
+                for monitor in monitors:
+                    for tos_res in resolutions:
+                        for press_key in press_keys:
+                            for program_index in program_indexes:
+                                if not remaining:
+                                    break
+                                for mode in modes:
+                                    run_shotgen(
+                                        section,
+                                        remaining,
+                                        report_dir,
+                                        tos,
+                                        args.jobs,
+                                        mode,
+                                        not args.no_click,
+                                        memsize=memsize,
+                                        no_drive_b=no_drive_b,
+                                        retry_any=retry_any,
+                                        monitor=monitor,
+                                        tos_res=tos_res,
+                                        press_key=press_key,
+                                        auto_program_index=program_index,
+                                    )
+                                reloaded = reload_entries(
+                                    out, section, remaining, cfg, args.workers
+                                )
+                                remaining = [
+                                    rel for rel in remaining
+                                    if rel in reloaded
+                                    and needs_mark(
+                                        reloaded[rel],
+                                        registry,
+                                        args.registry_distance,
+                                        action,
+                                    )
+                                ]
+                            if not remaining:
+                                break
+                        if not remaining:
+                            break
+                    if not remaining:
+                        break
+                if not remaining:
+                    break
+            if not remaining:
+                break
         if remaining:
             print(
                 f"marking {len(remaining)} {section} entries as no_usable_shots",

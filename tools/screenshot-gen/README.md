@@ -37,6 +37,9 @@ tools/screenshot-gen/run.sh run --jobs 8   # parallel workers (e.g. night runs)
 tools/screenshot-gen/run.sh run --retry-desktop-auto --retry-any --force --only-file list.txt
 tools/screenshot-gen/run.sh run --force --memsize 0 --only-file list.txt  # 512 KiB
 tools/screenshot-gen/run.sh run --force --no-drive-b --only-file list.txt # drive B off
+tools/screenshot-gen/run.sh run --force --monitor color --tos-res med --only-file list.txt
+tools/screenshot-gen/run.sh run --force --press-key space --only-file list.txt
+tools/screenshot-gen/run.sh run --retry-desktop-auto --retry-any --force --auto-program-index 1 --only-file list.txt
 tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
 
 # Old titles that hang on TOS 1.04 (black screen -> no_usable_shots) but run

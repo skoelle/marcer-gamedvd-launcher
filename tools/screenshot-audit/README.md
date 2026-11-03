@@ -138,6 +138,14 @@ Example with retry options:
 `--drive-b off`. `retry_any: true` lets `retry-desktop`/`retry-desktop-auto`
 process `done` entries too (not only `desktop`).
 
+Additional `try` fields:
+
+- `monitor`: list of `mono`/`color` overrides
+- `tos_res`: list of `low`/`med`/`high`
+- `press_keys`: list of xdotool keys (`space`, `Return`, …)
+- `auto_program_indexes`: alternative program candidates for auto retry
+- `modes`: subset of `plain`, `auto`, `click` (default all three)
+
 ## Retry behaviour
 
 For every entry whose current preview matches an `error` or `no_usable`

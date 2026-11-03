@@ -906,6 +906,13 @@ classified `black` (section 8.1) and the entry ends as
   `status: desktop`; `--retry-any` extends the selection to
   `done`, `no_usable_shots` and `error` entries (combined with `--force`
   to ignore the `auto_retried`/`click_retried` gates).
+- `run --monitor mono|color` and `--tos-res low|med|high` override the
+  ST monitor/resolution for a run (e.g. retrying high-res vs medium-res
+  screens). `--press-key <xdotool-key>` focuses Hatari and sends one key
+  after boot (e.g. `space`, `Return`) for boot sectors that wait for input.
+- `--auto-program-index N` selects the Nth launchable candidate for
+  `--retry-desktop-auto` after the primary heuristic, so the wrong program
+  can be replaced without hand-editing the ZIP.
 
 ---
 

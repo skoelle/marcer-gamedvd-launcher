@@ -578,6 +578,27 @@ def pick_boot_program(zf, names, sizes, stem):
     return pool[0]
 
 
+def boot_program_candidates(zf, names, sizes, stem):
+    """Return GEMDOS boot candidates in preference order (primary first)."""
+    boots = [n for n in names if Path(n).suffix.lower() in BOOT_EXTS]
+    if not boots:
+        return []
+    primary = pick_boot_program(zf, names, sizes, stem)
+    target = _norm_prog(stem)
+
+    def rank(name):
+        ns = _norm_prog(Path(name).stem)
+        exact = 0 if ns == target else 1
+        contains = 0 if target and (target in ns or ns in target) else 1
+        return (exact, contains, _is_stzip(zf, name),
+                -sizes.get(name, 0), name.lower())
+
+    ordered = sorted(boots, key=rank)
+    if primary in ordered:
+        ordered = [primary] + [name for name in ordered if name != primary]
+    return ordered
+
+
 def _extract_member(zf, name: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with zf.open(name) as src, open(dest, "wb") as out:
@@ -616,7 +637,8 @@ def _safe_extract(zf, dest: Path) -> None:
             shutil.copyfileobj(src, out)
 
 
-def prepare_boot(stage: Path, staged_zip: Path, stem: str):
+def prepare_boot(stage: Path, staged_zip: Path, stem: str,
+                 program_index: int = 0):
     """Return ``(mode, args)`` for one bootable ZIP.
 
     ``mode`` is ``"floppy"`` (disk image(s) inside the ZIP) or ``"gemdos"``
@@ -629,7 +651,8 @@ def prepare_boot(stage: Path, staged_zip: Path, stem: str):
     images = [n for n in names if Path(n).suffix.lower() in FLOPPY_EXTS]
     no_floppy = ["--drive-a", "off", "--drive-b", "off"]
     with zipfile.ZipFile(staged_zip) as zf:
-        boot = pick_boot_program(zf, names, sizes, stem)
+        candidates = boot_program_candidates(zf, names, sizes, stem)
+        boot = candidates[program_index] if 0 <= program_index < len(candidates) else None
         if images and not boot:
             return "floppy", _floppy_args(zf, stage, staged_zip, images)
         if boot is None:
@@ -896,20 +919,24 @@ def _is_sfx(head: bytes) -> bool:
             or b"stzip" in hl)
 
 
-def _floppy_program(raw: bytes):
-    """Largest launchable program on a floppy image (AUTO/ preferred).
-
-    Self-extracting archives are skipped; a disk with only SFX packs has no
-    launchable program and the entry stays on the desktop.
-    """
+def _floppy_programs(raw: bytes):
+    """Return launchable floppy programs in preference order."""
     progs = [(n, s, h) for n, s, h in _fat12_files(raw)
              if Path(n).suffix.lower() in BOOT_EXTS and not _is_sfx(h)]
     if not progs:
-        return None
+        return []
     auto = [p for p in progs if p[0].lower().startswith("auto/")]
     pool = auto or progs
-    pool.sort(key=lambda t: -t[1])
-    return pool[0][0]
+    pool.sort(key=lambda t: (-t[1], t[0].lower()))
+    return [name for name, _size, _head in pool]
+
+
+def _floppy_program(raw: bytes, program_index: int = 0):
+    """Largest launchable program (AUTO/ preferred), or an alternate index."""
+    progs = _floppy_programs(raw)
+    if 0 <= program_index < len(progs):
+        return progs[program_index]
+    return None
 
 
 def _atari_cli_path(name: str) -> str:
@@ -922,7 +949,8 @@ def _atari_cli_path(name: str) -> str:
     return name.encode("cp437", "replace").decode("utf-8", "surrogateescape")
 
 
-def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str):
+def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str,
+                       program_index: int = 0):
     """Return ``(mode, args, program)`` for ``--retry-desktop-auto``.
 
     GEMDOS archives reuse the normal extract + ``-d``/``--auto`` path.
@@ -935,7 +963,9 @@ def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str):
     names, _sizes = _zip_entries(staged_zip)
     boots = [n for n in names if Path(n).suffix.lower() in BOOT_EXTS]
     if boots:
-        mode, args = prepare_boot(stage, staged_zip, stem)
+        mode, args = prepare_boot(
+            stage, staged_zip, stem, program_index=program_index
+        )
         program = args[args.index("--auto") + 1] if "--auto" in args else None
         return mode, args, program
 
@@ -950,7 +980,7 @@ def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str):
     b_name = next((n for n in ordered if n != a_name), None)
     with zipfile.ZipFile(staged_zip) as zf:
         raw = _image_to_raw(a_name, zf.read(a_name))
-        program = _floppy_program(raw)
+        program = _floppy_program(raw, program_index)
         if not program:
             return None, None, None
         args = []
@@ -1619,6 +1649,34 @@ def find_hatari_window(P: dict, grab_png: Path, pid: int = None):
     if best is None:
         raise RuntimeError("no hatari window found via xdotool")
     return best[1], best[2]
+
+
+def send_key_to_hatari(P: dict, pid: int, key: str, log) -> bool:
+    """Focus our Hatari window and send one key (xdotool)."""
+    if not shutil.which("xdotool"):
+        log("keypress skipped: xdotool not found")
+        return False
+    disp = P["display"]
+    for _attempt in range(10):
+        try:
+            res = _xdotool(["search", "--all", "--class", "hatari"], disp)
+        except Exception:
+            res = None
+        if res is not None:
+            for wid in [w for w in res.stdout.split() if w]:
+                try:
+                    if int(_xdotool(["getwindowpid", wid], disp).stdout.strip()) != pid:
+                        continue
+                    _xdotool(["windowraise", wid], disp)
+                    _xdotool(["windowfocus", wid], disp)
+                    _xdotool(["key", "--clearmodifiers", key], disp)
+                    log(f"pressed key {key}")
+                    return True
+                except Exception:
+                    continue
+        time.sleep(1)
+    log(f"keypress failed: {key}")
+    return False
 
 
 def click_window_xy(P: dict, wid: str, kv: dict, shot_w: int, shot_h: int,
@@ -2991,7 +3049,9 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                   tos_image: str = "", monitor_info=None,
                   profile: dict = None, boot_mode: str = "",
                   timepoints: list = None, auto_retry: bool = False,
-                  no_drive_b: bool = False) -> None:
+                  no_drive_b: bool = False, monitor_override: str = "",
+                  tos_res: str = "", press_key: str = "",
+                  auto_program_index: int = 0) -> None:
     def commit(fn):
         # With parallel jobs, entry mutation must be serialized against
         # index saves performed by other workers (avoids torn index state).
@@ -3020,6 +3080,11 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             parent_name.strip().lower().endswith(mono_suffix.lower())
         monitor = "mono" if is_mono else "color"
         monitor_source = "folder-suffix" if is_mono else "default"
+
+    if monitor_override:
+        monitor = monitor_override
+        is_mono = monitor == "mono"
+        monitor_source = "cli"
 
     # src_rel carries the folder spelling the file actually has under its
     # own layer root when the canonical output spelling differs (case-only
@@ -3084,7 +3149,8 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
         # autostarted with `-d` + `--auto`; floppy ZIPs keep `--disk-a`.
         if auto_retry:
             auto_mode, auto_args, auto_program = prepare_auto_retry(
-                stage, staged, Path(rel).stem)
+                stage, staged, Path(rel).stem,
+                program_index=auto_program_index)
             if auto_args is None:
                 def _no_program():
                     entry["auto_retried"] = True
@@ -3143,10 +3209,16 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
         elif is_mono:
             # --mono selects the monochrome monitor (TOS then boots to
             # high res); --tos-res high forces 640x400 explicitly.
-            cmd += ["--mono", "--tos-res", "high"]
+            cmd += ["--mono", "--tos-res", tos_res or "high"]
+        elif tos_res:
+            cmd += ["--tos-res", tos_res]
         if monitor_source != "default" and not prof_monitor:
-            log(f"monitor {monitor} ({monitor_source})"
-                + (" --mono --tos-res high" if is_mono else ""))
+            suffix = ""
+            if is_mono:
+                suffix = f" --mono --tos-res {tos_res or 'high'}"
+            elif tos_res:
+                suffix = f" --tos-res {tos_res}"
+            log(f"monitor {monitor} ({monitor_source}){suffix}")
 
         env = {**os.environ, "DISPLAY": P["display"]}
         log(f"hatari start ({' '.join(cmd[:6])} ...)")
@@ -3155,6 +3227,9 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                                 stderr=subprocess.DEVNULL,
                                 start_new_session=True)
         t0 = time.monotonic()
+        if press_key:
+            if sleep_until(t0 + 5):
+                send_key_to_hatari(P, proc.pid, press_key, log)
         entry_timeout = (click_cfg.get("entry_timeout_s", 120)
                          if do_click else cfg["entry_timeout_s"])
         deadline = t0 + entry_timeout
@@ -3536,7 +3611,9 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   tos_image: str = "", monitor_map: dict = None,
                   profile: dict = None, boot_mode: str = "",
                   timepoints: list = None, auto_retry: bool = False,
-                  no_drive_b: bool = False):
+                  no_drive_b: bool = False, monitor_override: str = "",
+                  tos_res: str = "", press_key: str = "",
+                  auto_program_index: int = 0):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
@@ -3605,7 +3682,11 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                               profile=profile, boot_mode=boot_mode,
                               timepoints=timepoints,
                               auto_retry=auto_retry,
-                              no_drive_b=no_drive_b)
+                              no_drive_b=no_drive_b,
+                              monitor_override=monitor_override,
+                              tos_res=tos_res,
+                              press_key=press_key,
+                              auto_program_index=auto_program_index)
                 with state_lock:
                     save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
@@ -3758,7 +3839,11 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 profile=scope_prof, boot_mode=boot_mode,
                 timepoints=scope.get("timepoints"),
                 auto_retry=args.retry_desktop_auto,
-                no_drive_b=args.no_drive_b)
+                no_drive_b=args.no_drive_b,
+                monitor_override=args.monitor,
+                tos_res=args.tos_res,
+                press_key=args.press_key,
+                auto_program_index=args.auto_program_index)
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -3794,7 +3879,11 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                               profile=scope_prof, boot_mode=boot_mode,
                               timepoints=scope.get("timepoints"),
                               auto_retry=args.retry_desktop_auto,
-                              no_drive_b=args.no_drive_b)
+                              no_drive_b=args.no_drive_b,
+                              monitor_override=args.monitor,
+                              tos_res=args.tos_res,
+                              press_key=args.press_key,
+                              auto_program_index=args.auto_program_index)
                 save_index(out, idx, scope["index"])
                 done_counts[e["status"]] = done_counts.get(e["status"], 0) + 1
                 if STOP_EVENT.is_set():
@@ -4799,6 +4888,14 @@ def main() -> int:
                             "MiB, otherwise KiB)")
     p_run.add_argument("--no-drive-b", action="store_true",
                        help="disable floppy drive B and omit --disk-b")
+    p_run.add_argument("--monitor", choices=["mono", "color"], default="",
+                       help="override ST monitor mode")
+    p_run.add_argument("--tos-res", choices=["low", "med", "high"], default="",
+                       help="override ST TOS resolution")
+    p_run.add_argument("--press-key", default="",
+                       help="send this xdotool key after boot (e.g. space, Return)")
+    p_run.add_argument("--auto-program-index", type=int, default=0,
+                       help="choose the Nth launchable program for auto retry")
     p_run.add_argument("--retry-no-usable", action="store_true",
                        help="retry only entries that ended as no_usable_shots "
                             "(not reprocessed by a normal run)")
