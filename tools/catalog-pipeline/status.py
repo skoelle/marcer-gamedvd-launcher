@@ -202,6 +202,8 @@ class StatusCollector:
             "asset_out": asset_out,
             "asset_state": asset_state,
             "legacy_asset_state": legacy_asset_state,
+            "jobs_dir": state / "jobs" if state is not None else None,
+            "pipeline_lock": state / "pipeline.lock" if state is not None else None,
             "gameinfo": data / "gameinfo" if data is not None else None,
         }
 
@@ -243,6 +245,7 @@ class StatusCollector:
             "screenshots": self._screenshots(paths),
             "storage": self._storage(paths),
             "pipeline": self._pipeline(paths),
+            "jobs": self._jobs(paths),
         }
         return status
 
@@ -586,6 +589,36 @@ class StatusCollector:
                 )
         return result
 
+    def _jobs(self, paths: dict) -> dict:
+        jobs_dir = paths.get("jobs_dir")
+        lock = paths.get("pipeline_lock")
+        result = {
+            "current": None,
+            "recent": [],
+            "lock_present": bool(lock is not None and lock.is_file()),
+        }
+        if jobs_dir is None or not jobs_dir.is_dir():
+            return result
+        jobs = []
+        try:
+            job_files = list(jobs_dir.glob("*/job.json"))
+        except OSError:
+            return result
+        for path in job_files:
+            data, error = self.cache.load(path)
+            if data is not None and not error:
+                jobs.append(_job_summary(data))
+        jobs.sort(
+            key=lambda job: (job.get("started_at") or "", job.get("id") or ""),
+            reverse=True,
+        )
+        for job in jobs:
+            if job.get("status") in ("running", "cancelling"):
+                result["current"] = job
+                break
+        result["recent"] = jobs[:10]
+        return result
+
     def _storage(self, paths: dict) -> dict:
         result = {}
         for name in ("root", "patch", "out", "data", "state"):
@@ -648,6 +681,25 @@ class StatusCollector:
                 }
             )
         return result
+
+
+def _job_summary(job: dict) -> dict:
+    keys = (
+        "id",
+        "mode",
+        "source",
+        "status",
+        "stage",
+        "started_at",
+        "finished_at",
+        "exit_code",
+        "error",
+        "report_file",
+        "pid",
+        "cancelling",
+        "heartbeat_epoch",
+    )
+    return {key: job.get(key) for key in keys if key in job}
 
 
 def _output_file(out: Path, rel: str, name: str) -> Path | None:

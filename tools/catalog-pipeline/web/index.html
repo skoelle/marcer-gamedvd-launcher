@@ -12,7 +12,7 @@
 <header>
   <div class="headline">
     <h1>Marcer Catalog Pipeline</h1>
-    <span class="badge badge-readonly">read-only</span>
+    <span class="badge badge-readonly">manual runs</span>
   </div>
   <div class="meta">
     <span id="version"></span>
@@ -21,21 +21,37 @@
 </header>
 
 <div class="actions">
-  <button type="button" disabled title="Phase 2">Start sync</button>
-  <button type="button" disabled title="Phase 5">Publish screenshots</button>
-  <span class="hint">Actions are added in a later phase.</span>
+  <button type="button" id="start-full" class="primary">Start catalog update</button>
+  <button type="button" id="start-dry">Dry run</button>
+  <button type="button" id="cancel-job" class="danger" hidden>Cancel</button>
+  <label class="token">Token
+    <input id="token" type="password" autocomplete="off" placeholder="optional">
+  </label>
+  <span class="hint" id="action-hint">Manual runs only; the scheduler follows later.</span>
 </div>
 
 <div id="banner" class="banner" hidden></div>
 
 <main class="dashboard">
   <div class="left-pane">
+    <section id="job-panel" class="panel job-panel" hidden>
+      <div class="job-head">
+        <h2>Current job</h2>
+        <span id="job-status"></span>
+      </div>
+      <div id="job-meta" class="kv"></div>
+      <pre id="job-log" class="job-log"></pre>
+    </section>
+
     <section class="grid" id="cards" aria-live="polite">
       <div class="card placeholder">Loading status…</div>
     </section>
 
     <section class="panel">
       <h2>Run history</h2>
+      <h3>Pipeline jobs</h3>
+      <div id="jobs" class="table-wrap"><p class="muted">Loading…</p></div>
+      <h3>Catalog update reports</h3>
       <div id="runs" class="table-wrap"><p class="muted">Loading…</p></div>
     </section>
 
@@ -47,7 +63,7 @@
 
 <footer>
   <span>tools/catalog-pipeline</span>
-  <span>Status is read-only and refreshed every 5 s.</span>
+  <span>Status refreshes every 5 s; jobs every 2 s while running.</span>
 </footer>
 
 <script src="/static/app.js"></script>

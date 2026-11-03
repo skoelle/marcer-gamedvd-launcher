@@ -93,52 +93,9 @@ freigegebener Pfad über einen Reverse Proxy veröffentlicht.
 
 ## 3. Phasen
 
-Phase 1 (read-only Status-Web-Interface) ist in
-[`tools/catalog-pipeline`](../../tools/catalog-pipeline/README.md) umgesetzt.
-Offen sind die folgenden Phasen.
-
-### Phase 2 – Aktionen, Job-Runner und Sperren
-
-Ziel: Läufe lassen sich über das Web-Interface starten, beobachten und
-abbrechen. Die Pipeline bleibt ohne Screenshot-Aktionen.
-
-#### API
-
-| Methode | Pfad | Bedeutung |
-|---|---|---|
-| `POST` | `/api/run` | Lauf starten (`sync`, `full`, `dry-run`) |
-| `POST` | `/api/cancel` | laufenden Job kooperativ beenden |
-| `GET` | `/api/jobs` | aktuelle und letzte Jobs |
-| `GET` | `/api/jobs/{id}` | Job-Detail |
-| `GET` | `/api/jobs/{id}/log` | Log-Tail |
-
-Optionen für `/api/run`: `mode`, `only`, `exclude`, `skip_publish`,
-`no_crew`, `dry_run`.
-
-#### Job-Modell
-
-- Ein Worker, ein globaler Lock (`$MARCER_STATE_DIR/pipeline.lock`)
-- Persistenter Job-State unter `$MARCER_STATE_DIR/jobs/<id>/`
-- Job-Report + Logdatei; Status-Endpoint liest nur
-- `409` bei laufendem Job; optional genau ein wartender Job in der Queue
-- Stale-Lock-Erkennung über PID/Heartbeat (NAS-`flock` ist unzuverlässig)
-- Cancel beendet die Prozessgruppe und schreibt einen `interrupted`-Report
-- Run-Reports unter `$MARCER_STATE_DIR/catalog-update/runs/`
-
-#### Voraussetzung für Container-Publish
-
-`tools/asset-manifest` bekommt die GitHub-Token-API (Release finden/erstellen,
-`latest.json` ersetzen). Der lokale `gh`-Fallback bleibt erhalten. Ohne diesen
-Schritt müsste `gh` ins Image oder der Publish-Schritt im Container entfallen.
-
-#### Akzeptanz Phase 2
-
-- Sync per Button startbar, Status zeigt aktuellen Schritt und Log
-- Paralleler Start liefert `409`
-- Cancel hinterlässt keinen aktiven Lock und einen nachvollziehbaren Report
-- Neustart des Prozesses während eines Laufs wird sauber als abgebrochen erkannt
-
----
+Phase 1 (read-only Status-Web-Interface) und Phase 2 (Aktionen, Job-Runner
+und Sperren) sind in [`tools/catalog-pipeline`](../../tools/catalog-pipeline/README.md)
+umgesetzt. Offen sind die folgenden Phasen.
 
 ### Phase 3 – Docker, Compose und GHCR
 
@@ -165,6 +122,12 @@ docker/
 - Optional Multi-Target (`base`, `pipeline`, `gallery`), falls das
   Gallery-Image kleiner werden soll
 - Healthcheck gegen `/healthz`
+
+#### Voraussetzung für Container-Publish
+
+`tools/asset-manifest` bekommt die GitHub-Token-API (Release finden/erstellen,
+`latest.json` ersetzen). Der lokale `gh`-Fallback bleibt erhalten. Ohne diesen
+Schritt müsste `gh` ins Image oder der Publish-Schritt im Container entfallen.
 
 #### Compose
 
@@ -343,6 +306,7 @@ Ziel: Screenshots werden getrennt vom automatischen Sync veröffentlicht –
 |---|---|
 | `MARCER_PIPELINE_HOST` | `0.0.0.0` |
 | `MARCER_PIPELINE_PORT` | `8080` |
+| `MARCER_PIPELINE_TOKEN` | – (POSTs ohne Token) |
 | `MARCER_SCHEDULE_CRON` | `0 20 * * 4` |
 | `MARCER_TZ` | `Europe/Berlin` |
 | `MARCER_SCHEDULE_CATCH_UP_HOURS` | `24` |
@@ -377,8 +341,6 @@ im Repository.
 
 ## 6. Definition of Done
 
-- Phase 2: Läufe sind per UI startbar, beobachtbar und abbrechbar; Lock und
-  Job-Historie überleben Neustarts.
 - Phase 3: Pipeline und Gallery laufen als getrennte Container aus GHCR;
   Secrets bleiben in der Pipeline.
 - Phase 4: Wöchentlicher Donnerstagslauf funktioniert unbeaufsichtigt in

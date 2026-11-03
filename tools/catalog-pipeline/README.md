@@ -1,16 +1,15 @@
 # catalog-pipeline
 
-Read-only status web service for the Marcer catalog pipeline.
+Status dashboard and manual job control for the Marcer catalog pipeline.
 
-Phase 1 of the server automation described in
-[`docs/plans/PLAN-docker-pipeline.md`](../../docs/plans/PLAN-docker-pipeline.md).
-It aggregates the existing sync reports, gameinfo files, full index, crew data,
-asset-publish state, screenshot indices, storage and recent run reports into a
-small dashboard. It never writes to the catalog, the game trees or the pipeline
-state.
+Phase 1 (read-only status) and Phase 2 (manual runs, job runner, locking and
+cancellation) of the server automation described in
+[`docs/plans/PLAN-docker-pipeline.md`](../../docs/plans/PLAN-docker-pipeline.md)
+are implemented. The dashboard aggregates sync reports, gameinfo files, full
+index, crew data, asset-publish state, screenshot indices, storage, recent run
+reports and pipeline jobs.
 
-Manual runs, the scheduler, Docker/GHCR and screenshot publishing are later
-phases.
+The scheduler, Docker/GHCR and screenshot publishing are later phases.
 
 ## Requirements
 
@@ -21,8 +20,9 @@ phases.
   `MARCER_SYNC_REPORT_DIR`, `MARCER_PIPELINE_REPORT_DIR`.
   Pipeline state lives in `$MARCER_DATA_DIR/state` by default; an explicit
   `MARCER_STATE_DIR` overrides it (the Docker container uses `/state`).
-- No FTP or GitHub connection is made in this phase; credentials only affect
-  the configuration indicator
+- Status polling makes no FTP or GitHub connection. A full run needs the FTP
+  credentials (and `gh` authentication for `latest.json` until the token API
+  lands); a dry run needs FTP read access.
 
 ## Usage
 
@@ -44,10 +44,14 @@ Environment overrides:
 | `MARCER_STATE_DIR` | `$MARCER_DATA_DIR/state` | state root (Docker: `/state`) |
 | `MARCER_SYNC_REPORT_DIR` | `$MARCER_STATE_DIR/archive-sync` | `archive-sync` reports |
 | `MARCER_PIPELINE_REPORT_DIR` | `$MARCER_STATE_DIR/catalog-update` | `catalog-update` run reports |
+| `MARCER_PIPELINE_TOKEN` | – | optional bearer token for `POST` requests |
 | `PIPELINE_VERBOSE` | – | log every HTTP request |
 
-The UI binds to `0.0.0.0` by default. It has no authentication; expose it only
-on a trusted network or behind a reverse proxy with TLS and Basic Auth.
+The UI binds to `0.0.0.0` by default. `GET` endpoints are read-only and
+unauthenticated. If `MARCER_PIPELINE_TOKEN` is set, every `POST` requires
+`Authorization: Bearer <token>`; the UI has a token field and stores it in
+`localStorage`. Without a token, expose the UI only on a trusted network or
+behind a reverse proxy with TLS and Basic Auth.
 
 ## HTTP API
 
@@ -56,8 +60,16 @@ on a trusted network or behind a reverse proxy with TLS and Basic Auth.
 | `GET` | `/healthz` | process/config health (`ok` or `degraded`) |
 | `GET` | `/api/status` | aggregated status |
 | `GET` | `/api/runs?limit=10` | recent `catalog-update` run reports |
+| `GET` | `/api/jobs?limit=10` | current and recent pipeline jobs |
+| `GET` | `/api/jobs/{id}` | job detail |
+| `GET` | `/api/jobs/{id}/log?tail=200` | job log tail |
+| `POST` | `/api/run` | start a `full` or `dry-run` job |
+| `POST` | `/api/cancel` | cancel the running job |
 
-All endpoints are read-only and return JSON except `/` and `/static/*`.
+`POST /api/run` accepts `mode` (`full`/`dry-run`) and the optional
+`only`/`exclude`/`skip_publish`/`no_crew` options. A second start returns
+`409` while a job is running. `POST /api/cancel` returns `202` and terminates
+the process group (SIGTERM, then SIGKILL after 10 seconds).
 
 ## Status sources
 
@@ -70,6 +82,8 @@ All endpoints are read-only and return JSON except `/` and `/static/*`.
 | Publish | `$MARCER_STATE_DIR/asset-publish/state.json` (legacy fallback: `<MARCER_DATA_DIR>/.asset-publish-state.json`) |
 | Screenshots | `MARCER_OUT_DIR/index*.json` and referenced PNGs |
 | Run history | `<report dir>/runs/*.json` |
+| Jobs | `$MARCER_STATE_DIR/jobs/<id>/job.json` + `job.log` |
+| Lock | `$MARCER_STATE_DIR/pipeline.lock` |
 | Storage | `shutil.disk_usage` for root, patch, out, data and state |
 | Configuration | presence of the `MARCER_*` variables, never their values |
 
@@ -77,12 +91,22 @@ Missing or malformed files are reported as `present: false` plus an error
 string. The service does not return HTTP 500 for broken catalog data. Large
 JSON files are cached in memory by `(mtime, size)`.
 
-Screenshot status is read-only in this phase: per scope it counts
+Screenshot status remains read-only: per scope it counts
 `done`/`desktop`/`no_usable_shots`/`pending`/`error`/… entries, entries without
 a preview and the referenced image bytes. No screenshot is packaged or uploaded.
 Image sizes are sampled within a small time budget because stat'ing tens of
 thousands of PNGs on a network share is slow; `bytes_partial` marks a sampled
 value (the UI prefixes it with `≥`). The index file size is always included.
+
+## Job model
+
+- One worker and one global lock (`$MARCER_STATE_DIR/pipeline.lock`).
+- Persistent job state under `$MARCER_STATE_DIR/jobs/<id>/` with `job.json`
+  and `job.log`.
+- Stage updates are parsed from the `==> <step>` lines of `catalog-update`.
+- A stale lock is detected by PID/heartbeat; after a service restart a running
+  job is marked `interrupted` and an orphaned process group is terminated.
+- The job history keeps the newest 50 jobs.
 
 ## Tests
 

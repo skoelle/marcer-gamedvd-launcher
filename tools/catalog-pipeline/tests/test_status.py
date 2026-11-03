@@ -275,6 +275,27 @@ class StatusCollectorTest(unittest.TestCase):
             result["publish"]["file"]["name"], ".asset-publish-state.json"
         )
 
+    def test_collects_current_and_recent_jobs(self) -> None:
+        env, paths = self.make_env()
+        job_id = "20261103T210000Z-abc123"
+        write_json(
+            paths["state"] / "jobs" / job_id / "job.json",
+            {
+                "id": job_id,
+                "mode": "full",
+                "status": "running",
+                "stage": "archive-sync",
+                "started_at": "2026-11-03T21:00:00Z",
+            },
+        )
+        (paths["state"] / "pipeline.lock").write_text("{}\n", encoding="utf-8")
+
+        collector = st.StatusCollector(environ=env, repo_root=self.repo)
+        jobs = collector.collect()["jobs"]
+        self.assertEqual(jobs["current"]["id"], job_id)
+        self.assertEqual(jobs["recent"][0]["stage"], "archive-sync")
+        self.assertTrue(jobs["lock_present"])
+
     def test_malformed_json_does_not_raise(self) -> None:
         env, paths = self.make_env()
         (paths["state"] / "archive-sync").mkdir(parents=True)

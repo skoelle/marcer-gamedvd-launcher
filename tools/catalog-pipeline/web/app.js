@@ -1,7 +1,9 @@
 /* Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
    Licensed under the MIT License. See LICENSE file in project root. */
 
-const REFRESH_MS = 5000;
+const IDLE_REFRESH_MS = 5000;
+const RUNNING_REFRESH_MS = 2000;
+const TOKEN_KEY = "marcerPipelineToken";
 const STATUS_ORDER = [
   "done", "desktop", "no_usable_shots", "pending",
   "error", "interrupted", "timeout", "skipped_disk_n", "unknown",
@@ -11,11 +13,26 @@ const els = {
   cards: document.getElementById("cards"),
   rightColumn: document.getElementById("right-column"),
   screenshots: document.getElementById("screenshots"),
+  jobs: document.getElementById("jobs"),
   runs: document.getElementById("runs"),
   banner: document.getElementById("banner"),
   version: document.getElementById("version"),
   updated: document.getElementById("updated"),
+  startFull: document.getElementById("start-full"),
+  startDry: document.getElementById("start-dry"),
+  cancelJob: document.getElementById("cancel-job"),
+  token: document.getElementById("token"),
+  actionHint: document.getElementById("action-hint"),
+  jobPanel: document.getElementById("job-panel"),
+  jobStatus: document.getElementById("job-status"),
+  jobMeta: document.getElementById("job-meta"),
+  jobLog: document.getElementById("job-log"),
 };
+
+let refreshTimer = null;
+let refreshInFlight = false;
+let currentJob = null;
+let bannerSource = "";
 
 function esc(value) {
   return String(value ?? "")
@@ -67,7 +84,7 @@ function badge(text, kind = "") {
 
 function statusKind(status) {
   if (["ok", "uploaded", "done"].includes(status)) return "ok";
-  if (["pending", "dirty", "dry-run", "degraded"].includes(status)) return "warn";
+  if (["pending", "dirty", "dry-run", "degraded", "running", "cancelling", "cancelled"].includes(status)) return "warn";
   if (["error", "missing", "interrupted"].includes(status)) return "bad";
   return "";
 }
@@ -266,7 +283,194 @@ function renderRuns(runs) {
     <tbody>${rows}</tbody></table>`;
 }
 
-function render(status, runs) {
+function getToken() {
+  try {
+    return localStorage.getItem(TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function saveToken() {
+  try {
+    localStorage.setItem(TOKEN_KEY, els.token.value.trim());
+  } catch {
+    /* localStorage can be unavailable in private mode */
+  }
+}
+
+function apiHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function postJson(path, payload) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: apiHeaders(),
+    body: JSON.stringify(payload || {}),
+  });
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+  if (!response.ok) {
+    const error = new Error(data.error || `HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function setBanner(message, source = "status") {
+  if (!message) {
+    els.banner.hidden = true;
+    els.banner.textContent = "";
+    bannerSource = "";
+    return;
+  }
+  els.banner.hidden = false;
+  els.banner.textContent = message;
+  bannerSource = source;
+}
+
+function setHint(message) {
+  els.actionHint.textContent = message;
+}
+
+function handleAuthError(error) {
+  if (error.status === 401) {
+    setBanner("Token missing or invalid. Enter it in the Token field.", "action");
+    els.token.focus();
+    return true;
+  }
+  return false;
+}
+
+function jobErrorText(error) {
+  if (!error) return "";
+  return `${error.stage || "run"}: ${error.message || ""}`;
+}
+
+function jobDuration(job) {
+  return fmtDuration(job.started_at, job.finished_at || new Date().toISOString());
+}
+
+function renderJobs(jobs) {
+  if (!jobs || !jobs.length) {
+    els.jobs.innerHTML = `<p class="muted">No pipeline jobs yet.</p>`;
+    return;
+  }
+  const rows = jobs.map((job) => {
+    const error = jobErrorText(job.error);
+    return `<tr>
+      <td>${fmtTime(job.started_at)}</td>
+      <td>${esc(job.mode || "–")}</td>
+      <td>${badge(job.status || "unknown", statusKind(job.status))}</td>
+      <td>${esc(job.stage || "–")}</td>
+      <td>${fmtDuration(job.started_at, job.finished_at)}</td>
+      <td class="num">${esc(job.exit_code ?? "–")}</td>
+      <td>${error ? `<span class="badge badge-bad">${esc(error)}</span>` : ""}</td>
+    </tr>`;
+  }).join("");
+  els.jobs.innerHTML = `<table>
+    <thead><tr><th>started</th><th>mode</th><th>status</th><th>stage</th>
+    <th>duration</th><th class="num">exit</th><th>error</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+async function refreshJobLog(jobId) {
+  const log = els.jobLog;
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  try {
+    const data = await fetchJson(`/api/jobs/${encodeURIComponent(jobId)}/log?tail=200`);
+    log.textContent = (data.lines || []).join("\n");
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  } catch {
+    /* a job can finish between the status and log request */
+  }
+}
+
+function renderJob(job) {
+  currentJob = job || null;
+  const running = !!job && ["running", "cancelling"].includes(job.status);
+  els.startFull.disabled = running;
+  els.startDry.disabled = running;
+  els.cancelJob.hidden = !running;
+  if (!job) {
+    els.jobPanel.hidden = true;
+    els.jobLog.textContent = "";
+    return;
+  }
+  els.jobPanel.hidden = false;
+  els.jobStatus.innerHTML = badge(job.status || "unknown", statusKind(job.status));
+  els.jobMeta.innerHTML = kv([
+    ["mode", job.mode || "–"],
+    ["stage", job.stage || "–"],
+    ["started", fmtTime(job.started_at)],
+    ["duration", jobDuration(job)],
+    ["exit", job.exit_code ?? "–"],
+    ["error", jobErrorText(job.error) || "–"],
+  ]);
+  refreshJobLog(job.id);
+}
+
+async function startJob(mode) {
+  const label = mode === "dry-run" ? "Dry run" : "Full catalog update";
+  if (mode !== "dry-run" && !window.confirm(
+    "Start a full catalog update now? This runs FTP sync, gameinfo, full index, crews and publish."
+  )) {
+    return;
+  }
+  setBanner("");
+  setHint(`Starting ${label}…`);
+  els.startFull.disabled = true;
+  els.startDry.disabled = true;
+  try {
+    const data = await postJson("/api/run", { mode });
+    setHint(`Job ${data.job.id} started.`);
+    await refresh();
+  } catch (error) {
+    setHint("");
+    if (!handleAuthError(error)) {
+      setBanner(`Cannot start job: ${error.message}`, "action");
+    }
+    els.startFull.disabled = false;
+    els.startDry.disabled = false;
+  }
+}
+
+async function cancelCurrentJob() {
+  if (!currentJob) return;
+  if (!window.confirm(`Cancel job ${currentJob.id}?`)) return;
+  setBanner("");
+  setHint("Cancellation requested…");
+  try {
+    await postJson("/api/cancel", { id: currentJob.id });
+    await refresh();
+  } catch (error) {
+    if (!handleAuthError(error)) {
+      setBanner(`Cannot cancel job: ${error.message}`, "action");
+    }
+  }
+}
+
+function scheduleRefresh(delay) {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    if (!document.hidden) {
+      refresh();
+    } else {
+      scheduleRefresh(IDLE_REFRESH_MS);
+    }
+  }, delay);
+}
+
+function render(status, runs, jobsPayload) {
   els.version.textContent = `v${status.tool_version || "?"}`;
   els.updated.textContent = `updated ${new Date().toLocaleTimeString()}`;
   els.cards.innerHTML = [
@@ -283,6 +487,8 @@ function render(status, runs) {
     renderCrews(status.crews || {}),
   ].join("");
   els.screenshots.innerHTML = renderScreenshots(status.screenshots || {});
+  renderJobs((jobsPayload && jobsPayload.jobs) || []);
+  renderJob((jobsPayload && jobsPayload.current) || null);
   renderRuns(runs || []);
 }
 
@@ -293,24 +499,36 @@ async function fetchJson(path) {
 }
 
 async function refresh() {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
+  let delay = IDLE_REFRESH_MS;
   try {
-    const [status, runsPayload] = await Promise.all([
+    const [status, runsPayload, jobsPayload] = await Promise.all([
       fetchJson("/api/status"),
       fetchJson("/api/runs?limit=10"),
+      fetchJson("/api/jobs?limit=10"),
     ]);
-    els.banner.hidden = true;
-    render(status, runsPayload.runs || []);
+    if (bannerSource === "status") setBanner("");
+    render(status, runsPayload.runs || [], jobsPayload);
+    const running = jobsPayload.current
+      && ["running", "cancelling"].includes(jobsPayload.current.status);
+    delay = running ? RUNNING_REFRESH_MS : IDLE_REFRESH_MS;
   } catch (error) {
-    els.banner.hidden = false;
-    els.banner.textContent = `Status could not be loaded: ${error.message}`;
+    setBanner(`Status could not be loaded: ${error.message}`);
+  } finally {
+    refreshInFlight = false;
+    scheduleRefresh(delay);
   }
 }
+
+els.token.value = getToken();
+els.token.addEventListener("input", saveToken);
+els.startFull.addEventListener("click", () => startJob("full"));
+els.startDry.addEventListener("click", () => startJob("dry-run"));
+els.cancelJob.addEventListener("click", cancelCurrentJob);
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refresh();
 });
 
 refresh();
-setInterval(() => {
-  if (!document.hidden) refresh();
-}, REFRESH_MS);
