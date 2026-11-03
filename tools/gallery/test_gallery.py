@@ -855,6 +855,68 @@ class CrewDataTest(unittest.TestCase):
         self.assertEqual(fetch("?id=nope")["error"], "cluster not found")
 
 
+class ScreenshotLockTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.out = Path(self.tmp.name) / "out"
+        self.out.mkdir()
+        self.index = self.out / "index.json"
+        self.index.write_text(
+            json.dumps({"version": 1, "entries": {}}), encoding="utf-8"
+        )
+        self.lock = self.out / "shotgen.lock"
+        self.store = gallery.DataStore(str(self.out), "")
+
+    def _touch_index(self):
+        stat = self.index.stat()
+        os.utime(self.index, (stat.st_atime, stat.st_mtime + 10))
+
+    def test_lock_blocks_auto_reload_and_force_reloads(self):
+        old_mtime = self.store._mtimes["index_cracked"]
+        self.index.write_text(
+            json.dumps({"version": 1, "entries": {}}), encoding="utf-8"
+        )
+        self._touch_index()
+        self.lock.write_text("123", encoding="utf-8")
+        self.assertTrue(self.store.screenshot_run_active())
+        self.assertFalse(self.store.reload())
+        self.assertEqual(self.store._mtimes["index_cracked"], old_mtime)
+        self.assertTrue(self.store.meta_payload()["screenshot_run_active"])
+
+        self.assertTrue(self.store.reload(force=True))
+        self.assertNotEqual(self.store._mtimes["index_cracked"], old_mtime)
+        self.assertTrue(self.store.meta_payload()["screenshot_run_active"])
+
+    def test_auto_reload_resumes_after_lock_is_removed(self):
+        self.lock.write_text("123", encoding="utf-8")
+        self.index.write_text(
+            json.dumps({"version": 1, "entries": {}}), encoding="utf-8"
+        )
+        self._touch_index()
+        self.assertFalse(self.store.reload())
+        self.lock.unlink()
+        self.assertFalse(self.store.screenshot_run_active())
+        self.assertTrue(self.store.reload())
+
+    def test_post_reload_forces_while_locked(self):
+        self.index.write_text(
+            json.dumps({"version": 1, "entries": {}}), encoding="utf-8"
+        )
+        self._touch_index()
+        self.lock.write_text("123", encoding="utf-8")
+        handler = object.__new__(gallery.GalleryHandler)
+        handler.path = "/api/reload"
+        handler.store = self.store
+        handler.cfg = {}
+        result = {}
+        handler._json = lambda obj, status=200: result.update(obj)
+        handler._error = lambda status, message: result.update(error=message)
+        handler.do_POST()
+        self.assertNotIn("error", result)
+        self.assertTrue(result["screenshot_run_active"])
+
+
 class DataDirPathTest(unittest.TestCase):
     """Gameinfo data is read only from <MARCER_DATA_DIR>/gameinfo (no fallback)."""
 

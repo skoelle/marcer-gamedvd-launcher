@@ -39,6 +39,7 @@ header { margin-bottom: 8px; }
 }
 .stats .st { white-space: nowrap; }
 .stats .st b { color: var(--fg); font-weight: 600; }
+.stats .st.warn { color: #db4; }
 .stats .hint { color: #667; }
 /* tool version, right-aligned (desktop status bar) */
 .stats .app-version { margin-left: auto; color: #667; }

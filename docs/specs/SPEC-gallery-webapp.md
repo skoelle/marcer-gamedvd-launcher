@@ -57,10 +57,11 @@ Everything else is *(untested)* and must be confirmed during implementation.
   are available via config/CLI (`--host 127.0.0.1`). For community
   deployments, bind to loopback and put the app behind a reverse proxy that
   provides **Basic Auth and TLS**; the proxy must protect all routes.
-- **No live refresh in v1.** Changes made by a running `shotgen run` become
-  visible when the user reloads (the server revalidates the section indices
-  on each API request, see section 8.4). There is no polling, push or
-  WebSocket.
+- **Freshness and screenshot lock.** Changes made by a completed
+  `shotgen run` become visible on the next API request (mtime revalidation,
+  section 8.4). While `MARCER_OUT_DIR/shotgen.lock` exists, automatic
+  revalidation is paused; the **reload index** button forces a reload via
+  `POST /api/reload`. There is no polling, push or WebSocket.
 - **No thumbnails.** Original PNGs are served as-is (user decision); lazy
   loading and pagination keep the load manageable.
 - **No local media distribution.** Boxscan images and manual documents
@@ -467,12 +468,15 @@ error body `{ "error": "<message>" }`.
 | `/api/crews` | crew cards / one crew with releases (section 5.6) |
 | `/api/clusters` | crew cluster cards / one cluster with tree and edges (section 5.7) |
 | `/img/<rel path>` | original preview/candidate PNG (section 5.4) |
+| `POST /api/reload` | force an index/metadata reload; returns the `/api/meta` payload |
 
 ### 5.2 `/api/meta`
 
 ```json
 {
   "gameinfo": true,
+  "screenshot_run_active": false,
+  "screenshot_lock_mtime": null,
   "index": {
     "cracked": { "entries": 22938, "mtime": 1780000000 },
     "pd":      { "entries": 2846,  "mtime": 1780000000 },
@@ -547,6 +551,9 @@ error body `{ "error": "<message>" }`.
 }
 ```
 
+- `screenshot_run_active` is true while `MARCER_OUT_DIR/shotgen.lock`
+  exists; `screenshot_lock_mtime` is its mtime (or `null`). While active,
+  automatic mtime revalidation is paused (section 8.4).
 - `index`, `status_counts`, `game_status_counts` and `sections` are **per
   section** maps keyed by `cracked`/`pd`/`utils`/`magazine`/`falcon`; the statistics
   bar and footer read the entry for the active section (`desktop-app parity`,
@@ -918,11 +925,12 @@ lightbox, whose side panel carries the same metadata.
    sort+order dropdown** with the ten entries `<key> asc|desc`
    (`name`/`year`/`publisher`/`cracker`/`crew`, e.g. `year desc` — the
    URL keeps the separate `sort`/`order` parameters), letter navigation
-   row (A–Z + `0-9` + `Any`). In the `crews` tab only search, clear, the
-   **Type** dropdown and the **Ranking** dropdown are shown; the crew cards
-   are already ordered by ZIP count. In the `clusters` tab only search and
-   clear are shown; the cluster data is ordered by ZIP count descending,
-   then name, and the cluster cards keep that order.
+   row (A–Z + `0-9` + `Any`). The **reload index** button stays visible in
+   every tab. In the `crews` tab only search, clear, reload, the **Type**
+   dropdown and the **Ranking** dropdown are shown; the crew cards are
+   already ordered by ZIP count. In the `clusters` tab only search, clear
+   and reload are shown; the cluster data is ordered by ZIP count
+   descending, then name, and the cluster cards keep that order.
 4. **Grid**: grouped cards (section 6.4), paginated.
 5. **Pagination**: page indicator + prev/next + page-size-constant
    (`offset/limit`); keyboard PageUp/PageDown works on the grid (6.6).
@@ -1363,13 +1371,20 @@ mirrors SPEC-screenshot-generator.md §9 write safety (S1/S2).
   are **not** implemented by the app.
 - No CORS headers for arbitrary origins; the app is same-origin only.
 
-### 8.4 Data freshness (v1)
+### 8.4 Data freshness and screenshot lock
 
 - The server `stat`s the section indices, the metadata files and
   `crews.json`/`crew-images.json`/`crew-cluster.json` on API requests; if an
   mtime changed, the affected dataset is reloaded once before answering
   (reload ≈ 0.16 s for the index *(verified)*, happens only on change).
-- The UI does **not** poll; the user reloads the page to see new data.
+- While `MARCER_OUT_DIR/shotgen.lock` exists, automatic revalidation is
+  paused: the last loaded dataset is served unchanged even if an index mtime
+  changed. This avoids loading the index repeatedly during a screenshot run.
+- The **reload index** button calls `POST /api/reload`, which forces a reload
+  even while the lock exists. `shotgen` writes its indices atomically, so a
+  forced read never sees a half-written JSON file.
+- When the lock disappears, normal mtime revalidation resumes on the next API
+  request. The UI does **not** poll.
 
 ### 8.5 Performance budgets *(targets, untested)*
 
@@ -1470,7 +1485,10 @@ Manual test pass (required before delivery, per AGENTS.md policy):
     `/`, `/api/*` (including `/api/local-assets`), `/img/*` and
     `/static/*`.
 11. **Freshness**: start server, run `shotgen run --limit 1`, reload page →
-    new/updated card visible (section 8.4 reload path).
+    new/updated card visible (section 8.4 reload path). With a
+    `shotgen.lock` present, a page reload keeps the cached data; **reload
+    index** (`POST /api/reload`) shows the current index; removing the lock
+    restores automatic mtime revalidation.
 12. **Performance**: `/api/entries` timings on the full dataset with the
     default filter and with `status=any` (budget table, section 8.5).
 13. **Desktop-parity display rules**: without a concrete status filter, a

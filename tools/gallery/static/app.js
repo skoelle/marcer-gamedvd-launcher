@@ -152,8 +152,8 @@ function writeURL(push) {
 }
 
 // ---------------------------------------------------------------- API
-async function api(path) {
-  const res = await fetch(path);
+async function api(path, options) {
+  const res = await fetch(path, options);
   if (res.status === 503) {
     const err = await res.json().catch(() => ({ error: "data unavailable" }));
     throw new Error(err.error || "data unavailable");
@@ -282,8 +282,14 @@ function buildLetters() {
   box.innerHTML = html;
 }
 
+function screenshotRunNotice() {
+  if (!meta || !meta.screenshot_run_active) return "";
+  return '<span class="st warn">screenshot run active — auto reload paused</span>';
+}
+
 function renderStats(extra) {
   if (!meta) return;
+  const runState = screenshotRunNotice();
   const section = state.section;
   if (section === "crew") {
     const crew = meta.crews || {};
@@ -300,7 +306,8 @@ function renderStats(extra) {
       }
     }
     if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
-    parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
+    if (runState) parts.push(runState);
+  parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
     $("stats").innerHTML = parts.join("");
     return;
   }
@@ -319,7 +326,8 @@ function renderStats(extra) {
       }
     }
     if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
-    parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
+    if (runState) parts.push(runState);
+  parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
     $("stats").innerHTML = parts.join("");
     return;
   }
@@ -364,6 +372,7 @@ function renderStats(extra) {
     parts.push(`<span class="st">${noInfo} without gameinfo</span>`);
   }
   if (extra) parts.push(`<span class="hint">${esc(extra)}</span>`);
+  if (runState) parts.push(runState);
   parts.push(`<span class="st app-version">gallery ${esc(meta.tool_version)}</span>`);
   $("stats").innerHTML = parts.join("");
 }
@@ -2163,6 +2172,17 @@ function wireEvents() {
   };
   $("clear").addEventListener("click", clearAll);
   $("empty-clear").addEventListener("click", clearAll);
+  $("reload-index").addEventListener("click", async () => {
+    const button = $("reload-index");
+    button.disabled = true;
+    try {
+      await api("/api/reload", { method: "POST" });
+      location.reload();
+    } catch (err) {
+      showBanner("Reload failed: " + err.message);
+      button.disabled = false;
+    }
+  });
 
   $("letters").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-letter]");

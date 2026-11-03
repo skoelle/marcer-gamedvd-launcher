@@ -41,7 +41,10 @@ protect `/`, `/api/*` (including `/api/local-assets`), `/img/*` and
 
 The server revalidates the section indices and the metadata files on each
 API request (mtime check), so a page reload shows the latest screenshot-run
-results. There is no live refresh/polling in v1.
+results. While a `shotgen.lock` exists in `MARCER_OUT_DIR` (a screenshot run
+is active), automatic revalidation is paused; use the **reload index** button
+to force a reload. After the lock disappears, normal mtime revalidation
+resumes. There is no live refresh/polling.
 
 ## Tests
 
@@ -176,7 +179,7 @@ Backend filter/card helpers use stdlib `unittest` only:
   layer for that metadata.
 - `crews.json not found` → the Crews tab is hidden; run
   `tools/crew-analysis/run.sh` to generate it in `MARCER_DATA_DIR/gameinfo`.
-- Stale data → reload the page (mtime revalidation runs per request).
+- Stale data → reload the page, or use **reload index** while `shotgen.lock` exists.
 
 ## Config
 

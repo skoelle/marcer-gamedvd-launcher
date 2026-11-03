@@ -78,6 +78,7 @@ MANUAL_IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".gif"})
 MANUAL_DOC_EXTS = frozenset({".pdf", ".doc", ".txt", ".msa"})
 MAX_ZIP_ENTRIES = 10000
 GAMEINFO_SUBDIR = "gameinfo"
+SHOTGEN_LOCK = "shotgen.lock"
 CREW_FILE = "crews.json"
 CREW_IMAGES_FILE = "crew-images.json"
 CREW_CLUSTER_FILE = "crew-cluster.json"
@@ -947,6 +948,7 @@ class DataStore:
     def __init__(self, out_dir, data_dir, root_dir="", patch_dir="",
                  assets_cache_seconds=60):
         self.out = Path(out_dir)
+        self.lock_path = self.out / SHOTGEN_LOCK
         sub = Path(data_dir) / GAMEINFO_SUBDIR if data_dir else None
         self.data = sub if sub and sub.is_dir() else None
         self.lock = threading.Lock()
@@ -1010,7 +1012,18 @@ class DataStore:
     def check_changed(self):
         return self._stamps() != self._mtimes
 
+    def screenshot_run_active(self):
+        return self.lock_path.is_file()
+
+    def screenshot_lock_mtime(self):
+        try:
+            return self.lock_path.stat().st_mtime
+        except OSError:
+            return None
+
     def reload(self, force=False):
+        if not force and self.screenshot_run_active():
+            return False
         if not force and not self.check_changed():
             return False
         with self.lock:
@@ -1168,6 +1181,8 @@ class DataStore:
             "generated_at": self.manifest.get("generated_at"),
             "tool_version": TOOL_VERSION,
             "local_assets": self.assets.enabled,
+            "screenshot_run_active": self.screenshot_run_active(),
+            "screenshot_lock_mtime": self.screenshot_lock_mtime(),
         }
         self.meta["sections"]["crew"] = {
             "games": 0,
@@ -1696,6 +1711,8 @@ class DataStore:
 
     def meta_payload(self, cfg=None):
         m = json.loads(json.dumps(self.meta))
+        m["screenshot_run_active"] = self.screenshot_run_active()
+        m["screenshot_lock_mtime"] = self.screenshot_lock_mtime()
         m["status_labels"] = STATUS_LABELS
         if cfg:
             m["show_candidates"] = bool(cfg.get("show_candidates", True))
@@ -1985,6 +2002,23 @@ class GalleryHandler(BaseHTTPRequestHandler):
             if path.startswith("/img/"):
                 return self._image(unquote(path[len("/img/"):]))
             return self._error(404, "not found")
+        except BrokenPipeError:
+            pass
+        except Exception as exc:  # noqa: BLE001
+            log(f"[error] {path}: {exc!r}")
+            try:
+                self._error(500, "internal error")
+            except Exception:  # noqa: BLE001
+                pass
+
+    def do_POST(self):  # noqa: N802 - http.server API
+        path = urlparse(self.path).path
+        if path != "/api/reload":
+            self._error(404, "not found")
+            return
+        try:
+            self.store.reload(force=True)
+            return self._json(self.store.meta_payload(self.cfg))
         except BrokenPipeError:
             pass
         except Exception as exc:  # noqa: BLE001
