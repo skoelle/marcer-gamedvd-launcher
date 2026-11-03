@@ -9,6 +9,8 @@ const STATUS_ORDER = [
 
 const els = {
   cards: document.getElementById("cards"),
+  rightColumn: document.getElementById("right-column"),
+  screenshots: document.getElementById("screenshots"),
   runs: document.getElementById("runs"),
   banner: document.getElementById("banner"),
   version: document.getElementById("version"),
@@ -262,17 +264,20 @@ function renderRuns(runs) {
 function render(status, runs) {
   els.version.textContent = `v${status.tool_version || "?"}`;
   els.updated.textContent = `updated ${new Date().toLocaleTimeString()}`;
-  const cards = [
+  els.cards.innerHTML = [
     renderSync(status.sync || {}),
+    `<div class="card-stack">
+      ${renderPublish(status.publish || {})}
+      ${renderConfig(status.config || {})}
+    </div>`,
+    renderStorage(status.storage || {}),
+  ].join("");
+  els.rightColumn.innerHTML = [
     renderGameinfo(status.gameinfo || {}),
     renderFullIndex(status.full_index || {}),
     renderCrews(status.crews || {}),
-    renderPublish(status.publish || {}),
-    renderScreenshots(status.screenshots || {}),
-    renderStorage(status.storage || {}),
-    renderConfig(status.config || {}),
-  ];
-  els.cards.innerHTML = cards.join("");
+  ].join("");
+  els.screenshots.innerHTML = renderScreenshots(status.screenshots || {});
   renderRuns(runs || []);
 }
 

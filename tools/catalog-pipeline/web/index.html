@@ -28,15 +28,21 @@
 
 <div id="banner" class="banner" hidden></div>
 
-<main>
-  <section class="grid" id="cards" aria-live="polite">
-    <div class="card placeholder">Loading status…</div>
-  </section>
+<main class="dashboard">
+  <div class="left-pane">
+    <section class="grid" id="cards" aria-live="polite">
+      <div class="card placeholder">Loading status…</div>
+    </section>
 
-  <section class="panel">
-    <h2>Run history</h2>
-    <div id="runs" class="table-wrap"><p class="muted">Loading…</p></div>
-  </section>
+    <section class="panel">
+      <h2>Run history</h2>
+      <div id="runs" class="table-wrap"><p class="muted">Loading…</p></div>
+    </section>
+
+    <section id="screenshots" aria-live="polite"></section>
+  </div>
+
+  <aside class="card-stack" id="right-column" aria-live="polite"></aside>
 </main>
 
 <footer>
