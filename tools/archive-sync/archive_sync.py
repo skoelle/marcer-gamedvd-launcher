@@ -39,9 +39,10 @@ from datetime import datetime, timezone
 from ftplib import FTP, all_errors as FTP_ALL_ERRORS, error_perm, error_temp
 from pathlib import Path, PurePosixPath
 
-TOOL_VERSION = "0.2.0"
+TOOL_VERSION = "0.2.1"
 REPORT_SCHEMA = 2
 DEFAULT_REMOTE = "/GameDVD/"
+FALLBACK_ENCODING = "latin-1"
 DEFAULT_EXCLUDES = (
     "@eaDir",
     ".DS_Store",
@@ -329,20 +330,53 @@ class DirEntry:
     modify: str | None
 
 
+class EncodingState:
+    def __init__(self, encoding: str):
+        self._lock = threading.Lock()
+        self._encoding = encoding
+        self.fallback_used = False
+
+    def current(self) -> str:
+        with self._lock:
+            return self._encoding
+
+    def use_fallback(self) -> bool:
+        with self._lock:
+            if self._encoding == FALLBACK_ENCODING:
+                return False
+            self._encoding = FALLBACK_ENCODING
+            self.fallback_used = True
+            return True
+
+
 class FtpClient:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, state: EncodingState | None = None):
         self.cfg = cfg
+        self.state = state or EncodingState(cfg.encoding)
         self.ftp: FTP | None = None
+        self._connected_encoding: str | None = None
+
+    @property
+    def encoding(self) -> str:
+        return self.state.current()
+
+    @property
+    def fallback_used(self) -> bool:
+        return self.state.fallback_used
 
     def connect(self) -> None:
+        encoding = self.state.current()
         if self.ftp is not None:
-            return
+            if self._connected_encoding == encoding:
+                return
+            self.close()
         ftp = FTP()
-        ftp.encoding = self.cfg.encoding
+        ftp.encoding = encoding
         ftp.connect(self.cfg.host, self.cfg.port, timeout=self.cfg.timeout)
         ftp.login(self.cfg.user or "anonymous", self.cfg.password or "")
         ftp.set_pasv(self.cfg.passive)
         self.ftp = ftp
+        self._connected_encoding = encoding
 
     def close(self) -> None:
         if self.ftp is not None:
@@ -354,6 +388,7 @@ class FtpClient:
                 except Exception:  # noqa: BLE001 - best effort close
                     pass
             self.ftp = None
+            self._connected_encoding = None
 
     def _with_retry(self, action, description: str):
         last: Exception | None = None
@@ -382,10 +417,20 @@ class FtpClient:
         return str(exc)[:3] in {"500", "501", "502", "504"}
 
     def list_dir(self, path: str) -> list[DirEntry]:
-        return self._with_retry(
-            lambda: self._list_once(path),
-            f"listing {path}",
-        )
+        try:
+            return self._with_retry(
+                lambda: self._list_once(path),
+                f"listing {path}",
+            )
+        except UnicodeDecodeError:
+            if self._connected_encoding == FALLBACK_ENCODING:
+                raise
+            self.state.use_fallback()
+            self.close()
+            return self._with_retry(
+                lambda: self._list_once(path),
+                f"listing {path}",
+            )
 
     def _list_once(self, path: str) -> list[DirEntry]:
         assert self.ftp is not None
@@ -529,6 +574,13 @@ def _merge_file(
     )
 
 
+def _encoding_fallback_warning(configured: str) -> str:
+    return (
+        f"FTP filename encoding {configured!r} could not decode a listing; "
+        f"fell back to {FALLBACK_ENCODING!r}"
+    )
+
+
 def scan_remote(client: FtpClient, cfg: Config) -> RemoteScan:
     if cfg.workers <= 1:
         return _scan_remote_sequential(client, cfg)
@@ -578,6 +630,8 @@ def _scan_remote_sequential(client: FtpClient, cfg: Config) -> RemoteScan:
             _merge_file(files, case_index, case_conflicts, item)
         stack.extend(dirs)
 
+    if client.fallback_used:
+        warnings.append(_encoding_fallback_warning(cfg.encoding))
     if cfg.verbose:
         print(
             f"remote scan done: {dirs_scanned} dirs, {len(files)} files, "
@@ -609,9 +663,11 @@ def _scan_remote_parallel(cfg: Config) -> RemoteScan:
             flush=True,
         )
 
+    state = EncodingState(cfg.encoding)
+
     def worker() -> None:
         nonlocal dirs_scanned
-        client = FtpClient(cfg)
+        client = FtpClient(cfg, state)
         try:
             while not stop.is_set():
                 try:
@@ -686,6 +742,8 @@ def _scan_remote_parallel(cfg: Config) -> RemoteScan:
         for thread in threads:
             thread.join(timeout=10)
 
+    if state.fallback_used:
+        warnings.append(_encoding_fallback_warning(cfg.encoding))
     if cfg.verbose:
         print(
             f"remote scan done: {dirs_scanned} dirs, {len(files)} files, "

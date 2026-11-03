@@ -87,6 +87,11 @@ patch directory, download anything, or write reports.
 - Path traversal is rejected; remote names containing `..`, absolute paths,
   NUL bytes or backslashes are skipped with a warning.
 - Symlinks are not followed or downloaded.
+- The Marcer server sends non-ASCII filenames as ISO-8859-1, not UTF-8. If a
+  listing raises a decode error with the configured encoding, it is retried
+  once with `latin-1` and a warning is added to the report. A full run is not
+  aborted because of one undecodable directory. Set
+  `MARCER_FTP_ENCODING="latin-1"` to skip the retry.
 - Directory listings run in parallel over separate FTP connections
   (`MARCER_SYNC_WORKERS`, default 4). The Marcer server is slow per directory
   (about 3-4 directories/second per connection), so parallel listing is the
@@ -135,7 +140,7 @@ the file is still `new` or `changed` in the current comparison.
 | `MARCER_FTP_HOST` | required | `host` or `host:port` |
 | `MARCER_FTP_USER` / `MARCER_FTP_PASS` | `anonymous` / empty | FTP credentials |
 | `MARCER_FTP_REMOTE` | `/GameDVD/` | remote base directory |
-| `MARCER_FTP_ENCODING` | `utf-8` | FTP filename encoding (the Marcer server uses UTF-8; override only for other servers) |
+| `MARCER_FTP_ENCODING` | `utf-8` | FTP filename encoding. The Marcer server returns non-ASCII names as ISO-8859-1; if a listing cannot be decoded, it is retried once with `latin-1` and a warning is reported. Set `latin-1` to avoid the retry. |
 | `MARCER_FTP_TIMEOUT` | `60` | socket timeout in seconds |
 | `MARCER_FTP_PASSIVE` | `1` | set `0`/`false` to disable passive mode |
 | `MARCER_SYNC_RETRIES` | `3` | retry count per operation |

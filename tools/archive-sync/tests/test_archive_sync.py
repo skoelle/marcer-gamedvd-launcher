@@ -62,6 +62,7 @@ class FakeClient:
         self.contents = contents or {}
         self.fail = set(fail)
         self.closed = False
+        self.fallback_used = False
 
     def list_dir(self, path):
         if path not in self.listings:
@@ -72,6 +73,44 @@ class FakeClient:
         if remote_path in self.fail:
             raise OSError("simulated failure")
         fileobj.write(self.contents[remote_path])
+
+    def close(self):
+        self.closed = True
+
+
+class FakeFtp:
+    instances = []
+
+    def __init__(self):
+        self.encoding = "utf-8"
+        self.closed = False
+        FakeFtp.instances.append(self)
+
+    def connect(self, host, port, timeout=None):
+        pass
+
+    def login(self, user, password):
+        pass
+
+    def set_pasv(self, passive):
+        pass
+
+    def mlsd(self, path):
+        if self.encoding == "utf-8":
+            raise UnicodeDecodeError(
+                "utf-8", b"\xe4", 0, 1, "invalid continuation byte"
+            )
+        return iter(
+            [
+                (
+                    "Auto B\u00f6rse - Mono",
+                    {"type": "dir", "modify": "20260101000000"},
+                )
+            ]
+        )
+
+    def quit(self):
+        self.closed = True
 
     def close(self):
         self.closed = True
@@ -227,7 +266,7 @@ class ScanRemoteTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp:
             cfg = make_config(Path(tmp), workers=2)
-            with mock.patch.object(a, "FtpClient", lambda _cfg: FakeClient(listings)):
+            with mock.patch.object(a, "FtpClient", lambda *_args: FakeClient(listings)):
                 scan = a.scan_remote(None, cfg)
         self.assertEqual(sorted(scan.files), ["A/one.zip", "A/two.zip"])
         self.assertEqual(scan.incomplete, [])
@@ -649,6 +688,70 @@ class ConfigTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"MARCER_PATCH_DIR": "/tmp/p"}, clear=True):
                 with self.assertRaises(a.ConfigError):
                     a.build_config(args)
+
+
+class FtpClientEncodingTests(unittest.TestCase):
+    def setUp(self):
+        FakeFtp.instances = []
+
+    def test_unicode_decode_error_falls_back_to_latin1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp))
+            with mock.patch.object(a, "FTP", FakeFtp):
+                client = a.FtpClient(cfg)
+                entries = client.list_dir("/GameDVD/A")
+        self.assertTrue(client.fallback_used)
+        self.assertEqual(client.encoding, a.FALLBACK_ENCODING)
+        self.assertEqual([entry.name for entry in entries], ["Auto B\u00f6rse - Mono"])
+        self.assertEqual(len(FakeFtp.instances), 2)
+        self.assertEqual(FakeFtp.instances[0].encoding, "utf-8")
+        self.assertEqual(FakeFtp.instances[1].encoding, "latin-1")
+        self.assertTrue(FakeFtp.instances[0].closed)
+
+    def test_latin1_config_does_not_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp), encoding="latin-1")
+            with mock.patch.object(a, "FTP", FakeFtp):
+                client = a.FtpClient(cfg)
+                entries = client.list_dir("/GameDVD/A")
+        self.assertFalse(client.fallback_used)
+        self.assertEqual([entry.name for entry in entries], ["Auto B\u00f6rse - Mono"])
+        self.assertEqual(len(FakeFtp.instances), 1)
+
+    def test_shared_state_reconnects_other_clients(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp))
+            state = a.EncodingState("utf-8")
+            with mock.patch.object(a, "FTP", FakeFtp):
+                client = a.FtpClient(cfg, state)
+                client.connect()
+                self.assertEqual(FakeFtp.instances[0].encoding, "utf-8")
+                self.assertTrue(state.use_fallback())
+                entries = client.list_dir("/GameDVD/A")
+        self.assertEqual([entry.name for entry in entries], ["Auto B\u00f6rse - Mono"])
+        self.assertEqual(len(FakeFtp.instances), 2)
+        self.assertEqual(FakeFtp.instances[1].encoding, "latin-1")
+        self.assertTrue(FakeFtp.instances[0].closed)
+
+    def test_sequential_scan_reports_fallback_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp))
+            client = FakeClient({"/GameDVD/": []})
+            client.fallback_used = True
+            scan = a.scan_remote(client, cfg)
+        self.assertTrue(any("fell back" in item for item in scan.warnings))
+
+    def test_parallel_scan_reports_fallback_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp), workers=2)
+
+            def make_client(_cfg, state):
+                state.use_fallback()
+                return FakeClient({"/GameDVD/": []})
+
+            with mock.patch.object(a, "FtpClient", make_client):
+                scan = a.scan_remote(None, cfg)
+        self.assertTrue(any("fell back" in item for item in scan.warnings))
 
 
 if __name__ == "__main__":

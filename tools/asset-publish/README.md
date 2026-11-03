@@ -52,7 +52,7 @@ MARCER_FTP_HOST="host:2121"
 MARCER_FTP_USER="user"
 MARCER_FTP_PASS="password"
 #MARCER_FTP_ASSETS_REMOTE="/Uploads/MarcerGameDVDLauncher-assets/"
-#MARCER_FTP_ENCODING="utf-8"
+#MARCER_FTP_ENCODING="latin-1"
 ```
 
 `--upload` also needs the authenticated `gh` CLI for `tools/asset-manifest`
@@ -120,7 +120,9 @@ FTP):
 
 The connection uses `MARCER_FTP_HOST` (`host` or `host:port`),
 `MARCER_FTP_USER`/`MARCER_FTP_PASS` (an empty user means `anonymous`) and
-`MARCER_FTP_ENCODING` (default `utf-8`, the encoding used by the Marcer FTP).
+`MARCER_FTP_ENCODING` (default `utf-8`). The Marcer server returns non-ASCII
+names as ISO-8859-1; use `latin-1` for listings with umlauts. Asset archive
+names themselves are ASCII.
 
 Old `<name>.zip.part` files from the earlier rename-based version are left
 untouched. They are harmless: `tools/asset-manifest` only matches
