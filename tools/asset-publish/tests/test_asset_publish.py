@@ -85,6 +85,105 @@ class FakeFTP:
         self.calls.append(("close",))
 
 
+class ScreenshotPublishTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.data = self.root / "Data"
+        self.out = self.root / "Screenshots"
+        self.data.mkdir()
+        self.out.mkdir()
+        (self.out / "index.json").write_text(
+            json.dumps({"version": 1, "entries": {}}), encoding="utf-8"
+        )
+        (self.out / "index-pd.json").write_text(
+            json.dumps({"version": 1, "entries": {}}), encoding="utf-8"
+        )
+        tree = self.out / "Title Sorted" / "Cracked Games - Title Sorted" / "A" / "Alpha"
+        tree.mkdir(parents=True)
+        (tree / "Alpha.png").write_bytes(b"png")
+        (tree / "Alpha_c01.png").write_bytes(b"candidate")
+        (tree / "Alpha.json").write_text("{}", encoding="utf-8")
+        logs = self.out / "logs"
+        logs.mkdir()
+        (logs / "run.log").write_text("log\n", encoding="utf-8")
+        (self.out / "screenshots-20260101-000000.zip").write_bytes(b"old")
+        (self.out / ".marcer-assets.json").write_text("{}", encoding="utf-8")
+        (self.out / "archive-screenshots.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+
+    def env(self):
+        return mock.patch.dict(
+            os.environ,
+            {
+                "MARCER_DATA_DIR": str(self.data),
+                "MARCER_OUT_DIR": str(self.out),
+                "MARCER_STATE_DIR": "",
+                "MARCER_ASSET_OUT_DIR": "",
+            },
+            clear=False,
+        )
+
+    def publish(self, *extra: str) -> tuple[int, dict]:
+        with self.env():
+            code, out, err = run_cli(
+                "publish", "--only", "screenshots", "--json", *extra
+            )
+        self.assertEqual(code, 0, err)
+        return code, json.loads(out)
+
+    def test_screenshot_files_are_selected_and_excluded(self) -> None:
+        names = [entry["relpath"] for entry in ap.collect_entries(
+            self.out, ap.KIND_SCREENSHOTS
+        )]
+        self.assertEqual(
+            names,
+            sorted([
+                "index.json",
+                "index-pd.json",
+                "Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha.png",
+                "Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha_c01.png",
+            ]),
+        )
+
+    def test_cli_creates_screenshot_archive_and_state(self) -> None:
+        _, result = self.publish()
+        self.assertEqual(result["kind"], "screenshots")
+        self.assertEqual(result["status"], "created")
+        archive = Path(result["archive"])
+        self.assertTrue(archive.is_file())
+        self.assertEqual(archive.parent, self.out)
+        self.assertRegex(archive.name, r"^screenshots-\d{8}-\d{6}\.zip$")
+        with zipfile.ZipFile(archive) as zf:
+            self.assertEqual(
+                sorted(zf.namelist()),
+                sorted([
+                    "index.json",
+                    "index-pd.json",
+                    "Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha.png",
+                    "Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha_c01.png",
+                ]),
+            )
+        state = json.loads(
+            (self.data / "state" / "asset-publish" / "state.json").read_text()
+        )
+        self.assertIn("screenshots", state["assets"])
+
+    def test_dry_run_writes_nothing(self) -> None:
+        before = set(self.out.glob("screenshots-*.zip"))
+        with self.env():
+            code, out, err = run_cli(
+                "publish", "--only", "screenshots", "--dry-run", "--json"
+            )
+        self.assertEqual(code, 0, err)
+        result = json.loads(out)
+        self.assertEqual(result["status"], "would-create")
+        self.assertEqual(set(self.out.glob("screenshots-*.zip")), before)
+        self.assertFalse(
+            (self.data / "state" / "asset-publish" / "state.json").exists()
+        )
+
+
 class GameinfoPublishTests(unittest.TestCase):
     def setUp(self) -> None:
         state_env = mock.patch.dict(os.environ, {"MARCER_STATE_DIR": ""}, clear=False)

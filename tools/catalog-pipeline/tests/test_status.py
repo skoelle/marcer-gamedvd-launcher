@@ -77,7 +77,8 @@ class StatusCollectorTest(unittest.TestCase):
         )
         self.assertFalse(result["sync"]["present"])
         self.assertFalse(result["screenshots"]["present"])
-        self.assertEqual(result["publish"]["status"], "missing")
+        self.assertEqual(result["publish"]["gameinfo"]["status"], "missing")
+        self.assertEqual(result["publish"]["screenshots"]["status"], "missing")
         self.assertEqual(collector.runs(), [])
         self.assertEqual(collector.health()["status"], "degraded")
 
@@ -219,8 +220,9 @@ class StatusCollectorTest(unittest.TestCase):
         self.assertTrue(result["crews"]["present"])
         self.assertEqual(result["crews"]["groups"], 2)
 
-        self.assertEqual(result["publish"]["status"], "uploaded")
-        self.assertTrue(result["publish"]["archive_exists"])
+        self.assertEqual(result["publish"]["gameinfo"]["status"], "uploaded")
+        self.assertTrue(result["publish"]["gameinfo"]["archive_exists"])
+        self.assertEqual(result["publish"]["screenshots"]["status"], "missing")
 
         cracked = result["screenshots"]["scopes"]["cracked"]
         self.assertTrue(cracked["present"])
@@ -270,9 +272,21 @@ class StatusCollectorTest(unittest.TestCase):
         self.assertEqual(
             result["pipeline"]["last_run"]["file"], "20261103T180000Z.json"
         )
-        self.assertEqual(result["publish"]["status"], "uploaded")
+        self.assertEqual(result["publish"]["gameinfo"]["status"], "uploaded")
         self.assertEqual(
             result["publish"]["file"]["name"], ".asset-publish-state.json"
+        )
+
+    def test_screenshot_run_active_flag(self) -> None:
+        env, paths = self.make_env()
+        collector = st.StatusCollector(environ=env, repo_root=self.repo)
+        self.assertFalse(
+            collector.collect()["config"]["screenshot_run_active"]
+        )
+        (paths["out"] / "shotgen.lock").write_text("123", encoding="utf-8")
+        collector = st.StatusCollector(environ=env, repo_root=self.repo)
+        self.assertTrue(
+            collector.collect()["config"]["screenshot_run_active"]
         )
 
     def test_pipeline_token_required_flag(self) -> None:
@@ -386,14 +400,40 @@ class StatusCollectorTest(unittest.TestCase):
             },
         )
         collector = st.StatusCollector(environ=env, repo_root=self.repo)
-        self.assertEqual(collector.collect()["publish"]["status"], "dirty")
+        self.assertEqual(
+            collector.collect()["publish"]["gameinfo"]["status"], "dirty"
+        )
 
         write_json(
             state_file,
             {"assets": {"gameinfo": {"archive": "gameinfo-x.zip", "uploaded": False}}},
         )
         collector = st.StatusCollector(environ=env, repo_root=self.repo)
-        self.assertEqual(collector.collect()["publish"]["status"], "pending")
+        self.assertEqual(
+            collector.collect()["publish"]["gameinfo"]["status"], "pending"
+        )
+
+    def test_publish_reports_screenshots_asset(self) -> None:
+        env, paths = self.make_env()
+        archive = paths["out"] / "screenshots-20260101-000000.zip"
+        archive.write_bytes(b"zip")
+        write_json(
+            paths["state"] / "asset-publish" / "state.json",
+            {
+                "assets": {
+                    "screenshots": {
+                        "archive": archive.name,
+                        "uploaded": True,
+                        "manifest_dirty": False,
+                    }
+                }
+            },
+        )
+        collector = st.StatusCollector(environ=env, repo_root=self.repo)
+        publish = collector.collect()["publish"]
+        self.assertEqual(publish["gameinfo"]["status"], "missing")
+        self.assertEqual(publish["screenshots"]["status"], "uploaded")
+        self.assertTrue(publish["screenshots"]["archive_exists"])
 
     def test_output_file_rejects_traversal(self) -> None:
         self.assertIsNone(st._output_file(Path("/tmp/out"), "../escape.zip", "a.png"))

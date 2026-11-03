@@ -39,7 +39,7 @@ LOCK_HARD_STALE_SECONDS = 24 * 3600
 CANCEL_GRACE_SECONDS = 10
 HEARTBEAT_SECONDS = 5
 STAGE_RE = re.compile(r"==>\s+(.+?)\s*$")
-MODES = ("full", "dry-run")
+MODES = ("full", "dry-run", "screenshots")
 
 
 class JobError(Exception):
@@ -206,7 +206,7 @@ class JobManager:
                 "mode": mode,
                 "source": source,
                 "status": "running",
-                "stage": "starting",
+                "stage": "screenshots" if mode == "screenshots" else "starting",
                 "started_at": iso_now(),
                 "started_epoch": time.time(),
                 "finished_at": "",
@@ -371,6 +371,21 @@ class JobManager:
     # -- command / process -------------------------------------------------
 
     def _default_command(self, mode: str, options: dict) -> list[str]:
+        if mode == "screenshots":
+            return [
+                sys.executable,
+                str(
+                    self.repo_root
+                    / "tools"
+                    / "asset-publish"
+                    / "asset_publish.py"
+                ),
+                "publish",
+                "--only",
+                "screenshots",
+                "--upload",
+                "--json",
+            ]
         argv = [
             sys.executable,
             str(self.repo_root / "tools" / "catalog-update" / "catalog_update.py"),
@@ -474,7 +489,11 @@ class JobManager:
                 finished_at=iso_now(),
                 exit_code=returncode,
                 error=error,
-                report_file=self._newest_report(job.get("started_epoch")),
+                report_file=(
+                    self._newest_report(job.get("started_epoch"))
+                    if job.get("mode") == "full"
+                    else None
+                ),
                 heartbeat_epoch=time.time(),
             )
             job.pop("cancelling", None)

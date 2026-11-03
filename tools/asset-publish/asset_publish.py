@@ -4,20 +4,22 @@
 """Marcer GameDVD catalog asset publisher.
 
 Packages the catalog data directories into deterministic ZIP archives for the
-desktop app and the ``catalog-latest`` release pointer.  This stage implements
-the **gameinfo** asset: local packaging, optional FTP upload and the automatic
-``latest.json`` pointer update.  Screenshot packaging follows later.
+desktop app and the ``catalog-latest`` release pointer.  Supported kinds are
+**gameinfo** and **screenshots**, with local packaging, optional FTP upload and
+the automatic ``latest.json`` pointer update.
 
 Usage::
 
     run.sh publish --only gameinfo              # local ZIP only
     run.sh publish --only gameinfo --upload     # ZIP + FTP upload + latest.json
+    run.sh publish --only screenshots --upload  # screenshot ZIP + upload
     run.sh publish --only gameinfo --dry-run
     run.sh publish --only gameinfo --force
 
-The source is ``<MARCER_DATA_DIR>/gameinfo``.  The ZIP is written to
-``MARCER_ASSET_OUT_DIR`` (default: ``MARCER_DATA_DIR`` itself, next to the
-``gameinfo/`` directory) as ``gameinfo-<yyyyMMdd-HHmmss>.zip``.
+The gameinfo source is ``<MARCER_DATA_DIR>/gameinfo``; the ZIP is written to
+``MARCER_ASSET_OUT_DIR`` (default: ``MARCER_DATA_DIR``) as
+``gameinfo-<yyyyMMdd-HHmmss>.zip``. The screenshots source and output are
+``MARCER_OUT_DIR``; the ZIP is ``screenshots-<yyyyMMdd-HHmmss>.zip``.
 
 An unchanged content signature (sorted ``relpath,size,sha256`` list) skips the
 packaging step unless ``--force`` is given.  The signature plus the upload and
@@ -64,15 +66,16 @@ TOOL_VERSION = "0.2.0"
 STATE_SCHEMA = 1
 
 KIND_GAMEINFO = "gameinfo"
-KINDS = (KIND_GAMEINFO,)
+KIND_SCREENSHOTS = "screenshots"
+KINDS = (KIND_GAMEINFO, KIND_SCREENSHOTS)
 
 DEFAULT_ASSETS_REMOTE = "/Uploads/MarcerGameDVDLauncher-assets/"
 FTP_TIMEOUT = 60
 FTP_BLOCKSIZE = 1024 * 1024
 
-# Only these files are published.  Everything else (backups, markers, temp
-# files, legacy archives) is ignored by design.
-INCLUDE_PATTERNS = (
+# Only these gameinfo files are published.  Everything else (backups,
+# markers, temp files, legacy archives) is ignored by design.
+GAMEINFO_INCLUDE_PATTERNS = (
     "games-*.json",
     "manifest.json",
     "crews.json",
@@ -81,6 +84,16 @@ INCLUDE_PATTERNS = (
     "unmatched-report.txt",
     "full-index.json.gz",
 )
+SCREENSHOT_INDEX_FILES = frozenset(
+    {
+        "index.json",
+        "index-pd.json",
+        "index-utils.json",
+        "index-magazine.json",
+        "index-falcon.json",
+    }
+)
+SCREENSHOT_EXCLUDE_DIRS = frozenset({"logs", "@eadir", "__macosx"})
 
 # Fixed timestamp inside the ZIP so identical content produces identical
 # bytes regardless of when the archive was built.
@@ -118,36 +131,75 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def is_included(rel: PurePosixPath) -> bool:
-    if any(part.startswith(".") for part in rel.parts):
-        return False
-    if "__MACOSX" in rel.parts:
-        return False
-    return any(fnmatch.fnmatch(rel.name, pattern) for pattern in INCLUDE_PATTERNS)
+def _is_hidden_or_system(rel: PurePosixPath) -> bool:
+    return any(
+        part.startswith(".") or part.casefold() in {"@eadir", "__macosx"}
+        for part in rel.parts
+    )
 
 
-def collect_entries(source: Path) -> list[dict]:
+def is_gameinfo_included(rel: PurePosixPath) -> bool:
+    if _is_hidden_or_system(rel):
+        return False
+    return any(
+        fnmatch.fnmatch(rel.name, pattern)
+        for pattern in GAMEINFO_INCLUDE_PATTERNS
+    )
+
+
+def is_screenshot_included(rel: PurePosixPath) -> bool:
+    if _is_hidden_or_system(rel):
+        return False
+    if any(part.casefold() in SCREENSHOT_EXCLUDE_DIRS for part in rel.parts):
+        return False
+    if len(rel.parts) == 1 and rel.as_posix() in SCREENSHOT_INDEX_FILES:
+        return True
+    return rel.suffix.lower() == ".png"
+
+
+def is_included(rel: PurePosixPath, kind: str = KIND_GAMEINFO) -> bool:
+    if kind == KIND_SCREENSHOTS:
+        return is_screenshot_included(rel)
+    return is_gameinfo_included(rel)
+
+
+def _skip_dir(name: str, kind: str) -> bool:
+    folded = name.casefold()
+    if name.startswith(".") or folded in {"@eadir", "__macosx"}:
+        return True
+    return kind == KIND_SCREENSHOTS and folded == "logs"
+
+
+def collect_entries(
+    source: Path, kind: str = KIND_GAMEINFO
+) -> list[dict]:
+    label = "gameinfo" if kind == KIND_GAMEINFO else "screenshots"
     if not source.is_dir():
-        raise PublishError(f"gameinfo source directory not found: {source}")
+        raise PublishError(f"{label} source directory not found: {source}")
 
     entries: list[dict] = []
-    for path in source.rglob("*"):
-        if not path.is_file():
-            continue
-        rel = PurePosixPath(path.relative_to(source).as_posix())
-        if not is_included(rel):
-            continue
-        entries.append(
-            {
-                "path": path,
-                "relpath": rel.as_posix(),
-                "size": path.stat().st_size,
-                "sha256": sha256_file(path),
-            }
-        )
+    for root, dirnames, filenames in os.walk(source):
+        dirnames[:] = [
+            name for name in dirnames if not _skip_dir(name, kind)
+        ]
+        for name in filenames:
+            path = Path(root) / name
+            if not path.is_file():
+                continue
+            rel = PurePosixPath(path.relative_to(source).as_posix())
+            if not is_included(rel, kind):
+                continue
+            entries.append(
+                {
+                    "path": path,
+                    "relpath": rel.as_posix(),
+                    "size": path.stat().st_size,
+                    "sha256": sha256_file(path),
+                }
+            )
     entries.sort(key=lambda item: item["relpath"])
     if not entries:
-        raise PublishError(f"no publishable files found in {source}")
+        raise PublishError(f"no publishable {label} files found in {source}")
     return entries
 
 
@@ -196,17 +248,25 @@ def unique_archive_path(output_dir: Path, kind: str) -> Path:
         time.sleep(1)
 
 
-def write_archive(output_dir: Path, kind: str, entries: list[dict]) -> Path:
+def write_archive(
+    output_dir: Path, kind: str, entries: list[dict]
+) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     target = unique_archive_path(output_dir, kind)
     tmp = target.with_name(f".{target.name}.{os.getpid()}.part")
+    compression = (
+        zipfile.ZIP_STORED
+        if kind == KIND_SCREENSHOTS
+        else zipfile.ZIP_DEFLATED
+    )
+    kwargs = {"compression": compression}
+    if compression == zipfile.ZIP_DEFLATED:
+        kwargs["compresslevel"] = 9
     try:
-        with zipfile.ZipFile(
-            tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
-        ) as archive:
+        with zipfile.ZipFile(tmp, "w", **kwargs) as archive:
             for entry in entries:
                 info = zipfile.ZipInfo(entry["relpath"], date_time=ZIP_TIMESTAMP)
-                info.compress_type = zipfile.ZIP_DEFLATED
+                info.compress_type = compression
                 info.external_attr = ZIP_MODE << 16
                 with entry["path"].open("rb") as src, archive.open(info, "w") as dst:
                     shutil.copyfileobj(src, dst)
@@ -356,7 +416,9 @@ def run_asset_manifest() -> None:
 
 
 
-def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
+def resolve_paths(
+    args: argparse.Namespace, kind: str
+) -> tuple[Path, Path, Path, Path]:
     data_dir_arg = args.data_dir or env("MARCER_DATA_DIR")
     if not data_dir_arg:
         raise PublishError(
@@ -364,14 +426,30 @@ def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
         )
     data_dir = Path(data_dir_arg).expanduser()
 
-    source = Path(args.source).expanduser() if args.source else data_dir / KIND_GAMEINFO
-
-    if args.output_dir:
-        output_dir = Path(args.output_dir).expanduser()
-    elif env("MARCER_ASSET_OUT_DIR"):
-        output_dir = Path(env("MARCER_ASSET_OUT_DIR")).expanduser()
+    if kind == KIND_SCREENSHOTS:
+        out_value = args.source or env("MARCER_OUT_DIR")
+        if not out_value:
+            raise PublishError(
+                "MARCER_OUT_DIR is not set (add it to local/paths.env or pass --source)"
+            )
+        source = Path(out_value).expanduser()
+        output_dir = (
+            Path(args.output_dir).expanduser()
+            if args.output_dir
+            else source
+        )
     else:
-        output_dir = data_dir
+        source = (
+            Path(args.source).expanduser()
+            if args.source
+            else data_dir / KIND_GAMEINFO
+        )
+        if args.output_dir:
+            output_dir = Path(args.output_dir).expanduser()
+        elif env("MARCER_ASSET_OUT_DIR"):
+            output_dir = Path(env("MARCER_ASSET_OUT_DIR")).expanduser()
+        else:
+            output_dir = data_dir
 
     if args.state_file:
         state_file = Path(args.state_file).expanduser()
@@ -388,10 +466,10 @@ def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
 
 def publish(args: argparse.Namespace) -> int:
     kind = args.only
-    source, output_dir, state_file, data_dir = resolve_paths(args)
+    source, output_dir, state_file, data_dir = resolve_paths(args, kind)
     ftp = ftp_settings() if args.upload else {}
 
-    entries = collect_entries(source)
+    entries = collect_entries(source, kind)
     signature = content_signature(entries)
     state = load_state(state_file)
     if not state:
@@ -664,7 +742,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     pub = sub.add_parser(
-        "publish", help="package catalog assets (currently gameinfo only)"
+        "publish", help="package catalog assets (gameinfo or screenshots)"
     )
     pub.add_argument(
         "--only",
@@ -673,10 +751,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="asset kind to publish (default: gameinfo)",
     )
     pub.add_argument("--data-dir", help="override MARCER_DATA_DIR")
-    pub.add_argument("--source", help="override the gameinfo source directory")
+    pub.add_argument(
+        "--source",
+        help="override the source directory (gameinfo or screenshots)",
+    )
     pub.add_argument(
         "--output-dir",
-        help="override MARCER_ASSET_OUT_DIR (default: MARCER_DATA_DIR)",
+        help="override the archive output directory",
     )
     pub.add_argument("--state-file", help="override the signature state file")
     pub.add_argument(

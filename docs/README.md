@@ -36,7 +36,7 @@ Rules:
 
 | File | What it covers |
 |---|---|
-| [`PLAN-docker-pipeline.md`](plans/PLAN-docker-pipeline.md) | Server automation: status web UI with manual job control, e-mail notification for sync changes, the weekly Thursday scheduler, archive sync, gameinfo/full-index/crews, asset packaging/upload and the `latest.json` pointer. Pipeline and gallery run as separate containers from one image; the remaining work is screenshot publishing, while screenshot generation stays on the dev machine. |
+| [`PLAN-docker-pipeline.md`](plans/PLAN-docker-pipeline.md) | Server automation: status web UI with manual job control, e-mail notification for sync changes, the weekly Thursday scheduler, archive sync, gameinfo/full-index/crews, asset packaging/upload, screenshot publishing and the `latest.json` pointer. Pipeline and gallery run as separate containers from one image; screenshot generation stays on the dev machine. |
 
 ## Specs
 

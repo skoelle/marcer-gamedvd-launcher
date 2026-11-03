@@ -20,6 +20,7 @@ const els = {
   updated: document.getElementById("updated"),
   startFull: document.getElementById("start-full"),
   startDry: document.getElementById("start-dry"),
+  publishScreenshots: document.getElementById("publish-screenshots"),
   cancelJob: document.getElementById("cancel-job"),
   tokenField: document.getElementById("token-field"),
   token: document.getElementById("token"),
@@ -34,6 +35,7 @@ let refreshTimer = null;
 let refreshInFlight = false;
 let currentJob = null;
 let bannerSource = "";
+let screenshotRunActive = false;
 
 function esc(value) {
   return String(value ?? "")
@@ -181,17 +183,22 @@ function renderCrews(crews) {
 }
 
 function renderPublish(publish) {
-  const status = publish.status || "missing";
-  const body = kv([
-    ["archive", publish.archive || "–"],
-    ["size", fmtBytes(publish.size)],
-    ["uploaded", publish.uploaded ? "yes" : "no"],
-    ["manifest dirty", publish.manifest_dirty ? "yes" : "no"],
-    ["updated", fmtTime(publish.updated_at)],
-  ]) + (publish.archive_exists === false
-    ? listWarnings(["archive is recorded but not present locally"])
-    : "");
-  return card("Publish", body, badge(status, statusKind(status)));
+  const assetBlock = (name) => {
+    const item = (publish && publish[name]) || {};
+    const status = item.status || "missing";
+    return `<div class="kv" style="margin-top:6px">
+      <span>${esc(name)} ${badge(status, statusKind(status))}</span>
+      <span>archive <b>${esc(item.archive || "–")}</b></span>
+      <span>size <b>${fmtBytes(item.size)}</b></span>
+      <span>uploaded <b>${item.uploaded ? "yes" : "no"}</b></span>
+      <span>dirty <b>${item.manifest_dirty ? "yes" : "no"}</b></span>
+    </div>` + (item.archive_exists === false
+      ? listWarnings([`${name}: archive recorded but not present locally`])
+      : "");
+  };
+  const body = assetBlock("gameinfo") + assetBlock("screenshots")
+    + (publish && publish.error ? listWarnings([publish.error]) : "");
+  return card("Publish", body, badge("assets", ""));
 }
 
 function renderScreenshots(shots) {
@@ -245,6 +252,7 @@ function renderStorage(storage) {
 
 function renderConfig(config, scheduler) {
   const warnings = [...(config.missing || []).map((item) => `${item} is not set`), ...(config.warnings || [])];
+  const shotActive = !!config.screenshot_run_active;
   const stateLabel = config.state_source === "env"
     ? "MARCER_STATE_DIR"
     : config.state_source === "data"
@@ -270,6 +278,7 @@ function renderConfig(config, scheduler) {
       <span class="chip${config.github_configured ? "" : " warn"}">GitHub token <b>${config.github_configured ? "configured" : "missing"}</b></span>
       <span class="chip${config.state_source === "missing" ? " warn" : ""}">state dir <b>${stateLabel}</b></span>
       <span class="chip${schedKind === "bad" ? " bad" : schedKind === "warn" ? " warn" : ""}">scheduler <b>${esc(schedStatus)}</b></span>
+      <span class="chip${shotActive ? " warn" : ""}">screenshot lock <b>${shotActive ? "active" : "clear"}</b></span>
     </div>` + schedBody + listWarnings(warnings);
   return card("Configuration", body, badge(warnings.length ? "warnings" : "ok",
     warnings.length ? "warn" : "ok"));
@@ -430,6 +439,10 @@ function renderJob(job) {
   const running = !!job && ["running", "cancelling"].includes(job.status);
   els.startFull.disabled = running;
   els.startDry.disabled = running;
+  els.publishScreenshots.disabled = running || screenshotRunActive;
+  els.publishScreenshots.title = screenshotRunActive
+    ? "Screenshot generation is running (shotgen.lock present)"
+    : "Package and upload the current screenshots";
   els.cancelJob.hidden = !running;
   if (!job) {
     els.jobPanel.hidden = true;
@@ -449,6 +462,28 @@ function renderJob(job) {
   refreshJobLog(job.id);
 }
 
+async function publishScreenshots() {
+  if (!window.confirm(
+    "Package and upload the current screenshots now?"
+  )) {
+    return;
+  }
+  setBanner("");
+  setHint("Starting screenshot publishing…");
+  els.publishScreenshots.disabled = true;
+  try {
+    const data = await postJson("/api/hook/screenshots", {});
+    setHint(`Screenshot job ${data.job.id} started.`);
+    await refresh();
+  } catch (error) {
+    setHint("");
+    if (!handleAuthError(error)) {
+      setBanner(`Cannot publish screenshots: ${error.message}`, "action");
+    }
+    els.publishScreenshots.disabled = screenshotRunActive;
+  }
+}
+
 async function startJob(mode) {
   const label = mode === "dry-run" ? "Dry run" : "Full catalog update";
   if (mode !== "dry-run" && !window.confirm(
@@ -460,6 +495,7 @@ async function startJob(mode) {
   setHint(`Starting ${label}…`);
   els.startFull.disabled = true;
   els.startDry.disabled = true;
+  els.publishScreenshots.disabled = true;
   try {
     const data = await postJson("/api/run", { mode });
     setHint(`Job ${data.job.id} started.`);
@@ -471,6 +507,7 @@ async function startJob(mode) {
     }
     els.startFull.disabled = false;
     els.startDry.disabled = false;
+    els.publishScreenshots.disabled = screenshotRunActive;
   }
 }
 
@@ -504,6 +541,7 @@ function render(status, runs, jobsPayload) {
   els.version.textContent = `v${status.tool_version || "?"}`;
   els.updated.textContent = `updated ${new Date().toLocaleTimeString()}`;
   updateTokenField(!!(status.config && status.config.pipeline_token_required));
+  screenshotRunActive = !!(status.config && status.config.screenshot_run_active);
   els.cards.innerHTML = [
     renderSync(status.sync || {}),
     `<div class="card-stack">
@@ -556,6 +594,7 @@ els.token.value = getToken();
 els.token.addEventListener("input", saveToken);
 els.startFull.addEventListener("click", () => startJob("full"));
 els.startDry.addEventListener("click", () => startJob("dry-run"));
+els.publishScreenshots.addEventListener("click", publishScreenshots);
 els.cancelJob.addEventListener("click", cancelCurrentJob);
 
 document.addEventListener("visibilitychange", () => {

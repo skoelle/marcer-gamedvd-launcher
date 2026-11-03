@@ -40,6 +40,11 @@ def env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+def screenshot_generation_active() -> bool:
+    out_dir = env("MARCER_OUT_DIR")
+    return bool(out_dir) and (Path(out_dir) / "shotgen.lock").is_file()
+
+
 def json_bytes(payload: dict | list) -> bytes:
     return (
         json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
@@ -96,12 +101,43 @@ class StatusHandler(BaseHTTPRequestHandler):
             if body is None:
                 return
             mode = str(body.get("mode") or "full")
+            if mode == "screenshots" and screenshot_generation_active():
+                self._send_json(
+                    {
+                        "error": "screenshot generation is running "
+                        "(shotgen.lock present)"
+                    },
+                    status=409,
+                )
+                return
             try:
                 job = self.server.manager.start(mode, body)
             except BusyError as exc:
                 self._send_json({"error": str(exc)}, status=409)
             except InvalidJobError as exc:
                 self._send_json({"error": str(exc)}, status=400)
+            except JobError as exc:
+                self._send_json({"error": str(exc)}, status=500)
+            else:
+                self._send_json({"job": job}, status=202)
+        elif path == "/api/hook/screenshots":
+            if self._read_json_body(allow_empty=True) is None:
+                return
+            if screenshot_generation_active():
+                self._send_json(
+                    {
+                        "error": "screenshot generation is running "
+                        "(shotgen.lock present)"
+                    },
+                    status=409,
+                )
+                return
+            try:
+                job = self.server.manager.start(
+                    "screenshots", {"source": "hook"}
+                )
+            except BusyError as exc:
+                self._send_json({"error": str(exc)}, status=409)
             except JobError as exc:
                 self._send_json({"error": str(exc)}, status=500)
             else:

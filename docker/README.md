@@ -71,6 +71,13 @@ The pipeline service runs the weekly scheduler in-process:
 - Manual runs do not move the schedule
 - Output uses the normal job runner and e-mail notification
 
+## Screenshots
+
+The **Publish screenshots** button (or `POST /api/hook/screenshots`) packages
+`MARCER_OUT_DIR` as `screenshots-<timestamp>.zip`, uploads it and updates
+`latest.json`. It refuses to start while `shotgen.lock` exists and uses the
+same job lock as catalog updates.
+
 ## E-mail notification
 
 A successful full run with at least one `new` or `changed` sync file sends one

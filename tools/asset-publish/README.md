@@ -3,12 +3,13 @@
 Packages the Marcer GameDVD catalog data into deterministic ZIP archives for
 the desktop app and the `catalog-latest` release pointer.
 
-The current stage implements the **gameinfo** asset: local packaging, optional
-FTP upload and the automatic `latest.json` update. Screenshot packaging follows
-in later pipeline phases; see
-[`docs/plans/PLAN-docker-pipeline.md`](../../docs/plans/PLAN-docker-pipeline.md).
+It supports two asset kinds: **gameinfo** and **screenshots**. Both use local
+deterministic packaging, optional FTP upload and the automatic `latest.json`
+update.
 
 ## What it does
+
+### gameinfo
 
 1. Reads `<MARCER_DATA_DIR>/gameinfo`.
 2. Selects only the published files:
@@ -20,18 +21,31 @@ in later pipeline phases; see
    - `unmatched-report.txt`
 3. Ignores everything else: `.marcer-assets.json`, `*.bak-*`, `*.tmp`,
    `*.part`, hidden files, `__MACOSX`, legacy ZIPs.
+
+### screenshots
+
+1. Reads `MARCER_OUT_DIR`.
+2. Selects the five root index files (`index.json`, `index-pd.json`,
+   `index-utils.json`, `index-magazine.json`, `index-falcon.json`) and every
+   `.png` below it.
+3. Excludes `logs/`, `@eaDir`, `__MACOSX`, hidden files/directories, sidecar
+   JSON, old `screenshots-*.zip`/`.7z` archives and the helper shell script.
+
+### Both kinds
+
 4. Builds a content signature from the sorted
    `(relpath, size, sha256)` list.
 5. If the signature matches the state file and the recorded archive still
    exists, the run is a **skip** (use `--force` to repack).
-6. Otherwise writes `gameinfo-<yyyyMMdd-HHmmss>.zip` into the output directory
+6. Otherwise writes `<kind>-<yyyyMMdd-HHmmss>.zip` into the output directory
    and records the new signature.
 7. With `--upload` only: uploads the archive via FTP and then runs
    `tools/asset-manifest` so `latest.json` points at the new archive.
 
 The ZIP is deterministic: entries are sorted, paths are POSIX and every entry
 uses the fixed timestamp `1980-01-01 00:00:00`, so identical content produces
-identical bytes.
+identical bytes. Screenshot archives are stored without extra deflate
+compression (PNGs are already compressed); gameinfo archives use deflate.
 
 The archive is written to a temporary `.part` file and moved into place with
 `os.replace`, so readers never see a half-written ZIP.
@@ -64,13 +78,15 @@ by the Docker pipeline).
 ```sh
 # Local ZIP only (no network)
 tools/asset-publish/run.sh publish --only gameinfo
+tools/asset-publish/run.sh publish --only screenshots
 
 # ZIP + FTP upload + latest.json
 tools/asset-publish/run.sh publish --only gameinfo --upload
+tools/asset-publish/run.sh publish --only screenshots --upload
 
 # Preview both modes without writing or connecting
 tools/asset-publish/run.sh publish --only gameinfo --dry-run
-tools/asset-publish/run.sh publish --only gameinfo --upload --dry-run
+tools/asset-publish/run.sh publish --only screenshots --upload --dry-run
 
 # Repack and re-upload even when the content signature is unchanged
 tools/asset-publish/run.sh publish --only gameinfo --upload --force
@@ -80,25 +96,25 @@ Useful options:
 
 | Option | Meaning |
 |---|---|
-| `--only gameinfo` | asset kind (currently the only one) |
+| `--only gameinfo\|screenshots` | asset kind |
 | `--upload` | upload to `MARCER_FTP_ASSETS_REMOTE` and update `latest.json` |
 | `--dry-run` | print `would-*` actions, write/connect nothing |
 | `--force` | pack (and upload) even when the signature is unchanged |
 | `--json` | machine-readable result (status, archive, signature, size, sha256, upload state) |
 | `--data-dir PATH` | override `MARCER_DATA_DIR` |
-| `--source PATH` | override `<MARCER_DATA_DIR>/gameinfo` |
-| `--output-dir PATH` | override `MARCER_ASSET_OUT_DIR` |
+| `--source PATH` | override the source directory |
+| `--output-dir PATH` | override the archive output directory |
 | `--state-file PATH` | override the signature state file |
 
 ## Paths
 
-| Thing | Default |
-|---|---|
-| Source | `<MARCER_DATA_DIR>/gameinfo` |
-| ZIP output | `MARCER_ASSET_OUT_DIR`, else `MARCER_DATA_DIR` |
-| Name | `gameinfo-<yyyyMMdd-HHmmss>.zip` (local time) |
-| State | `MARCER_STATE_DIR/asset-publish/state.json`; default `MARCER_STATE_DIR` is `<MARCER_DATA_DIR>/state` |
-| FTP target | `MARCER_FTP_ASSETS_REMOTE`, else `/Uploads/MarcerGameDVDLauncher-assets/` |
+| Thing | gameinfo | screenshots |
+|---|---|---|
+| Source | `<MARCER_DATA_DIR>/gameinfo` | `MARCER_OUT_DIR` |
+| ZIP output | `MARCER_ASSET_OUT_DIR`, else `MARCER_DATA_DIR` | `MARCER_OUT_DIR` |
+| Name | `gameinfo-<yyyyMMdd-HHmmss>.zip` | `screenshots-<yyyyMMdd-HHmmss>.zip` |
+| State | `MARCER_STATE_DIR/asset-publish/state.json` | same file, separate `assets.screenshots` entry |
+| FTP target | `MARCER_FTP_ASSETS_REMOTE` | same |
 
 The state file holds the content signature, the archive name/size/SHA-256 and
 the upload/manifest state. It is written atomically and ignored by the packer

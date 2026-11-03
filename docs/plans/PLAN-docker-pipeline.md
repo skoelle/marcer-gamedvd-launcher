@@ -1,18 +1,19 @@
 # Plan: Katalog-Pipeline, Web-Interface und Docker-Betrieb
 
-- **Status:** Entwurf
+- **Status:** umgesetzt
 - **Stand:** 2026-11-03
 - **Ziel:** Ein dauerhaft laufender Docker-Container übernimmt FTP-Sync,
   Katalogaufbereitung und Veröffentlichung. Ein Web-Interface zeigt den
   aktuellen Zustand und löst Läufe manuell aus. Ein Scheduler startet den
   Sync wöchentlich am **Donnerstagabend**. Die Gallery läuft als eigener
-  Service aus demselben Image.
+  Service aus demselben Image. Screenshots werden separat über Button/Hook
+  veröffentlicht.
 
 Die vorhandenen Bausteine `tools/archive-sync`, `tools/catalog-update`,
 `tools/gameinfo-gen`, `tools/full-index-gen`, `tools/crew-analysis`,
 `tools/asset-publish` und `tools/asset-manifest` bilden die Grundlage.
-Dieser Plan beschreibt, was für Web-Interface, Aktionen, Docker, Scheduler
-und die spätere Screenshot-Veröffentlichung noch fehlt.
+Dieses Dokument beschreibt die umgesetzte Architektur, Konfiguration und
+Betriebsregeln der Pipeline.
 
 ---
 
@@ -22,7 +23,7 @@ und die spätere Screenshot-Veröffentlichung noch fehlt.
 |---|---|
 | Reihenfolge | Zuerst das lesende Web-Interface, danach Aktionen, Docker, Scheduler, Screenshots |
 | Status-Umfang (read-only UI) | Auch Screenshot-Index **nur lesend** anzeigen (Counts, pending, Alter, Größe) |
-| Screenshot-Aktionen | Erst später als eigener Button; kein Bestandteil des ersten Schritts |
+| Screenshot-Aktionen | Eigener Button/Hook; nicht Teil des automatischen Syncs |
 | Screenshot-Auslöser | Nach einem automatischen Sync bzw. separat über den Dev-Hook |
 | `MARCER_OUT_DIR` | Ist im Docker-Container gemountet und lesbar |
 | Scheduler | Wöchentlich Donnerstag, Default `20:00`, Zeitzone `Europe/Berlin` |
@@ -34,7 +35,7 @@ und die spätere Screenshot-Veröffentlichung noch fehlt.
 ### Nicht-Ziele
 
 - Keine Screenshot-Erzeugung (Hatari/Xvfb) im Container.
-- Keine Screenshot-Paketierung oder -Upload vor Phase 5.
+- Screenshot-Paketierung/Upload nur über den separaten Button/Hook, nicht im automatischen Sync.
 - Kein Löschen, Pruning oder Rename-Erkennung in Root/Patch.
 - Kein öffentlicher Betrieb des Pipeline-UI ohne Reverse Proxy.
 
@@ -85,7 +86,7 @@ freigegebener Pfad über einen Reverse Proxy veröffentlicht.
 |---|---|---|---|
 | `HOST_ROOT_DIR` | `/data/root` | `ro` | `ro` |
 | `HOST_PATCH_DIR` | `/data/patch` | `rw` | `ro` |
-| `HOST_OUT_DIR` | `/data/out` | `rw` (Phase 5) / `ro` (vorher) | `ro` |
+| `HOST_OUT_DIR` | `/data/out` | `rw` (Screenshot-Publish) | `ro` |
 | `HOST_DATA_DIR` | `/data/data` | `rw` | `ro` |
 | `${HOST_DATA_DIR}/state` | `/state` | `rw` | – |
 
@@ -93,47 +94,18 @@ freigegebener Pfad über einen Reverse Proxy veröffentlicht.
 
 ## 3. Phasen
 
-Phase 1 (read-only Status-Web-Interface), Phase 2 (Aktionen, Job-Runner und
-Sperren) und Phase 3 (Docker, Compose und GHCR) sind in
-[`tools/catalog-pipeline`](../../tools/catalog-pipeline/README.md) bzw.
-[`docker/`](../../docker/README.md) umgesetzt. Die E-Mail-Benachrichtigung bei
-Sync-Änderungen ist in `tools/catalog-pipeline/notify.py` umgesetzt. Der
-wöchentliche Scheduler ist in `tools/catalog-pipeline/scheduler.py` umgesetzt
-(Donnerstag 20:00 Europe/Berlin, Catch-up-Fenster und persistenter State).
+Alle geplanten Phasen sind umgesetzt:
 
-Offen ist die Screenshot-Veröffentlichung.
+- Status-Web-Interface, manuelle Jobs und Locking
+  ([`tools/catalog-pipeline`](../../tools/catalog-pipeline/README.md))
+- Docker/Compose/GHCR ([`docker/`](../../docker/README.md))
+- E-Mail-Benachrichtigung (`tools/catalog-pipeline/notify.py`)
+- Wöchentlicher Scheduler (`tools/catalog-pipeline/scheduler.py`)
+- Screenshot-Paketierung/Upload (`tools/asset-publish --only screenshots`)
+  und `POST /api/hook/screenshots` bzw. der UI-Button
 
-### Phase 5 – Screenshots veröffentlichen (später)
-
-Ziel: Screenshots werden getrennt vom automatischen Sync veröffentlicht –
-über einen eigenen Button bzw. den Dev-Hook nach einem Screenshot-Lauf.
-
-#### Voraussetzungen
-
-- `tools/asset-publish --only screenshots` implementieren:
-  - Quelle `MARCER_OUT_DIR`
-  - Excludes wie beim bisherigen Screenshot-Archiv (`logs/`, alte ZIPs,
-    Sidecar-JSON, `@eaDir`, `.DS_Store`, …)
-  - `index*.json` und PNGs aufnehmen
-  - deterministisches ZIP, Signatur, Skip bei unverändertem Inhalt
-  - FTP-Upload und `latest.json` über `asset-manifest`
-- `POST /api/hook/screenshots` im Pipeline-Service
-- Prüfung auf einen aktiven `shotgen.lock` eines Dev-Laufs
-
-#### Ablauf
-
-1. Automatischer Sync läuft wie gewohnt ohne Screenshots.
-2. Nach dem Sync kann der Screenshot-Button manuell ausgelöst werden.
-3. Alternativ ruft der Dev-Rechner nach `shotgen run` den Hook auf.
-4. Nur bei inhaltlicher Änderung wird gepackt und hochgeladen.
-5. `latest.json` wird nur nach erfolgreichem Upload aktualisiert.
-
-#### Akzeptanz Phase 5
-
-- Unveränderte Screenshots erzeugen weder ZIP noch Upload
-- Hook liefert bei laufendem `shotgen.lock` einen sauberen Busy-Fehler
-- Screenshot-Lauf ist im Status und in der Run-Historie sichtbar
-- Der automatische Sync packt weiterhin keine Screenshots
+Es sind keine Pipeline-Entwicklungsphasen mehr offen. Offene Betriebs- und
+Verifikationspunkte stehen in Abschnitt 5.
 
 ---
 
@@ -222,6 +194,6 @@ im Repository.
 
 ## 6. Definition of Done
 
-- Phase 5: Screenshot-Veröffentlichung läuft separat über Button/Hook, ohne
-  den automatischen Sync zu verändern.
+- Screenshot-Veröffentlichung läuft separat über Button/Hook, ohne den
+  automatischen Sync zu verändern.
 - Tests und Dokumentation sind je Phase aktualisiert; keine Secrets im Repo.

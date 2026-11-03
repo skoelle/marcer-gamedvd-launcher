@@ -70,6 +70,7 @@ trusted network or behind a reverse proxy with TLS and Basic Auth.
 | `GET` | `/api/jobs/{id}/log?tail=200` | job log tail |
 | `POST` | `/api/run` | start a `full` or `dry-run` job |
 | `POST` | `/api/cancel` | cancel the running job |
+| `POST` | `/api/hook/screenshots` | package/upload screenshots (409 while `shotgen.lock` exists) |
 
 `POST /api/run` accepts `mode` (`full`/`dry-run`) and the optional
 `only`/`exclude`/`skip_publish`/`no_crew` options. A second start returns
@@ -126,7 +127,7 @@ job log.
 | Gameinfo | `gameinfo/manifest.json`, `games-*.json`, file metadata |
 | Full index | `gameinfo/full-index.json.gz` |
 | Crews | `gameinfo/crews.json` |
-| Publish | `$MARCER_STATE_DIR/asset-publish/state.json` (legacy fallback: `<MARCER_DATA_DIR>/.asset-publish-state.json`) |
+| Publish | `$MARCER_STATE_DIR/asset-publish/state.json` (gameinfo + screenshots entries; legacy fallback for gameinfo) |
 | Screenshots | `MARCER_OUT_DIR/index*.json` and referenced PNGs |
 | Run history | `<report dir>/runs/*.json` |
 | Jobs | `$MARCER_STATE_DIR/jobs/<id>/job.json` + `job.log` |
@@ -139,12 +140,14 @@ Missing or malformed files are reported as `present: false` plus an error
 string. The service does not return HTTP 500 for broken catalog data. Large
 JSON files are cached in memory by `(mtime, size)`.
 
-Screenshot status remains read-only: per scope it counts
+Screenshot status is read-only for the index view: per scope it counts
 `done`/`desktop`/`no_usable_shots`/`pending`/`error`/… entries, entries without
-a preview and the referenced image bytes. No screenshot is packaged or uploaded.
-Image sizes are sampled within a small time budget because stat'ing tens of
-thousands of PNGs on a network share is slow; `bytes_partial` marks a sampled
-value (the UI prefixes it with `≥`). The index file size is always included.
+a preview and the referenced image bytes. Screenshot **publishing** is a
+separate job (button or `POST /api/hook/screenshots`); it packages and uploads
+the current `MARCER_OUT_DIR` only when the content changed. Image sizes are
+sampled within a small time budget because stat'ing tens of thousands of PNGs
+on a network share is slow; `bytes_partial` marks a sampled value (the UI
+prefixes it with `≥`). The index file size is always included.
 
 ## Job model
 
@@ -155,6 +158,27 @@ value (the UI prefixes it with `≥`). The index file size is always included.
 - A stale lock is detected by PID/heartbeat; after a service restart a running
   job is marked `interrupted` and an orphaned process group is terminated.
 - The job history keeps the newest 50 jobs.
+- Besides `full`/`dry-run`, the runner supports the `screenshots` mode
+  (`asset-publish --only screenshots --upload`).
+
+## Screenshot publishing
+
+Use the **Publish screenshots** button or:
+
+```sh
+curl -X POST http://<host>:8080/api/hook/screenshots
+```
+
+The hook:
+
+- refuses with `409` while `MARCER_OUT_DIR/shotgen.lock` exists,
+- uses the same global job lock as catalog updates,
+- runs `asset-publish --only screenshots --upload`,
+- packs only changed content (content signature),
+- updates `latest.json` through `asset-manifest`,
+- shows up in the normal job panel and history.
+
+The automatic weekly/full catalog update never packages screenshots.
 
 ## Scheduler
 

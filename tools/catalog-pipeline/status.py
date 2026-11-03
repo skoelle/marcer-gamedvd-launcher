@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 DEFAULT_RUN_LIMIT = 10
 SCREENSHOT_BYTES_BUDGET = 0.4
+SHOTGEN_LOCK = "shotgen.lock"
 
 SCOPES = (
     ("cracked", "index.json"),
@@ -292,6 +293,10 @@ class StatusCollector:
             ),
             "github_configured": bool(self.env("MARCER_GITHUB_TOKEN")),
             "pipeline_token_required": bool(self.env("MARCER_PIPELINE_TOKEN")),
+            "screenshot_run_active": bool(
+                paths["out"] is not None
+                and (paths["out"] / SHOTGEN_LOCK).is_file()
+            ),
             "state_configured": paths["state"] is not None,
             "state_source": state_source,
         }
@@ -413,19 +418,38 @@ class StatusCollector:
     def _publish(self, paths: dict) -> dict:
         state_file = paths["asset_state"]
         legacy = paths.get("legacy_asset_state")
+        result = {
+            "file": None,
+            "error": None,
+            "gameinfo": {"status": "missing", "error": "no gameinfo entry"},
+            "screenshots": {"status": "missing", "error": "no screenshots entry"},
+        }
         if state_file is None:
-            return {"status": "missing", "error": "state directory missing"}
+            result["error"] = "state directory missing"
+            return result
         state, error = self.cache.load(state_file)
         if state is None and legacy is not None and legacy != state_file:
             legacy_state, legacy_error = self.cache.load(legacy)
             if legacy_state is not None:
                 state, error, state_file = legacy_state, None, legacy
+        result["file"] = _file_info(state_file)
         if state is None:
-            return {"status": "missing", "error": error, "file": _file_info(state_file)}
+            result["error"] = error
+            return result
         assets = state.get("assets")
-        entry = assets.get("gameinfo") if isinstance(assets, dict) else None
+        if not isinstance(assets, dict):
+            assets = {}
+        result["gameinfo"] = self._publish_asset(
+            "gameinfo", assets.get("gameinfo"), paths["asset_out"]
+        )
+        result["screenshots"] = self._publish_asset(
+            "screenshots", assets.get("screenshots"), paths["out"]
+        )
+        return result
+
+    def _publish_asset(self, kind: str, entry, output_dir) -> dict:
         if not isinstance(entry, dict) or not entry:
-            return {"status": "missing", "error": "no gameinfo entry"}
+            return {"status": "missing", "error": f"no {kind} entry"}
         uploaded = bool(entry.get("uploaded"))
         manifest_dirty = bool(entry.get("manifest_dirty"))
         if not uploaded:
@@ -435,7 +459,6 @@ class StatusCollector:
         else:
             publish_status = "uploaded"
         archive = entry.get("archive")
-        output_dir = paths["asset_out"]
         archive_exists = bool(
             archive
             and output_dir is not None
@@ -444,7 +467,6 @@ class StatusCollector:
         return {
             "status": publish_status,
             "error": None,
-            "file": _file_info(state_file),
             "archive": archive,
             "archive_exists": archive_exists,
             "size": entry.get("size"),

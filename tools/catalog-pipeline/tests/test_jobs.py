@@ -143,6 +143,15 @@ class JobManagerTest(unittest.TestCase):
             )
         notify.assert_called_once()
 
+    def test_default_screenshot_command(self) -> None:
+        manager = jobs.JobManager(
+            state_dir=self.state, repo_root=Path.cwd()
+        )
+        argv = manager._default_command("screenshots", {})
+        self.assertIn("asset-publish", " ".join(argv))
+        self.assertIn("asset_publish.py", " ".join(argv))
+        self.assertEqual(argv[-4:], ["--only", "screenshots", "--upload", "--json"])
+
     def test_jobs_are_listed_newest_first(self) -> None:
         manager = self.manager("print('done')\n")
         first = manager.start("full")

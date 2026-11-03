@@ -119,6 +119,31 @@ class ApiTest(unittest.TestCase):
         code, payload = self.request("GET", f"/api/jobs/{job_id}")
         self.assertEqual(payload["job"]["status"], "cancelled")
 
+    def test_screenshot_hook_is_busy_while_shotgen_lock_exists(self) -> None:
+        out = Path(self.temp.name) / "out"
+        out.mkdir()
+        (out / "shotgen.lock").write_text("123", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"MARCER_OUT_DIR": str(out)}, clear=False):
+            code, payload = self.request(
+                "POST", "/api/hook/screenshots", {}
+            )
+        self.assertEqual(code, 409)
+        self.assertIn("shotgen.lock", payload["error"])
+
+    def test_screenshot_hook_starts_a_screenshot_job(self) -> None:
+        out = Path(self.temp.name) / "out"
+        out.mkdir()
+        with mock.patch.dict(os.environ, {"MARCER_OUT_DIR": str(out)}, clear=False):
+            code, payload = self.request(
+                "POST", "/api/hook/screenshots", {}
+            )
+        self.assertEqual(code, 202)
+        job_id = payload["job"]["id"]
+        self.assertEqual(payload["job"]["mode"], "screenshots")
+        code, _ = self.request("POST", "/api/cancel", {"id": job_id})
+        self.assertEqual(code, 202)
+        self.assertTrue(wait_for(lambda: self.manager.current() is None))
+
     def test_run_rejects_wrong_content_type(self) -> None:
         request = urllib.request.Request(
             self.base + "/api/run",
