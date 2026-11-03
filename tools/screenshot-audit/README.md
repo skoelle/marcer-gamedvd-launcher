@@ -70,6 +70,9 @@ Options (`retry`):
 | `--dry-run` | print targets, change nothing |
 | `--no-click` | skip the `retry-desktop` click pass |
 | `--include-no-usable` | also retry entries already marked `no_usable_shots` (default: skip) |
+| `--registry-try-only` | only registry clusters that define `try` options |
+| `--retry-state FILE` | resume state (default `local/screenshot-audit/retry-state.json`) |
+| `--reset-retry-state` | clear the resume state before running |
 
 Options (`apply`):
 
@@ -108,6 +111,12 @@ Options (`apply`):
 
 `retry`/`apply` use exact pHash matching by default (`--registry-distance 0`);
 `scan` still uses distance 2 to group re-encoded variants.
+
+Long exhaustive runs keep a resume state. Each completed
+`section|entry|hash|TOS|memory|monitor|resolution|key|program|mode` attempt is
+recorded, so an interrupted run can be restarted without redoing completed
+attempts. Use `--reset-retry-state` when the catalog changed and every attempt
+should run again.
 
 Example valid state:
 

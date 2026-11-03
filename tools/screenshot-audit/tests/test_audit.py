@@ -188,6 +188,30 @@ class RetryTests(unittest.TestCase):
         self.assertFalse(a.needs_mark(fixed, registry, 2, "no_usable"))
 
 
+class RetryStateTests(unittest.TestCase):
+    def test_state_roundtrip_and_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"
+            a.save_retry_state(path, {"one", "two"})
+            self.assertEqual(a.load_retry_state(path), {"one", "two"})
+        key = a.attempt_key(
+            "pd", "T/A.zip", "abcd", "1.02", "0", "mono", "high",
+            "space", 1, "auto", True, True,
+        )
+        self.assertIn("T/A.zip", key)
+        self.assertIn("space", key)
+        self.assertIn("auto", key)
+
+    def test_require_try_skips_clusters_without_try(self) -> None:
+        e = entry("pd", "A.zip", status="no_usable_shots")
+        registry = {"cdc93236cdc93236": {"action": "no_usable"}}
+        groups = a.target_groups(
+            [e], registry, {"filters": {}}, 2,
+            include_no_usable=True, require_try=True,
+        )
+        self.assertFalse(groups)
+
+
 class ApplyStateTests(unittest.TestCase):
     def test_valid_status_and_kind_are_written_to_index_and_sidecar(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

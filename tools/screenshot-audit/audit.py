@@ -33,6 +33,7 @@ import shotgen  # noqa: E402
 TOOL_VERSION = "0.1.0"
 DEFAULT_REPORT_DIR = REPO_ROOT / "local" / "screenshot-audit"
 DEFAULT_REGISTRY = Path(__file__).with_name("screens.json")
+DEFAULT_RETRY_STATE = DEFAULT_REPORT_DIR / "retry-state.json"
 SECTION_INDEXES = {
     "cracked": "index.json",
     "pd": "index-pd.json",
@@ -94,6 +95,59 @@ def out_dir() -> Path:
     if not path.is_dir():
         raise AuditError("config", f"MARCER_OUT_DIR not found: {path}")
     return path
+
+
+def load_retry_state(path: Path) -> set[str]:
+    if not path.is_file():
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    attempts = data.get("attempts") if isinstance(data, dict) else None
+    return {str(value) for value in (attempts or [])}
+
+
+def save_retry_state(path: Path, attempts: set[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    payload = {"schema": 1, "attempts": sorted(attempts)}
+    tmp.write_text(
+        json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    os.replace(tmp, path)
+
+
+def attempt_key(
+    section: str,
+    rel: str,
+    phash: str,
+    tos: str,
+    memsize: str,
+    monitor: str,
+    tos_res: str,
+    press_key: str,
+    program_index: int,
+    mode: str,
+    no_drive_b: bool,
+    retry_any: bool,
+) -> str:
+    return "|".join(
+        [
+            section,
+            rel,
+            phash,
+            tos,
+            memsize,
+            monitor,
+            tos_res,
+            press_key,
+            str(program_index),
+            mode,
+            "nob" if no_drive_b else "",
+            "any" if retry_any else "",
+        ]
+    )
 
 
 def load_registry(path: Path) -> dict:
@@ -621,12 +675,15 @@ def target_groups(
     cfg: dict,
     registry_dist: int,
     include_no_usable: bool = False,
+    require_try: bool = False,
 ) -> dict[tuple[str, str, str, str], list[Entry]]:
     grouped: dict[tuple[str, str, str, str], list[Entry]] = defaultdict(list)
     for entry, action, info, phash in collect_registry_matches(
         entries, registry, cfg, registry_dist, ("error", "no_usable")
     ):
         options = info.get("try") or {}
+        if require_try and not options:
+            continue
         if action == "no_usable" and not options:
             continue
         if entry.status == "no_usable_shots" and not include_no_usable:
@@ -888,10 +945,19 @@ def retry(args) -> int:
         cfg,
         args.registry_distance,
         include_no_usable=args.include_no_usable,
+        require_try=args.registry_try_only,
     )
     if not groups:
         print("no known error/no_usable targets found", flush=True)
         return 0
+    state_path = Path(args.retry_state).expanduser()
+    if args.reset_retry_state:
+        try:
+            state_path.unlink()
+        except FileNotFoundError:
+            pass
+    state = load_retry_state(state_path)
+    state_dirty = 0
     report_dir = Path(args.report_dir).expanduser() / stamp()
     report_dir.mkdir(parents=True, exist_ok=True)
     total = sum(len(value) for value in groups.values())
@@ -942,9 +1008,21 @@ def retry(args) -> int:
                                 if not remaining:
                                     break
                                 for mode in modes:
+                                    pending_rels = []
+                                    for rel in remaining:
+                                        key = attempt_key(
+                                            section, rel, phash, tos, memsize,
+                                            monitor, tos_res, press_key,
+                                            program_index, mode, no_drive_b,
+                                            retry_any,
+                                        )
+                                        if key not in state:
+                                            pending_rels.append((rel, key))
+                                    if not pending_rels:
+                                        continue
                                     run_shotgen(
                                         section,
-                                        remaining,
+                                        [rel for rel, _key in pending_rels],
                                         report_dir,
                                         tos,
                                         args.jobs,
@@ -958,6 +1036,12 @@ def retry(args) -> int:
                                         press_key=press_key,
                                         auto_program_index=program_index,
                                     )
+                                    for _rel, key in pending_rels:
+                                        state.add(key)
+                                        state_dirty += 1
+                                    if state_dirty >= 10:
+                                        save_retry_state(state_path, state)
+                                        state_dirty = 0
                                 reloaded = reload_entries(
                                     out, section, remaining, cfg, args.workers
                                 )
@@ -987,6 +1071,7 @@ def retry(args) -> int:
                 flush=True,
             )
             mark_no_usable(out, section, remaining)
+    save_retry_state(state_path, state)
     return 0
 
 
@@ -1041,6 +1126,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-no-usable",
         action="store_true",
         help="also retry entries already marked no_usable_shots",
+    )
+    retry_cmd.add_argument(
+        "--registry-try-only",
+        action="store_true",
+        help="only registry entries that define try options",
+    )
+    retry_cmd.add_argument(
+        "--retry-state", default=str(DEFAULT_RETRY_STATE),
+        help="resume state file (default: local/screenshot-audit/retry-state.json)",
+    )
+    retry_cmd.add_argument(
+        "--reset-retry-state", action="store_true",
+        help="clear the resume state before running",
     )
     apply_cmd = sub.choices["apply"]
     apply_cmd.set_defaults(registry_distance=0)
