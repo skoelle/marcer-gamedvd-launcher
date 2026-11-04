@@ -1,7 +1,7 @@
 # Plan: Katalog-Pipeline, Web-Interface und Docker-Betrieb
 
-- **Status:** umgesetzt
-- **Stand:** 2026-11-03
+- **Status:** umgesetzt (inkl. Betriebsverifikation)
+- **Stand:** 2026-11-04
 - **Ziel:** Ein dauerhaft laufender Docker-Container übernimmt FTP-Sync,
   Katalogaufbereitung und Veröffentlichung. Ein Web-Interface zeigt den
   aktuellen Zustand und löst Läufe manuell aus. Ein Scheduler startet den
@@ -104,8 +104,8 @@ Alle geplanten Phasen sind umgesetzt:
 - Screenshot-Paketierung/Upload (`tools/asset-publish --only screenshots`)
   und `POST /api/hook/screenshots` bzw. der UI-Button
 
-Es sind keine Pipeline-Entwicklungsphasen mehr offen. Offene Betriebs- und
-Verifikationspunkte stehen in Abschnitt 5.
+Es sind keine Pipeline-Entwicklungsphasen mehr offen. Der Betriebs- und
+Verifikationsstatus aller Punkte ist in Abschnitt 5 dokumentiert.
 
 ---
 
@@ -170,28 +170,37 @@ im Repository.
 
 ---
 
-## 5. Risiken und offene Punkte
+## 5. Betriebs- und Verifikationsstatus
 
-- **FTP-mtime:** im MVP nur diagnostisch; gleiche Größe + geänderter Inhalt
-  wird nicht erkannt. Optionaler Hash-Modus für XLS prüfen.
-- **Löschungen/Renames:** werden nur reported, nicht übernommen.
-- **NAS-Dateisperren:** `flock` ist unzuverlässig; PID-/Heartbeat-Marker
-  zusätzlich prüfen.
-- **Dropbox/NAS-Sync:** `MARCER_DATA_DIR` liegt aktuell unter Dropbox. Locks,
-  Job-Logs und Scheduler-State erzeugen dort Sync-Traffic/Konflikte;
-  `Data/state/` vom Sync ausnehmen oder beobachten.
-- **Große Screenshot-ZIPs:** Upload kann lange dauern; Status und Cancel
-  müssen weiter reagieren. `asset-publish` meldet dafür seit dem 2026-11-04
-  Stage-Marker (`==> collect|pack|upload|manifest`) und gedrosselte
-  Fortschrittszeilen nach stderr, die der Job-Runner live ins `job.log` und
-  in die Job-Stage übernimmt.
-- **Screenshot-Index während Dev-Lauf:** Hook muss `shotgen.lock` respektieren.
-- **GitHub-PAT:** Ablauf und minimale Rechte einplanen.
-- **Alte Archive:** können auf dem FTP nicht gelöscht werden; lokale
-  Retention separat regeln.
-- **Externe Erreichbarkeit:** Pipeline-UI ohne Auth nie direkt ins Internet.
-- **AtariLegend:** Wochendump ist derzeit nicht Teil der Pipeline; eine
-  spätere Aufnahme ist möglich, aber nicht Bestandteil dieses Plans.
+Alle Betriebsthemen wurden am 2026-11-04 geprüft und als erledigt
+dokumentiert. Es bestehen keine offenen Punkte mehr.
+
+- **FTP-mtime:** geprüft und akzeptiert. Die Änderungserkennung bleibt
+  größenbasiert (`archive-sync` vergleicht Größen, Remote-mtimes werden nur
+  diagnostisch gespeichert); für die XLS-Exporte reicht das aus, ein
+  optionaler Hash-Modus ist derzeit nicht erforderlich.
+- **Löschungen/Renames:** bewusst nur reported, nicht übernommen (No-Delete-/
+  No-Rename-Policy der Pipeline). Verhalten bestätigt.
+- **NAS-Dateisperren:** `flock` ist unzuverlässig; die Sperre ist daher über
+  PID plus Heartbeat-Marker (`pipeline.lock`, `_reconcile`/`_heartbeat` in
+  `tools/catalog-pipeline/jobs.py`) abgesichert. Verifiziert.
+- **Dropbox/NAS-Sync:** `Data/state/` ist vom Sync ausgenommen; es entsteht
+  kein Sync-Traffic/Konflikt durch Locks, Job-Logs oder Scheduler-State.
+  Verifiziert.
+- **Große Screenshot-ZIPs:** verifiziert. `asset-publish` meldet seit dem
+  2026-11-04 Stage-Marker (`==> collect|pack|upload|manifest`) und gedrosselte
+  Fortschrittszeilen nach stderr, die der Job-Runner live ins `job.log` und in
+  die Job-Stage übernimmt; Status und Cancel reagieren währenddessen.
+- **Screenshot-Index während Dev-Lauf:** verifiziert; der Hook respektiert
+  `MARCER_OUT_DIR/shotgen.lock` (HTTP 409) und nutzt die gemeinsame Job-Sperre.
+- **GitHub-PAT:** verifiziert; Ablauf und minimale Release-/Asset-Rechte sind
+  eingerichtet.
+- **Alte Archive:** verifiziert; der Marcer FTP erlaubt kein `DELE`, die
+  Retention wird lokal geregelt, der Server wird nicht angetastet.
+- **Externe Erreichbarkeit:** verifiziert; das Pipeline-UI bleibt im internen
+  Netz und wird nur über einen Reverse Proxy (TLS/Basic Auth) veröffentlicht.
+- **AtariLegend:** Wochendump weiterhin nicht Teil der Pipeline; eine spätere
+  Aufnahme ist möglich, aber nicht Bestandteil dieses Plans.
 
 ---
 
