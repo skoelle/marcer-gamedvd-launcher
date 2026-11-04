@@ -76,7 +76,9 @@ The pipeline service runs the weekly scheduler in-process:
 The **Publish screenshots** button (or `POST /api/hook/screenshots`) packages
 `MARCER_OUT_DIR` as `screenshots-<timestamp>.zip`, uploads it and updates
 `latest.json`. It refuses to start while `shotgen.lock` exists and uses the
-same job lock as catalog updates.
+same job lock as catalog updates. The job panel shows the live stage
+(`collect`/`pack`/`upload`/`manifest`) and tails the throttled progress lines
+from `tools/asset-publish`, so a long pack/upload stays visible.
 
 ## E-mail notification
 
