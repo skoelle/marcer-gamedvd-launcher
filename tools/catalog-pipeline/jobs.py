@@ -484,6 +484,8 @@ class JobManager:
                     "message": f"catalog-update exited with code {returncode}",
                 }
 
+            if status == "ok":
+                job["stage"] = "done"
             job.update(
                 status=status,
                 finished_at=iso_now(),

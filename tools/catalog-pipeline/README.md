@@ -154,7 +154,8 @@ prefixes it with `≥`). The index file size is always included.
 - One worker and one global lock (`$MARCER_STATE_DIR/pipeline.lock`).
 - Persistent job state under `$MARCER_STATE_DIR/jobs/<id>/` with `job.json`
   and `job.log`.
-- Stage updates are parsed from the `==> <step>` lines of `catalog-update`.
+- Stage updates are parsed from the `==> <step>` lines of `catalog-update`;
+  a successful job ends with `stage: "done"`.
 - A stale lock is detected by PID/heartbeat; after a service restart a running
   job is marked `interrupted` and an orphaned process group is terminated.
 - The job history keeps the newest 50 jobs.

@@ -48,7 +48,7 @@ class JobManagerTest(unittest.TestCase):
             command_factory=script_factory(code),
         )
 
-    def test_start_finishes_and_parses_stage(self) -> None:
+    def test_start_finishes_and_marks_stage_done(self) -> None:
         manager = self.manager(
             "print('==> archive-sync', flush=True)\n"
             "print('hello', flush=True)\n"
@@ -58,7 +58,7 @@ class JobManagerTest(unittest.TestCase):
         self.assertTrue(wait_for(lambda: manager.current() is None))
         job = manager.get_job(started["id"])
         self.assertEqual(job["status"], "ok")
-        self.assertEqual(job["stage"], "archive-sync")
+        self.assertEqual(job["stage"], "done")
         self.assertEqual(job["exit_code"], 0)
         self.assertFalse((self.state / "pipeline.lock").exists())
         log = manager.log_tail(started["id"])
