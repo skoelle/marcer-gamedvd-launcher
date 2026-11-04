@@ -16,6 +16,10 @@ Usage::
     run.sh publish --only gameinfo --dry-run
     run.sh publish --only gameinfo --force
 
+Long steps print throttled progress to stderr (``==> collect|pack|upload|
+manifest`` stage markers plus counter lines); disable the counter lines with
+``--no-progress``.  The ``--json`` result on stdout is unaffected.
+
 The gameinfo source is ``<MARCER_DATA_DIR>/gameinfo``; the ZIP is written to
 ``MARCER_ASSET_OUT_DIR`` (default: ``MARCER_DATA_DIR``) as
 ``gameinfo-<yyyyMMdd-HHmmss>.zip``. The screenshots source and output are
@@ -73,6 +77,10 @@ DEFAULT_ASSETS_REMOTE = "/Uploads/MarcerGameDVDLauncher-assets/"
 FTP_TIMEOUT = 60
 FTP_BLOCKSIZE = 1024 * 1024
 
+# Progress lines are throttled to roughly one line per second so a long
+# screenshot pack keeps the job log useful without flooding it.
+PROGRESS_INTERVAL = 1.0
+
 # Only these gameinfo files are published.  Everything else (backups,
 # markers, temp files, legacy archives) is ignored by design.
 GAMEINFO_INCLUDE_PATTERNS = (
@@ -103,6 +111,35 @@ ZIP_MODE = 0o644
 
 class PublishError(Exception):
     """User-facing error (configuration, missing data, I/O)."""
+
+
+class Progress:
+    """Best-effort progress reporter for long packaging steps.
+
+    Everything is written to stderr so the ``--json`` result on stdout stays
+    machine-readable.  ``stage`` emits ``==> <name>`` markers that the pipeline
+    jobs runner turns into the visible job stage; ``status`` prints throttled
+    counter/percentage lines.
+    """
+
+    def __init__(
+        self, enabled: bool = True, interval: float = PROGRESS_INTERVAL
+    ) -> None:
+        self.enabled = enabled
+        self.interval = interval
+        self._last = 0.0
+
+    def stage(self, name: str) -> None:
+        print(f"==> {name}", file=sys.stderr, flush=True)
+
+    def status(self, text: str, force: bool = False) -> None:
+        if not self.enabled:
+            return
+        now = time.monotonic()
+        if not force and self._last and now - self._last < self.interval:
+            return
+        self._last = now
+        print(text, file=sys.stderr, flush=True)
 
 
 # --------------------------------------------------------------------------
@@ -171,13 +208,14 @@ def _skip_dir(name: str, kind: str) -> bool:
 
 
 def collect_entries(
-    source: Path, kind: str = KIND_GAMEINFO
+    source: Path, kind: str = KIND_GAMEINFO, progress: Progress | None = None
 ) -> list[dict]:
     label = "gameinfo" if kind == KIND_GAMEINFO else "screenshots"
     if not source.is_dir():
         raise PublishError(f"{label} source directory not found: {source}")
 
     entries: list[dict] = []
+    started = time.monotonic()
     for root, dirnames, filenames in os.walk(source):
         dirnames[:] = [
             name for name in dirnames if not _skip_dir(name, kind)
@@ -197,9 +235,17 @@ def collect_entries(
                     "sha256": sha256_file(path),
                 }
             )
+            if progress is not None:
+                progress.status(f"collect: {len(entries)} files hashed")
     entries.sort(key=lambda item: item["relpath"])
     if not entries:
         raise PublishError(f"no publishable {label} files found in {source}")
+    if progress is not None:
+        progress.status(
+            f"collect: {len(entries)} files hashed "
+            f"in {time.monotonic() - started:.1f}s",
+            force=True,
+        )
     return entries
 
 
@@ -249,7 +295,7 @@ def unique_archive_path(output_dir: Path, kind: str) -> Path:
 
 
 def write_archive(
-    output_dir: Path, kind: str, entries: list[dict]
+    output_dir: Path, kind: str, entries: list[dict], progress: Progress | None = None
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     target = unique_archive_path(output_dir, kind)
@@ -262,20 +308,32 @@ def write_archive(
     kwargs = {"compression": compression}
     if compression == zipfile.ZIP_DEFLATED:
         kwargs["compresslevel"] = 9
+    total = len(entries)
+    started = time.monotonic()
     try:
         with zipfile.ZipFile(tmp, "w", **kwargs) as archive:
-            for entry in entries:
+            for index, entry in enumerate(entries, start=1):
                 info = zipfile.ZipInfo(entry["relpath"], date_time=ZIP_TIMESTAMP)
                 info.compress_type = compression
                 info.external_attr = ZIP_MODE << 16
                 with entry["path"].open("rb") as src, archive.open(info, "w") as dst:
                     shutil.copyfileobj(src, dst)
+                if progress is not None:
+                    progress.status(
+                        f"pack: {index}/{total} entries "
+                        f"({index * 100 // total}%)"
+                    )
         os.replace(tmp, target)
     finally:
         try:
             tmp.unlink()
         except FileNotFoundError:
             pass
+    if progress is not None:
+        progress.status(
+            f"pack: {total} entries written in {time.monotonic() - started:.1f}s",
+            force=True,
+        )
     return target
 
 
@@ -325,7 +383,9 @@ def _remote_size(ftp: FTP, name: str) -> int | None:
     return size if isinstance(size, int) else None
 
 
-def upload_archive(settings: dict, local_path: Path) -> str:
+def upload_archive(
+    settings: dict, local_path: Path, progress: Progress | None = None
+) -> str:
     """Upload ``local_path`` under its final name and return the remote path.
 
     The Marcer FTP server rejects ``RNFR``/``RNTO`` and ``DELE`` (and may
@@ -353,9 +413,24 @@ def upload_archive(settings: dict, local_path: Path) -> str:
 
         ftp.voidcmd("TYPE I")
         if _remote_size(ftp, target_name) != local_size:
+            sent = 0
+            started = time.monotonic()
+
+            def _account(block: bytes) -> None:
+                nonlocal sent
+                sent += len(block)
+                if progress is not None and local_size:
+                    progress.status(
+                        f"upload: {sent * 100 // local_size}% "
+                        f"({sent}/{local_size} bytes)"
+                    )
+
             with local_path.open("rb") as handle:
                 ftp.storbinary(
-                    f"STOR {target_name}", handle, blocksize=FTP_BLOCKSIZE
+                    f"STOR {target_name}",
+                    handle,
+                    blocksize=FTP_BLOCKSIZE,
+                    callback=_account,
                 )
             uploaded_size = _remote_size(ftp, target_name)
             if uploaded_size is not None and uploaded_size != local_size:
@@ -365,6 +440,17 @@ def upload_archive(settings: dict, local_path: Path) -> str:
                     "cannot be deleted on the Marcer FTP; the next --upload "
                     "run overwrites it"
                 )
+            if progress is not None:
+                progress.status(
+                    f"upload: {local_size} bytes sent "
+                    f"in {time.monotonic() - started:.1f}s",
+                    force=True,
+                )
+        elif progress is not None:
+            progress.status(
+                f"upload: {target_name} already present on the server",
+                force=True,
+            )
         return remote_path
     except PublishError:
         raise
@@ -384,7 +470,7 @@ def manifest_script() -> Path:
     return Path(__file__).resolve().parents[1] / "asset-manifest" / "asset_manifest.py"
 
 
-def run_asset_manifest() -> None:
+def run_asset_manifest(progress: Progress | None = None) -> None:
     """Publish the small ``latest.json`` pointer via ``tools/asset-manifest``.
 
     Always runs without ``--only`` so both the screenshots and gameinfo entries
@@ -393,6 +479,8 @@ def run_asset_manifest() -> None:
     script = manifest_script()
     if not script.is_file():
         raise PublishError(f"asset-manifest tool not found: {script}")
+    if progress is not None:
+        progress.status("manifest: updating latest.json", force=True)
     command = [sys.executable, str(script)]
     try:
         completed = subprocess.run(
@@ -468,8 +556,10 @@ def publish(args: argparse.Namespace) -> int:
     kind = args.only
     source, output_dir, state_file, data_dir = resolve_paths(args, kind)
     ftp = ftp_settings() if args.upload else {}
+    progress = Progress(enabled=not getattr(args, "no_progress", False))
 
-    entries = collect_entries(source, kind)
+    progress.stage("collect")
+    entries = collect_entries(source, kind, progress=progress)
     signature = content_signature(entries)
     state = load_state(state_file)
     if not state:
@@ -534,7 +624,8 @@ def publish(args: argparse.Namespace) -> int:
 
         if not uploaded:
             try:
-                remote = upload_archive(ftp, archive)
+                progress.stage("upload")
+                remote = upload_archive(ftp, archive, progress=progress)
             except PublishError as exc:
                 result.update(status="error", stage="upload", error=str(exc))
                 emit(result, args.json)
@@ -548,7 +639,8 @@ def publish(args: argparse.Namespace) -> int:
             write_state(state_file, state)
 
         try:
-            run_asset_manifest()
+            progress.stage("manifest")
+            run_asset_manifest(progress)
         except PublishError as exc:
             previous["manifest_dirty"] = True
             assets[kind] = previous
@@ -590,7 +682,8 @@ def publish(args: argparse.Namespace) -> int:
         emit(result, args.json)
         return 0
 
-    archive = write_archive(output_dir, kind, entries)
+    progress.stage("pack")
+    archive = write_archive(output_dir, kind, entries, progress=progress)
     size = archive.stat().st_size
     archive_sha = sha256_file(archive)
 
@@ -622,7 +715,8 @@ def publish(args: argparse.Namespace) -> int:
         return 0
 
     try:
-        remote = upload_archive(ftp, archive)
+        progress.stage("upload")
+        remote = upload_archive(ftp, archive, progress=progress)
     except PublishError as exc:
         result.update(status="error", stage="upload", error=str(exc))
         emit(result, args.json)
@@ -637,7 +731,8 @@ def publish(args: argparse.Namespace) -> int:
     write_state(state_file, state)
 
     try:
-        run_asset_manifest()
+        progress.stage("manifest")
+        run_asset_manifest(progress)
     except PublishError as exc:
         result.update(
             status="error",
@@ -772,6 +867,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="report the action without writing"
     )
     pub.add_argument("--json", action="store_true", help="machine-readable output")
+    pub.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="do not print throttled progress lines to stderr",
+    )
     pub.set_defaults(func=publish)
     return parser
 

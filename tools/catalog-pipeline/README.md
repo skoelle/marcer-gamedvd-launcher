@@ -9,8 +9,9 @@ are implemented. The dashboard aggregates sync reports, gameinfo files, full
 index, crew data, asset-publish state, screenshot indices, storage, recent run
 reports and pipeline jobs.
 
-The weekly scheduler is included; screenshot publishing is the remaining
-phase.
+The weekly scheduler and screenshot publishing are included. During a running
+job the panel shows the current stage and tails the live job log, so long
+steps (screenshot hashing, packing, FTP upload) stay visible.
 
 ## Requirements
 

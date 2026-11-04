@@ -181,7 +181,10 @@ im Repository.
   Job-Logs und Scheduler-State erzeugen dort Sync-Traffic/Konflikte;
   `Data/state/` vom Sync ausnehmen oder beobachten.
 - **Große Screenshot-ZIPs:** Upload kann lange dauern; Status und Cancel
-  müssen weiter reagieren.
+  müssen weiter reagieren. `asset-publish` meldet dafür seit dem 2026-11-04
+  Stage-Marker (`==> collect|pack|upload|manifest`) und gedrosselte
+  Fortschrittszeilen nach stderr, die der Job-Runner live ins `job.log` und
+  in die Job-Stage übernimmt.
 - **Screenshot-Index während Dev-Lauf:** Hook muss `shotgen.lock` respektieren.
 - **GitHub-PAT:** Ablauf und minimale Rechte einplanen.
 - **Alte Archive:** können auf dem FTP nicht gelöscht werden; lokale

@@ -101,10 +101,27 @@ Useful options:
 | `--dry-run` | print `would-*` actions, write/connect nothing |
 | `--force` | pack (and upload) even when the signature is unchanged |
 | `--json` | machine-readable result (status, archive, signature, size, sha256, upload state) |
+| `--no-progress` | suppress the throttled progress lines on stderr |
 | `--data-dir PATH` | override `MARCER_DATA_DIR` |
 | `--source PATH` | override the source directory |
 | `--output-dir PATH` | override the archive output directory |
 | `--state-file PATH` | override the signature state file |
+
+## Progress output
+
+A run that has to hash and pack many screenshot PNGs would otherwise be
+silent until the final result. To keep the pipeline job log and the console
+informative, `asset-publish` reports its progress on **stderr** (stdout stays
+reserved for the `--json` result):
+
+- `==> collect` / `==> pack` / `==> upload` / `==> manifest` stage markers,
+  which the catalog-pipeline runner turns into the visible job stage;
+- throttled counter lines (about one per second), e.g.
+  `collect: 12345 files hashed`, `pack: 3400/12800 entries (26%)`,
+  `upload: 42% (1234567/2938475 bytes)`.
+
+Counter lines are enabled by default and can be disabled with
+`--no-progress`; the stage markers are then still printed.
 
 ## Paths
 

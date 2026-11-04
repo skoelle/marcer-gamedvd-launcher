@@ -59,11 +59,15 @@ class FakeFTP:
     def voidcmd(self, command: str) -> None:
         self.calls.append(("voidcmd", command))
 
-    def storbinary(self, command: str, handle, blocksize: int = 0) -> None:
+    def storbinary(
+        self, command: str, handle, blocksize: int = 0, callback=None
+    ) -> None:
         if self.fail_on == "stor":
             raise error_perm("550 upload failed")
         name = command.split(" ", 1)[1]
         data = handle.read()
+        if callback is not None:
+            callback(data)
         self.files[name] = len(data) + self.size_delta
         self.calls.append(("storbinary", name, len(data)))
 
@@ -168,6 +172,28 @@ class ScreenshotPublishTests(unittest.TestCase):
             (self.data / "state" / "asset-publish" / "state.json").read_text()
         )
         self.assertIn("screenshots", state["assets"])
+
+    def test_progress_stage_markers_and_counts(self) -> None:
+        with self.env():
+            code, out, err = run_cli(
+                "publish", "--only", "screenshots", "--json"
+            )
+        self.assertEqual(code, 0, err)
+        json.loads(out)
+        self.assertIn("==> collect", err)
+        self.assertIn("==> pack", err)
+        self.assertIn("pack: 4 entries written", err)
+
+    def test_no_progress_keeps_stage_markers_only(self) -> None:
+        with self.env():
+            code, out, err = run_cli(
+                "publish", "--only", "screenshots", "--json", "--no-progress"
+            )
+        self.assertEqual(code, 0, err)
+        json.loads(out)
+        self.assertIn("==> collect", err)
+        self.assertNotIn("collect:", err)
+        self.assertNotIn("pack:", err)
 
     def test_dry_run_writes_nothing(self) -> None:
         before = set(self.out.glob("screenshots-*.zip"))
@@ -392,7 +418,7 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertTrue(result["uploaded"])
         self.assertEqual(result["remote"], f"/assets/{Path(result['archive']).name}")
         self.assertTrue(result["manifest_updated"])
-        manifest.assert_called_once_with()
+        manifest.assert_called_once()
 
         self.assertIn(("set_pasv", True), fake.calls)
         self.assertIn(("cwd", "/assets/"), fake.calls)
@@ -412,6 +438,27 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertFalse(entry["manifest_dirty"])
         self.assertEqual(entry["remote"], result["remote"])
 
+    def test_upload_reports_progress_on_stderr(self) -> None:
+        fake = FakeFTP()
+        with self.ftp_env(), mock.patch.object(
+            ap, "FTP", lambda: fake
+        ), mock.patch.object(ap, "run_asset_manifest"):
+            code, out, err = run_cli(
+                "publish",
+                "--data-dir",
+                str(self.data),
+                "--json",
+                "--upload",
+            )
+        self.assertEqual(code, 0, err)
+        json.loads(out)
+        self.assertIn("==> collect", err)
+        self.assertIn("==> pack", err)
+        self.assertIn("==> upload", err)
+        self.assertIn("==> manifest", err)
+        self.assertIn("upload:", err)
+        self.assertIn("bytes sent", err)
+
     def test_reuses_complete_remote_file_without_storing_again(self) -> None:
         self.publish()
         archive = self.archives()[0]
@@ -426,7 +473,7 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertEqual(result["status"], "uploaded")
         self.assertFalse(result["created"])
         self.assertFalse(any(call[0] == "storbinary" for call in fake.calls))
-        manifest.assert_called_once_with()
+        manifest.assert_called_once()
 
     def test_leaves_existing_part_file_untouched(self) -> None:
         self.publish()
@@ -484,7 +531,7 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertFalse(second["created"])
         self.assertEqual(second["archive"], str(archive))
         self.assertEqual(len(self.archives()), 1)
-        manifest.assert_called_once_with()
+        manifest.assert_called_once()
 
     def test_size_mismatch_reports_but_keeps_remote_file(self) -> None:
         fake = FakeFTP(size_delta=1)
@@ -544,7 +591,7 @@ class GameinfoPublishTests(unittest.TestCase):
         self.assertEqual(second["status"], "uploaded")
         self.assertFalse(second["created"])
         self.assertEqual(len(self.archives()), 1)
-        manifest.assert_called_once_with()
+        manifest.assert_called_once()
         state = json.loads(self.state_file().read_text())
         self.assertFalse(state["assets"]["gameinfo"]["manifest_dirty"])
 
