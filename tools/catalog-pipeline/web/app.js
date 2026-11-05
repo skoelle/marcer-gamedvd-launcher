@@ -555,8 +555,8 @@ function render(status, runs, jobsPayload) {
   updateTokenField(!!(status.config && status.config.pipeline_token_required));
   screenshotRunActive = !!(status.config && status.config.screenshot_run_active);
   els.cards.innerHTML = [
-    renderSync(status.sync || {}),
     `<div class="card-stack">
+      ${renderSync(status.sync || {})}
       ${renderPublish(status.publish || {})}
       ${renderConfig(status.config || {}, status.scheduler || {})}
     </div>`,
