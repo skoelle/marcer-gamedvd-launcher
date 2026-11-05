@@ -141,6 +141,12 @@ Missing or malformed files are reported as `present: false` plus an error
 string. The service does not return HTTP 500 for broken catalog data. Large
 JSON files are cached in memory by `(mtime, size)`.
 
+The **Sync** card also shows the archive-sync remote inventory
+(`remote_inventory` in `changes.json`: file count, complete flag, age) so the
+freshness of the FTP badges is visible. The **Full index** card shows the
+`full-index.json.gz` FTP counts (`ftp_on`/`ftp_physical_dvd`/`ftp_deleted`,
+plus `ftp_unknown`, which raises a warning).
+
 Screenshot status is read-only for the index view: per scope it counts
 `done`/`desktop`/`no_usable_shots`/`pending`/`error`/… entries, entries without
 a preview and the referenced image bytes. Screenshot **publishing** is a

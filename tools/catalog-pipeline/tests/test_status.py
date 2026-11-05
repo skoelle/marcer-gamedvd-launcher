@@ -100,6 +100,14 @@ class StatusCollectorTest(unittest.TestCase):
                     "incomplete_dirs": 1,
                 },
                 "incomplete_dirs": ["Title Sorted/Broken"],
+                "remote_inventory": {
+                    "path": "/state/archive-sync/remote-inventory.json.gz",
+                    "written": True,
+                    "complete": True,
+                    "generated_at": "2026-11-03T18:00:00Z",
+                    "files": 10,
+                    "remote": "/GameDVD/",
+                },
             },
         )
 
@@ -125,7 +133,15 @@ class StatusCollectorTest(unittest.TestCase):
             gameinfo / "full-index.json.gz",
             {
                 "tool": "tools/full-index-gen",
-                "counts": {"zips": 3, "members": 4, "errors": 0},
+                "counts": {
+                    "zips": 3,
+                    "members": 4,
+                    "errors": 0,
+                    "ftp_on": 2,
+                    "ftp_physical_dvd": 1,
+                    "ftp_deleted": 1,
+                    "ftp_unknown": 0,
+                },
                 "errors": [],
                 "entries": {},
             },
@@ -212,11 +228,14 @@ class StatusCollectorTest(unittest.TestCase):
         self.assertTrue(result["sync"]["present"])
         self.assertEqual(result["sync"]["counts"]["new"], 2)
         self.assertEqual(result["sync"]["incomplete_dirs"], ["Title Sorted/Broken"])
+        self.assertTrue(result["sync"]["inventory"]["complete"])
+        self.assertEqual(result["sync"]["inventory"]["files"], 10)
 
         self.assertTrue(result["gameinfo"]["present"])
         self.assertEqual(result["gameinfo"]["sources"][0]["matched_folders"], 42)
         self.assertTrue(result["full_index"]["present"])
         self.assertEqual(result["full_index"]["counts"]["zips"], 3)
+        self.assertEqual(result["full_index"]["counts"]["ftp_deleted"], 1)
         self.assertTrue(result["crews"]["present"])
         self.assertEqual(result["crews"]["groups"], 2)
 

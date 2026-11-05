@@ -121,11 +121,17 @@ function renderSync(sync) {
   const bad = (counts.download_errors || 0) + (counts.incomplete_dirs || 0);
   const kind = !sync.present ? "bad" : bad > 0 ? "warn" : "ok";
   const label = !sync.present ? "missing" : bad > 0 ? "warnings" : "ok";
+  const inv = sync.inventory || null;
+  const invLabel = inv
+    ? `${inv.files ?? "–"} files · ${inv.complete === false ? "partial" : "complete"}`
+      + (inv.complete !== false && inv.written === false ? " (not updated)" : "")
+    : "–";
   return card(
     "Sync",
     kv([
       ["last run", fmtTime(sync.generated_at)],
       ["mode", sync.mode || "–"],
+      ["inventory", invLabel],
     ]) + chips(counts, ["download_errors", "incomplete_dirs"], ["local_only", "warnings"])
       + listWarnings(sync.incomplete_dirs),
     badge(label, kind),
@@ -161,6 +167,7 @@ function renderGameinfo(info) {
 function renderFullIndex(index) {
   const counts = index.counts || {};
   const errors = index.error_count || 0;
+  const ftpUnknown = counts.ftp_unknown || 0;
   const body = kv([
     ["generated file", fmtTime(index.file?.mtime)],
     ["age", fmtAge(index.file?.age_hours)],
@@ -168,9 +175,14 @@ function renderFullIndex(index) {
     zips: counts.zips ?? "–",
     members: counts.members ?? "–",
     errors,
-  }, ["errors"]);
-  return card("Full index", body, badge(index.present ? (errors ? "warnings" : "ok") : "missing",
-    index.present ? (errors ? "warn" : "ok") : "bad"));
+    ftp_on: counts.ftp_on ?? "–",
+    ftp_physical_dvd: counts.ftp_physical_dvd ?? "–",
+    ftp_deleted: counts.ftp_deleted ?? "–",
+    ftp_unknown: ftpUnknown,
+  }, ["errors"], ["ftp_unknown"]);
+  const warn = index.present && (errors > 0 || ftpUnknown > 0);
+  return card("Full index", body, badge(index.present ? (warn ? "warnings" : "ok") : "missing",
+    index.present ? (warn ? "warn" : "ok") : "bad"));
 }
 
 function renderCrews(crews) {

@@ -329,6 +329,20 @@ class StatusCollector:
             if isinstance(incomplete, list)
             else []
         )
+        inventory = data.get("remote_inventory")
+        if isinstance(inventory, dict):
+            result["inventory"] = {
+                key: inventory.get(key)
+                for key in (
+                    "path",
+                    "written",
+                    "complete",
+                    "generated_at",
+                    "files",
+                    "remote",
+                )
+                if key in inventory
+            }
         return result
 
     def _gameinfo(self, paths: dict) -> dict:
