@@ -536,6 +536,25 @@ triggers the scan on demand).
 The offline data-layer benchmark against the real artifacts is
 `dart run tool/benchmark.dart`.
 
+## FTP availability
+
+`full-index.json.gz` can additionally carry `ftp_status` per ZIP, derived by
+`tools/full-index-gen` from the last complete `archive-sync` remote inventory:
+
+- `on_ftp` — the ZIP exists on the Marcer FTP (no badge).
+- `physical_dvd` — the ZIP exists only in your ROOT/BOTH layer and is no longer
+  on FTP; badge **`PHYSICAL-DVD`**.
+- `ftp_deleted` — the ZIP existed only in the old PATCH layer and is no longer
+  on FTP; badge **`FTP-DELETED`**.
+
+The card (grid tile, detail panel, lightbox header) shows one badge per
+unavailable state found in its variants; the lightbox filmstrip marks the
+affected ZIPs (`DVD`/`FTP-DEL`) and the "This ZIP" table gets an `FTP` row with
+the full label. Statuses are advisory: they come from the published index, not
+from a live FTP check. When the field is absent (no inventory has ever been
+applied), no FTP badge appears and downloads keep their previous behavior. The
+app never deletes local files because of `ftp_status`.
+
 ## Box scans & manuals
 
 The hand-curated `Boxscan/` and `Manual/` folders shipped with the Marcer
@@ -608,6 +627,12 @@ edited in the ⚙ settings editor:
 - `Ftp.RemoteBase` — remote directory prefix, default `/GameDVD/` (the game
   folders are looked up as `<RemoteBase>/<section tree>/<letter>/<folder>`).
   Leave it empty when the FTP login directory is already the catalog root.
+
+If every known ZIP of the card is `physical_dvd` or `ftp_deleted`, the
+**Download folder** button is disabled with **Not available on FTP** and the
+controller refuses the transfer (the remote folder no longer has those files).
+A card with at least one `on_ftp` or status-less ZIP keeps the button, so
+remaining remote files can still be fetched.
 
 The transfer always runs in **binary FTP** mode (ASCII would corrupt the ZIP
 files).

@@ -27,12 +27,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _lib import catalog_sections as cs  # noqa: E402
+from _lib import pipeline_paths  # noqa: E402
 from _lib import zip_hashes  # noqa: E402
 
-TOOL_VERSION = "0.1.0"
-SCHEMA = 1
+TOOL_VERSION = "0.2.0"
+SCHEMA = 2
 GAMEINFO_SUBDIR = "gameinfo"
 FILE_NAME = "full-index.json.gz"
+INVENTORY_NAME = "remote-inventory.json.gz"
+FTP_ON = "on_ftp"
+FTP_PHYSICAL = "physical_dvd"
+FTP_DELETED = "ftp_deleted"
 
 
 def env(name: str, default: str = "") -> str:
@@ -44,6 +49,73 @@ def default_output() -> Path:
     if not data:
         sys.exit("error: MARCER_DATA_DIR is not set (add it to local/paths.env)")
     return Path(data) / GAMEINFO_SUBDIR / FILE_NAME
+
+
+def default_inventory_path() -> Path:
+    state = pipeline_paths.state_root(Path(__file__).resolve().parents[2])
+    return state / "archive-sync" / INVENTORY_NAME
+
+
+def load_inventory(path: Path) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError, gzip.BadGzipFile) as error:
+        print(f"warning: cannot read FTP inventory {path}: {error}", file=sys.stderr)
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("files"), dict):
+        print(f"warning: invalid FTP inventory {path}", file=sys.stderr)
+        return None
+    return data
+
+
+def resolve_inventory(args) -> tuple[set[str] | None, dict]:
+    """Load the remote inventory and return ``(rel keys, metadata)``.
+
+    Without an inventory the entries keep their previous ``ftp_status`` (so a
+    manual run never drops published badges); ``--no-ftp-status`` clears them.
+    """
+    if getattr(args, "no_ftp_status", False) or getattr(
+        args, "keep_ftp_status", False
+    ):
+        return None, {"enabled": False, "path": "", "found": False, "files": 0}
+    path = (
+        Path(args.ftp_inventory).expanduser()
+        if getattr(args, "ftp_inventory", "")
+        else default_inventory_path()
+    )
+    inventory = load_inventory(path)
+    if inventory is None:
+        return None, {
+            "enabled": True,
+            "path": str(path),
+            "found": False,
+            "files": 0,
+        }
+    rels = {
+        str(rel).lower()
+        for rel in inventory["files"]
+        if isinstance(rel, str) and rel
+    }
+    return rels, {
+        "enabled": True,
+        "path": str(path),
+        "found": True,
+        "files": len(rels),
+        "generated_at": inventory.get("generated_at"),
+        "complete": inventory.get("complete", True),
+        "remote": inventory.get("remote"),
+    }
+
+
+def ftp_status_for(layer: str, on_ftp: bool) -> str:
+    if on_ftp:
+        return FTP_ON
+    if layer in ("ROOT", "BOTH"):
+        return FTP_PHYSICAL
+    return FTP_DELETED
 
 
 def load_index(path: Path) -> dict:
@@ -170,6 +242,8 @@ def build_payload(
     workers: int,
     root: Path,
     patch: Path | None,
+    ftp_rels: set[str] | None = None,
+    preserve_ftp: bool = True,
 ) -> tuple[dict, dict]:
     entries: dict[str, dict] = {}
     errors: list[dict] = []
@@ -178,6 +252,12 @@ def build_payload(
     for rel in sorted(scan):
         item = scan[rel]
         old = None if full else old_entries.get(rel)
+        if ftp_rels is not None:
+            ftp_status = ftp_status_for(item["layer"], rel.lower() in ftp_rels)
+        elif preserve_ftp and old:
+            ftp_status = old.get("ftp_status")
+        else:
+            ftp_status = None
         if (
             old
             and old.get("size") == item["size"]
@@ -201,6 +281,8 @@ def build_payload(
             "fingerprint": fingerprint,
             "members": members or [],
         }
+        if ftp_status:
+            entries[rel]["ftp_status"] = ftp_status
         if item.get("src_rel"):
             entries[rel]["src_rel"] = item["src_rel"]
 
@@ -224,6 +306,21 @@ def build_payload(
                     "error": member["error"],
                 })
 
+    ftp_counts = {
+        "ftp_on": 0,
+        "ftp_physical_dvd": 0,
+        "ftp_deleted": 0,
+        "ftp_unknown": 0,
+    }
+    by_status = {
+        FTP_ON: "ftp_on",
+        FTP_PHYSICAL: "ftp_physical_dvd",
+        FTP_DELETED: "ftp_deleted",
+    }
+    for entry in entries.values():
+        status = entry.get("ftp_status")
+        ftp_counts[by_status.get(status, "ftp_unknown")] += 1
+
     payload = {
         "schema": SCHEMA,
         "tool": "tools/full-index-gen",
@@ -232,6 +329,7 @@ def build_payload(
             "zips": len(entries),
             "members": sum(len(entry["members"]) for entry in entries.values()),
             "errors": len(errors),
+            **ftp_counts,
         },
         "errors": errors,
         "entries": entries,
@@ -263,6 +361,18 @@ def command_run(args) -> int:
         return 0
 
     old = load_index(out)
+    ftp_rels, inventory = resolve_inventory(args)
+    if inventory.get("found"):
+        print(
+            f"ftp inventory: {inventory['path']} "
+            f"({inventory.get('files', 0)} files)"
+        )
+    elif inventory.get("enabled"):
+        print(
+            f"ftp inventory not found: {inventory.get('path')} "
+            "(keeping existing ftp_status values)",
+            file=sys.stderr,
+        )
     payload, stats = build_payload(
         scan,
         old.get("entries", {}),
@@ -270,6 +380,8 @@ def command_run(args) -> int:
         workers=args.workers,
         root=root,
         patch=patch,
+        ftp_rels=ftp_rels,
+        preserve_ftp=not args.no_ftp_status,
     )
     write_index(out, payload)
     counts = payload["counts"]
@@ -277,6 +389,11 @@ def command_run(args) -> int:
         f"wrote {out}: {counts['zips']} zips, {counts['members']} members "
         f"(hashed {stats['hashed']}, reused {stats['reused']}, "
         f"errors {counts['errors']})"
+    )
+    print(
+        "ftp status: "
+        f"on_ftp {counts['ftp_on']}, physical {counts['ftp_physical_dvd']}, "
+        f"deleted {counts['ftp_deleted']}, unknown {counts['ftp_unknown']}"
     )
     return 0
 
@@ -292,6 +409,9 @@ def command_check(args) -> int:
     index = load_index(out)
     old_entries = index.get("entries", {})
     scan = build_scan(cfg, scopes, root, patch, only=args.only)
+    ftp_rels, inventory = resolve_inventory(args)
+    if inventory.get("found"):
+        print(f"ftp inventory: {inventory['path']} ({inventory.get('files', 0)} files)")
 
     missing = sorted(set(scan) - set(old_entries))
     extra = sorted(set(old_entries) - set(scan))
@@ -299,11 +419,18 @@ def command_check(args) -> int:
     for rel in sorted(set(scan) & set(old_entries)):
         new = scan[rel]
         old = old_entries[rel]
+        ftp_changed = False
+        if ftp_rels is not None:
+            expected = ftp_status_for(new["layer"], rel.lower() in ftp_rels)
+            ftp_changed = old.get("ftp_status") != expected
+        elif args.no_ftp_status:
+            ftp_changed = bool(old.get("ftp_status"))
         if (
             old.get("size") != new["size"]
             or old.get("mtime") != new["mtime"]
             or old.get("section") != new["section"]
             or old.get("layer") != new["layer"]
+            or ftp_changed
         ):
             changed.append(rel)
 
@@ -418,6 +545,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--parity",
         action="store_true",
         help="compare rel/layer with the screenshot index (check command)",
+    )
+    parser.add_argument(
+        "--ftp-inventory",
+        default="",
+        help=(
+            "archive-sync remote-inventory.json.gz "
+            "(default: <state>/archive-sync/remote-inventory.json.gz)"
+        ),
+    )
+    parser.add_argument(
+        "--no-ftp-status",
+        action="store_true",
+        help="do not read the FTP inventory and clear ftp_status",
+    )
+    parser.add_argument(
+        "--keep-ftp-status",
+        action="store_true",
+        help=(
+            "do not read the FTP inventory; keep the existing ftp_status "
+            "values (used after partial syncs)"
+        ),
     )
     return parser.parse_args(argv)
 

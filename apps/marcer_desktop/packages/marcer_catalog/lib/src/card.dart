@@ -53,6 +53,18 @@ const List<String> kStatusFilterKeys = [
 
 const List<String> kSortKeys = ['name', 'year', 'publisher', 'cracker', 'crew'];
 
+/// FTP availability of a ZIP, published by `tools/full-index-gen` from the
+/// archive-sync inventory (`ftp_status`).
+const String kFtpStatusOn = 'on_ftp';
+const String kFtpStatusPhysicalDvd = 'physical_dvd';
+const String kFtpStatusDeleted = 'ftp_deleted';
+
+/// Badge labels of the two unavailable FTP states; `on_ftp` has no badge.
+const Map<String, String> kFtpStatusLabels = {
+  kFtpStatusPhysicalDvd: 'PHYSICAL-DVD',
+  kFtpStatusDeleted: 'FTP-DELETED',
+};
+
 final RegExp _yearRe = RegExp(r'\d{4}');
 
 /// First 4-digit year in a release string (gallery `extract_year`).
@@ -73,6 +85,7 @@ class CardVariant {
     this.candidatePaths = const [],
     this.size,
     this.tos,
+    this.ftpStatus,
   });
 
   final String rel;
@@ -95,6 +108,10 @@ class CardVariant {
   /// (`1.04`), e.g. `1.02` (`SPEC-screenshot-generator.md` §7.5). `null` means
   /// the default TOS.
   final String? tos;
+
+  /// Remote availability (`on_ftp`/`physical_dvd`/`ftp_deleted`); null when the
+  /// index has no inventory status.
+  final String? ftpStatus;
 }
 
 /// Flattened first-XLS-variant info for display (gallery
@@ -261,6 +278,23 @@ class GameCard {
   final bool screenshots;
   final Map<String, int> statusCounts;
   final String layer;
+
+  /// Unavailable FTP states of this card's ZIP variants (no `on_ftp`).
+  Set<String> get ftpStatuses => {
+    for (final variant in variants)
+      if (variant.ftpStatus != null && variant.ftpStatus != kFtpStatusOn)
+        variant.ftpStatus!,
+  };
+
+  /// True when at least one variant is known to be on FTP (or has no status);
+  /// false only when every known variant is unavailable from FTP.
+  bool get hasFtpSource =>
+      variants.isEmpty ||
+      variants.any(
+        (variant) =>
+            variant.ftpStatus == null || variant.ftpStatus == kFtpStatusOn,
+      );
+
   final String year;
   final String? previewPath;
   final List<CardVariant> variants;
@@ -465,6 +499,7 @@ GameCard buildIndexedCard({
           e.candidates.map((c) => fullPng(rel, c)).whereType<String>().toList(),
       size: e.size,
       tos: e.tos,
+      ftpStatus: e.ftpStatus,
     ));
   }
   var displayStatus = 'pending';

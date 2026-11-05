@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import sys
@@ -76,6 +77,24 @@ def make_options(tmp: Path, **overrides) -> cu.Options:
 def make_tree(root: Path, tree: str, *dirs: str) -> None:
     for rel in dirs:
         (root / tree / rel).mkdir(parents=True, exist_ok=True)
+
+
+def write_inventory(
+    opts: cu.Options,
+    files: dict | None = None,
+) -> Path:
+    path = opts.sync_report_dir / cu.SYNC_INVENTORY_NAME
+    payload = {
+        "schema": 1,
+        "tool": "archive-sync",
+        "complete": True,
+        "remote": "/GameDVD/",
+        "generated_at": "2026-11-05T00:00:00Z",
+        "files": files or {},
+    }
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        json.dump(payload, handle)
+    return path
 
 
 def write_changes(
@@ -294,6 +313,56 @@ class CatalogUpdateTests(unittest.TestCase):
         self.assertIn("crew-analysis", names)
         self.assertIn("asset-publish", names)
 
+    def test_full_index_uses_sync_inventory(self) -> None:
+        new_rel = f"{PD_TREE}/A/New Game.zip"
+        write_changes(self.opts, new=(new_rel,))
+        inventory = write_inventory(
+            self.opts, {new_rel: {"size": 1, "mtime": None}}
+        )
+        runner = FakeRunner(
+            {
+                "gameinfo check": (0, ""),
+                "full-index run": (0, ""),
+                "full-index check (final)": (0, ""),
+                **publish_responses("would-create-upload"),
+            }
+        )
+        self.assertEqual(cu.run_update(self.opts, runner), 0)
+        for name in ("full-index run", "full-index check (final)"):
+            argv = next(argv for call, argv, _ in runner.calls if call == name)
+            self.assertIn("--ftp-inventory", argv)
+            self.assertEqual(
+                argv[argv.index("--ftp-inventory") + 1], str(inventory)
+            )
+        report = json.loads(
+            next((self.opts.report_dir / "runs").glob("*.json")).read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(report["sync"]["inventory"]["exists"])
+        self.assertEqual(report["sync"]["inventory"]["files"], 1)
+        self.assertTrue(report["sync"]["inventory"]["complete"])
+
+    def test_ftp_status_change_rebuilds_full_index(self) -> None:
+        write_changes(self.opts)
+        inventory = write_inventory(self.opts, {"x.zip": {"size": 1, "mtime": None}})
+        runner = FakeRunner(
+            {
+                "gameinfo check": (0, ""),
+                "full-index check": (1, ""),
+                "full-index run": (0, ""),
+                "full-index check (final)": (0, ""),
+                **publish_responses("would-create-upload"),
+            }
+        )
+        self.assertEqual(cu.run_update(self.opts, runner), 0)
+        self.assertIn("full-index run", runner.names())
+        for name in ("full-index check", "full-index run", "full-index check (final)"):
+            argv = next(argv for call, argv, _ in runner.calls if call == name)
+            self.assertEqual(
+                argv[argv.index("--ftp-inventory") + 1], str(inventory)
+            )
+
     def test_sync_failure_aborts_and_writes_error_report(self) -> None:
         write_changes(self.opts)
         runner = FakeRunner({"archive-sync": (1, "")})
@@ -416,6 +485,11 @@ class CatalogUpdateTests(unittest.TestCase):
         self.assertIn("Title Sorted/PD Games - Title Sorted/T", argv)
         self.assertIn("--exclude", argv)
         self.assertIn("*.bak", argv)
+        fi_argv = next(
+            argv for name, argv, _ in runner.calls if name == "full-index check"
+        )
+        self.assertIn("--keep-ftp-status", fi_argv)
+        self.assertNotIn("--ftp-inventory", fi_argv)
 
 
 if __name__ == "__main__":

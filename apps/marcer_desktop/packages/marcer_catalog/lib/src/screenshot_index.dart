@@ -218,6 +218,7 @@ class ScreenshotIndices {
         size: entry.size,
         zipContents: const [],
         tos: null,
+        ftpStatus: entry.ftpStatus,
       );
     });
     for (final section in kSectionIndexNames.keys) {
@@ -255,6 +256,7 @@ class ScreenshotIndices {
       size: shot.size ?? base.size,
       zipContents: shot.zipContents,
       tos: shot.tos,
+      ftpStatus: shot.ftpStatus ?? base.ftpStatus,
     );
   }
 
@@ -327,6 +329,7 @@ class ScreenshotEntry {
     this.size,
     this.zipContents = const [],
     this.tos,
+    this.ftpStatus,
   });
 
   factory ScreenshotEntry.fromJson(String key, Map<String, dynamic> json) {
@@ -347,6 +350,9 @@ class ScreenshotEntry {
       tos: (json['tos'] as String?)?.trim().isEmpty ?? true
           ? null
           : (json['tos'] as String).trim(),
+      ftpStatus: (json['ftp_status'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : (json['ftp_status'] as String).trim(),
     );
   }
 
@@ -372,6 +378,10 @@ class ScreenshotEntry {
   /// the default (`1.04`) — e.g. `1.02` for old titles that hang on TOS 1.04
   /// (`SPEC-screenshot-generator.md` §7.5). `null` means the default TOS.
   final String? tos;
+
+  /// Remote availability from the full index (`on_ftp`/`physical_dvd`/
+  /// `ftp_deleted`); null when no inventory status is published.
+  final String? ftpStatus;
 
   /// Manual curation: set a new status/kind pair in memory (the pending
   /// map in the controller keeps the original values for discard/save).

@@ -53,6 +53,11 @@ class _CenterGridState extends State<CenterGrid> {
   static const double _cardWidth = 220;
   static const double _footerHeight = 52;
 
+  List<String> _ftpBadges(CatalogController c, GameCard card) {
+    final statuses = c.ftpStatusesOfCard(card).toList()..sort();
+    return [for (final status in statuses) kFtpStatusLabels[status] ?? status];
+  }
+
   final FocusNode _internalFocusNode = FocusNode(debugLabel: 'card-grid');
   FocusNode get _focusNode => widget.focusNode ?? _internalFocusNode;
   final ScrollController _scroll = ScrollController();
@@ -480,9 +485,8 @@ class _CenterGridState extends State<CenterGrid> {
       if (!synthetic && card.variants.length > 1) '×${card.variants.length}',
       if (!synthetic && layer != null && layer.isNotEmpty) layer,
       if (!synthetic && missing == true) 'MISSING',
-      if (!synthetic &&
-          card.tosVersion != null &&
-          card.tosVersion!.isNotEmpty)
+      if (!synthetic) ..._ftpBadges(c, card),
+      if (!synthetic && card.tosVersion != null && card.tosVersion!.isNotEmpty)
         'TOS ${card.tosVersion}',
       if (!synthetic && card.displayStatus.isNotEmpty) card.displayStatus,
       if (!synthetic && card.year != 'unknown') card.year,

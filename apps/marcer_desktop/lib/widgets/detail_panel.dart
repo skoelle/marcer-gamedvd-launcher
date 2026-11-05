@@ -177,6 +177,7 @@ class DetailPanel extends StatelessWidget {
     // (possibly network) filesystem. Badges/rows appear once the scan lands.
     c.ensureCardScanned(card);
     final variants = c.cachedVariantsOfCard(card) ?? const <CardVariant>[];
+    final ftpStatuses = c.ftpStatusesOfCard(card);
     final layer = c.cachedCardLayer(card);
     final missing = c.cachedCardMissing(card);
     final al = c.atariLegendForCard(card);
@@ -221,6 +222,11 @@ class DetailPanel extends StatelessWidget {
                   if (layer != null && layer.isNotEmpty)
                     _badge(layer, _layerColorName(layer)),
                   if (missing == true) _badge('MISSING', Colors.redAccent),
+                  for (final status in ftpStatuses)
+                    _badge(
+                      kFtpStatusLabels[status] ?? status,
+                      _ftpColor(status),
+                    ),
                   if (card.tosVersion != null && card.tosVersion!.isNotEmpty)
                     _badge('TOS ${card.tosVersion}', Colors.deepOrange),
                   if (card.displayStatus.isNotEmpty)
@@ -315,11 +321,14 @@ class DetailPanel extends StatelessWidget {
       );
     }
     final busy = c.downloading;
+    final canDownload = c.cardHasFtpSource(card);
     return Align(
       alignment: Alignment.centerLeft,
       child: Builder(
         builder: (context) => OutlinedButton.icon(
-          onPressed: busy ? null : () => _startDownload(context, c, card),
+          onPressed: busy || !canDownload
+              ? null
+              : () => _startDownload(context, c, card),
           icon: const Icon(Icons.download, size: 16),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.redAccent,
@@ -329,7 +338,9 @@ class DetailPanel extends StatelessWidget {
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           label: Text(
-            c.ftpConfigured
+            !canDownload
+                ? 'Not available on FTP'
+                : c.ftpConfigured
                 ? 'Download folder'
                 : 'Download folder (FTP not set)',
             style: const TextStyle(fontSize: 12),
@@ -391,8 +402,14 @@ class DetailPanel extends StatelessWidget {
       size: v.size,
       missing: layer != null && layer.isEmpty,
       tos: v.tos,
+      ftpStatus: v.ftpStatus,
     );
   }
+
+  Color _ftpColor(String status) => switch (status) {
+    kFtpStatusDeleted => Colors.redAccent,
+    _ => Colors.orange,
+  };
 
   Color _layerColorName(String layer) => switch (layer) {
     'BOTH' => Colors.green,

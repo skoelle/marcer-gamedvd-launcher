@@ -181,6 +181,12 @@ dokumentiert. Es bestehen keine offenen Punkte mehr.
   optionaler Hash-Modus ist derzeit nicht erforderlich.
 - **Löschungen/Renames:** bewusst nur reported, nicht übernommen (No-Delete-/
   No-Rename-Policy der Pipeline). Verhalten bestätigt.
+- **FTP-Löschungen:** Ein vollständiger `archive-sync`-Scan schreibt
+  `state/archive-sync/remote-inventory.json.gz`; `full-index-gen` markiert
+  betroffene ZIPs als `physical_dvd` (lokal in ROOT/BOTH) oder `ftp_deleted`
+  (nur PATCH) und die Desktop-App zeigt `PHYSICAL-DVD`/`FTP-DELETED`-Badges.
+  Partielle Scans überschreiben den Snapshot nicht; lokale Dateien werden
+  weiterhin nie gelöscht, der FTP erhält kein `DELE`.
 - **NAS-Dateisperren:** `flock` ist unzuverlässig; die Sperre ist daher über
   PID plus Heartbeat-Marker (`pipeline.lock`, `_reconcile`/`_heartbeat` in
   `tools/catalog-pipeline/jobs.py`) abgesichert. Verifiziert.

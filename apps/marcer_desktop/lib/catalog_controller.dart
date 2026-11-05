@@ -1148,6 +1148,31 @@ class CatalogController extends ChangeNotifier {
   /// Without it the app keeps the previous title-only PirateFinder behavior.
   bool get hasFullIndex => _fullIndex?.isEmpty == false;
 
+  /// FTP availability of [rel] from the full index, if published.
+  String? ftpStatusForRel(String rel) => _fullIndex?[_relKey(rel)]?.ftpStatus;
+
+  /// Unavailable FTP states of [card]'s cached variants (no `on_ftp`).
+  Set<String> ftpStatusesOfCard(GameCard card) {
+    final cached = cachedVariantsOfCard(card);
+    if (cached == null) return card.ftpStatuses;
+    return {
+      for (final variant in cached)
+        if (variant.ftpStatus != null && variant.ftpStatus != kFtpStatusOn)
+          variant.ftpStatus!,
+    };
+  }
+
+  /// False only when every known variant is unavailable from FTP.
+  bool cardHasFtpSource(GameCard card) {
+    final cached = cachedVariantsOfCard(card);
+    if (cached == null) return card.hasFtpSource;
+    if (cached.isEmpty) return true;
+    return cached.any(
+      (variant) =>
+          variant.ftpStatus == null || variant.ftpStatus == kFtpStatusOn,
+    );
+  }
+
   /// Exact match for a card via the precomputed full-index hashes of [rel]
   /// (the ZIP shown in the detail view). Falls back to the title match.
   PirateFinderMatch? pirateFinderIndexMatchForCard(
@@ -1778,6 +1803,7 @@ class CatalogController extends ChangeNotifier {
             name: p.basename(rel),
             status: '',
             layer: _zipLayerCache[rel] ?? '',
+            ftpStatus: ftpStatusForRel(rel),
           ),
       ];
       _resolvedCardVariants[card] = out;
@@ -1792,6 +1818,7 @@ class CatalogController extends ChangeNotifier {
           name: e.name,
           status: '',
           layer: e.layerStatus.name.toUpperCase(),
+          ftpStatus: ftpStatusForRel('$dir/${e.name}'),
         ),
       );
     }
@@ -1820,6 +1847,7 @@ class CatalogController extends ChangeNotifier {
           name: p.basename(rel),
           status: '',
           layer: _zipLayerCache[rel] ?? '',
+          ftpStatus: ftpStatusForRel(rel),
         ),
     ];
     _resolvedCardVariants[card] = out;
@@ -2076,6 +2104,13 @@ class CatalogController extends ChangeNotifier {
     if (!config.ftpConfigured) {
       downloadError =
           'FTP not configured — set Host/User/Password in Settings.';
+      notifyListeners();
+      return;
+    }
+    if (!cardHasFtpSource(card)) {
+      downloadError =
+          'Not available on FTP (physical DVD or deleted) — '
+          'download skipped.';
       notifyListeners();
       return;
     }

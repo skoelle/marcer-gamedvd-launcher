@@ -169,6 +169,20 @@ class FullIndexTests(unittest.TestCase):
         with gzip.open(self.out, "rt", encoding="utf-8") as handle:
             return json.load(handle)
 
+    def write_inventory(self, files: dict, name: str = "inventory.json.gz") -> Path:
+        path = Path(self.tmp.name) / name
+        payload = {
+            "schema": 1,
+            "tool": "archive-sync",
+            "complete": True,
+            "remote": "/GameDVD/",
+            "generated_at": "2026-11-05T00:00:00Z",
+            "files": files,
+        }
+        with gzip.open(path, "wt", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        return path
+
     def test_run_writes_layer_hashes_and_section(self) -> None:
         self.assertEqual(self.run_tool(), 0)
         data = self.load()
@@ -201,6 +215,109 @@ class FullIndexTests(unittest.TestCase):
         second = self.out.read_bytes()
         self.assertEqual(first, second)
         self.assertEqual(calls, [])
+
+    def test_ftp_status_from_inventory(self) -> None:
+        write_zip(
+            self.patch / CRACKED / "Z" / "Zeta" / "Zeta.zip",
+            {"zeta.st": raw_image(5)},
+        )
+        alpha = f"{CRACKED}/A/Alpha/Alpha - Crew.zip"
+        disk2 = f"{CRACKED}/A/Alpha/Alpha - Crew - Disk 2.zip"
+        beta = f"{CRACKED}/B/Beta/Beta.zip"
+        zeta = f"{CRACKED}/Z/Zeta/Zeta.zip"
+        inventory = self.write_inventory(
+            {alpha: {"size": 1, "mtime": None}}
+        )
+        self.assertEqual(
+            self.run_tool("--ftp-inventory", str(inventory)), 0
+        )
+        data = self.load()
+        entries = data["entries"]
+        self.assertEqual(entries[alpha]["ftp_status"], "on_ftp")
+        self.assertEqual(entries[disk2]["ftp_status"], "physical_dvd")
+        self.assertEqual(entries[beta]["ftp_status"], "physical_dvd")
+        self.assertEqual(entries[zeta]["ftp_status"], "ftp_deleted")
+        self.assertEqual(data["counts"]["ftp_on"], 1)
+        self.assertEqual(data["counts"]["ftp_physical_dvd"], 2)
+        self.assertEqual(data["counts"]["ftp_deleted"], 1)
+        self.assertEqual(data["counts"]["ftp_unknown"], 0)
+        self.assertEqual(data["schema"], 2)
+
+    def test_ftp_status_inventory_is_case_insensitive(self) -> None:
+        alpha = f"{CRACKED}/A/Alpha/Alpha - Crew.zip"
+        inventory = self.write_inventory(
+            {alpha.upper(): {"size": 1, "mtime": None}}
+        )
+        self.assertEqual(self.run_tool("--ftp-inventory", str(inventory)), 0)
+        entries = self.load()["entries"]
+        self.assertEqual(entries[alpha]["ftp_status"], "on_ftp")
+
+    def test_ftp_status_is_preserved_without_inventory(self) -> None:
+        alpha = f"{CRACKED}/A/Alpha/Alpha - Crew.zip"
+        inventory = self.write_inventory(
+            {alpha: {"size": 1, "mtime": None}}
+        )
+        self.assertEqual(self.run_tool("--ftp-inventory", str(inventory)), 0)
+        first = {
+            rel: value.get("ftp_status")
+            for rel, value in self.load()["entries"].items()
+        }
+        missing = Path(self.tmp.name) / "does-not-exist.json.gz"
+        self.assertEqual(self.run_tool("--ftp-inventory", str(missing)), 0)
+        second = {
+            rel: value.get("ftp_status")
+            for rel, value in self.load()["entries"].items()
+        }
+        self.assertEqual(first, second)
+        empty = self.write_inventory({}, name="keep.json.gz")
+        self.assertEqual(
+            self.run_tool(
+                "--ftp-inventory", str(empty), "--keep-ftp-status"
+            ),
+            0,
+        )
+        kept = {
+            rel: value.get("ftp_status")
+            for rel, value in self.load()["entries"].items()
+        }
+        self.assertEqual(first, kept)
+        self.assertEqual(self.run_tool("--no-ftp-status"), 0)
+        cleared = self.load()["entries"]
+        self.assertFalse(any("ftp_status" in value for value in cleared.values()))
+
+    def test_check_detects_ftp_status_change(self) -> None:
+        alpha = f"{CRACKED}/A/Alpha/Alpha - Crew.zip"
+        inventory = self.write_inventory(
+            {alpha: {"size": 1, "mtime": None}}
+        )
+        self.assertEqual(self.run_tool("--ftp-inventory", str(inventory)), 0)
+        empty = self.write_inventory({}, name="empty.json.gz")
+        status = fig.main([
+            "check",
+            "--root", str(self.root),
+            "--patch", str(self.patch),
+            "--out", str(self.out),
+            "--scope", "cracked",
+            "--ftp-inventory", str(empty),
+        ])
+        self.assertEqual(status, 1)
+
+    def test_check_ignores_ftp_without_inventory(self) -> None:
+        alpha = f"{CRACKED}/A/Alpha/Alpha - Crew.zip"
+        inventory = self.write_inventory(
+            {alpha: {"size": 1, "mtime": None}}
+        )
+        self.assertEqual(self.run_tool("--ftp-inventory", str(inventory)), 0)
+        missing = Path(self.tmp.name) / "does-not-exist.json.gz"
+        status = fig.main([
+            "check",
+            "--root", str(self.root),
+            "--patch", str(self.patch),
+            "--out", str(self.out),
+            "--scope", "cracked",
+            "--ftp-inventory", str(missing),
+        ])
+        self.assertEqual(status, 0)
 
     def test_check_detects_change(self) -> None:
         self.assertEqual(self.run_tool(), 0)

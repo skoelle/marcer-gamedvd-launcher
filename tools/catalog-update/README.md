@@ -5,7 +5,7 @@ Runs the local catalog pipeline once:
 ```text
 archive-sync
   -> gameinfo-gen (when needed)
-  -> full-index-gen (when needed)
+  -> full-index-gen (when needed, with the archive-sync inventory)
   -> crew-analysis (when needed)
   -> asset-publish (only when the gameinfo content changed)
 ```
@@ -56,7 +56,7 @@ the PD/T folder.
 | Sync failed | abort |
 | `gameinfo-gen check` fails | `gameinfo-gen extract` |
 | new folder in `cracked`, `pd` or `utils` | `gameinfo-gen extract` |
-| new/changed ZIPs, gameinfo rebuilt or full index stale | `full-index-gen run` |
+| new/changed ZIPs, gameinfo rebuilt, full index stale or FTP status changed | `full-index-gen run` |
 | gameinfo rebuilt or cracked tree changed | `crew-analysis` (ranking) |
 | gameinfo content changed or upload/manifest pending | `asset-publish --upload` |
 | nothing changed | publish skipped |
@@ -65,6 +65,18 @@ New folders are detected from the sync report without walking the whole
 archive: a parent folder that is absent in root and has no older patch files
 counts as new. A new ZIP inside an existing folder therefore does not trigger
 a needless gameinfo rebuild.
+
+A full sync passes
+`--ftp-inventory <sync-report-dir>/remote-inventory.json.gz` to
+`full-index-gen check`/`run`, so ZIPs that disappeared from FTP (but still
+exist on the physical DVD or only in the old patch layer) are marked in
+`full-index.json.gz`. If only that status changes, the check fails, the index
+is rebuilt and the changed gameinfo asset is published; no local file is
+deleted.
+
+A targeted run (`--only`) uses `--keep-ftp-status` instead: that partial sync
+does not refresh the complete inventory, so the existing FTP badges are kept
+until the next full scan.
 
 ## Publish gate
 
@@ -94,7 +106,8 @@ Unless `--dry-run` is used, each run writes
 
 - overall status and error
 - executed steps with args, exit code and duration
-- sync counts and detected new gameinfo folders
+- sync counts, detected new gameinfo folders and the remote inventory state
+  (`path`, `exists`, `complete`, `generated_at`, `files`)
 - whether gameinfo, full index, crew analysis and publish ran
 - publish status
 

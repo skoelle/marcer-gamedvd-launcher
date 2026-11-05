@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import calendar
 import fnmatch
+import gzip
 import json
 import os
 import posixpath
@@ -44,8 +45,10 @@ sys.path.insert(0, str(_REPO_ROOT / "tools"))
 
 from _lib import pipeline_paths  # noqa: E402
 
-TOOL_VERSION = "0.2.1"
-REPORT_SCHEMA = 2
+TOOL_VERSION = "0.3.0"
+REPORT_SCHEMA = 3
+INVENTORY_SCHEMA = 1
+INVENTORY_FILE = "remote-inventory.json.gz"
 DEFAULT_REMOTE = "/GameDVD/"
 FALLBACK_ENCODING = "latin-1"
 DEFAULT_EXCLUDES = (
@@ -232,6 +235,25 @@ def atomic_write_text(path: Path, text: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def atomic_write_gzip_json(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(
+        data, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    blob = gzip.compress(payload, compresslevel=6, mtime=0)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp-", suffix=".gz")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(blob)
         os.replace(tmp, path)
     except BaseException:
         try:
@@ -941,6 +963,46 @@ def build_plan(
     )
 
 
+def write_remote_inventory(
+    cfg: Config, scan: RemoteScan, complete: bool
+) -> dict:
+    """Write the complete remote file inventory used by the catalog pipeline.
+
+    Unlike the sync comparison, this snapshot is a run output: it only records
+    which files exist on the FTP at scan time. It is written exclusively for a
+    complete scan (no ``--only`` and no unreadable directories), so a partial
+    run never makes local files look deleted.
+    """
+    path = cfg.report_dir / INVENTORY_FILE
+    meta = {
+        "path": str(path),
+        "written": False,
+        "complete": complete,
+        "generated_at": None,
+        "files": len(scan.files),
+    }
+    if not complete:
+        return meta
+    generated_at = iso_now()
+    payload = {
+        "schema": INVENTORY_SCHEMA,
+        "tool": "archive-sync",
+        "tool_version": TOOL_VERSION,
+        "generated_at": generated_at,
+        "remote": cfg.remote,
+        "complete": True,
+        "excludes": list(cfg.excludes),
+        "files": {
+            rel: {"size": scan.files[rel].size, "mtime": scan.files[rel].mtime}
+            for rel in sorted(scan.files)
+        },
+    }
+    atomic_write_gzip_json(path, payload)
+    meta["written"] = True
+    meta["generated_at"] = generated_at
+    return meta
+
+
 def execute_downloads(
     client: FtpClient, cfg: Config, downloads: list[Download]
 ) -> tuple[list[dict], list[dict]]:
@@ -1010,6 +1072,7 @@ def build_report(
     errors: list[dict],
     duration_s: float,
     mode: str,
+    inventory: dict | None = None,
 ) -> dict:
     counts = {
         "remote_files": len(plan.remote),
@@ -1076,7 +1139,19 @@ def build_report(
         "local_conflicts": plan.local_conflicts,
         "warnings": plan.warnings,
         "incomplete_dirs": plan.incomplete_dirs,
+        "remote_inventory": inventory,
     }
+
+
+def _inventory_lines(inventory: dict | None) -> list[str]:
+    if not inventory:
+        return []
+    status = (
+        f"{inventory.get('files', 0)} files"
+        if inventory.get("written")
+        else "not updated (partial or incomplete scan)"
+    )
+    return [f"remote inventory: {inventory.get('path')} ({status})"]
 
 
 def render_report(report: dict, limit: int = 0) -> str:
@@ -1088,6 +1163,7 @@ def render_report(report: dict, limit: int = 0) -> str:
         f"root: {report['local']['root'] or '-'}",
         f"patch: {report['local']['patch']}",
         "",
+        *_inventory_lines(report.get("remote_inventory")),
         f"remote files: {counts['remote_files']}",
         f"new (missing locally): {counts['new']}",
         f"changed (size differs): {counts['changed']}",
@@ -1160,6 +1236,8 @@ def print_summary(report: dict) -> None:
     print(f"remote: {report['remote']}")
     print(f"root:   {report['local']['root'] or '-'}")
     print(f"patch:  {report['local']['patch']}")
+    for line in _inventory_lines(report.get("remote_inventory")):
+        print(line)
     print(f"remote files: {counts['remote_files']}")
     print(
         "new: {new}  changed: {changed}  in sync: {in_sync}  "
@@ -1215,9 +1293,17 @@ def run_sync(cfg: Config, dry_run: bool) -> int:
             print_summary(report)
             return 1 if scan.incomplete else 0
 
+        complete = not cfg.only and not scan.incomplete
+        inventory = write_remote_inventory(cfg, scan, complete)
         downloaded, errors = execute_downloads(client, cfg, plan.downloads)
         report = build_report(
-            cfg, plan, downloaded, errors, time.monotonic() - started, mode="sync"
+            cfg,
+            plan,
+            downloaded,
+            errors,
+            time.monotonic() - started,
+            mode="sync",
+            inventory=inventory,
         )
         cfg.report_dir.mkdir(parents=True, exist_ok=True)
         atomic_write_json(cfg.report_dir / "changes.json", report)
@@ -1251,6 +1337,7 @@ def cmd_status(args) -> int:
         "mode": (last_changes or {}).get("mode"),
         "counts": counts,
         "incomplete_dirs": (last_changes or {}).get("incomplete_dirs") or [],
+        "remote_inventory": (last_changes or {}).get("remote_inventory"),
     }
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))

@@ -138,6 +138,37 @@ void main() {
     expect(c.downloadError, isNull);
   });
 
+  test('does not download a card whose ZIPs are gone from FTP', () async {
+    final fullEntry = {
+      ...entry(relBeta),
+      'section': 'cracked',
+      'ftp_status': 'ftp_deleted',
+      'size': 1,
+      'mtime': 1,
+      'members': <dynamic>[],
+    };
+    Directory('${tmp.path}/data/gameinfo').createSync(recursive: true);
+    File('${tmp.path}/data/gameinfo/full-index.json.gz').writeAsBytesSync(
+      gzip.encode(utf8.encode(jsonEncode({
+        'schema': 2,
+        'tool': 'tools/full-index-gen',
+        'entries': {relBeta: fullEntry},
+      }))),
+    );
+    c = CatalogController(cfg());
+    await c.init();
+    final card = beta();
+    expect(c.cardMissing(card), isTrue);
+    expect(c.ftpStatusesOfCard(card), {'ftp_deleted'});
+
+    final fake = _FakeDownloader();
+    c.downloader = fake;
+    await c.downloadMissing(card);
+
+    expect(fake.calls, 0);
+    expect(c.downloadError, contains('Not available on FTP'));
+  });
+
   test('resolves the game folder from the index rel when the first ZIP is '
       'nested (no section tree discovered)', () async {
     // Empty RootDirectory / no tree on disk — exactly the Download-missing

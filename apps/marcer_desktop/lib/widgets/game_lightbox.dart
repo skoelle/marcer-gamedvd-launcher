@@ -197,6 +197,7 @@ class _GameLightboxState extends State<GameLightbox> {
             origIndex: i,
             tos: variants[i].tos,
             missing: widget.controller.variantMissing(variants[i]),
+            ftpStatus: variants[i].ftpStatus,
           ),
       ];
       // ZIPs from the game folder itself always come before ZIPs from its
@@ -230,6 +231,7 @@ class _GameLightboxState extends State<GameLightbox> {
           rel: c.relOf(item),
           origIndex: 0,
           tos: shots?.tos,
+          ftpStatus: c.ftpStatusForRel(c.relOf(item)),
         ),
       ];
     }
@@ -758,6 +760,13 @@ class _GameLightboxState extends State<GameLightbox> {
     final counts = _statusCounts.entries
         .map((e) => '${e.value}× ${e.key}')
         .join('  ');
+    final itemForFtp = _item;
+    final ftpStatuses = itemForFtp is GameCard
+        ? widget.controller.ftpStatusesOfCard(itemForFtp)
+        : {
+            if (v?.ftpStatus != null && v!.ftpStatus != kFtpStatusOn)
+              v.ftpStatus!,
+          };
     // gallery `lb-sub` miss prefix: focus filter active but no ZIP matched.
     // pd/utils cards have no raw variants to match against (they resolve
     // lazily), so the prefix is limited to cards where focus could miss.
@@ -837,6 +846,8 @@ class _GameLightboxState extends State<GameLightbox> {
                 _badge(_layer!, Colors.green),
               if (item is GameCard && widget.controller.cardMissing(item))
                 _badge('MISSING', Colors.redAccent),
+              for (final status in ftpStatuses)
+                _badge(kFtpStatusLabels[status] ?? status, _ftpColor(status)),
               if (v?.tos != null && v!.tos!.isNotEmpty)
                 _badge('TOS ${v.tos}', Colors.deepOrange),
               if (counts.isNotEmpty) _badge(counts, Colors.blueGrey),
@@ -847,6 +858,11 @@ class _GameLightboxState extends State<GameLightbox> {
       ),
     );
   }
+
+  Color _ftpColor(String status) => switch (status) {
+    kFtpStatusDeleted => Colors.redAccent,
+    _ => Colors.orange,
+  };
 
   Widget _badge(String text, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -995,6 +1011,33 @@ class _GameLightboxState extends State<GameLightbox> {
                                   child: const Text(
                                     'MISSING',
                                     style: TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (v.ftpStatus != null &&
+                                v.ftpStatus != kFtpStatusOn)
+                              Positioned(
+                                left: 3,
+                                bottom: 3,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xCCB35C00),
+                                    borderRadius: BorderRadius.circular(7),
+                                  ),
+                                  child: Text(
+                                    v.ftpStatus == kFtpStatusDeleted
+                                        ? 'FTP-DEL'
+                                        : 'DVD',
+                                    style: const TextStyle(
                                       fontSize: 8,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
@@ -1183,6 +1226,7 @@ class _GameLightboxState extends State<GameLightbox> {
                   size: v.size,
                   missing: v.missing,
                   tos: v.tos,
+                  ftpStatus: v.ftpStatus,
                 ),
           filter: widget.controller.filter,
           onPlay: v == null ? null : _launchCurrent,
@@ -1369,6 +1413,7 @@ class _Variant {
     this.kind,
     this.tos,
     this.missing = false,
+    this.ftpStatus,
   });
 
   final String title;
@@ -1390,6 +1435,10 @@ class _Variant {
   /// True when the variant's ZIP is not present locally (neither root nor
   /// patch); marked in the filmstrip and the "This ZIP" table.
   final bool missing;
+
+  /// Remote availability (`on_ftp`/`physical_dvd`/`ftp_deleted`), shown as a
+  /// filmstrip marker and "This ZIP" row.
+  final String? ftpStatus;
 
   /// Index of this variant in the card's original `variants` order (used to
   /// map back for launch / focus; the display order groups previews first).

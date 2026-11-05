@@ -32,9 +32,9 @@ docker compose up -d
 The host paths are read from `docker/.env` for the Compose volume mounts. The
 pipeline state lives under `${HOST_DATA_DIR}/state` and is mounted as `/state`
 (`MARCER_STATE_DIR=/state`). Create that directory before the first start and
-match `PUID`/`PGID` to the owner of the NAS mounts. It contains `archive-sync/`, `catalog-update/`,
-`asset-publish/`, `crew-analysis/`, `jobs/`, `pipeline.lock` and
-`scheduler.json`.
+match `PUID`/`PGID` to the owner of the NAS mounts. It contains `archive-sync/` (including the complete
+`remote-inventory.json.gz`), `catalog-update/`, `asset-publish/`,
+`crew-analysis/`, `jobs/`, `pipeline.lock` and `scheduler.json`.
 
 ## Image
 

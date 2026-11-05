@@ -21,6 +21,7 @@ class ZipVariantView {
     this.missing = false,
     this.tos,
     this.hideStatus = false,
+    this.ftpStatus,
   });
 
   final String name;
@@ -45,6 +46,10 @@ class ZipVariantView {
   /// True when this ZIP is not present locally (neither root nor patch);
   /// shown as a dedicated red "Missing" row in the "This ZIP" table.
   final bool missing;
+
+  /// Remote availability (`on_ftp`/`physical_dvd`/`ftp_deleted`); the two
+  /// unavailable states get an "FTP" row in the "This ZIP" table.
+  final String? ftpStatus;
 }
 
 /// Gallery-style detail panel (`SPEC-gallery-webapp.md` §6.5 `lb-side`):
@@ -618,6 +623,8 @@ class GameInfoPanel extends StatelessWidget {
         ),
       if (v.tos != null && v.tos!.isNotEmpty) _kv('TOS', v.tos!),
       if (v.missing) _kv('Missing', 'yes — not present locally'),
+      if (v.ftpStatus != null && v.ftpStatus != kFtpStatusOn)
+        _kv('FTP', kFtpStatusLabels[v.ftpStatus] ?? v.ftpStatus!),
       if (v.layer.isNotEmpty) _kv('Layer', v.layer),
       if (v.size != null)
         _kv('Size', '${(v.size! / 1024).toStringAsFixed(0)} KB'),

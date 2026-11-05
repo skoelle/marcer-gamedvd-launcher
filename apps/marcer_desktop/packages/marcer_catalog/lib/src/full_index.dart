@@ -97,6 +97,7 @@ class FullIndexEntry {
     required this.fingerprint,
     required this.members,
     required this.hashes,
+    this.ftpStatus,
   });
 
   factory FullIndexEntry.fromJson(String rel, Map<String, dynamic> json) {
@@ -117,6 +118,9 @@ class FullIndexEntry {
       fingerprint: (json['fingerprint'] ?? '').toString(),
       members: members,
       hashes: hashes,
+      ftpStatus: (json['ftp_status'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : (json['ftp_status'] as String).trim(),
     );
   }
 
@@ -126,6 +130,12 @@ class FullIndexEntry {
   final int size;
   final int mtime;
   final String layer;
+
+  /// Remote availability from the archive-sync inventory:
+  /// `on_ftp`, `physical_dvd` (local ROOT/BOTH, no longer on FTP) or
+  /// `ftp_deleted` (local PATCH only, no longer on FTP). Null when the
+  /// published index carries no status (older index / no inventory).
+  final String? ftpStatus;
 
   /// Sorted `crc32:size` list of the image members (read from the ZIP central
   /// directory without decoding).

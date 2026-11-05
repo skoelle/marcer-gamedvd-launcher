@@ -154,6 +154,7 @@ consumer: a missing directory degrades to no metadata.
 | `games-utils.json` | Extracted `Utils_.xls` |
 | `manifest.json` | Generation metadata (4.3) |
 | `unmatched-report.txt` (optional) | Human-readable matching gaps |
+| `full-index.json.gz` | Screenshot-independent ZIP universe from `tools/full-index-gen` (4.4) |
 | `crews.json`, `crew-images.json` | Crew artifacts from `tools/crew-analysis` (see [`ANALYSIS-crews.md`](ANALYSIS-crews.md)) |
 
 One file per source kind keeps each file small and lets a consumer load only
@@ -224,6 +225,52 @@ the kinds it needs.
 
 Consumers use `generated_at`/source `mtime` to detect stale data without
 failing.
+
+### 4.4 `full-index.json.gz`
+
+Deterministic gzip JSON (schema `2`) generated from the on-disk ZIP trees
+only; it is the catalog universe and the source of the disk-image hashes used
+for exact PirateFinder matching:
+
+```json
+{
+  "schema": 2,
+  "tool": "tools/full-index-gen",
+  "counts": {
+    "zips": 19347, "members": 24000, "errors": 0,
+    "ftp_on": 18000, "ftp_physical_dvd": 1200,
+    "ftp_deleted": 147, "ftp_unknown": 0
+  },
+  "entries": {
+    "Title Sorted/Cracked Games - Title Sorted/A/Alpha/Alpha.zip": {
+      "section": "cracked",
+      "name": "Alpha.zip",
+      "size": 134227,
+      "mtime": 1700000000,
+      "layer": "ROOT",
+      "ftp_status": "physical_dvd",
+      "fingerprint": "a1454725:380945",
+      "members": [
+        {"name": "Alpha.MSA", "format": "msa", "crc32": "a1454725",
+         "size": 380945, "raw": {"sha1": "…"}, "file": {"sha1": "…"}}
+      ]
+    }
+  }
+}
+```
+
+- `entries` is keyed by the relative ZIP path; `section`/`layer` mirror the
+  catalog sections and the ROOT/PATCH/BOTH overlay.
+- `members[].raw` holds the decoded disk-image hashes (`.st`), `file` the
+  stored member hashes (`.msa`/`.stx`); `fingerprint` is the sorted
+  `crc32:size` list and allows renamed-ZIP matches.
+- `ftp_status` is optional and comes from the last **complete**
+  `archive-sync` remote inventory: `on_ftp`, `physical_dvd` (local ROOT/BOTH,
+  no longer on FTP) or `ftp_deleted` (local PATCH only, no longer on FTP).
+  Without an inventory the field is absent/kept; consumers must treat a
+  missing value as "unknown", never as deleted.
+- No local deletion or rename detection is performed; the index marks remote
+  availability, it does not mutate the trees.
 
 ---
 

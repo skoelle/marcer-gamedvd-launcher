@@ -8,7 +8,9 @@ machine-readable change report for the catalog pipeline.
 
 `archive-sync` **never** modifies the root tree and **never** deletes local
 files. Every run compares the current remote tree against the current local
-union (root + patch). There is **no persistent comparison state**.
+union (root + patch). There is **no persistent comparison state**; the only
+persisted file is the complete remote inventory consumed by
+`tools/full-index-gen` (see below).
 
 See [`docs/plans/PLAN-docker-pipeline.md`](../../docs/plans/PLAN-docker-pipeline.md) for the
 surrounding server pipeline.
@@ -112,6 +114,8 @@ Default files under the report directory:
 ```
 changes.json   machine-readable comparison of the last run
 changes.txt    human-readable report
+remote-inventory.json.gz
+               complete remote file inventory (only after a full scan)
 ```
 
 `changes.json` contains:
@@ -122,6 +126,17 @@ changes.txt    human-readable report
 - `downloads` (planned) and `downloaded` (completed)
 - `download_errors`, `case_conflicts`, `local_conflicts`, `warnings`
 - `incomplete_dirs` (directories whose listing failed)
+- `remote_inventory`: path, whether it was written, file count and timestamp
+
+`remote-inventory.json.gz` is written deterministically (sorted keys, gzip
+without timestamp, atomic replace) after a **complete** scan: `sync` without
+`--only` and without incomplete directories. The file holds every remote rel
+path in `files` plus `schema`, `tool`, `tool_version`, `generated_at`, `remote`,
+`complete` and the applied `excludes`. `plan`, `--only` runs and scans with
+incomplete directories keep the previous complete snapshot unchanged. The
+`status` command and the JSON report expose the last inventory state under
+`remote_inventory`; `tools/full-index-gen` uses it to annotate ZIPs with
+`ftp_status` (`on_ftp`, `physical_dvd`, `ftp_deleted`).
 
 Because there is no state, `status` simply shows the most recent
 `changes.json`. A failed download is retried automatically on the next run:

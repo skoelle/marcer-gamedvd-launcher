@@ -27,6 +27,7 @@ Map<String, dynamic> entry(
   String sha1 = 'sha',
   String layer = 'ROOT',
   String fingerprint = 'b2aa7578:512',
+  String? ftpStatus,
 }) => {
   'section': section,
   'name': rel.split('/').last,
@@ -35,6 +36,7 @@ Map<String, dynamic> entry(
   'layer': layer,
   'fingerprint': fingerprint,
   'members': [member('game.st', sha1)],
+  'ftp_status': ?ftpStatus,
 };
 
 void writeFullIndex(Directory dir, Map<String, dynamic> entries) {
@@ -63,7 +65,12 @@ void main() {
 
   test('loads entries, hashes and the fingerprint index', () {
     writeFullIndex(gameinfo, {
-      crackedRel: entry(crackedRel, 'cracked', sha1: 'aaa'),
+      crackedRel: entry(
+        crackedRel,
+        'cracked',
+        sha1: 'aaa',
+        ftpStatus: 'physical_dvd',
+      ),
       pdRel: entry(pdRel, 'pd', sha1: 'bbb', fingerprint: 'deadbeef:512'),
     });
     final full = FullIndex.load(gameinfo.path);
@@ -74,6 +81,36 @@ void main() {
     expect(full.hashesForRel(crackedRel).single['sha1'], 'aaa');
     expect(full.hashesForFingerprint('deadbeef:512').single['sha1'], 'bbb');
     expect(full[crackedRel]!.layer, 'ROOT');
+    expect(full[crackedRel]!.ftpStatus, 'physical_dvd');
+    expect(full[pdRel]!.ftpStatus, isNull);
+  });
+
+  test('merge carries ftp_status from the full index', () {
+    writeFullIndex(gameinfo, {
+      crackedRel: entry(crackedRel, 'cracked', ftpStatus: 'physical_dvd'),
+      crackedPatch: entry(crackedPatch, 'cracked', ftpStatus: 'ftp_deleted'),
+    });
+    final screenshotsDir = Directory('${tmp.path}/shots')..createSync();
+    File('${screenshotsDir.path}/index.json').writeAsStringSync(
+      jsonEncode({
+        'entries': {
+          crackedRel: {
+            'rel': crackedRel,
+            'name': 'Alpha - Crew.zip',
+            'status': 'done',
+            'kind': 'game',
+            'layer': 'ROOT',
+          },
+        },
+      }),
+    );
+    final merged = ScreenshotIndices.merge(
+      screenshots: ScreenshotIndices.load(screenshotsDir.path),
+      full: FullIndex.load(gameinfo.path),
+    );
+    final cracked = merged.forSection('cracked');
+    expect(cracked[crackedRel]!.ftpStatus, 'physical_dvd');
+    expect(cracked[crackedPatch]!.ftpStatus, 'ftp_deleted');
   });
 
   test('missing index degrades to empty without throwing', () {

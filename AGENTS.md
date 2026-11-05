@@ -19,24 +19,29 @@ added or removed. The documentation taxonomy is described in
 | Gameinfo extractor | `tools/gameinfo-gen/` | [`ANALYSIS-game-data.md`](docs/analysis/ANALYSIS-game-data.md) |
 | Crew analysis | `tools/crew-analysis/` | [`ANALYSIS-crews.md`](docs/analysis/ANALYSIS-crews.md) |
 | AtariLegend import | `tools/atarilegend-gen/` | [`ANALYSIS-atarilegend.md`](docs/analysis/ANALYSIS-atarilegend.md) |
-| Full catalog index | `tools/full-index-gen/` | [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md), [`ANALYSIS-piratefinder.md`](docs/analysis/ANALYSIS-piratefinder.md) |
+| Full catalog index | `tools/full-index-gen/` | [`tools/full-index-gen/README.md`](tools/full-index-gen/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md), [`ANALYSIS-piratefinder.md`](docs/analysis/ANALYSIS-piratefinder.md) |
 | One-shot catalog update | `tools/catalog-update/` | [`tools/catalog-update/README.md`](tools/catalog-update/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | Catalog pipeline web UI | `tools/catalog-pipeline/` | [`tools/catalog-pipeline/README.md`](tools/catalog-pipeline/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | Pipeline image / compose | `docker/` | [`docker/README.md`](docker/README.md), [`PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) |
 | Screenshot audit | `tools/screenshot-audit/` | [`tools/screenshot-audit/README.md`](tools/screenshot-audit/README.md), [`SPEC-screenshot-generator.md`](docs/specs/SPEC-screenshot-generator.md) |
 | Shared pipeline helpers | `tools/_lib/` | Section trees/overlay scan (`catalog_sections.py`), disk-image hashing (`zip_hashes.py`) + pipeline state paths (`pipeline_paths.py`) |
-| Archive sync / asset publish / manifest | `tools/archive-sync/`, `tools/asset-publish/`, `tools/asset-manifest/` | [`docs/plans/PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) + each tool README |
+| Archive sync / asset publish / manifest | `tools/archive-sync/`, `tools/asset-publish/`, `tools/asset-manifest/` | [`docs/plans/PLAN-docker-pipeline.md`](docs/plans/PLAN-docker-pipeline.md) + each tool README; archive-sync writes the complete `remote-inventory.json.gz` for full-index FTP badges |
 
 Catalog data flow: `tools/full-index-gen` scans the game trees (no screenshot
 index) and writes `<MARCER_DATA_DIR>/gameinfo/full-index.json.gz` — the ZIP
-universe plus per-member disk-image hashes. It ships in the gameinfo asset, so
-new ZIPs appear in the desktop app immediately (without screenshots). The
-screenshot index (`index*.json`) remains the screenshot-state authority and is
-merged into the full index by the app. `tools/piratefinder-gen` was retired;
+universe plus per-member disk-image hashes and `ftp_status` from the last
+complete `<MARCER_STATE_DIR>/archive-sync/remote-inventory.json.gz`. It ships in
+the gameinfo asset, so new ZIPs appear in the desktop app immediately (without
+screenshots). The screenshot index (`index*.json`) remains the
+screenshot-state authority and is merged into the full index by the app; ZIPs
+missing from FTP show `PHYSICAL-DVD`/`FTP-DELETED` badges and block downloads,
+without any local deletion. `tools/piratefinder-gen` was retired;
 its reusable ZIP hashing moved to `tools/_lib/zip_hashes.py`.
 `tools/catalog-update` runs this local sequence once: FTP sync, then
 gameinfo/full-index/crew only when needed, then a signature-gated gameinfo
-publish (no root changes, no rename detection, no deletion).
+publish (no root changes, no rename detection, no deletion). Targeted
+(`--only`) syncs pass `--keep-ftp-status`, because they do not refresh the
+complete inventory; the next full scan updates the badges.
 
 **No absolute local paths in published artifacts.** Gameinfo/screenshot assets
 must only contain relative rel paths and logical names. Absolute paths belong

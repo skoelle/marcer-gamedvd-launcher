@@ -23,7 +23,8 @@ void main() {
           List<String> candidates = const [],
           int? size,
           String? kindOverride,
-          String? tos}) =>
+          String? tos,
+          String? ftpStatus}) =>
       jsonEncode({
         'rel': rel,
         'name': rel.split('/').last,
@@ -34,6 +35,7 @@ void main() {
         'candidates': candidates,
         'size': size ?? 1000,
         'tos': ?tos,
+        'ftp_status': ?ftpStatus,
       });
 
   setUp(() {
@@ -271,6 +273,42 @@ void main() {
           [
             '$screenshotDir/Title Sorted/Cracked Games - Title Sorted/A/Alpha/a_c01.png'
           ]);
+    });
+
+    test('CardVariant.ftpStatus aggregates unavailable states per card', () {
+      final u = buildUniverse({
+        relA: entryJson(
+          relA,
+          'done',
+          'ROOT',
+          preview: 'a.png',
+          ftpStatus: 'physical_dvd',
+        ),
+        relA2: entryJson(relA2, 'pending', 'PATCH', ftpStatus: 'ftp_deleted'),
+      });
+      final alpha = u.cracked.firstWhere((c) => c.folder == 'Alpha');
+      expect(alpha.variants.map((v) => v.ftpStatus).toSet(), {
+        'physical_dvd',
+        'ftp_deleted',
+      });
+      expect(alpha.ftpStatuses, {'physical_dvd', 'ftp_deleted'});
+      expect(alpha.hasFtpSource, isFalse);
+    });
+
+    test('CardVariant on_ftp keeps the card downloadable', () {
+      final u = buildUniverse({
+        relA: entryJson(
+          relA,
+          'done',
+          'ROOT',
+          preview: 'a.png',
+          ftpStatus: 'on_ftp',
+        ),
+        relA2: entryJson(relA2, 'pending', 'PATCH', ftpStatus: 'ftp_deleted'),
+      });
+      final alpha = u.cracked.firstWhere((c) => c.folder == 'Alpha');
+      expect(alpha.ftpStatuses, {'ftp_deleted'});
+      expect(alpha.hasFtpSource, isTrue);
     });
 
     test('CardVariant.kind comes from the index entry', () {

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import calendar
 import contextlib
+import gzip
 import io
 import json
 import os
@@ -517,9 +518,74 @@ class RunSyncTests(unittest.TestCase):
                     self.assertEqual(a.run_sync(cfg, dry_run=False), 0)
             self.assertTrue((cfg.report_dir / "changes.json").is_file())
             self.assertTrue((cfg.report_dir / "changes.txt").is_file())
+            self.assertTrue((cfg.report_dir / a.INVENTORY_FILE).is_file())
             self.assertFalse((cfg.report_dir / "state.json").exists())
             report = json.loads((cfg.report_dir / "changes.json").read_text())
         self.assertEqual(report["counts"]["in_sync"], 0)
+        self.assertTrue(report["remote_inventory"]["written"])
+
+    def test_partial_run_keeps_last_complete_inventory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp), only=("A",))
+            scan = a.RemoteScan(
+                {"A/Game.zip": remote("A/Game.zip", 10, "20260101000000")},
+                [],
+                [],
+                [],
+            )
+            first = a.write_remote_inventory(cfg, scan, complete=True)
+            before = (cfg.report_dir / a.INVENTORY_FILE).read_bytes()
+            second = a.write_remote_inventory(
+                cfg,
+                a.RemoteScan({}, [], [], []),
+                complete=False,
+            )
+            after = (cfg.report_dir / a.INVENTORY_FILE).read_bytes()
+        self.assertTrue(first["written"])
+        self.assertFalse(second["written"])
+        self.assertEqual(before, after)
+
+    def test_incomplete_scan_keeps_last_complete_inventory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp))
+            scan = a.RemoteScan(
+                {"A/Game.zip": remote("A/Game.zip", 10, None)},
+                [],
+                [],
+                ["Broken"],
+            )
+            first = a.write_remote_inventory(cfg, scan, complete=True)
+            second = a.write_remote_inventory(
+                cfg,
+                a.RemoteScan({}, [], [], ["Broken"]),
+                complete=False,
+            )
+        self.assertTrue(first["written"])
+        self.assertFalse(second["written"])
+
+    def test_inventory_contains_sorted_remote_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp))
+            scan = a.RemoteScan(
+                {
+                    "B/Late.zip": remote("B/Late.zip", 2, "20260102000000"),
+                    "A/Early.zip": remote("A/Early.zip", 1, None),
+                },
+                [],
+                [],
+                [],
+            )
+            meta = a.write_remote_inventory(cfg, scan, complete=True)
+            with gzip.open(meta["path"], "rt", encoding="utf-8") as handle:
+                payload = json.load(handle)
+        self.assertEqual(payload["schema"], a.INVENTORY_SCHEMA)
+        self.assertTrue(payload["complete"])
+        self.assertEqual(payload["remote"], "/GameDVD/")
+        self.assertEqual(list(payload["files"]), ["A/Early.zip", "B/Late.zip"])
+        self.assertEqual(payload["files"]["A/Early.zip"]["size"], 1)
+        self.assertEqual(
+            payload["files"]["B/Late.zip"]["mtime"], "20260102000000"
+        )
 
     def test_dry_run_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:

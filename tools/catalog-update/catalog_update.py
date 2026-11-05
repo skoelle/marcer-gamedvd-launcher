@@ -20,6 +20,7 @@ The root tree is never modified. There is no rename detection and no deletion.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import os
 import posixpath
@@ -36,8 +37,9 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 from _lib import catalog_sections as cs  # noqa: E402
 from _lib import pipeline_paths  # noqa: E402
 
-TOOL_VERSION = "0.1.0"
+TOOL_VERSION = "0.2.0"
 GAMEINFO_SCOPES = ("cracked", "pd", "utils")
+SYNC_INVENTORY_NAME = "remote-inventory.json.gz"
 PUBLISH_STATUSES = {
     "would-create-upload",
     "would-upload",
@@ -454,8 +456,34 @@ def run_checks(
     opts: Options,
     name: str,
     script: str,
+    *extra: str,
 ) -> StepResult:
-    return runner.run(name, tool_argv(opts.repo_root, script, "check"))
+    return runner.run(name, tool_argv(opts.repo_root, script, "check", *extra))
+
+
+def full_index_inventory_path(opts: Options) -> Path:
+    return opts.sync_report_dir / SYNC_INVENTORY_NAME
+
+
+def inventory_meta(path: Path) -> dict:
+    meta: dict = {"path": str(path), "exists": path.is_file()}
+    if not path.is_file():
+        return meta
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError) as exc:
+        meta["error"] = str(exc)
+        return meta
+    if isinstance(data, dict):
+        files = data.get("files")
+        meta.update(
+            complete=data.get("complete"),
+            generated_at=data.get("generated_at"),
+            files=len(files) if isinstance(files, dict) else 0,
+            remote=data.get("remote"),
+        )
+    return meta
 
 
 def publish_gameinfo(runner: CommandRunner, opts: Options) -> dict:
@@ -549,12 +577,23 @@ def _run_locked(opts: Options, runner: CommandRunner, report: UpdateReport) -> i
             f"archive-sync failed with exit code {sync_step.returncode}",
         )
 
+    inventory_path = full_index_inventory_path(opts)
+    ftp_args = (
+        ("--keep-ftp-status",)
+        if opts.only
+        else ("--ftp-inventory", str(inventory_path))
+    )
+
     if opts.dry_run:
         gi_check = run_checks(
             runner, opts, "gameinfo check (dry-run)", "gameinfo-gen/gameinfo.py"
         )
         fi_check = run_checks(
-            runner, opts, "full-index check (dry-run)", "full-index-gen/full_index_gen.py"
+            runner,
+            opts,
+            "full-index check (dry-run)",
+            "full-index-gen/full_index_gen.py",
+            *ftp_args,
         )
         report.status = "dry-run"
         report.actions = {
@@ -574,6 +613,7 @@ def _run_locked(opts: Options, runner: CommandRunner, report: UpdateReport) -> i
     report.sync = {
         "counts": counts,
         "new_dirs": new_gameinfo_dirs(changes, opts.root, opts.patch, trees),
+        "inventory": inventory_meta(inventory_path),
     }
     has_zip_changes = bool(changes.get("new") or changes.get("changed"))
     cracked_changed = changes_under(changes, scopes.get("cracked", ()))
@@ -597,7 +637,11 @@ def _run_locked(opts: Options, runner: CommandRunner, report: UpdateReport) -> i
     needs_full_index = has_zip_changes or needs_gameinfo
     if not needs_full_index:
         fi_check = run_checks(
-            runner, opts, "full-index check", "full-index-gen/full_index_gen.py"
+            runner,
+            opts,
+            "full-index check",
+            "full-index-gen/full_index_gen.py",
+            *ftp_args,
         )
         needs_full_index = fi_check.returncode != 0
     report.actions["full_index_run"] = needs_full_index
@@ -606,10 +650,19 @@ def _run_locked(opts: Options, runner: CommandRunner, report: UpdateReport) -> i
         run_step(
             runner,
             "full-index run",
-            tool_argv(opts.repo_root, "full-index-gen/full_index_gen.py", "run"),
+            tool_argv(
+                opts.repo_root,
+                "full-index-gen/full_index_gen.py",
+                "run",
+                *ftp_args,
+            ),
         )
         fi_final = run_checks(
-            runner, opts, "full-index check (final)", "full-index-gen/full_index_gen.py"
+            runner,
+            opts,
+            "full-index check (final)",
+            "full-index-gen/full_index_gen.py",
+            *ftp_args,
         )
         if fi_final.returncode != 0:
             raise UpdateError("full-index", "full-index check failed after run")

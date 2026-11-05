@@ -124,7 +124,7 @@ job log.
 
 | Area | Source |
 |---|---|
-| Sync | `archive-sync/changes.json` |
+| Sync | `archive-sync/changes.json`, `archive-sync/remote-inventory.json.gz` |
 | Gameinfo | `gameinfo/manifest.json`, `games-*.json`, file metadata |
 | Full index | `gameinfo/full-index.json.gz` |
 | Crews | `gameinfo/crews.json` |
