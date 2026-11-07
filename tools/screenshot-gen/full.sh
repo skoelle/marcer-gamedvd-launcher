@@ -38,6 +38,9 @@ esac
 ./run.sh run --scope "$SCOPE" --retry-desktop-auto --jobs 8
 ./run.sh run --scope "$SCOPE" --retry-no-usable --tos 1.02 --jobs 4
 
+# Promote reviewed application-window candidates (offline, no Hatari).
+./run.sh promote-app-screens --scope "$SCOPE"
+
 # Retry known error screens before the final index/audit pass.
 ../screenshot-audit/run.sh retry --section "$SCOPE" --jobs 4
 

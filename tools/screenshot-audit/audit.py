@@ -42,6 +42,14 @@ SECTION_INDEXES = {
     "falcon": "index-falcon.json",
 }
 ERROR_STATUSES = {"error", "interrupted", "pending"}
+AUTO_SCAN_LABELS = (
+    "program starts but hangs",
+    "program starts but does not appear",
+    "program started but did not appear",
+    "gem desktop, no_program/desktop",
+    "desktop, program never started",
+    "mono gem desktop after failed start",
+)
 
 
 class AuditError(Exception):
@@ -131,23 +139,38 @@ def attempt_key(
     mode: str,
     no_drive_b: bool,
     retry_any: bool,
+    auto_max_programs: int = 1,
 ) -> str:
-    return "|".join(
-        [
-            section,
-            rel,
-            phash,
-            tos,
-            memsize,
-            monitor,
-            tos_res,
-            press_key,
-            str(program_index),
-            mode,
-            "nob" if no_drive_b else "",
-            "any" if retry_any else "",
-        ]
-    )
+    parts = [
+        section,
+        rel,
+        phash,
+        tos,
+        memsize,
+        monitor,
+        tos_res,
+        press_key,
+        str(program_index),
+        mode,
+        "nob" if no_drive_b else "",
+        "any" if retry_any else "",
+    ]
+    if auto_max_programs > 1:
+        parts.append(f"scan{auto_max_programs}")
+    return "|".join(parts)
+
+
+def retry_auto_max_programs(options: dict, label: str) -> int:
+    """Candidate count for an auto retry group.
+
+    Explicit ``auto_program_scan``/``auto_max_programs`` wins; otherwise
+    desktop/hang clusters get the 3-candidate scan automatically.
+    """
+    value = int(options.get("auto_max_programs") or 1)
+    if options.get("auto_program_scan") or any(
+            hint in str(label or "").lower() for hint in AUTO_SCAN_LABELS):
+        return max(3, value)
+    return value
 
 
 def load_registry(path: Path) -> dict:
@@ -770,6 +793,7 @@ def run_shotgen(
     tos_res: str = "",
     press_key: str = "",
     auto_program_index: int = 0,
+    auto_max_programs: int = 1,
 ) -> None:
     suffix = f"tos{tos}-{mode}"
     if memsize:
@@ -784,6 +808,8 @@ def run_shotgen(
         suffix += f"-key{press_key}"
     if auto_program_index:
         suffix += f"-prog{auto_program_index}"
+    if auto_max_programs > 1:
+        suffix += f"-scan{auto_max_programs}"
     target_file = report_dir / f"targets-{section}-{suffix}.txt"
     target_file.write_text("\n".join(rels) + "\n", encoding="utf-8")
     argv = [
@@ -819,6 +845,10 @@ def run_shotgen(
         argv += ["--press-key", press_key]
     if auto_program_index:
         argv += ["--auto-program-index", str(auto_program_index)]
+    if mode == "auto":
+        # Explicit even for 1: shotgen's CLI default is 3, but audit
+        # clusters without a scan option keep the single-candidate retry.
+        argv += ["--auto-max-programs", str(max(1, auto_max_programs))]
     print(
         f"\n==> {section}: {mode} TOS {tos}"
         f"{' mem ' + str(memsize) if memsize else ''}"
@@ -827,6 +857,7 @@ def run_shotgen(
         f"{' res ' + tos_res if tos_res else ''}"
         f"{' key ' + press_key if press_key else ''}"
         f"{' prog ' + str(auto_program_index) if auto_program_index else ''}"
+        f"{' scan ' + str(auto_max_programs) if auto_max_programs > 1 else ''}"
         f" ({len(rels)} entries)",
         flush=True,
     )
@@ -987,12 +1018,18 @@ def retry(args) -> int:
         program_indexes = options.get("auto_program_indexes") or [0]
         if isinstance(program_indexes, int):
             program_indexes = [program_indexes]
+        match = registry_match(phash, registry, args.registry_distance)
+        label = str((match[1] if match else {}).get("label") or "")
+        auto_max_programs = retry_auto_max_programs(options, label)
+        if auto_max_programs > 1:
+            program_indexes = [0]
         modes = options.get("modes") or ["plain", "auto", "click"]
         print(
             f"\n[{section}] {action} {phash}: {len(rels)} entries, "
             f"TOS {','.join(tos_list)}, "
             f"memory {','.join(str(value or 'default') for value in memsize_list)}"
-            f"{', no-drive-b' if no_drive_b else ''}",
+            f"{', no-drive-b' if no_drive_b else ''}"
+            f"{f', scan {auto_max_programs}' if auto_max_programs > 1 else ''}",
             flush=True,
         )
         if args.dry_run:
@@ -1014,7 +1051,7 @@ def retry(args) -> int:
                                             section, rel, phash, tos, memsize,
                                             monitor, tos_res, press_key,
                                             program_index, mode, no_drive_b,
-                                            retry_any,
+                                            retry_any, auto_max_programs,
                                         )
                                         if key not in state:
                                             pending_rels.append((rel, key))
@@ -1035,6 +1072,7 @@ def retry(args) -> int:
                                         tos_res=tos_res,
                                         press_key=press_key,
                                         auto_program_index=program_index,
+                                        auto_max_programs=auto_max_programs,
                                     )
                                     for _rel, key in pending_rels:
                                         state.add(key)

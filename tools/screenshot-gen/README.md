@@ -39,7 +39,9 @@ tools/screenshot-gen/run.sh run --force --memsize 0 --only-file list.txt  # 512 
 tools/screenshot-gen/run.sh run --force --no-drive-b --only-file list.txt # drive B off
 tools/screenshot-gen/run.sh run --force --monitor color --tos-res med --only-file list.txt
 tools/screenshot-gen/run.sh run --force --press-key space --only-file list.txt
-tools/screenshot-gen/run.sh run --retry-desktop-auto --retry-any --force --auto-program-index 1 --only-file list.txt
+tools/screenshot-gen/run.sh run --retry-desktop-auto --retry-any --force --auto-program-index 1 --auto-max-programs 1 --only-file list.txt
+tools/screenshot-gen/run.sh run --retry-desktop-auto --retry-any --force --auto-max-programs 3 --only-file list.txt
+tools/screenshot-gen/run.sh programs "path/to/game.zip"  # show ranked candidates (no Hatari)
 tools/screenshot-gen/run.sh run --retry-no-usable   # only no_usable_shots again
 
 # Old titles that hang on TOS 1.04 (black screen -> no_usable_shots) but run
@@ -272,20 +274,39 @@ A click-free alternative to the GEM desktop click chain. It selects the
   memory (MSA header + track RLE; STX/Pasti track and sector payloads;
   standard BPB/FAT). A BPB `reserved sectors` value of 0 — common in old
   MSA formatter/crack output — is treated as 1, matching TOS/GEMDOS, so
-  the FAT/root lookup is not one sector early. A disk's own `AUTO/` program
-  wins, else the largest
-  launchable `.PRG`/`.TOS`/`.TTP`/`.APP`. Hatari is started with
-  `--disk-a <image> --auto "A:\<path>"` (plus drive B for a second image).
-  Self-extracting archives (LZH/STZip "SFX", which only unpack onto the
-  write-protected floppy) are skipped.
+  the FAT/root lookup is not one sector early. Candidates are ranked by
+  stem match first, then main application (largest non-helper program),
+  then helper programs, then `AUTO/`; boot drivers such as `AHDI`, `GDOS`,
+  `MONO_EMU`, `MCLOCK` and `SETUP` are demoted so the real app starts.
+  Hatari is started with `--disk-a <image> --auto "A:\<path>"` (plus
+  drive B for a second image). Self-extracting archives (LZH/STZip "SFX",
+  which only unpack onto the write-protected floppy) are skipped.
+- **Non-Atari disks** (MS-DOS `.EXE`/`.COM`, Mac images
+  `.ISK`/`.DMG`/`.HFS` without an Atari boot program) are marked
+  `skipped_disk_n` (no preview/candidates/metadata) instead of `desktop`.
 - **Unreadable images** (`.ipf`, non-DOS disks, copy-protected `.stx` without
   a usable boot sector/FAT, empty images) and SFX-only disks have no
   detectable program: the entry is marked `auto_retried` /
   `auto_result: no_program` and stays `desktop` (the `--retry-desktop` click
   path remains for those).
+- **Multiple candidates:** `--auto-max-programs N` (default 3) probes
+  further programs when the first
+  ends as `desktop`, `no_usable_shots` or `timeout`. Later candidates use
+  `auto_probe_timepoints` (default `12,25`). A `textscreen`/`darkscreen`
+  result is accepted as `done` only when it matches a marked valid
+  app/textscreen cluster in `screens.json` (disable this acceptance with
+  `filters.auto_accept_textscreen: false`). Failure screens (drive B alert,
+  "program hangs", disk defects) abort the attempt; a drive B alert is
+  retried once with `--no-drive-b`.
 
-Completed attempts store `auto_retried`, `auto_result` and `auto_program`;
-`--force` re-runs them. No `xdotool`/`detect` run is required.
+Completed attempts store `auto_retried`, `auto_result`, `auto_program`,
+`auto_logic_version` and the last five `auto_attempts`; entries with an
+older/missing `auto_logic_version` are retried automatically, `--force`
+re-runs regardless. No `xdotool`/`detect` run is required.
+
+`run.sh programs <zip>` prints the detected mode, reason
+(`gemdos`/`floppy`/`not_atari`/`no_program`) and the ranked programs without
+starting Hatari.
 
 ### Desktop click retry (`detect` + `run --retry-desktop`)
 
@@ -532,10 +553,16 @@ The offline `promote-app-screens` pass (no Hatari) fixes those entries:
   - GEM drive/folder (file) window, detected via the fixed `A:\` title-path
     crop (`assets/gem-file-window.png`),
   - blank/black screens (`analyze_image` kind `black`),
-  - the plain TOS desktop (known mono TOS 1.04 pHash).
-  The last remaining candidate is promoted. There is no hard-coded candidate
-  number: the app screen is `_c01`, `_c02` or `_c03` depending on the entry,
-  and full-screen text applications are supported too.
+  - the plain TOS desktop (`plain_desktop_phashes`, default the three known
+    mono TOS 1.04 pHashes),
+  - failure screens (configured `failure_phashes` and registry
+    `error`/`no_usable` clusters, e.g. drive B alert or "program hangs").
+  The last remaining candidate must also match a *marked valid*
+  app/textscreen cluster in `tools/screenshot-audit/screens.json`
+  (`filters.valid_app_label_hints`); a merely plausible-looking screen is
+  not promoted. There is no hard-coded candidate number: the app screen is
+  `_c01`, `_c02` or `_c03` depending on the entry, and full-screen text
+  applications are supported too.
 - The chosen image is swapped with the preview exactly like the app's `M`
   curation: it becomes `<base>.png`, the old preview takes the chosen
   candidate's name (nothing is deleted). The index/metadata become
@@ -550,9 +577,10 @@ The offline `promote-app-screens` pass (no Hatari) fixes those entries:
   `desktop textscreen`.
 - `--dry-run` reports only, `--list` prints the chosen candidate per entry,
   `--only <substring>` limits the pass, and `--candidate N` (1-based) can
-  promote a specific candidate for special cases (bypassing all filters).
-- The summary reports `promoted`, `TTP reset`, `no app`, and skipped
-  `file`/`blank`/`desktop` candidates. After a run,
+  promote a specific candidate for special cases (bypassing the registry
+  requirement, but not the plain/failure filters).
+- The summary reports `promoted`, `TTP reset`, `no app`, `skip_failure`,
+  `skip_unmarked`, and skipped `file`/`blank`/`desktop` candidates. After a run,
   `cleanup-duplicates --scope utils` removes duplicates created by the swap.
   The file-window and plain-desktop templates are tuned to the German
   mono TOS 1.04 layout (`A:\` drive path).

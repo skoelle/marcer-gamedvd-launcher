@@ -113,10 +113,11 @@ Options (`apply`):
 `scan` still uses distance 2 to group re-encoded variants.
 
 Long exhaustive runs keep a resume state. Each completed
-`section|entry|hash|TOS|memory|monitor|resolution|key|program|mode` attempt is
-recorded, so an interrupted run can be restarted without redoing completed
-attempts. Use `--reset-retry-state` when the catalog changed and every attempt
-should run again.
+`section|entry|hash|TOS|memory|monitor|resolution|key|program|mode` attempt
+(plus `scanN` when `auto_max_programs > 1`) is recorded, so an interrupted run
+can be restarted without redoing completed attempts. Use
+`--reset-retry-state` when the catalog changed and every attempt should run
+again.
 
 Example valid state:
 
@@ -153,7 +154,16 @@ Additional `try` fields:
 - `tos_res`: list of `low`/`med`/`high`
 - `press_keys`: list of xdotool keys (`space`, `Return`, …)
 - `auto_program_indexes`: alternative program candidates for auto retry
+- `auto_program_scan`: let shotgen probe up to 3 ranked candidates itself
+- `auto_max_programs`: candidate count for `auto_program_scan` (min 3)
 - `modes`: subset of `plain`, `auto`, `click` (default all three)
+
+Clusters whose label is a desktop/hang pattern (`program starts but hangs`,
+`program starts but does not appear`, `desktop, program never started`,
+`gem desktop, no_program/desktop`, `mono gem desktop after failed start`)
+enable the 3-candidate auto scan automatically, without editing the
+registry. The drive B alert (`dfbc34938aaca093`) is a reviewed `error`
+cluster that retries once with `no_drive_b`.
 
 ## Retry behaviour
 

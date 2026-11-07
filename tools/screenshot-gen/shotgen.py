@@ -49,6 +49,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _lib import catalog_sections as cs  # noqa: E402
 
 TOOL_VERSION = "0.1.1"
+# Bump when the auto-retry program selection/acceptance changes: entries
+# processed by an older logic are retried without --force.
+AUTO_LOGIC_VERSION = 3
 GAMEINFO_SUBDIR = "gameinfo"
 STOP_EVENT = None  # set in main
 PROGRESS_INTERVAL_S = 10.0
@@ -105,6 +108,9 @@ DEFAULT_CONFIG = {
     # spaces/underscores/dashes, at any depth below the scope tree.
     "exclude_dirs": list(cs.DEFAULT_EXCLUDE_DIRS),
     "timepoints": [10, 25, 45],
+    # Later auto-retry candidates use a short probe instead of the full
+    # timepoint list so a 3-candidate scan stays affordable.
+    "auto_probe_timepoints": [12, 25],
     "entry_timeout_s": 90,
     "keep_candidates": True,
     # TOS selection (section 7.5): the version used for a normal run is
@@ -129,6 +135,33 @@ DEFAULT_CONFIG = {
         "textscreen_min_white": 0.5,
         "white_pixel_min": 230,
         "phash_max_distance": 6,
+        # Offline promotion safety: plain TOS desktops (empty, with 1-2 drive
+        # icons) and TOS error/alert dialogs must never be promoted as an
+        # application screen. The hashes are stable per monitor mode.
+        "plain_desktop_phashes": [
+            "ffbf9c9c9c888088",
+            "fe9ffc9c80808cb8",
+            "ffbebe9c8088809c",
+        ],
+        "plain_desktop_max_distance": 2,
+        "failure_phashes": ["dfbc34938aaca093"],
+        "failure_phash_max_distance": 4,
+        "drive_b_dialog_phashes": ["dfbc34938aaca093"],
+        "drive_b_dialog_max_distance": 4,
+        # Screen classification registry shared with tools/screenshot-audit.
+        # A textscreen/app screen is only auto-accepted when its pHash matches
+        # a cluster marked "valid" (and an app/textscreen label hint).
+        "audit_registry": "tools/screenshot-audit/screens.json",
+        "auto_accept_textscreen": True,
+        "valid_app_label_hints": [
+            "gem program",
+            "gem app",
+            "utility text screen",
+            "textscreen",
+            "application window",
+            "app window",
+            "menu bar",
+        ],
         # Falcon TOS 4.04 boot screens: the white screen with the black
         # Atari logo top-left (matched by pHash, with a geometry fallback
         # when crop/zoom changes the hash) and the plain green Videl
@@ -529,6 +562,38 @@ def _part_number(name: str):
     return None, base
 
 
+# Basenames that usually are drivers, patches or installers, not the main
+# application. They are only demoted (never dropped): a disk whose only
+# launchable file is e.g. SETUP.APP still starts it.
+HELPER_PROGRAM_HINTS = (
+    "ahdi", "gdos", "mono_emu", "monoemu", "mclock", "clock",
+    "setup", "install", "inst_", "patch", "fix", "config",
+    "driver", "boot", "autoboot", "acc_on", "acc_off",
+)
+
+
+def _is_helper_program(name: str) -> bool:
+    """True for an AUTO/-folder program or a known driver/installer name."""
+    normalized = name.replace("\\", "/").lower()
+    parts = [part for part in normalized.split("/") if part]
+    if "auto" in parts[:-1]:
+        return True
+    stem = Path(parts[-1]).stem if parts else ""
+    for hint in HELPER_PROGRAM_HINTS:
+        if stem == hint:
+            return True
+        if stem.startswith(hint):
+            if hint[-1] in "_-.":
+                # INST_CAR, FIX_IT: the separator is part of the hint.
+                return True
+            # Only a non-letter suffix (SETUP2, MONO_EMU_2) continues the
+            # hint; CLOCKWORK/BOOTLEG are real programs, not helpers.
+            rest = stem[len(hint):len(hint) + 1]
+            if rest and not rest.isalpha():
+                return True
+    return False
+
+
 def pick_boot_program(zf, names, sizes, stem):
     """Pick the program to autostart from a GEMDOS ZIP.
 
@@ -554,7 +619,9 @@ def pick_boot_program(zf, names, sizes, stem):
     if len(contain) == 1:
         return contain[0]
     real = [n for n in boots if not _is_stzip(zf, n)]
-    pool = contain or real or boots
+    preferred = [n for n in real if not _is_helper_program(n)]
+    contain_preferred = [n for n in contain if not _is_helper_program(n)]
+    pool = (contain_preferred or contain or preferred or real or boots)
     if len(pool) == 1:
         return pool[0]
     # Numbered multi-part sets: a group only counts when at least two of its
@@ -590,8 +657,8 @@ def boot_program_candidates(zf, names, sizes, stem):
         ns = _norm_prog(Path(name).stem)
         exact = 0 if ns == target else 1
         contains = 0 if target and (target in ns or ns in target) else 1
-        return (exact, contains, _is_stzip(zf, name),
-                -sizes.get(name, 0), name.lower())
+        return (exact, contains, 1 if _is_helper_program(name) else 0,
+                _is_stzip(zf, name), -sizes.get(name, 0), name.lower())
 
     ordered = sorted(boots, key=rank)
     if primary in ordered:
@@ -919,21 +986,42 @@ def _is_sfx(head: bytes) -> bool:
             or b"stzip" in hl)
 
 
-def _floppy_programs(raw: bytes):
-    """Return launchable floppy programs in preference order."""
+NON_ATARI_EXTS = {".exe", ".com", ".bat", ".dll", ".sys", ".ovl",
+                 ".isk", ".dmg", ".hfs"}
+
+
+def _floppy_programs(raw: bytes, stem: str = ""):
+    """Return launchable floppy programs in preference order.
+
+    A ZIP-stem match wins over everything else; otherwise the largest main
+    program (not a driver/installer and not below ``AUTO/``) is primary.
+    ``AUTO/`` programs are the last resort, never the default: they are
+    drivers/patches, not the application the entry is about.
+    """
     progs = [(n, s, h) for n, s, h in _fat12_files(raw)
              if Path(n).suffix.lower() in BOOT_EXTS and not _is_sfx(h)]
     if not progs:
         return []
-    auto = [p for p in progs if p[0].lower().startswith("auto/")]
-    pool = auto or progs
-    pool.sort(key=lambda t: (-t[1], t[0].lower()))
-    return [name for name, _size, _head in pool]
+    target = _norm_prog(stem)
+
+    def rank(item):
+        name, size, _head = item
+        ns = _norm_prog(Path(name).stem)
+        exact = 0 if ns and ns == target else 1
+        contains = 0 if target and ns and (
+            target in ns or ns in target) else 1
+        helper = 1 if _is_helper_program(name) else 0
+        auto_dir = 1 if name.replace("\\", "/").lower().startswith(
+            "auto/") else 0
+        return (exact, contains, helper, auto_dir, -size, name.lower())
+
+    progs.sort(key=rank)
+    return [name for name, _size, _head in progs]
 
 
-def _floppy_program(raw: bytes, program_index: int = 0):
-    """Largest launchable program (AUTO/ preferred), or an alternate index."""
-    progs = _floppy_programs(raw)
+def _floppy_program(raw: bytes, program_index: int = 0, stem: str = ""):
+    """Return the Nth ranked launchable program, or ``None``."""
+    progs = _floppy_programs(raw, stem)
     if 0 <= program_index < len(progs):
         return progs[program_index]
     return None
@@ -949,40 +1037,79 @@ def _atari_cli_path(name: str) -> str:
     return name.encode("cp437", "replace").decode("utf-8", "surrogateescape")
 
 
-def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str,
-                       program_index: int = 0):
-    """Return ``(mode, args, program)`` for ``--retry-desktop-auto``.
+def auto_plan(staged_zip: Path, stem: str) -> dict:
+    """Return the launch plan for ``--retry-desktop-auto``.
 
-    GEMDOS archives reuse the normal extract + ``-d``/``--auto`` path.
-    Floppy ZIPs are scanned through their FAT12 directory: the disk's
-    ``AUTO/`` program wins, else the largest launchable program. `.stx`
-    images are reconstructed to a raw sector dump first (`_stx_to_raw`);
-    images without a readable FAT (`.ipf`, non-DOS/copy-protected disks)
-    yield no candidate (the click retry remains for those).
+    ``mode`` is ``"gemdos"``, ``"floppy"`` or ``None``. ``programs`` holds
+    the ranked candidates (GEMDOS paths are ZIP-relative, floppy paths are
+    ``A:\\`` Atari paths). ``reason`` explains an empty list:
+    ``no_program`` or ``not_atari`` (MS-DOS/Mac disk).
     """
-    names, _sizes = _zip_entries(staged_zip)
+    names, sizes = _zip_entries(staged_zip)
     boots = [n for n in names if Path(n).suffix.lower() in BOOT_EXTS]
     if boots:
+        with zipfile.ZipFile(staged_zip) as zf:
+            programs = boot_program_candidates(zf, names, sizes, stem)
+        return {"mode": "gemdos", "programs": programs, "reason": ""}
+
+    images = [n for n in names if Path(n).suffix.lower() in FLOPPY_EXTS]
+    if not images:
+        if any(Path(n).suffix.lower() in NON_ATARI_EXTS for n in names):
+            return {"mode": None, "programs": [], "reason": "not_atari"}
+        return {"mode": None, "programs": [], "reason": "no_program"}
+    readable = [n for n in images
+                if Path(n).suffix.lower() in FAT_FLOPPY_EXTS]
+    if not readable:
+        # `.ipf` and other non-FAT Atari images are not non-Atari; they
+        # simply cannot be scanned for a program (the click retry remains).
+        return {"mode": None, "programs": [], "reason": "no_program"}
+
+    readable.sort(key=lambda n: (_disk_index(n), n.lower()))
+    a_name = readable[0]
+    with zipfile.ZipFile(staged_zip) as zf:
+        raw = _image_to_raw(a_name, zf.read(a_name))
+    programs = _floppy_programs(raw, stem)
+    if not programs:
+        files = _fat12_files(raw)
+        if any(Path(n).suffix.lower() in NON_ATARI_EXTS
+               for n, _size, _head in files):
+            return {"mode": None, "programs": [], "reason": "not_atari"}
+        return {"mode": None, "programs": [], "reason": "no_program"}
+    return {"mode": "floppy", "programs": programs, "reason": ""}
+
+
+def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str,
+                       program_index: int = 0):
+    """Return ``(mode, args, program, reason)`` for ``--retry-desktop-auto``.
+
+    GEMDOS archives reuse the normal extract + ``-d``/``--auto`` path.
+    Floppy ZIPs are scanned through their FAT12 directory and use the ranked
+    candidate list from :func:`auto_plan`. `.stx` images are reconstructed to
+    a raw sector dump first (`_stx_to_raw`); images without a readable FAT
+    (`.ipf`, non-DOS/copy-protected disks) yield no candidate (the click
+    retry remains for those).
+    """
+    plan = auto_plan(staged_zip, stem)
+    programs = plan["programs"]
+    if not programs or not (0 <= program_index < len(programs)):
+        return None, None, None, plan["reason"] or "no_program"
+    if plan["mode"] == "gemdos":
         mode, args = prepare_boot(
             stage, staged_zip, stem, program_index=program_index
         )
         program = args[args.index("--auto") + 1] if "--auto" in args else None
-        return mode, args, program
+        return mode, args, program, ""
 
+    names, _sizes = _zip_entries(staged_zip)
     images = [n for n in names if Path(n).suffix.lower() in FLOPPY_EXTS]
     readable = [n for n in images
                 if Path(n).suffix.lower() in FAT_FLOPPY_EXTS]
-    if not readable:
-        return None, None, None
     readable.sort(key=lambda n: (_disk_index(n), n.lower()))
     a_name = readable[0]
     ordered = sorted(images, key=lambda n: (_disk_index(n), n.lower()))
     b_name = next((n for n in ordered if n != a_name), None)
+    program = programs[program_index]
     with zipfile.ZipFile(staged_zip) as zf:
-        raw = _image_to_raw(a_name, zf.read(a_name))
-        program = _floppy_program(raw, program_index)
-        if not program:
-            return None, None, None
         args = []
         for label, name in (("a", a_name), ("b", b_name)):
             if name is None:
@@ -996,6 +1123,7 @@ def prepare_auto_retry(stage: Path, staged_zip: Path, stem: str,
         "floppy",
         args + ["--auto", _atari_cli_path(atari_path)],
         atari_path,
+        "",
     )
 
 
@@ -2515,9 +2643,119 @@ def find_ttp_abort_xy(path: Path):
 GEM_FILE_WINDOW_TEMPLATE = "gem-file-window.png"
 GEM_FILE_WINDOW_MIN_SCORE = 0.90
 _GEM_FILE_WINDOW: list = []
-# pHash of the plain mono TOS 1.04 desktop (no window). It is stable across
-# entries; candidates with this hash are the old preview / plain desktop.
-PLAIN_DESKTOP_PHASHES = {"ffbf9c9c9c888088"}
+_AUDIT_REGISTRY_CACHE: dict = {}
+
+
+def load_audit_registry(cfg: dict) -> dict:
+    """Load the audit screen registry (``screens.json``), cached by mtime.
+
+    The registry carries the reviewed pHash clusters (``action`` + ``label``)
+    and is shared with tools/screenshot-audit. A missing file disables the
+    registry-based checks; callers must then stay conservative.
+    """
+    rel = str((cfg.get("filters") or {}).get("audit_registry") or "").strip()
+    if not rel:
+        return {}
+    path = Path(rel)
+    if not path.is_absolute():
+        path = repo_root() / path
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return {}
+    if (_AUDIT_REGISTRY_CACHE.get("path") == path
+            and _AUDIT_REGISTRY_CACHE.get("mtime") == mtime):
+        return _AUDIT_REGISTRY_CACHE.get("data") or {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            screens = (json.load(fh) or {}).get("screens") or {}
+    except (OSError, ValueError):
+        screens = {}
+    _AUDIT_REGISTRY_CACHE.update(path=path, mtime=mtime, data=screens)
+    return screens
+
+
+def _phash_in(phash: str, hashes, max_distance: int) -> bool:
+    return bool(phash) and any(
+        phash_distance(phash, other) <= max_distance
+        for other in hashes if other
+    )
+
+
+def is_plain_desktop(phash: str, cfg: dict) -> bool:
+    """True for an empty TOS desktop (one or two drive icons)."""
+    filters = cfg.get("filters") or {}
+    return _phash_in(phash, filters.get("plain_desktop_phashes") or [],
+                     int(filters.get("plain_desktop_max_distance", 2)))
+
+
+def is_drive_b_dialog(phash: str, cfg: dict) -> bool:
+    """True for TOS' "Drive B: is not responding" alert."""
+    filters = cfg.get("filters") or {}
+    return _phash_in(phash, filters.get("drive_b_dialog_phashes") or [],
+                     int(filters.get("drive_b_dialog_max_distance", 4)))
+
+
+def _failure_distance(phash: str, cfg: dict):
+    """Distance to the nearest configured/registry failure screen, if any.
+
+    Besides the configured hashes, every registry cluster marked ``error`` or
+    ``no_usable`` counts as a failure. Returns ``None`` when no failure
+    cluster is within ``failure_phash_max_distance``.
+    """
+    filters = cfg.get("filters") or {}
+    hashes = list(filters.get("failure_phashes") or [])
+    hashes += [
+        other for other, info in load_audit_registry(cfg).items()
+        if (info or {}).get("action") in ("error", "no_usable")
+    ]
+    max_distance = int(filters.get("failure_phash_max_distance", 4))
+    best = None
+    for other in hashes:
+        if not other:
+            continue
+        distance = phash_distance(phash, other)
+        if distance <= max_distance and (
+                best is None or distance < best):
+            best = distance
+    return best
+
+
+def is_failure_screen(phash: str, cfg: dict) -> bool:
+    """True when a configured or registry failure cluster is nearby."""
+    return _failure_distance(phash, cfg) is not None
+
+
+def marked_valid_match(phash: str, cfg: dict):
+    """Return ``(distance, hash, info)`` for a reviewed valid app cluster.
+
+    Only clusters whose label contains one of ``valid_app_label_hints`` are
+    accepted. A nearer (or equally near) failure cluster wins, so a screen
+    that exactly matches a hang/error cluster is never accepted just because
+    an unrelated valid cluster is within the hash tolerance. Returns ``None``
+    for an unknown screen: a new textscreen/app screen is never auto-accepted
+    without a review entry.
+    """
+    filters = cfg.get("filters") or {}
+    hints = tuple(str(value).lower()
+                  for value in (filters.get("valid_app_label_hints") or []))
+    max_distance = int(filters.get("phash_max_distance", 6))
+    failure_distance = _failure_distance(phash, cfg)
+    best = None
+    for other, info in load_audit_registry(cfg).items():
+        if (info or {}).get("action") != "valid":
+            continue
+        label = str((info or {}).get("label") or "").lower()
+        if hints and not any(hint in label for hint in hints):
+            continue
+        distance = phash_distance(phash, other)
+        if distance > max_distance:
+            continue
+        if failure_distance is not None and distance >= failure_distance:
+            continue
+        if best is None or distance < best[0]:
+            best = (distance, other, info)
+    return best
 
 
 def gem_file_window_template():
@@ -3051,7 +3289,10 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                   timepoints: list = None, auto_retry: bool = False,
                   no_drive_b: bool = False, monitor_override: str = "",
                   tos_res: str = "", press_key: str = "",
-                  auto_program_index: int = 0) -> None:
+                  auto_program_index: int = 0,
+                  auto_max_programs: int = 1,
+                  auto_accept_textscreen: bool = None,
+                  auto_program_stop: int = None) -> None:
     def commit(fn):
         # With parallel jobs, entry mutation must be serialized against
         # index saves performed by other workers (avoids torn index state).
@@ -3065,7 +3306,14 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     layer = entry["layer"]
     rel_path = Path(rel)
     parts = rel_path.parts
+    if auto_accept_textscreen is None:
+        auto_accept_textscreen = bool(
+            (cfg.get("filters") or {}).get("auto_accept_textscreen", True))
+    if auto_program_stop is None:
+        auto_program_stop = auto_program_index + max(1, auto_max_programs)
     tp_list = list(timepoints or cfg["timepoints"])
+    if auto_retry and auto_program_index > 0:
+        tp_list = list(cfg.get("auto_probe_timepoints") or [12, 25])
 
     # Monitor selection: gameinfo screen_format rules are resolved once per
     # run and passed in; without a rule the historic folder-suffix check
@@ -3120,6 +3368,10 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
     shots_meta, preview, candidates = [], None, []
     click_result = None
     auto_program = None
+    auto_phash = ""
+    auto_reason = ""
+    retry_next = False
+    retry_no_drive_b = False
     chain_shots = []
 
     click_cfg = cfg.get("click_retry") or {}
@@ -3148,17 +3400,43 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
         # hard-disk archives (not floppy images), so they are extracted and
         # autostarted with `-d` + `--auto`; floppy ZIPs keep `--disk-a`.
         if auto_retry:
-            auto_mode, auto_args, auto_program = prepare_auto_retry(
+            (auto_mode, auto_args, auto_program,
+             auto_reason) = prepare_auto_retry(
                 stage, staged, Path(rel).stem,
                 program_index=auto_program_index)
             if auto_args is None:
+                not_atari = auto_reason == "not_atari"
+
                 def _no_program():
                     entry["auto_retried"] = True
-                    entry["auto_result"] = "no_program"
+                    entry["auto_result"] = auto_reason or "no_program"
+                    entry["auto_logic_version"] = AUTO_LOGIC_VERSION
                     entry["last_run"] = time.strftime(
                         "%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    attempts = list(entry.get("auto_attempts") or [])
+                    attempts.append({
+                        "index": auto_program_index,
+                        "program": "",
+                        "result": auto_reason or "no_program",
+                        "kind": None,
+                        "phash": "",
+                        "reason": auto_reason or "no_program",
+                        "no_drive_b": bool(no_drive_b),
+                        "duration_s": round(time.time() - t_start, 1),
+                    })
+                    entry["auto_attempts"] = attempts[-5:]
+                    if not_atari:
+                        entry["status"] = "skipped_disk_n"
+                        entry["kind"] = None
+                        entry["preview"] = None
+                        entry["candidates"] = []
                 commit(_no_program)
-                log("auto retry: no launchable program found")
+                if not_atari:
+                    meta_path.unlink(missing_ok=True)
+                    log("auto retry: non-Atari disk -> skipped_disk_n")
+                else:
+                    log(f"auto retry: no launchable program "
+                        f"({auto_reason or 'no_program'})")
                 return
             boot_kind, boot_args = auto_mode, auto_args
             display_args = list(boot_args)
@@ -3430,6 +3708,17 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
                 kind = refine_desktop_kind(pick["kind"], pick, cfg)
                 status = ("desktop" if kind in
                           ("desktop", "textscreen", "darkscreen") else "done")
+                auto_phash = pick["phash"]
+                if (auto_retry and status == "desktop"
+                        and kind in ("textscreen", "darkscreen")
+                        and auto_accept_textscreen
+                        and marked_valid_match(auto_phash, cfg) is not None):
+                    # A real text application is only accepted when its
+                    # screen is a reviewed registry cluster. Unknown screens
+                    # stay desktop and go through review first.
+                    status = "done"
+                    log(f"auto retry: {kind} matches a reviewed valid "
+                        f"cluster -> done")
                 # copy files to mirror
                 preview = preview_name
                 target = mirror_dir / preview_name
@@ -3498,10 +3787,23 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             if auto_retry:
                 entry["auto_retried"] = True
                 entry["auto_result"] = status
+                entry["auto_logic_version"] = AUTO_LOGIC_VERSION
                 if auto_program:
                     entry["auto_program"] = auto_program
                 else:
                     entry.pop("auto_program", None)
+                attempts = list(entry.get("auto_attempts") or [])
+                attempts.append({
+                    "index": auto_program_index,
+                    "program": auto_program or "",
+                    "result": status,
+                    "kind": kind,
+                    "phash": auto_phash,
+                    "reason": auto_reason or "",
+                    "no_drive_b": bool(no_drive_b),
+                    "duration_s": round(time.time() - t_start, 1),
+                })
+                entry["auto_attempts"] = attempts[-5:]
             # TOS marker (section 7.5/10.4): only a successful capture with a
             # non-default TOS is recorded (sparse; absent = the default TOS).
             # A failed attempt remembers its version in `tos_tried` so a
@@ -3547,6 +3849,8 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             "auto_retried": bool(entry.get("auto_retried")),
             "auto_result": entry.get("auto_result"),
             "auto_program": entry.get("auto_program"),
+            "auto_logic_version": entry.get("auto_logic_version"),
+            "auto_attempts": entry.get("auto_attempts"),
             "capture_method": "cmd-fifo",
             "shots": shots_meta,
             "zip_contents": zip_contents,
@@ -3559,6 +3863,28 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
             with open(meta_path, "w", encoding="utf-8") as fh:
                 json.dump(meta, fh, indent=1)
         log(f"status={status}")
+
+        if (auto_retry and auto_program_index + 1 < auto_program_stop
+                and status in ("desktop", "no_usable_shots", "timeout")
+                and (STOP_EVENT is None or not STOP_EVENT.is_set())):
+            try:
+                plan = auto_plan(staged, Path(rel).stem)
+                retry_next = len(plan["programs"]) > auto_program_index + 1
+            except Exception as ex:
+                log(f"auto retry: candidate scan failed: {ex}")
+            if retry_next:
+                log(f"auto retry: trying candidate "
+                    f"{auto_program_index + 1}")
+
+        if (auto_retry and not no_drive_b
+                and status in ("desktop", "no_usable_shots", "timeout")
+                and (STOP_EVENT is None or not STOP_EVENT.is_set())
+                and any(is_drive_b_dialog(m.get("phash", ""), cfg)
+                        for m in shots_meta)):
+            # The alert also appears for a single image when the program
+            # probes B:; disabling drive B is harmless and unblocks it.
+            retry_no_drive_b = True
+            log("auto retry: drive-B dialog -> retry without drive B")
     except MemoryGuardTripped as ex:
         def _commit_guard():
             entry["status"] = "error"
@@ -3581,6 +3907,33 @@ def process_entry(cfg: dict, P: dict, entry: dict, log,
         else:
             shutil.rmtree(stage, ignore_errors=True)
         gc.collect()
+
+    if retry_no_drive_b:
+        process_entry(
+            cfg, P, entry, log, state_lock=state_lock, click_retry=False,
+            force=force, tos_version=tos_version, tos_image=tos_image,
+            monitor_info=monitor_info, profile=profile, boot_mode=boot_mode,
+            timepoints=timepoints, auto_retry=auto_retry,
+            no_drive_b=True, monitor_override=monitor_override,
+            tos_res=tos_res, press_key=press_key,
+            auto_program_index=auto_program_index,
+            auto_max_programs=auto_max_programs,
+            auto_accept_textscreen=auto_accept_textscreen,
+            auto_program_stop=auto_program_stop,
+        )
+    elif retry_next:
+        process_entry(
+            cfg, P, entry, log, state_lock=state_lock, click_retry=False,
+            force=force, tos_version=tos_version, tos_image=tos_image,
+            monitor_info=monitor_info, profile=profile, boot_mode=boot_mode,
+            timepoints=timepoints, auto_retry=auto_retry,
+            no_drive_b=no_drive_b, monitor_override=monitor_override,
+            tos_res=tos_res, press_key=press_key,
+            auto_program_index=auto_program_index + 1,
+            auto_max_programs=auto_max_programs,
+            auto_accept_textscreen=auto_accept_textscreen,
+            auto_program_stop=auto_program_stop,
+        )
 
 
 def acquire_lock(out: Path) -> Path:
@@ -3613,7 +3966,9 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                   timepoints: list = None, auto_retry: bool = False,
                   no_drive_b: bool = False, monitor_override: str = "",
                   tos_res: str = "", press_key: str = "",
-                  auto_program_index: int = 0):
+                  auto_program_index: int = 0,
+                  auto_max_programs: int = 1,
+                  auto_accept_textscreen: bool = None):
     """Worker pool: claim entries from a shared queue, process, save index.
 
     Entry mutation and index saves are serialized under one lock, so
@@ -3686,7 +4041,9 @@ def _run_parallel(cfg: dict, P: dict, args, out: Path, idx: dict,
                               monitor_override=monitor_override,
                               tos_res=tos_res,
                               press_key=press_key,
-                              auto_program_index=auto_program_index)
+                              auto_program_index=auto_program_index,
+                              auto_max_programs=auto_max_programs,
+                              auto_accept_textscreen=auto_accept_textscreen)
                 with state_lock:
                     save_index(out, idx, index_name)
                     done_counts[e["status"]] = (done_counts.get(e["status"], 0)
@@ -3779,7 +4136,11 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
             # with --auto (no GEM desktop clicks)
             if e["status"] not in retry_statuses:
                 continue
-            if e.get("auto_retried") and not args.force:
+            # Old auto logic (or no version) is retried automatically; a
+            # current-logic result needs --force.
+            if (not args.force
+                    and int(e.get("auto_logic_version") or 0)
+                    >= AUTO_LOGIC_VERSION):
                 continue
         elif args.retry_no_usable:
             if e["status"] != "no_usable_shots":
@@ -3843,7 +4204,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                 monitor_override=args.monitor,
                 tos_res=args.tos_res,
                 press_key=args.press_key,
-                auto_program_index=args.auto_program_index)
+                auto_program_index=args.auto_program_index,
+                auto_max_programs=args.auto_max_programs)
         else:
             for e in pending:
                 if args.limit and processed >= args.limit:
@@ -3883,7 +4245,8 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
                               monitor_override=args.monitor,
                               tos_res=args.tos_res,
                               press_key=args.press_key,
-                              auto_program_index=args.auto_program_index)
+                              auto_program_index=args.auto_program_index,
+                              auto_max_programs=args.auto_max_programs)
                 save_index(out, idx, scope["index"])
                 done_counts[e["status"]] = done_counts.get(e["status"], 0) + 1
                 if STOP_EVENT.is_set():
@@ -3907,6 +4270,27 @@ def cmd_run(cfg: dict, P: dict, args, scope: dict) -> int:
 # --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
+def cmd_programs(cfg: dict, P: dict, args, scope: dict) -> int:
+    """Print the ranked launch candidates of one ZIP (offline, no Hatari)."""
+    src = Path(args.zip).expanduser()
+    if not src.is_file():
+        sys.exit(f"error: no such ZIP: {src}")
+    tmp_root = Path(cfg["tmp_dir"])
+    tmp_root.mkdir(parents=True, exist_ok=True)
+    stage = Path(tempfile.mkdtemp(prefix="programs-", dir=tmp_root))
+    try:
+        staged = stage / "disk.zip"
+        shutil.copy2(src, staged)
+        plan = auto_plan(staged, Path(args.zip).stem)
+        print(f"mode: {plan['mode'] or '-'}  reason: "
+              f"{plan['reason'] or '-'}", flush=True)
+        for index, program in enumerate(plan["programs"]):
+            print(f"{index}: {program}", flush=True)
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+    return 0
+
+
 def cmd_index(cfg: dict, P: dict, args, scope: dict) -> int:
     global STOP_EVENT
     stats, idx = build_index(cfg, P, args.full, scope)
@@ -4448,8 +4832,12 @@ def cmd_promote_app_screens(cfg: dict, P: dict, args, scope: dict) -> int:
     because it has only two colors. This offline pass (no Hatari) looks at
     every ``desktop`` entry with candidates and scans them backwards,
     skipping TTP dialogs (:func:`is_ttp_dialog`), GEM drive/folder windows
-    (:func:`is_gem_file_window`), blank/black screens and the plain TOS
-    desktop (known pHash). The last remaining candidate is the application.
+    (:func:`is_gem_file_window`), blank/black screens, TOS error dialogs and
+    the plain TOS desktop (known pHashes). A candidate is only promoted when
+    its pHash matches a reviewed ``valid`` cluster (an app/textscreen label)
+    in ``screens.json``; an unknown screen is left for review. ``--candidate``
+    bypasses the registry check (explicit manual choice) but still rejects
+    plain/failure screens.
 
     TTP programs show GEM's "ANWENDUNG ÖFFNEN" command-line dialog rather
     than an application screen. An entry with only a TTP dialog is reset to
@@ -4466,7 +4854,8 @@ def cmd_promote_app_screens(cfg: dict, P: dict, args, scope: dict) -> int:
     lock = acquire_lock(out)
     stats = {"scanned": 0, "promoted": 0, "ttp": 0, "no_app": 0,
              "missing": 0, "metadata": 0, "errors": 0,
-             "skip_file": 0, "skip_blank": 0, "skip_desktop": 0}
+             "skip_file": 0, "skip_blank": 0, "skip_desktop": 0,
+             "skip_failure": 0, "skip_unmarked": 0}
     dirty = False
 
     try:
@@ -4495,8 +4884,17 @@ def cmd_promote_app_screens(cfg: dict, P: dict, args, scope: dict) -> int:
             if args.candidate:
                 if 1 <= args.candidate <= len(cands):
                     name = cands[args.candidate - 1]
-                    if (mirror / name).is_file():
-                        chosen = name
+                    path = mirror / name
+                    if path.is_file():
+                        metrics = analyze_image(path, cfg)
+                        phash = metrics["phash"]
+                        if is_plain_desktop(phash, cfg):
+                            stats["skip_desktop"] += 1
+                        elif (marked_valid_match(phash, cfg) is None
+                              and is_failure_screen(phash, cfg)):
+                            stats["skip_failure"] += 1
+                        else:
+                            chosen = name
             else:
                 # Walk the candidates backwards and skip everything that is
                 # not an application screen: TTP command dialog, GEM file
@@ -4519,8 +4917,15 @@ def cmd_promote_app_screens(cfg: dict, P: dict, args, scope: dict) -> int:
                         if metrics["kind"] == "black":
                             stats["skip_blank"] += 1
                             continue
-                        if metrics["phash"] in PLAIN_DESKTOP_PHASHES:
+                        phash = metrics["phash"]
+                        if is_plain_desktop(phash, cfg):
                             stats["skip_desktop"] += 1
+                            continue
+                        if marked_valid_match(phash, cfg) is None:
+                            if is_failure_screen(phash, cfg):
+                                stats["skip_failure"] += 1
+                            else:
+                                stats["skip_unmarked"] += 1
                             continue
                         chosen = name
                         break
@@ -4629,7 +5034,9 @@ def cmd_promote_app_screens(cfg: dict, P: dict, args, scope: dict) -> int:
           f"{stats['scanned']}, promoted {stats['promoted']}, TTP reset "
           f"{stats['ttp']}, no app {stats['no_app']}, skipped file "
           f"{stats['skip_file']}/blank {stats['skip_blank']}/desktop "
-          f"{stats['skip_desktop']}, missing {stats['missing']}, metadata "
+          f"{stats['skip_desktop']}/failure {stats['skip_failure']}/"
+          f"unmarked {stats['skip_unmarked']}, missing {stats['missing']}, "
+          f"metadata "
           f"{stats['metadata']}, errors {stats['errors']}"
           + (" [dry-run, nothing changed]" if args.dry_run else ""))
     return 0
@@ -4856,6 +5263,12 @@ def main() -> int:
     p_index.add_argument("--full", action="store_true",
                          help="rescan metadata of all entries")
 
+    p_programs = sub.add_parser(
+        "programs", help="list the ranked auto-retry candidates of one ZIP "
+                         "(offline, no Hatari)")
+    _scope_arg(p_programs)
+    p_programs.add_argument("zip", help="path to the ZIP to inspect")
+
     p_run = sub.add_parser("run", help="process pending entries")
     _scope_arg(p_run)
     p_run.add_argument("--limit", type=int, default=0,
@@ -4896,6 +5309,9 @@ def main() -> int:
                        help="send this xdotool key after boot (e.g. space, Return)")
     p_run.add_argument("--auto-program-index", type=int, default=0,
                        help="choose the Nth launchable program for auto retry")
+    p_run.add_argument("--auto-max-programs", type=int, default=3,
+                       help="try up to N ranked programs for auto retry "
+                            "(default: 3)")
     p_run.add_argument("--retry-no-usable", action="store_true",
                        help="retry only entries that ended as no_usable_shots "
                             "(not reprocessed by a normal run)")
@@ -5014,6 +5430,8 @@ def main() -> int:
 
     if args.cmd == "index":
         return cmd_index(cfg, P, args, scope)
+    if args.cmd == "programs":
+        return cmd_programs(cfg, P, args, scope)
     if args.cmd == "run":
         return cmd_run(cfg, P, args, scope)
     if args.cmd == "detect":

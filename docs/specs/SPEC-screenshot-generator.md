@@ -219,7 +219,7 @@ Defined scopes:
 
 Every subcommand (`index`, `run`, `detect`, `reclassify`,
 `cleanup-drive-led`, `cleanup-duplicates`, `cleanup-boot-logo`,
-`promote-app-screens`, `prune`)
+`promote-app-screens`, `prune`, `programs`)
 takes `--scope` and works exclusively on the selected scope's trees, index
 file and output subtree. There is deliberately
 **no "all scopes" mode**: running two scopes means running the command
@@ -608,9 +608,13 @@ the image/archive is scanned before boot:
   read. A BPB `reserved sectors` value of 0 (common in old MSA formatter/
   crack output) is normalized to the usual 1, because TOS/GEMDOS still
   places the FAT after the boot sector; without this the FAT/root lookup is
-  one sector early and every directory entry is missed. A disk's own
-  `AUTO/` program wins, else the largest launchable
-  `.PRG`/`.TOS`/`.TTP`/`.APP`; Hatari gets
+  one sector early and every directory entry is missed. Candidate ranking
+  is **stem match first** (the program name resembles the ZIP/title), then
+  the largest non-helper program, then helper programs, and only then
+  `AUTO/` programs; helpers (drivers, patches, emulators such as
+  `AHDI`, `GDOS`, `MONO_EMU`, `MCLOCK`, `SETUP`) are demoted so the main
+  application starts instead of a boot driver. The largest launchable
+  `.PRG`/`.TOS`/`.TTP`/`.APP` is the size tiebreaker. Hatari gets
   `--disk-a <image> --auto "A:\<path>"` (drive B included for a second
   image). FAT names are decoded as CP437 and passed to Hatari as raw Atari
   bytes (`surrogateescape`), so umlauts such as `Ä` (0x8E) match the GEMDOS
@@ -621,10 +625,34 @@ the image/archive is scanned before boot:
   FAT chain or a sub-directory pointing back to an ancestor; without these
   guards the scan looped forever and grew the process until the OOM killer
   reaped it (observed with the STX "Fleetstreet Publisher Fonts" disk).
+- Non-Atari disks are detected without booting: a FAT whose files are
+  MS-DOS programs (`.EXE`/`.COM`/`.BAT`/`.DLL`/`.SYS`/`.OVL`) or Mac
+  disk images (`.ISK`/`.DMG`/`.HFS`) and which contains no
+  Atari boot program yields `auto_result: not_atari`; the entry is marked
+  `skipped_disk_n` with `kind: null`, `preview: null`, `candidates: []` and
+  no retry metadata. This is distinct from an unreadable FAT (`no_program`).
+- Multiple program candidates can be probed per entry
+  (`--auto-max-programs`, default 3; the audit keeps 1 for ordinary clusters
+  and raises it for desktop/"program starts but hangs/does not appear"
+  clusters). Candidate
+  0 uses the normal timepoints; later candidates use
+  `auto_probe_timepoints` (default `12,25`) so the scan stays within the
+  entry budget. Every attempt is recorded in `auto_attempts` (last five:
+  index, program, phash, reason, `no_drive_b`, duration) plus
+  `auto_logic_version`, so the resume state is reproducible.
+- A TOS alert screen aborts the attempt instead of accepting it. The
+  configured `failure_phashes` (default the drive B dialog) and registry
+  `error`/`no_usable` clusters are rejected; a second, non-bootable image
+  that triggers the drive B alert is retried once with
+  `--drive-b off` before the next program candidate. `desktop`/
+  `no_usable_shots`/`timeout` results with further candidates continue the
+  scan; a `textscreen`/`darkscreen` result is only accepted as `done` when
+  it matches a **marked valid** app/textscreen cluster (see 8.9).
 - `.ipf`/non-DOS/empty images, copy-protected `.stx` without a usable boot
   sector/FAT and SFX-only disks yield no candidate: the entry is marked
-  `auto_retried` / `auto_result: no_program` and stays `desktop` (the click
-  retry below remains for those). No `xdotool`/`detect` run is required.
+  `auto_retried` / `auto_result: no_program` / `auto_logic_version` and
+  stays `desktop` (the click retry below remains for those). No
+  `xdotool`/`detect` run is required.
 
 **Icon click retry (`detect` + `run --retry-desktop`).**
 
@@ -1228,10 +1256,19 @@ existing candidates into a proper preview:
   - GEM drive/folder (file) window, detected with the fixed `A:\`
     title-path template `assets/gem-file-window.png`,
   - blank/black screens (`analyze_image` kind `black`),
-  - plain TOS desktop (known mono TOS 1.04 pHash `ffbf9c9c9c888088`).
-  The last remaining candidate is promoted. No fixed candidate number is
-  used: the app screen is `_c01`, `_c02` or `_c03` depending on the entry,
-  and full-screen text applications (e.g. Atoric) are supported too.
+  - plain TOS desktop (the configured `plain_desktop_phashes`, default the
+    three known TOS 1.04 mono pHashes),
+  - failure screens: the configured `failure_phashes` and registry
+    `error`/`no_usable` clusters (distance-bounded), e.g. the drive B alert
+    or "Program starts but hangs on GEM desktop".
+  The last remaining candidate must **also** match a *marked valid*
+  app/textscreen cluster in `screens.json` (labels such as `GEM program`,
+  `application window`, `textscreen`; config
+  `filters.valid_app_label_hints`). A VLM-style "visually plausible" screen
+  is not enough: only reviewed valid clusters are promoted. No fixed
+  candidate number is used: the app screen is `_c01`, `_c02` or `_c03`
+  depending on the entry, and full-screen text applications (e.g. Atoric)
+  are supported too.
 - **TTP launchers:** double-clicking a `.TTP` program opens GEM's
   "ANWENDUNG ÖFFNEN" command-line dialog (Name/Parameter/OK/ABBRUCH),
   which is also an open window. `is_ttp_dialog` template-matches the fixed
@@ -1239,7 +1276,8 @@ existing candidates into a proper preview:
   `assets/ttp-dialog-buttons.png`, German TOS 1.04). An entry with a TTP
   candidate but no real app candidate is not promoted: it is reset to
   `status: desktop` / `kind: desktop` (no longer `textscreen`).
-  `--candidate N` bypasses all filters for an explicit manual choice.
+  `--candidate N` bypasses the registry/label requirement for an explicit
+  manual choice, but still rejects plain-desktop and failure screens.
 - **Swap:** chosen candidate becomes `<base>.png`; the old preview is
   renamed to the chosen candidate's name. Nothing is deleted (same fixed
   filenames/behaviour as the desktop app's `M` curation).
@@ -1251,9 +1289,19 @@ existing candidates into a proper preview:
 - **Limits:** the file-window template is tuned to the German mono TOS
   1.04 `A:\` drive path; other drive letters or an English TOS image need
   their own templates. Entries without any remaining app candidate are
-  counted as `no app` and stay `desktop`. A following
-  `cleanup-duplicates` pass removes exact duplicates created by the swap.
+  counted as `unmarked` (no reviewed valid cluster) or `no app` and stay
+  `desktop`; a skipped failure/plain screen is counted as `skip_failure`.
+  A following `cleanup-duplicates` pass removes exact duplicates created by
+  the swap.
 - The output-dir lock is taken; Ctrl+C saves already-applied index changes.
+
+### 8.10 Inspect program candidates (`programs`)
+
+`programs <zip>` is the offline counterpart of the auto retry (no Hatari,
+no output-dir lock, no index changes). It prints the detected `mode`
+(`gemdos`, `floppy` or `-`), the `reason` (`not_atari`/`no_program`/`-`) and
+the ranked candidate list (`0: <program>` first). It is used to validate
+ranking changes and non-Atari detection against real archives (section 7.4).
 
 ---
 

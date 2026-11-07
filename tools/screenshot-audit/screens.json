@@ -11,6 +11,17 @@
       "action": "error",
       "notes": "TOS disk-defect dialog seen with many unrelated titles; retry with TOS 1.02 then 1.00."
     },
+    "dfbc34938aaca093": {
+      "label": "TOS drive B not responding dialog",
+      "action": "error",
+      "notes": "Drive B: alert (also with a single image when the program probes B:); retry without drive B.",
+      "try": {
+        "tos": ["1.04"],
+        "modes": ["auto"],
+        "no_drive_b": true,
+        "retry_any": true
+      }
+    },
     "949c2b9c3b62e52b": {
       "label": "LAPD bootsector cracktro",
       "action": "valid",

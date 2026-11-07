@@ -201,6 +201,34 @@ class RetryStateTests(unittest.TestCase):
         self.assertIn("T/A.zip", key)
         self.assertIn("space", key)
         self.assertIn("auto", key)
+        plain = a.attempt_key(
+            "pd", "T/A.zip", "abcd", "1.02", "0", "mono", "high",
+            "space", 1, "auto", True, True,
+        )
+        self.assertEqual(key, plain)
+        scan = a.attempt_key(
+            "pd", "T/A.zip", "abcd", "1.02", "0", "mono", "high",
+            "space", 1, "auto", True, True, 3,
+        )
+        self.assertNotEqual(key, scan)
+        self.assertIn("scan3", scan)
+
+    def test_desktop_label_enables_three_candidate_scan(self) -> None:
+        self.assertEqual(
+            a.retry_auto_max_programs({}, "Program starts but hangs on GEM desktop"),
+            3,
+        )
+        self.assertEqual(
+            a.retry_auto_max_programs(
+                {"auto_program_scan": True, "auto_max_programs": 4},
+                "Reviewed valid game",
+            ),
+            4,
+        )
+        self.assertEqual(
+            a.retry_auto_max_programs({}, "Wrong program started"),
+            1,
+        )
 
     def test_require_try_skips_clusters_without_try(self) -> None:
         e = entry("pd", "A.zip", status="no_usable_shots")
