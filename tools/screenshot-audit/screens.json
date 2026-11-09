@@ -1,6 +1,88 @@
 {
   "schema": 1,
   "screens": {
+    "99191d1d1d1d1d1f": {
+      "label": "GDOS resident banner",
+      "action": "no_usable",
+      "notes": "GDOS resident driver banner; reviewed 2026-11-09, not an app screen."
+    },
+    "ad1a9b1b132d991d": {
+      "label": "GEM file selector dialog (object select)",
+      "action": "no_usable",
+      "notes": "OBJECT AUSWÄHLEN file selector; reviewed 2026-11-09, not an app screen."
+    },
+    "c6b231e361e4b19b": {
+      "label": "GEM file selector dialog (load/open)",
+      "action": "no_usable",
+      "notes": "Load/Open file dialog; reviewed 2026-11-09, not an app screen."
+    },
+    "9c1d1d1d1d1d1d1d": {
+      "label": "Low-resolution error / text message",
+      "action": "no_usable",
+      "notes": "Resolution or text prompt; reviewed 2026-11-09, not an app screen."
+    },
+    "9e1e1e1e1e1e1e0e": {
+      "label": "Copyright / hardware requirement prompt",
+      "action": "no_usable",
+      "notes": "Copyright or hardware prompt; reviewed 2026-11-09, not an app screen."
+    },
+    "b236363636363636": {
+      "label": "Installer / disk / date prompt",
+      "action": "no_usable",
+      "notes": "Installer or disk/date prompt; reviewed 2026-11-09, not an app screen."
+    },
+    "b636363636363626": {
+      "label": "TOS error / registration / SFX prompt",
+      "action": "no_usable",
+      "notes": "TOS error, registration or SFX prompt; reviewed 2026-11-09, not an app screen."
+    },
+    "8b8fa724ac8d8b87": {
+      "label": "Configuration program menu",
+      "action": "no_usable",
+      "notes": "Protext/Prodata configuration menu; reviewed 2026-11-09, not an app screen."
+    },
+    "e6a6a6a6e6a2a2a6": {
+      "label": "Sparse grey GEM screen (no app content)",
+      "action": "no_usable",
+      "notes": "Grey screen with only a file name; reviewed 2026-11-09, not an app screen."
+    },
+    "9ba2668b99b0e6c6": {
+      "label": "STIK/RSC error dialog",
+      "action": "no_usable",
+      "notes": "STIK/RSC error dialog; reviewed 2026-11-09, not an app screen."
+    },
+    "8ab224ce9bb3e4c6": {
+      "label": "Interface not supported error",
+      "action": "no_usable",
+      "notes": "Interface-not-supported dialog; reviewed 2026-11-09, not an app screen."
+    },
+    "92b065c792b0e7c7": {
+      "label": "Wrong resolution / already installed error",
+      "action": "no_usable",
+      "notes": "Resolution or already-installed error; reviewed 2026-11-09, not an app screen."
+    },
+    "9dbd268e99b0a28e": {
+      "label": "Not enough memory error",
+      "action": "no_usable",
+      "notes": "Out-of-memory dialog; reviewed 2026-11-09, not an app screen."
+    },
+    "c6b264e331e4b89b": {
+      "label": "GEM file selector dialog (depack)",
+      "action": "no_usable",
+      "notes": "Select-file-to-depack dialog; reviewed 2026-11-09, not an app screen."
+    },
+    "b7372325656c6c2c": {
+      "label": "Cubase cracktro (Medway Boys)",
+      "action": "valid",
+      "status": "done",
+      "kind": "game",
+      "notes": "Reviewed 2026-11-09; valid cracktro/done game preview."
+    },
+    "e699992666999966": {
+      "label": "Blank screen with mouse pointer",
+      "action": "no_usable",
+      "notes": "Blank/white screen with only the mouse pointer; reviewed 2026-11-09."
+    },
     "cdc93236cdc93236": {
       "label": "Error while loading [Invalid argument]",
       "action": "error",
