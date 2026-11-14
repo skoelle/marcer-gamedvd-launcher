@@ -3,4 +3,5 @@ emoji: "🕹️"
 category: code
 subcategory: "Retro"
 status: active
-stack: [C#, .NET, Console]
+stack: [Flutter, Dart, C#, .NET, Python, Docker]
+summary: "Flutter desktop gallery and terminal launcher for Marcer's Atari ST/Falcon GameDVD archive — browse the full catalog with screenshots, metadata and box scans, or launch ZIPs in Hatari."
